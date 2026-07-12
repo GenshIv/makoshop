@@ -171,6 +171,26 @@ func (m *MockShardClient) GetSortedIDs(ctx context.Context, sortBy string, limit
 	return sortedIDs, nil
 }
 
+// GetSortedIDsBytes возвращает pre-sorted IDs как []byte (zero-copy через unsafe.Slice!)
+// Используется для передачи sorted IDs между шардами без аллокаций!
+// LOCK-FREE: данные immutable после создания
+func (m *MockShardClient) GetSortedIDsBytes(ctx context.Context, sortBy string, limit int) ([]byte, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	// Получаем sorted IDs и сериализуем их в []byte без копирования!
+	sortedIDs, err := m.GetSortedIDs(ctx, sortBy, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	// Zero-copy сериализация через unsafe.Slice (из unsafe_helpers.go)!
+	return serializeInt32s(sortedIDs), nil
+}
+
 // MultiGet - batch read нескольких записей по ID (lock-free!)
 // LOCK-FREE: данные immutable после создания
 func (m *MockShardClient) MultiGet(ctx context.Context, ids []int32) (*ShardRecordResponse, error) {

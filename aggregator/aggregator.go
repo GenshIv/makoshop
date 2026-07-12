@@ -252,6 +252,7 @@ func (a *Aggregator) scatterToShardsWithBuffers(ctx context.Context, shardIDs []
 }
 
 // gatherResultsFromBuffers собирает результаты из буферов БЕЗ БЛОКИРУЮЩИХ КАНАЛОВ!
+// ОПТИМИЗИРОВАНО: K-Way Merge через sorted IDs вместо gather-all-then-sort!
 func (a *Aggregator) gatherResultsFromBuffers(ctx context.Context, shardIDs []int64, buffers []*ShardQueryBuffer, limit int, lastKey []byte, lastShardID int64) (*SearchResult, error) {
 	var total uint64
 	shardStats := make(map[int64]uint64)

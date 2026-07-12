@@ -184,7 +184,13 @@ type ShardClient interface {
 	SearchRecord(ctx context.Context, query *ShardQuery) (*ShardRecordResponse, error)
 
 	// GetSortedIDs - получить pre-sorted IDs для указанного поля сортировки
+	// sortBy: "id", "key", "date", "score" и т.д.
+	// limit: 0 = все записи, >0 = ограничить результат
 	GetSortedIDs(ctx context.Context, sortBy string, limit int) ([]int32, error)
+
+	// GetSortedIDsBytes - получить pre-sorted IDs как []byte (zero-copy через unsafe.Slice!)
+	// Используется для передачи sorted IDs между шардами без аллокаций!
+	GetSortedIDsBytes(ctx context.Context, sortBy string, limit int) ([]byte, error)
 
 	// MultiGet - batch read нескольких записей по ID (lock-free!)
 	MultiGet(ctx context.Context, ids []int32) (*ShardRecordResponse, error)
