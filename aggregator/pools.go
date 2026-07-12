@@ -186,7 +186,8 @@ func GetRecord() *Record {
 	rec.ShardID = 0
 	rec.Key = rec.Key[:0]
 	rec.Value = rec.Value[:0]
-	rec.Date = ""
+	// Поле Date удалено для cache-line alignment (64 bytes).
+	// Дата хранится как часть Value (JSON) или извлекается при необходимости.
 	return rec
 }
 
