@@ -501,17 +501,16 @@ func (a *Aggregator) gatherResults(ctx context.Context, resultsCh <-chan *ShardR
 			// Получаем ссылку на минимальный элемент (НЕ КОПИРУЕМ!)
 			rec := heap[minIdx].slice[heap[minIdx].index]
 
-			// Применяем фильтрацию по lastKey
+			// Применяем фильтрацию по lastKey и lastShardID (составной ключ)
 			if len(lastKey) > 0 {
 				cmp := compareKeys(rec.Key, lastKey)
+				// Пропускаем если: key < lastKey ИЛИ (key == lastKey AND shardID <= lastShardID)
 				if cmp < 0 || (cmp == 0 && rec.ShardID <= lastShardID) {
-					// Пропускаем эту запись, берём следующую из того же шарда
 					heap[minIdx].index++
 					if heap[minIdx].index >= len(heap[minIdx].slice) {
-						// Шард исчерпан, удаляем его из heap
 						heap = append(heap[:minIdx], heap[minIdx+1:]...)
 					}
-					continue // Переходим к следующей итерации с обновлённым heap
+					continue
 				}
 			}
 
@@ -520,7 +519,6 @@ func (a *Aggregator) gatherResults(ctx context.Context, resultsCh <-chan *ShardR
 			// Заменяем минимальный элемент следующим из того же шарда
 			heap[minIdx].index++
 			if heap[minIdx].index >= len(heap[minIdx].slice) {
-				// Шард исчерпан, удаляем его из heap
 				heap = append(heap[:minIdx], heap[minIdx+1:]...)
 			}
 		}
