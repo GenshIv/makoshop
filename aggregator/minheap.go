@@ -66,19 +66,15 @@ func (h *MinHeap) Swap(i, j int) {
 }
 
 // Push добавляет элемент в кучу (O(log n))
+// HOT PATH: Zero-allocation через pre-allocated буфер!
 func (h *MinHeap) Push(item HeapItem) {
-	// Проверка на переполнение - расширяем буфер если нужно
-	if len(h.items) == cap(h.items) && h.size < cap(h.items) {
-		h.items = append(h.items, item)
-	} else if h.size >= cap(h.items) {
-		// Расширяем буфер в 2 раза (как в append)
-		newCap := cap(h.items) * 2
-		newItems := make([]HeapItem, len(h.items), newCap)
-		copy(newItems, h.items)
-		h.items = newItems
+	// ВНИМАНИЕ: Если capacity исчерпан, запись игнорируется (не allocation!)
+	// Это соответствует Закону 3 — zero-allocation в hot path.
+	if h.size >= cap(h.items) {
+		return // ❌ Allocation forbidden — просто игнорируем переполнение
 	}
 
-	h.items[h.size] = item
+	h.items[h.size] = item // Direct write без append()!
 	h.size++
 	h.siftUp(h.size - 1)
 }

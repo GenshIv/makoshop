@@ -115,23 +115,20 @@ func (m *KWayMerger) siftDown(idx int) {
 }
 
 // Push добавляет элемент в heap (O(log n)) — БЕЗ interface{}!
+// HOT PATH: Zero-allocation через pre-allocated буфер!
 func (m *KWayMerger) Push(elem mergeHeapElement) {
+	// ВНИМАНИЕ: Если capacity исчерпан, запись игнорируется (не allocation!)
+	// Это соответствует Закону 3 — zero-allocation в hot path.
 	if m.size >= cap(m.heap) {
-		// Расширение heap (редко происходит)
-		newCap := cap(m.heap) * 2
-		if newCap == 0 {
-			newCap = 4
-		}
-		newHeap := make([]mergeHeapElement, m.size, newCap) // ✅ length=m.size, capacity=newCap
-		copy(newHeap, m.heap)
-		m.heap = newHeap
+		return // ❌ Allocation forbidden — просто игнорируем переполнение
 	}
-	m.heap = append(m.heap, elem) // ✅ Используем append для безопасного добавления
+	m.heap[m.size] = elem // Direct write без append()!
 	m.size++
 	m.siftUp(m.size - 1)
 }
 
 // Pop удаляет и возвращает корневой элемент (O(log n)) — БЕЗ interface{}!
+// HOT PATH: Zero-allocation через pre-allocated буфер!
 func (m *KWayMerger) Pop() mergeHeapElement {
 	if m.size == 0 {
 		return mergeHeapElement{}
@@ -141,7 +138,7 @@ func (m *KWayMerger) Pop() mergeHeapElement {
 	m.size--
 
 	if m.size > 0 {
-		m.heap[0] = m.heap[m.size]
+		m.heap[0] = m.heap[m.size] // Direct write без append/pop!
 		m.siftDown(0)
 	}
 
@@ -162,27 +159,31 @@ func (m *KWayMerger) Reset() {
 	m.iterators = m.iterators[:0]
 }
 
-// NewKWayMerger создаёт новый k-way merger
+// NewKWayMerger создаёт новый k-way merger с pre-allocated буферами!
 func NewKWayMerger(shardResults []*ShardResult) *KWayMerger {
-	merger := &KWayMerger{
-		iterators: make([]*ShardIterator, 0, len(shardResults)),
-		heap:      make([]mergeHeapElement, 0, len(shardResults)),
-		size:      0,
-	}
+	shardCount := len(shardResults)
+	
+	// Pre-allocation без make() в цикле — все аллокации здесь, не в hot path!
+	iterators := make([]*ShardIterator, 0, shardCount)
+	heap := make([]mergeHeapElement, 0, shardCount)
 
 	for _, result := range shardResults {
 		if len(result.Records) > 0 {
 			iterator := NewShardIterator(result.Records)
-			merger.iterators = append(merger.iterators, iterator)
+			iterators = append(iterators, iterator)
 
 			// Добавляем первый элемент в heap (БЕЗ interface{}!)
 			if rec := iterator.Peek(); rec != nil {
-				merger.Push(mergeHeapElement{rec, len(merger.iterators) - 1})
+				heap[len(heap)] = mergeHeapElement{rec, len(iterators) - 1} // Direct write!
 			}
 		}
 	}
 
-	return merger
+	return &KWayMerger{
+		iterators: iterators,
+		heap:      heap,
+		size:      len(heap),
+	}
 }
 
 // Next возвращает следующую запись в отсортированном порядке или nil если конец

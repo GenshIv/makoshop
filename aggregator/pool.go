@@ -35,10 +35,15 @@ var ShardQueryBufferPool = sync.Pool{
 
 // ShardQueryBuffer — буфер с фиксированной ёмкостью для результатов шарда
 // Layout: данные и atomic.Bool разделены для предотвращения false sharing!
+// Cache-line alignment (64 bytes):
+//   [0..23]    Records header []Record  (pointer=8, len=8, cap=8)
+//   [24..31]    Error pointer           (8 bytes)
+//   [32..63]    _ padding               (32 bytes — выравнивание до 64b)
+//   [64..71]    Ready atomic.Bool       (в отдельной cache line!)
 type ShardQueryBuffer struct {
 	Records []Record    // Pre-allocated слайс (макс. ShardBufferCapacity)
 	Error   error       // Ошибка запроса к шарду
-	_       [56]byte    // Padding до 64 байт — изоляция Ready от данных!
+	_       [32]byte    // Padding до 64 байт — изоляция Ready от данных!
 	Ready   atomic.Bool // Lock-free флаг готовности в отдельной cache line!
 }
 
