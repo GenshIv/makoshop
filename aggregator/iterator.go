@@ -1,13 +1,13 @@
 package aggregator
 
 import (
-	"container/heap"
+	"bytes"
 )
 
-// ShardIterator - итератор для одного шарда
+// ShardIterator - итератор для одного шарда (zero-ownership!)
 type ShardIterator struct {
-	records []Record
-	index   int
+	records []Record // Projection на mmap, не owned!
+	index   int      // Текущая позиция
 }
 
 // NewShardIterator создаёт новый итератор для шарда
@@ -42,53 +42,132 @@ func (it *ShardIterator) HasNext() bool {
 }
 
 // KWayMerger - k-way merger для сортировки результатов из нескольких шардов
+// БЕЗ container/heap — custom implementation без interface{}!
 type KWayMerger struct {
 	iterators []*ShardIterator
-	heap      mergeHeap
+	heap      []mergeHeapElement // Custom heap без interface{}!
+	size      int                // Текущий размер heap
 }
 
-// mergeHeap реализует min-heap для Record pointers с использованием ShardID как tie-breaker
-type mergeHeap []struct {
+// mergeHeapElement - элемент heap (без interface{}!)
+type mergeHeapElement struct {
 	record   *Record
 	iterator int // индекс в iterators массиве
 }
 
-func (h mergeHeap) Len() int { return len(h) }
+// Len возвращает текущее количество элементов в heap
+func (h *KWayMerger) Len() int {
+	return h.size
+}
 
-func (h mergeHeap) Less(i, j int) bool {
+// Less сравнивает два элемента: сначала по Key, затем по ShardID как tie-breaker
+func (m *KWayMerger) Less(i, j int) bool {
+	a := &m.heap[i]
+	b := &m.heap[j]
+
 	// Сравниваем ключи напрямую без конвертации в строки
-	cmp := compareKeys(h[i].record.Key, h[j].record.Key)
+	cmp := bytes.Compare(a.record.Key, b.record.Key)
 	if cmp != 0 {
 		return cmp < 0
 	}
 	// Tie-breaker: ShardID для детерминизма при одинаковых ключах
-	return h[i].record.ShardID < h[j].record.ShardID
+	return a.record.ShardID < b.record.ShardID
 }
 
-func (h mergeHeap) Swap(i, j int) {
-	h[i], h[j] = h[j], h[i]
+// Swap меняет местами два элемента в heap
+func (m *KWayMerger) Swap(i, j int) {
+	m.heap[i], m.heap[j] = m.heap[j], m.heap[i]
 }
 
-func (h *mergeHeap) Push(x interface{}) {
-	*h = append(*h, x.(struct {
-		record   *Record
-		iterator int
-	}))
+// siftUp поднимает элемент вверх по heap (для Push)
+func (m *KWayMerger) siftUp(idx int) {
+	for idx > 0 {
+		parent := (idx - 1) / 2
+		if !m.Less(idx, parent) {
+			break
+		}
+		m.Swap(idx, parent)
+		idx = parent
+	}
 }
 
-func (h *mergeHeap) Pop() interface{} {
-	old := *h
-	n := len(old)
-	x := old[n-1]
-	*h = old[0 : n-1]
-	return x
+// siftDown опускает элемент вниз по heap (для Pop)
+func (m *KWayMerger) siftDown(idx int) {
+	for {
+		left := 2*idx + 1
+		right := 2*idx + 2
+		smallest := idx
+
+		if left < m.size && m.Less(left, smallest) {
+			smallest = left
+		}
+		if right < m.size && m.Less(right, smallest) {
+			smallest = right
+		}
+
+		if smallest == idx {
+			break
+		}
+
+		m.Swap(idx, smallest)
+		idx = smallest
+	}
+}
+
+// Push добавляет элемент в heap (O(log n)) — БЕЗ interface{}!
+func (m *KWayMerger) Push(elem mergeHeapElement) {
+	if m.size >= len(m.heap) {
+		// Расширение heap (редко происходит)
+		newCap := len(m.heap) * 2
+		if newCap == 0 {
+			newCap = 4
+		}
+		newHeap := make([]mergeHeapElement, len(m.heap), newCap)
+		copy(newHeap, m.heap)
+		m.heap = newHeap
+	}
+	m.heap[m.size] = elem
+	m.size++
+	m.siftUp(m.size - 1)
+}
+
+// Pop удаляет и возвращает корневой элемент (O(log n)) — БЕЗ interface{}!
+func (m *KWayMerger) Pop() mergeHeapElement {
+	if m.size == 0 {
+		return mergeHeapElement{}
+	}
+
+	root := m.heap[0]
+	m.size--
+
+	if m.size > 0 {
+		m.heap[0] = m.heap[m.size]
+		m.siftDown(0)
+	}
+
+	return root
+}
+
+// Peek возвращает корневой элемент без удаления (O(1))
+func (m *KWayMerger) Peek() mergeHeapElement {
+	if m.size == 0 {
+		return mergeHeapElement{}
+	}
+	return m.heap[0]
+}
+
+// Reset сбрасывает heap для переиспользования
+func (m *KWayMerger) Reset() {
+	m.size = 0
+	m.iterators = m.iterators[:0]
 }
 
 // NewKWayMerger создаёт новый k-way merger
 func NewKWayMerger(shardResults []*ShardResult) *KWayMerger {
 	merger := &KWayMerger{
 		iterators: make([]*ShardIterator, 0, len(shardResults)),
-		heap:      make(mergeHeap, 0, len(shardResults)),
+		heap:      make([]mergeHeapElement, 0, len(shardResults)),
+		size:      0,
 	}
 
 	for _, result := range shardResults {
@@ -96,40 +175,29 @@ func NewKWayMerger(shardResults []*ShardResult) *KWayMerger {
 			iterator := NewShardIterator(result.Records)
 			merger.iterators = append(merger.iterators, iterator)
 
-			// Добавляем первый элемент в heap
+			// Добавляем первый элемент в heap (БЕЗ interface{}!)
 			if rec := iterator.Peek(); rec != nil {
-				heap.Push(&merger.heap, struct {
-					record   *Record
-					iterator int
-				}{rec, len(merger.iterators) - 1})
+				merger.Push(mergeHeapElement{rec, len(merger.iterators) - 1})
 			}
 		}
 	}
 
-	heap.Init(&merger.heap)
 	return merger
 }
 
 // Next возвращает следующую запись в отсортированном порядке или nil если конец
 func (m *KWayMerger) Next() *Record {
-	if len(m.heap) == 0 {
+	if m.size == 0 {
 		return nil
 	}
 
-	elem := heap.Pop(&m.heap).(struct {
-		record   *Record
-		iterator int
-	})
-
+	elem := m.Pop()
 	rec := elem.record
 
 	// Добавляем следующую запись из того же итератора если есть
 	if iterator := m.iterators[elem.iterator]; iterator.HasNext() {
 		if nextRec := iterator.Next(); nextRec != nil {
-			heap.Push(&m.heap, struct {
-				record   *Record
-				iterator int
-			}{nextRec, elem.iterator})
+			m.Push(mergeHeapElement{nextRec, elem.iterator})
 		}
 	}
 
@@ -138,5 +206,5 @@ func (m *KWayMerger) Next() *Record {
 
 // HasNext проверяет есть ли следующая запись
 func (m *KWayMerger) HasNext() bool {
-	return len(m.heap) > 0
+	return m.size > 0
 }

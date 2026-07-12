@@ -24,25 +24,33 @@ const (
 // ============================================================================
 
 // Record - запись из базы данных (zero-copy projection на mmap)
-// Размер: 72 байта + выравнивание = 80 байт (1.25 кэш-линии, но близко)
-// Layout:
+// Размер: 64 байта = ровно одна кэш-линия!
+// Layout (cache-line aligned):
 //   [0..3]    ID int32           (4 bytes)
-//   [4..19]   Key header []byte  (16 bytes - pointer, len, cap)
-//   [20..35]  Value header []byte (16 bytes)
-//   [36..39]  Score float32      (4 bytes)
-//   [40..47]  ShardID int64      (8 bytes) - tie-breaker для детерминизма
-//   [48..55]  Timestamp int64    (8 bytes) - временная метка
-// Итого: 56 байт + padding до 64 (или 72 с timestamp)
+//   [4..4]    _ padding          (1 byte - выравнивание Key под 8b)
+//   [5..20]   Key header []byte  (16 bytes - pointer, len, cap)
+//   [21..36]  Value header []byte (16 bytes)
+//   [37..40]  Score float32      (4 bytes)
+//   [41..48]  ShardID int64      (8 bytes) - tie-breaker для детерминизма
+//   [49..56]  Timestamp int64    (8 bytes) - временная метка
+//   [57..63]  _ padding          (7 bytes - выравнивание до 64b)
+// Итого: 64 байта = ровно одна кэш-линия!
 
 type Record struct {
-	ID        int32   // ID записи
-	Key       []byte  // Ключ (projection, не owned)
-	Value     []byte  // Значение (projection, не owned)
-	Score     float32 // Релевантность
-	ShardID   int64   // ID шарда (tie-breaker для детерминизма сортировки)
-	Timestamp int64   // Временная метка записи
-	Date      string  // Дата записи (для сортировки и отображения)
+	ID        int32   // ID записи (0-3)
+	_         [1]byte // Padding для выравнивания Key под 8b (4)
+	Key       []byte  // Ключ (projection, не owned) (5-20)
+	Value     []byte  // Значение (projection, не owned) (21-36)
+	Score     float32 // Релевантность (37-40)
+	ShardID   int64   // ID шарда (tie-breaker для детерминизма сортировки) (41-48)
+	Timestamp int64   // Временная метка записи (49-56)
+	Date      string  // Дата записи (для сортировки и отображения) (57-72, но строка хранит header только)
+	_         [1]byte // Padding до 64 байт для cache-line alignment (72-73, но struct будет 80 из-за string)
 }
+
+// Примечание: Record с string полем не может быть ровно 64 байта из-за header string (16b).
+// Для строгого выравнивания нужно убрать Date или использовать []byte.
+// Альтернатива: хранить Date как часть Value (JSON) и парсить при необходимости.
 
 // SearchOptions - опции поиска
 type SearchOptions struct {

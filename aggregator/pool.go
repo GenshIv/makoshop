@@ -34,10 +34,12 @@ var ShardQueryBufferPool = sync.Pool{
 }
 
 // ShardQueryBuffer — буфер с фиксированной ёмкостью для результатов шарда
+// Layout: данные и atomic.Bool разделены для предотвращения false sharing!
 type ShardQueryBuffer struct {
 	Records []Record    // Pre-allocated слайс (макс. ShardBufferCapacity)
 	Error   error       // Ошибка запроса к шарду
-	Ready   atomic.Bool // Lock-free флаг готовности (заменяет канал!)
+	_       [56]byte    // Padding до 64 байт — изоляция Ready от данных!
+	Ready   atomic.Bool // Lock-free флаг готовности в отдельной cache line!
 }
 
 // GetShardQueryBuffer получает буфер из пула
@@ -55,7 +57,11 @@ func PutShardQueryBuffer(buf *ShardQueryBuffer) {
 	if cap(buf.Records) > ShardBufferCapacity*2 {
 		// Защита от разрастания capacity — создаём новый слайс
 		buf.Records = make([]Record, 0, ShardBufferCapacity)
+	} else {
+		// Trim length перед Put — стандартный паттерн для sync.Pool!
+		buf.Records = buf.Records[:0]
 	}
+	buf.Error = nil
 	buf.Ready.Store(false)
 	ShardQueryBufferPool.Put(buf)
 }
@@ -119,6 +125,9 @@ func GetRecordSlice() *RecordSlice {
 
 // Release - освобождение слайса обратно в пул
 func (rs *RecordSlice) Release() {
+	if rs.Records != nil {
+		rs.Records = rs.Records[:0] // Trim перед Put — предотвращает memory bloat!
+	}
 	RecordsSlicePool.Put(rs)
 }
 
@@ -142,6 +151,7 @@ func GetBitmapContext() *BitmapContext {
 
 // Release - освобождение контекста обратно в пул
 func (bc *BitmapContext) Release() {
+	bc.Mask = 0 // Сброс состояния перед Put
 	BitmapPool.Put(bc)
 }
 
@@ -176,6 +186,16 @@ func GetSearchQuery() *SearchQuery {
 
 // Release - освобождение запроса обратно в пул
 func (q *SearchQuery) Release() {
+	if q.Terms != nil {
+		q.Terms = q.Terms[:0] // Trim перед Put
+	}
+	if len(q.LastKey) > 0 {
+		q.LastKey = q.LastKey[:0]
+	}
+	q.MinScore = 0
+	q.Limit = 0
+	q.Offset = 0
+	q.ShardMask = 0
 	QueryPool.Put(q)
 }
 
@@ -206,6 +226,7 @@ func GetFinalResult(capacity int) []Record {
 // PutFinalResult возвращает слайс обратно в пул
 func PutFinalResult(result []Record) {
 	if cap(result) <= DefaultFinalResultCapacity*2 { // Не храним слишком большие слайсы в пуле
+		result = result[:0] // Trim перед Put — предотвращает memory bloat!
 		FinalResultPool.Put(result)
 	}
 }
