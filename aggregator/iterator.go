@@ -116,17 +116,17 @@ func (m *KWayMerger) siftDown(idx int) {
 
 // Push добавляет элемент в heap (O(log n)) — БЕЗ interface{}!
 func (m *KWayMerger) Push(elem mergeHeapElement) {
-	if m.size >= len(m.heap) {
+	if m.size >= cap(m.heap) {
 		// Расширение heap (редко происходит)
-		newCap := len(m.heap) * 2
+		newCap := cap(m.heap) * 2
 		if newCap == 0 {
 			newCap = 4
 		}
-		newHeap := make([]mergeHeapElement, len(m.heap), newCap)
+		newHeap := make([]mergeHeapElement, m.size, newCap) // ✅ length=m.size, capacity=newCap
 		copy(newHeap, m.heap)
 		m.heap = newHeap
 	}
-	m.heap[m.size] = elem
+	m.heap = append(m.heap, elem) // ✅ Используем append для безопасного добавления
 	m.size++
 	m.siftUp(m.size - 1)
 }
