@@ -188,7 +188,7 @@ func (m *MockShardClient) GetSortedIDsBytes(ctx context.Context, sortBy string, 
 	}
 
 	// Zero-copy сериализация через unsafe.Slice (из unsafe_helpers.go)!
-	return serializeInt32s(sortedIDs), nil
+	return serializeIDs(sortedIDs), nil  // Переименована функция для устранения дублирования
 }
 
 // MultiGet - batch read нескольких записей по ID (lock-free!)
