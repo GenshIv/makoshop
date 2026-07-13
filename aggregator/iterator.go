@@ -131,7 +131,7 @@ func (m *KWayMerger) Push(elem mergeHeapElement) {
 // HOT PATH: Zero-allocation через pre-allocated буфер!
 func (m *KWayMerger) Pop() mergeHeapElement {
 	if m.size == 0 {
-		return mergeHeapElement{}
+		return mergeHeapElement{record: nil, iterator: -1}
 	}
 
 	root := m.heap[0]
@@ -148,7 +148,7 @@ func (m *KWayMerger) Pop() mergeHeapElement {
 // Peek возвращает корневой элемент без удаления (O(1))
 func (m *KWayMerger) Peek() mergeHeapElement {
 	if m.size == 0 {
-		return mergeHeapElement{}
+		return mergeHeapElement{record: nil, iterator: -1}
 	}
 	return m.heap[0]
 }
