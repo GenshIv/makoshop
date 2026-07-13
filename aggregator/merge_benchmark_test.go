@@ -57,6 +57,119 @@ func BenchmarkMergeStrategies(b *testing.B) {
 		}
 	})
 
+	b.Run("KWayMerge_AllEmpty", func(b *testing.B) {
+		// Тест когда все шарды возвращают пустые результаты (worst case edge!)
+		allEmptyResults := make([]*ShardResult, numShards)
+		for i := 0; i < numShards; i++ {
+			allEmptyResults[i] = &ShardResult{
+				ShardID: int64(i),
+				Records: nil, // nil slice!
+			}
+		}
+
+		for i := 0; i < b.N; i++ {
+			merger := NewKWayMerger(allEmptyResults)
+			
+			if merger.HasNext() {
+				b.Fatal("Expected HasNext() to return false for all empty shards")
+			}
+			
+			rec := merger.Next()
+			if rec != nil {
+				b.Fatal("Expected Next() to return nil for all empty shards")
+			}
+		}
+	})
+
+	b.Run("KWayMerge_MixedEmpty", func(b *testing.B) {
+		// Тест с частично пустыми шардами (realistic scenario!)
+		mixedShardResults := make([]*ShardResult, numShards)
+		for i := 0; i < numShards; i++ {
+			if i%2 == 0 {
+				mixedShardResults[i] = &ShardResult{
+					ShardID: int64(i),
+					Records: generateRandomRecords(recordsPerShard, int64(i)),
+				}
+			} else {
+				mixedShardResults[i] = &ShardResult{
+					ShardID: int64(i),
+					Records: []Record{}, // Пустой!
+				}
+			}
+		}
+
+		for i := 0; i < b.N; i++ {
+			merger := NewKWayMerger(mixedShardResults)
+			
+			limit := 100
+			result := make([]Record, 0, limit)
+			
+			for j := 0; j < limit && merger.HasNext(); j++ {
+				if rec := merger.Next(); rec != nil {
+					result = append(result, *rec)
+				} else {
+					break // Early exit if Next() returns nil
+				}
+			}
+		}
+	})
+
+	b.Run("KWayMerge_SingleShard", func(b *testing.B) {
+		// Тест с одним шардом (оптимизация!)
+		singleShardResults := []*ShardResult{
+			{
+				ShardID: 0,
+				Records: generateRandomRecords(recordsPerShard, 0),
+			},
+		}
+
+		for i := 0; i < b.N; i++ {
+			merger := NewKWayMerger(singleShardResults)
+			
+			limit := 100
+			result := make([]Record, 0, limit)
+			
+			for j := 0; j < limit && merger.HasNext(); j++ {
+				if rec := merger.Next(); rec != nil {
+					result = append(result, *rec)
+				} else {
+					break // Early exit if Next() returns nil
+				}
+			}
+		}
+	})
+
+	b.Run("KWayMerge_EmptyShards", func(b *testing.B) {
+		// Тест с пустыми шардами (edge case!)
+		emptyShardResults := make([]*ShardResult, numShards)
+		for i := 0; i < numShards; i++ {
+			emptyShardResults[i] = &ShardResult{
+				ShardID: int64(i),
+				Records: []Record{}, // Пустой слайс!
+			}
+		}
+
+		for i := 0; i < b.N; i++ {
+			merger := NewKWayMerger(emptyShardResults)
+			
+			limit := 100
+			result := make([]Record, 0, limit)
+			
+			for j := 0; j < limit && merger.HasNext(); j++ {
+				if rec := merger.Next(); rec != nil {
+					result = append(result, *rec)
+				} else {
+					break // Early exit if Next() returns nil
+				}
+			}
+			
+			// Должно быть пустой результат
+			if len(result) != 0 {
+				b.Fatalf("Expected empty result, got %d records", len(result))
+			}
+		}
+	})
+
 	b.Run("KWayMerge", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			// Создаём merger
