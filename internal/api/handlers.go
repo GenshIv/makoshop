@@ -46,7 +46,7 @@ func NewHandlers(store *db.Store) *Handlers {
 
 	// Turbo search: enabled by default. Can be disabled via env flag if needed.
 	turboEnabled := true
-	turboSearch := db.NewTurboProductSearch(store.DB(), productRepo, categoryRepo, turboEnabled)
+	turboSearch := db.NewTurboProductSearch(store, productRepo, categoryRepo, turboEnabled)
 	productRepo.SetTurboSearch(turboSearch)
 
 	landingRepo := db.NewLandingRepo(store)
@@ -495,10 +495,10 @@ func (h *Handlers) handleRemoveCategoryAttribute(w http.ResponseWriter, r *http.
 
 	if len(newCats) == 0 {
 		// No more categories use this attribute — clear it
-		_ = h.store.DB().TurboRawWrite("attrdef_cats:"+code, []byte{})
+		_ = h.store.TurboWrite("attrdef_cats:"+code, []byte{})
 	} else {
 		buf := makodb.TurboBinaryNew(db.Uint64SliceFromInt64(newCats))
-		_ = h.store.DB().TurboRawWrite("attrdef_cats:"+code, buf)
+		_ = h.store.TurboWrite("attrdef_cats:"+code, buf)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

@@ -66,9 +66,14 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-// DB returns the underlying ShardedDB (for turbo index access).
+// DB returns the underlying ShardedDB (for turbo index access, reads and writes).
 func (s *Store) DB() *makodb.ShardedDB {
 	return s.db
+}
+
+// TurboWrite writes a turbo key-value directly.
+func (s *Store) TurboWrite(key string, value []byte) error {
+	return s.db.TurboRawWrite(key, value)
 }
 
 // NextID generates and persists the next ID for the given entity type.
@@ -119,7 +124,6 @@ func (s *Store) DocGet(key string) ([]byte, error) {
 
 // DocDelete removes a document by key. Uses TurboRawWrite with empty value.
 func (s *Store) DocDelete(key string) error {
-	// TurboRawWrite with empty data effectively "clears" the key.
 	if err := s.db.TurboRawWrite(key, []byte{}); err != nil {
 		return fmt.Errorf("doc_delete %s: %w", key, err)
 	}

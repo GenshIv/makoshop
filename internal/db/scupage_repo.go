@@ -55,7 +55,7 @@ func (r *SCUPageRepo) Create(s *model.SCUPage) error {
 
 	// Turbo index: scupage_scu:<scu>
 	scuKey := turboKeySCUPageSCU + s.SCU
-	if err := r.Store.db.TurboRawWrite(scuKey, []byte(strconv.FormatInt(id, 10))); err != nil {
+	if err := r.Store.TurboWrite(scuKey, []byte(strconv.FormatInt(id, 10))); err != nil {
 		_, _ = r.Store.db.TurboDeleteIndex(TurboKeySCUPageList, uint64(id))
 		_ = r.Store.DocDelete(KeySCUPage(s.ID))
 		return fmt.Errorf("turbo index scupage_scu: %w", err)
@@ -63,9 +63,9 @@ func (r *SCUPageRepo) Create(s *model.SCUPage) error {
 
 	// Turbo index: scupage_slug:<slug>
 	slugKey := turboKeySCUPageSlug + s.Slug
-	if err := r.Store.db.TurboRawWrite(slugKey, []byte(strconv.FormatInt(id, 10))); err != nil {
+	if err := r.Store.TurboWrite(slugKey, []byte(strconv.FormatInt(id, 10))); err != nil {
 		_, _ = r.Store.db.TurboDeleteIndex(TurboKeySCUPageList, uint64(id))
-		_ = r.Store.db.TurboRawWrite(scuKey, []byte{})
+		_ = r.Store.TurboWrite(scuKey, []byte{})
 		_ = r.Store.DocDelete(KeySCUPage(s.ID))
 		return fmt.Errorf("turbo index scupage_slug: %w", err)
 	}
@@ -134,9 +134,9 @@ func (r *SCUPageRepo) Update(id int64, updater func(*model.SCUPage)) error {
 
 	// Update SCU index if changed
 	if oldSCU != s.SCU {
-		_ = r.Store.db.TurboRawWrite(turboKeySCUPageSCU+oldSCU, []byte{})
+		_ = r.Store.TurboWrite(turboKeySCUPageSCU+oldSCU, []byte{})
 		if s.SCU != "" {
-			if err := r.Store.db.TurboRawWrite(turboKeySCUPageSCU+s.SCU, []byte(strconv.FormatInt(id, 10))); err != nil {
+			if err := r.Store.TurboWrite(turboKeySCUPageSCU+s.SCU, []byte(strconv.FormatInt(id, 10))); err != nil {
 				return fmt.Errorf("update scupage_scu index: %w", err)
 			}
 		}
@@ -144,9 +144,9 @@ func (r *SCUPageRepo) Update(id int64, updater func(*model.SCUPage)) error {
 
 	// Update slug index if changed
 	if oldSlug != s.Slug {
-		_ = r.Store.db.TurboRawWrite(turboKeySCUPageSlug+oldSlug, []byte{})
+		_ = r.Store.TurboWrite(turboKeySCUPageSlug+oldSlug, []byte{})
 		if s.Slug != "" {
-			if err := r.Store.db.TurboRawWrite(turboKeySCUPageSlug+s.Slug, []byte(strconv.FormatInt(id, 10))); err != nil {
+			if err := r.Store.TurboWrite(turboKeySCUPageSlug+s.Slug, []byte(strconv.FormatInt(id, 10))); err != nil {
 				return fmt.Errorf("update scupage_slug index: %w", err)
 			}
 		}
@@ -189,10 +189,10 @@ func (r *SCUPageRepo) Delete(id int64) error {
 	// Remove turbo indexes
 	_, _ = r.Store.db.TurboDeleteIndex(TurboKeySCUPageList, uint64(id))
 	if s.SCU != "" {
-		_ = r.Store.db.TurboRawWrite(turboKeySCUPageSCU+s.SCU, []byte{})
+		_ = r.Store.TurboWrite(turboKeySCUPageSCU+s.SCU, []byte{})
 	}
 	if s.Slug != "" {
-		_ = r.Store.db.TurboRawWrite(turboKeySCUPageSlug+s.Slug, []byte{})
+		_ = r.Store.TurboWrite(turboKeySCUPageSlug+s.Slug, []byte{})
 	}
 
 	if err := r.Store.DocDelete(KeySCUPage(id)); err != nil {

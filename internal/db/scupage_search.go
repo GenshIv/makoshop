@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -312,36 +313,8 @@ type SCUPageListParams struct {
 	Limit       int
 }
 
-type SCUPageListItem struct {
-	ID           int64                  `json:"id"`
-	SCU          string                 `json:"scu"`
-	Slug         string                 `json:"slug"`
-	Title        string                 `json:"title"`
-	CategoryID   int64                  `json:"category_id"`
-	Brand        string                 `json:"brand,omitempty"`
-	MinPrice     float64                `json:"min_price"`
-	Currency     string                 `json:"currency"`
-	ProductCount int                    `json:"product_count"`
-	Images       []string               `json:"images,omitempty"`
-	Attributes   map[string]interface{} `json:"attributes,omitempty"`
-	Products     []SCUPageProductInfo   `json:"products,omitempty"` // linked products with price/company
-	SEOURL       string                 `json:"seo_url,omitempty"`  // canonical URL: /shop/{breadcrumbs}/{slug}
-}
-
-type SCUPageProductInfo struct {
-	ID          int64   `json:"id"`
-	SKU         string  `json:"sku"`
-	Name        string  `json:"name"`
-	Price       float64 `json:"price"`
-	Currency    string  `json:"currency"`
-	CompanyID   int64   `json:"company_id"`
-	CompanyName string  `json:"company_name,omitempty"`
-	StockQty    int64   `json:"stock_qty"`
-	Status      string  `json:"status"`
-}
-
 type SCUPageListResult struct {
-	Items []SCUPageListItem `json:"items"`
+	Items []json.RawMessage `json:"items"` // raw SCUPage JSON
 	Total int64             `json:"total"`
 	Page  int               `json:"page"`
 	Limit int               `json:"limit"`
@@ -363,8 +336,6 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		params.Limit = 200
 	}
 
-	start := time.Now()
-
 	// 1) Build category filter (category + all descendants via union)
 	var candidates []uint64
 
@@ -376,17 +347,14 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		if len(catIDs) == 0 {
 			catIDs = []int64{params.CategoryID}
 		}
-		fmt.Printf("DEBUG SCUPageListWithTurbo: category=%d descendants=%v\n", params.CategoryID, catIDs)
 		catTokens := make([]string, len(catIDs))
 		for i, cid := range catIDs {
 			catTokens[i] = scupageKeyCategory(cid)
 		}
-		fmt.Printf("DEBUG SCUPageListWithTurbo: catTokens=%v\n", catTokens)
 		catResult, err := s.db.TurboBulkUnion(catTokens)
 		if err != nil {
 			return nil, fmt.Errorf("turbo union categories: %w", err)
 		}
-		fmt.Printf("DEBUG SCUPageListWithTurbo: catResult count=%d\n", len(catResult))
 		candidates = catResult
 		if len(candidates) == 0 {
 			return &SCUPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
@@ -471,7 +439,6 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		)
 		if err != nil {
 			// Fallback: continue without price filter
-			fmt.Printf("DEBUG price filter error: %v\n", err)
 		} else {
 			filtered := make([]uint64, len(priceResult.Pairs))
 			for i, p := range priceResult.Pairs {
@@ -497,9 +464,15 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		sortKey = scupageSortPriceAsc
 	}
 
+	// Use candidates if we have them, otherwise use full sort index
+	var sortCandidates []uint64
+	if len(candidates) > 0 {
+		sortCandidates = candidates
+	}
+
 	res, err := s.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
 		Name:       sortKey,
-		Candidates: candidates,
+		Candidates: sortCandidates,
 		Page:       params.Page - 1,
 		PageSize:   params.Limit,
 		Desc:       false,
@@ -510,54 +483,14 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		return nil, fmt.Errorf("turbo sort page with docs: %w", err)
 	}
 
-	// 5) Парсим документы и собираем результат
-	items := make([]SCUPageListItem, 0, len(res.Docs))
+	// 5) Return raw JSON documents directly (no unmarshal/marshal)
+	items := make([]json.RawMessage, 0, len(res.Docs))
 	for _, doc := range res.Docs {
-		if doc == nil {
+		if doc == nil || len(doc) == 0 {
 			continue
 		}
-		sp, err := UnmarshalSCUPage(doc)
-		if err != nil {
-			continue
-		}
-
-		item := SCUPageListItem{
-			ID:           sp.ID,
-			SCU:          sp.SCU,
-			Slug:         sp.Slug,
-			Title:        sp.Title,
-			CategoryID:   sp.CategoryID,
-			Brand:        sp.Brand,
-			MinPrice:     sp.MinPrice,
-			Currency:     sp.Currency,
-			ProductCount: sp.ProductCount,
-			Images:       sp.Images,
-			Attributes:   sp.Attributes,
-		}
-
-		// Build canonical SEO URL: /shop/{breadcrumbs}/{slug}
-		if sp.CategoryID != 0 {
-			treePath, err := s.categoryRepo.GetTreePath(sp.CategoryID)
-			if err == nil && len(treePath) > 0 {
-				item.SEOURL = "/shop/" + strings.Join(treePath, "/") + "/" + sp.Slug
-			} else {
-				item.SEOURL = "/shop/" + sp.Slug
-			}
-		} else {
-			item.SEOURL = "/shop/" + sp.Slug
-		}
-
-		// Load linked products info (for price/company comparison)
-		if len(sp.ProductIDs) > 0 {
-			item.Products = s.loadProductInfos(sp.ProductIDs)
-		}
-
-		items = append(items, item)
+		items = append(items, json.RawMessage(doc))
 	}
-
-	elapsed := time.Since(start)
-	fmt.Printf("DEBUG SCUPageListWithTurbo: total=%d page=%d items=%d time=%v\n",
-		res.Total, params.Page, len(items), elapsed)
 
 	return &SCUPageListResult{
 		Items: items,
@@ -568,73 +501,16 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 }
 
 // getCategoryWithDescendants returns the given category ID and all its descendants.
+// Uses cached descendants index for O(1) lookup.
 func (s *SCUPageSearch) getCategoryWithDescendants(catID int64) ([]int64, error) {
-	tree, err := s.categoryRepo.GetTree()
+	descendants, err := s.categoryRepo.GetDescendants(catID)
 	if err != nil {
 		return nil, err
 	}
-
-	var result []int64
-
-	var collect func(nodes []*CategoryTreeNode)
-	collect = func(nodes []*CategoryTreeNode) {
-		for _, node := range nodes {
-			if node.ID == catID {
-				// Found target — collect it and all descendants
-				result = append(result, node.ID)
-				if len(node.Children) > 0 {
-					collect(node.Children)
-				}
-				return
-			}
-			if len(node.Children) > 0 {
-				collect(node.Children)
-			}
-		}
-	}
-
-	// Convert tree to []*CategoryTreeNode
-	treePtrs := make([]*CategoryTreeNode, len(tree))
-	for i := range tree {
-		treePtrs[i] = &tree[i]
-	}
-	collect(treePtrs)
+	result := make([]int64, 0, len(descendants)+1)
+	result = append(result, catID)
+	result = append(result, descendants...)
 	return result, nil
-}
-
-// loadProductInfos loads basic info for a list of product IDs.
-func (s *SCUPageSearch) loadProductInfos(productIDs []int64) []SCUPageProductInfo {
-	if len(productIDs) == 0 {
-		return nil
-	}
-
-	var result []SCUPageProductInfo
-	for _, pid := range productIDs {
-		p, err := s.productRepo.Get(pid)
-		if err != nil || p == nil {
-			continue
-		}
-
-		info := SCUPageProductInfo{
-			ID:        p.ID,
-			SKU:       p.SKU,
-			Name:      p.Name,
-			Price:     p.Price,
-			Currency:  p.Currency,
-			CompanyID: p.CompanyID,
-			StockQty:  p.StockQty,
-			Status:    string(p.Status),
-		}
-
-		// Load company name
-		if p.CompanyID != 0 {
-			// TODO: cache company names
-		}
-
-		result = append(result, info)
-	}
-
-	return result
 }
 
 // ---------- helpers ----------

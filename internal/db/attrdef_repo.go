@@ -9,11 +9,19 @@ import (
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
+// Turbo index keys for attrdefs:
+// turbo_attrdef_list            -> JSON array of codes
+// turbo_attrdef_code:{code}     -> docID
+// turbo_attrdef_cats:{code}     -> [categoryIDs]
+// turbo_attrdef_cat_codes:{catID} -> [codes] (reverse: cat -> codes, O(1))
+// turbo_attr_values_cat:{code}:{catID} -> [hashes]
+
 const (
-	turboKeyAttrDefList   = "attrdef_list"
-	turboKeyAttrDefCode   = "attrdef_code:"    // prefix + code -> docID
-	turboKeyAttrDefCats   = "attrdef_cats:"    // prefix + code -> [categoryIDs]
-	turboKeyAttrValuesCat = "attr_values_cat:" // prefix + code + ":" + catID -> [hashes]
+	turboKeyAttrDefList     = "attrdef_list"
+	turboKeyAttrDefCode     = "attrdef_code:"
+	turboKeyAttrDefCats     = "attrdef_cats:"
+	turboKeyAttrDefCatCodes = "attrdef_cat_codes:" // catID -> [codes]
+	turboKeyAttrValuesCat   = "attr_values_cat:"
 )
 
 type AttrDefRepo struct {
@@ -24,8 +32,8 @@ func NewAttrDefRepo(store *Store) *AttrDefRepo {
 	return &AttrDefRepo{store: store}
 }
 
-// GetByCode returns attrdef by code. If document doesn't exist (e.g. created by BatchUpsertCodes),
-// it creates a default AttrDef on the fly.
+// ---------- CRUD ----------
+
 func (r *AttrDefRepo) GetByCode(code string) (*model.AttrDef, error) {
 	key := turboKeyAttrDefCode + code
 	data, err := r.store.DB().TurboRawRead(key)
@@ -41,8 +49,8 @@ func (r *AttrDefRepo) GetByCode(code string) (*model.AttrDef, error) {
 		return ad, nil
 	}
 
-	// Document doesn't exist (e.g. created by BatchUpsertCodes with hash as pseudo-ID).
-	// Create a default AttrDef.
+	// Document doesn't exist (e.g. created by BatchUpsertCodes).
+	// Create a default AttrDef on the fly.
 	cats, _ := r.GetCategories(code)
 	if cats == nil {
 		cats = []int64{}
@@ -61,14 +69,12 @@ func (r *AttrDefRepo) GetByCode(code string) (*model.AttrDef, error) {
 		CreatedAt:    time.Now(),
 	}
 
-	// Persist the document so future calls work
 	buf, _ := json.Marshal(ad)
 	_ = r.store.DocPut(fmt.Sprintf("attrdef:%d", ad.ID), buf)
 
 	return ad, nil
 }
 
-// Get returns attrdef by ID.
 func (r *AttrDefRepo) Get(id int64) (*model.AttrDef, error) {
 	data, err := r.store.DocGet(fmt.Sprintf("attrdef:%d", id))
 	if err != nil {
@@ -80,6 +86,8 @@ func (r *AttrDefRepo) Get(id int64) (*model.AttrDef, error) {
 	}
 	return &ad, nil
 }
+
+// ---------- Index-based lookups (O(1)) ----------
 
 // GetCategories returns all category IDs where this attribute code is used.
 func (r *AttrDefRepo) GetCategories(code string) ([]int64, error) {
@@ -96,9 +104,81 @@ func (r *AttrDefRepo) GetCategories(code string) ([]int64, error) {
 	return cats, nil
 }
 
+// GetCodesForCategory returns all attribute codes for a category in O(1).
+// Uses turbo_attrdef_cat_codes:{catID} index.
+func (r *AttrDefRepo) GetCodesForCategory(catID int64) ([]string, error) {
+	key := turboKeyAttrDefCatCodes + fmt.Sprintf("%d", catID)
+	data, err := r.store.DB().TurboRawRead(key)
+	if err != nil || len(data) == 0 {
+		return nil, nil
+	}
+
+	var codes []string
+	if err := json.Unmarshal(data, &codes); err != nil {
+		return nil, nil
+	}
+	return codes, nil
+}
+
+// GetCodesForCategoryTree returns attribute codes for a category considering its subtree.
+// Uses cached indexes instead of scanning all categories.
+func (r *AttrDefRepo) GetCodesForCategoryTree(catID int64, categoryRepo *CategoryRepo) ([]string, error) {
+	// 1. Get direct codes for this category (O(1))
+	codes, err := r.GetCodesForCategory(catID)
+	if err != nil {
+		return nil, err
+	}
+	if len(codes) > 0 {
+		return codes, nil
+	}
+
+	// 2. No direct codes — check direct children (O(1) via cached children)
+	children, err := categoryRepo.GetDirectChildren(catID)
+	if err != nil {
+		return nil, err
+	}
+	if len(children) == 0 {
+		return []string{}, nil
+	}
+
+	// 3. Intersect codes of all direct children (O(1) each)
+	firstCodes, err := r.GetCodesForCategory(children[0])
+	if err != nil {
+		return nil, err
+	}
+	firstSet := make(map[string]struct{}, len(firstCodes))
+	for _, c := range firstCodes {
+		firstSet[c] = struct{}{}
+	}
+
+	for _, cid := range children[1:] {
+		childCodes, err := r.GetCodesForCategory(cid)
+		if err != nil {
+			continue
+		}
+		childSet := make(map[string]struct{}, len(childCodes))
+		for _, c := range childCodes {
+			childSet[c] = struct{}{}
+		}
+
+		newSet := make(map[string]struct{})
+		for c := range firstSet {
+			if _, ok := childSet[c]; ok {
+				newSet[c] = struct{}{}
+			}
+		}
+		firstSet = newSet
+	}
+
+	result := make([]string, 0, len(firstSet))
+	for c := range firstSet {
+		result = append(result, c)
+	}
+
+	return result, nil
+}
+
 // GetAttrValuesForCategory returns all values for an attribute code in a specific category.
-// Uses attr_values_cat:<code>:<catID> index.
-// If catID is 0, returns values from all categories (merged).
 func (r *AttrDefRepo) GetAttrValuesForCategory(code string, catID int64) ([]string, error) {
 	if catID != 0 {
 		key := turboKeyAttrValuesCat + code + ":" + fmt.Sprintf("%d", catID)
@@ -115,7 +195,6 @@ func (r *AttrDefRepo) GetAttrValuesForCategory(code string, catID int64) ([]stri
 	var allHashes []uint64
 	seen := make(map[uint64]struct{})
 
-	// Read attrdef_cats:<code> to get all category IDs
 	catsKey := turboKeyAttrDefCats + code
 	catsData, err := r.store.DB().TurboRawRead(catsKey)
 	if err != nil || len(catsData) == 0 {
@@ -141,7 +220,6 @@ func (r *AttrDefRepo) GetAttrValuesForCategory(code string, catID int64) ([]stri
 	return r.hashesToStrings(code, allHashes)
 }
 
-// hashesToStrings converts hash tokens to value strings using attr_label index.
 func (r *AttrDefRepo) hashesToStrings(code string, hashes []uint64) ([]string, error) {
 	values := make([]string, 0, len(hashes))
 	for _, h := range hashes {
@@ -157,211 +235,46 @@ func (r *AttrDefRepo) hashesToStrings(code string, hashes []uint64) ([]string, e
 	return values, nil
 }
 
-// GetCodesForCategory returns all attribute codes used in a category.
-// Uses reverse lookup from attrdef_cats indexes.
-func (r *AttrDefRepo) GetCodesForCategory(catID int64) ([]string, error) {
-	// Read all attrdef codes
-	data, err := r.store.DB().TurboRawRead(turboKeyAttrDefList)
-	if err != nil || len(data) == 0 {
-		return nil, nil
+// ---------- Index management ----------
+
+// updateCatCodesIndex updates the cat->codes index when categories change for a code.
+func (r *AttrDefRepo) updateCatCodesIndex(code string, oldCats, newCats []int64) error {
+	// Remove code from old categories that are no longer in newCats
+	newSet := make(map[int64]struct{}, len(newCats))
+	for _, c := range newCats {
+		newSet[c] = struct{}{}
 	}
 
-	var codes []string
-	if err := json.Unmarshal(data, &codes); err != nil {
-		return nil, nil
-	}
-
-	var result []string
-	for _, code := range codes {
-		cats, err := r.GetCategories(code)
-		if err != nil {
-			continue
+	for _, oldCat := range oldCats {
+		if _, ok := newSet[oldCat]; !ok {
+			r.removeFromCatCodes(oldCat, code)
 		}
-		for _, c := range cats {
-			if c == catID {
-				result = append(result, code)
-				break
+	}
+
+	// Add code to new categories that didn't have it
+	for _, newCat := range newCats {
+		if _, ok := newSet[newCat]; ok {
+			// Check if already present
+			existing, _ := r.GetCodesForCategory(newCat)
+			found := false
+			for _, c := range existing {
+				if c == code {
+					found = true
+					break
+				}
+			}
+			if !found {
+				r.addToCatCodes(newCat, code)
 			}
 		}
-	}
-
-	return result, nil
-}
-
-// GetCodesForCategoryTree returns attribute codes for a category considering its subtree.
-// Logic:
-// - If category has direct attributes (products in this category), return them.
-// - If category has no direct attributes but has children, return codes present in ALL direct children.
-// - If no children, return codes for this category.
-func (r *AttrDefRepo) GetCodesForCategoryTree(catID int64, categoryRepo *CategoryRepo) ([]string, error) {
-	// Get codes for this category
-	codes, err := r.GetCodesForCategory(catID)
-	if err != nil {
-		return nil, err
-	}
-	if len(codes) > 0 {
-		return codes, nil
-	}
-
-	// No direct codes — check children
-	children, err := r.getDirectChildren(catID, categoryRepo)
-	if err != nil {
-		return nil, err
-	}
-	if len(children) == 0 {
-		return []string{}, nil
-	}
-
-	// Intersect codes of all direct children
-	firstCodes, err := r.GetCodesForCategory(children[0])
-	if err != nil {
-		return nil, err
-	}
-	firstSet := make(map[string]struct{}, len(firstCodes))
-	for _, c := range firstCodes {
-		firstSet[c] = struct{}{}
-	}
-
-	for _, cid := range children[1:] {
-		childCodes, err := r.GetCodesForCategory(cid)
-		if err != nil {
-			continue
-		}
-		childSet := make(map[string]struct{}, len(childCodes))
-		for _, c := range childCodes {
-			childSet[c] = struct{}{}
-		}
-
-		// Intersect
-		newSet := make(map[string]struct{})
-		for c := range firstSet {
-			if _, ok := childSet[c]; ok {
-				newSet[c] = struct{}{}
-			}
-		}
-		firstSet = newSet
-	}
-
-	result := make([]string, 0, len(firstSet))
-	for c := range firstSet {
-		result = append(result, c)
-	}
-
-	return result, nil
-}
-
-// getDirectChildren returns immediate children of catID.
-func (r *AttrDefRepo) getDirectChildren(catID int64, categoryRepo *CategoryRepo) ([]int64, error) {
-	all, err := categoryRepo.ListAll()
-	if err != nil {
-		return nil, err
-	}
-
-	var children []int64
-	for _, c := range all {
-		if c.ParentID != nil && *c.ParentID == catID {
-			children = append(children, c.ID)
-		}
-	}
-	return children, nil
-}
-
-// getSubtreeCategories returns all category IDs in the subtree rooted at catID.
-func (r *AttrDefRepo) getSubtreeCategories(catID int64, categoryRepo *CategoryRepo) ([]int64, error) {
-	var result []int64
-	result = append(result, catID)
-
-	// Get all categories and build children map
-	all, err := categoryRepo.ListAll()
-	if err != nil {
-		return nil, err
-	}
-
-	children := make(map[int64][]int64)
-	for _, c := range all {
-		if c.ParentID != nil {
-			children[*c.ParentID] = append(children[*c.ParentID], c.ID)
-		}
-	}
-
-	// BFS
-	queue := []int64{catID}
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-		for _, child := range children[current] {
-			result = append(result, child)
-			queue = append(queue, child)
-		}
-	}
-
-	return result, nil
-}
-
-// UpsertCode adds a code to the attrdef system and links it to a category.
-// If code already exists, just adds category if not present.
-func (r *AttrDefRepo) UpsertCode(code string, catID int64) error {
-	if code == "" || catID == 0 {
-		return nil
-	}
-
-	// Check if code already exists
-	existing, _ := r.GetByCode(code)
-
-	if existing != nil {
-		// Add category if not present
-		cats, _ := r.GetCategories(code)
-		for _, c := range cats {
-			if c == catID {
-				return nil
-			}
-		}
-		// Append category
-		cats = append(cats, catID)
-		buf := makodb.TurboBinaryNew(Uint64SliceFromInt64(cats))
-		return r.store.DB().TurboRawWrite(turboKeyAttrDefCats+code, buf)
-	}
-
-	// Create new attrdef
-	id, err := r.store.NextID("attrdef")
-	if err != nil {
-		return err
-	}
-
-	ad := &model.AttrDef{
-		ID:         id,
-		Code:       code,
-		Categories: []int64{catID},
-		CreatedAt:  time.Now(),
-	}
-
-	// Save doc
-	data, _ := json.Marshal(ad)
-	if err := r.store.DocPut(fmt.Sprintf("attrdef:%d", id), data); err != nil {
-		return err
-	}
-
-	// Index: code -> docID
-	if err := r.store.DB().TurboRawWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", id))); err != nil {
-		return err
-	}
-
-	// Index: code -> categories
-	catBuf := makodb.TurboBinaryNew([]uint64{uint64(catID)})
-	if err := r.store.DB().TurboRawWrite(turboKeyAttrDefCats+code, catBuf); err != nil {
-		return err
-	}
-
-	// Add to attrdef_list
-	if err := r.addToAttrDefList(code); err != nil {
-		fmt.Printf("WARN: failed to add attrdef %s to list: %v\n", code, err)
 	}
 
 	return nil
 }
 
-func (r *AttrDefRepo) addToAttrDefList(code string) error {
-	data, _ := r.store.DB().TurboRawRead(turboKeyAttrDefList)
+func (r *AttrDefRepo) addToCatCodes(catID int64, code string) error {
+	key := turboKeyAttrDefCatCodes + fmt.Sprintf("%d", catID)
+	data, _ := r.store.DB().TurboRawRead(key)
 	var codes []string
 	if data != nil && len(data) > 0 {
 		json.Unmarshal(data, &codes)
@@ -373,179 +286,18 @@ func (r *AttrDefRepo) addToAttrDefList(code string) error {
 	}
 	codes = append(codes, code)
 	buf, _ := json.Marshal(codes)
-	return r.store.DB().TurboRawWrite(turboKeyAttrDefList, buf)
+	return r.store.TurboWrite(key, buf)
 }
 
-func Uint64SliceFromInt64(in []int64) []uint64 {
-	out := make([]uint64, len(in))
-	for i, v := range in {
-		out[i] = uint64(v)
-	}
-	return out
-}
-
-// BatchUpsertCodes batch-inserts all attr codes with their category links.
-// Uses direct turbo writes (no per-code DB round-trips).
-func (r *AttrDefRepo) BatchUpsertCodes(codeCats map[string]map[int64]struct{}) error {
-	if len(codeCats) == 0 {
+func (r *AttrDefRepo) removeFromCatCodes(catID int64, code string) error {
+	key := turboKeyAttrDefCatCodes + fmt.Sprintf("%d", catID)
+	data, _ := r.store.DB().TurboRawRead(key)
+	if len(data) == 0 {
 		return nil
 	}
-
-	var allCodes []string
-	for code := range codeCats {
-		allCodes = append(allCodes, code)
-	}
-
-	// Write attrdef_list
-	listBuf, _ := json.Marshal(allCodes)
-	if err := r.store.DB().TurboRawWrite(turboKeyAttrDefList, listBuf); err != nil {
-		return fmt.Errorf("write attrdef_list: %w", err)
-	}
-
-	// Write each code -> categories and code -> docID
-	for code, catSet := range codeCats {
-		cats := make([]int64, 0, len(catSet))
-		for c := range catSet {
-			cats = append(cats, c)
-		}
-
-		// attrdef_cats:<code> -> [categoryIDs]
-		catBuf := makodb.TurboBinaryNew(Uint64SliceFromInt64(cats))
-		if err := r.store.DB().TurboRawWrite(turboKeyAttrDefCats+code, catBuf); err != nil {
-			fmt.Printf("WARN: write attrdef_cats %s: %v\n", code, err)
-		}
-
-		// attrdef_code:<code> -> docID (use hash as pseudo-ID)
-		h := uint64(0)
-		for i := 0; i < len(code); i++ {
-			h ^= uint64(code[i])
-			h *= 1099511628211
-		}
-		if err := r.store.DB().TurboRawWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", h))); err != nil {
-			fmt.Printf("WARN: write attrdef_code %s: %v\n", code, err)
-		}
-	}
-
-	return nil
-}
-
-// BatchWriteAttrValues batch-writes attr value references.
-// codeValues: global code -> values
-// codeCatValues: code -> catID -> values (for per-category filtering)
-func (r *AttrDefRepo) BatchWriteAttrValues(codeValues map[string]map[string]struct{}, codeCatValues map[string]map[int64]map[string]struct{}) error {
-	if len(codeValues) == 0 {
-		return nil
-	}
-
-	for code, valSet := range codeValues {
-		if len(valSet) == 0 {
-			continue
-		}
-
-		// Collect hashes and write labels
-		var hashes []uint64
-		for val := range valSet {
-			h := fnv64(val)
-			hashes = append(hashes, h)
-
-			// Write label
-			hexH := fmt.Sprintf("%x", h)
-			labelKey := "attr_label:" + code + ":" + hexH
-			if err := r.store.DB().TurboRawWrite(labelKey, []byte(val)); err != nil {
-				fmt.Printf("WARN: write attr_label %s: %v\n", labelKey, err)
-			}
-		}
-
-		// Write per-category attr_values_cat:<code>:<catID> -> [hashes]
-		if catVals, ok := codeCatValues[code]; ok {
-			for catID, catValSet := range catVals {
-				if len(catValSet) == 0 {
-					continue
-				}
-				var catHashes []uint64
-				for val := range catValSet {
-					catHashes = append(catHashes, fnv64(val))
-				}
-				catBuf := makodb.TurboBinaryNew(catHashes)
-				catKey := turboKeyAttrValuesCat + code + ":" + fmt.Sprintf("%d", catID)
-				if err := r.store.DB().TurboRawWrite(catKey, catBuf); err != nil {
-					fmt.Printf("WARN: write attr_values_cat %s: %v\n", catKey, err)
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
-func fnv64(s string) uint64 {
-	h := uint64(14695981039346656037)
-	for i := 0; i < len(s); i++ {
-		h ^= uint64(s[i])
-		h *= 1099511628211
-	}
-	return h
-}
-
-// List returns all AttrDef entries.
-func (r *AttrDefRepo) List() ([]model.AttrDef, error) {
-	data, err := r.store.DB().TurboRawRead(turboKeyAttrDefList)
-	if err != nil || len(data) == 0 {
-		return nil, nil
-	}
-
 	var codes []string
 	if err := json.Unmarshal(data, &codes); err != nil {
-		return nil, err
-	}
-
-	var result []model.AttrDef
-	for _, code := range codes {
-		ad, err := r.GetByCode(code)
-		if err != nil {
-			continue
-		}
-		result = append(result, *ad)
-	}
-	return result, nil
-}
-
-// Update updates an AttrDef by code.
-func (r *AttrDefRepo) Update(code string, updater func(*model.AttrDef)) error {
-	ad, err := r.GetByCode(code)
-	if err != nil {
 		return err
-	}
-
-	updater(ad)
-
-	data, err := json.Marshal(ad)
-	if err != nil {
-		return err
-	}
-
-	return r.store.DocPut(fmt.Sprintf("attrdef:%d", ad.ID), data)
-}
-
-// Delete removes an AttrDef by code.
-func (r *AttrDefRepo) Delete(code string) error {
-	ad, err := r.GetByCode(code)
-	if err != nil {
-		return err
-	}
-
-	// Remove from doc store
-	_ = r.store.DocDelete(fmt.Sprintf("attrdef:%d", ad.ID))
-
-	// Remove indexes
-	_ = r.store.DB().TurboRawWrite(turboKeyAttrDefCode+code, []byte{})
-	_ = r.store.DB().TurboRawWrite(turboKeyAttrDefCats+code, []byte{})
-
-	// Remove from list
-	data, _ := r.store.DB().TurboRawRead(turboKeyAttrDefList)
-	var codes []string
-	if data != nil && len(data) > 0 {
-		json.Unmarshal(data, &codes)
 	}
 	var newCodes []string
 	for _, c := range codes {
@@ -555,21 +307,18 @@ func (r *AttrDefRepo) Delete(code string) error {
 	}
 	if len(newCodes) > 0 {
 		buf, _ := json.Marshal(newCodes)
-		_ = r.store.DB().TurboRawWrite(turboKeyAttrDefList, buf)
-	} else {
-		_ = r.store.DB().TurboRawWrite(turboKeyAttrDefList, []byte{})
+		return r.store.TurboWrite(key, buf)
 	}
-
-	return nil
+	return r.store.TurboWrite(key, []byte{})
 }
 
-// Create creates a new AttrDef.
+// ---------- CRUD with index updates ----------
+
 func (r *AttrDefRepo) Create(code string, ad *model.AttrDef) error {
 	if code == "" {
 		return fmt.Errorf("code is required")
 	}
 
-	// Check if exists
 	_, err := r.GetByCode(code)
 	if err == nil {
 		return fmt.Errorf("attrdef %s already exists", code)
@@ -597,18 +346,357 @@ func (r *AttrDefRepo) Create(code string, ad *model.AttrDef) error {
 	}
 
 	// Index: code -> docID
-	if err := r.store.DB().TurboRawWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", id))); err != nil {
+	if err := r.store.TurboWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", id))); err != nil {
 		return err
 	}
 
 	// Index: code -> categories
 	if len(ad.Categories) > 0 {
 		catBuf := makodb.TurboBinaryNew(Uint64SliceFromInt64(ad.Categories))
-		if err := r.store.DB().TurboRawWrite(turboKeyAttrDefCats+code, catBuf); err != nil {
+		if err := r.store.TurboWrite(turboKeyAttrDefCats+code, catBuf); err != nil {
 			return err
 		}
 	}
 
+	// Index: cat -> codes
+	for _, catID := range ad.Categories {
+		r.addToCatCodes(catID, code)
+	}
+
 	// Add to list
 	return r.addToAttrDefList(code)
+}
+
+func (r *AttrDefRepo) Update(code string, updater func(*model.AttrDef)) error {
+	ad, err := r.GetByCode(code)
+	if err != nil {
+		return err
+	}
+
+	oldCats := make([]int64, len(ad.Categories))
+	copy(oldCats, ad.Categories)
+
+	updater(ad)
+
+	data, err := json.Marshal(ad)
+	if err != nil {
+		return err
+	}
+
+	if err := r.store.DocPut(fmt.Sprintf("attrdef:%d", ad.ID), data); err != nil {
+		return err
+	}
+
+	// Update code -> categories
+	if len(ad.Categories) > 0 {
+		catBuf := makodb.TurboBinaryNew(Uint64SliceFromInt64(ad.Categories))
+		r.store.TurboWrite(turboKeyAttrDefCats+code, catBuf)
+	} else {
+		r.store.TurboWrite(turboKeyAttrDefCats+code, []byte{})
+	}
+
+	// Update cat -> codes
+	return r.updateCatCodesIndex(code, oldCats, ad.Categories)
+}
+
+func (r *AttrDefRepo) Delete(code string) error {
+	ad, err := r.GetByCode(code)
+	if err != nil {
+		return err
+	}
+
+	// Remove from cat -> codes
+	for _, catID := range ad.Categories {
+		r.removeFromCatCodes(catID, code)
+	}
+
+	// Remove doc
+	_ = r.store.DocDelete(fmt.Sprintf("attrdef:%d", ad.ID))
+
+	// Remove indexes
+	_ = r.store.TurboWrite(turboKeyAttrDefCode+code, []byte{})
+	_ = r.store.TurboWrite(turboKeyAttrDefCats+code, []byte{})
+
+	// Remove from list
+	data, _ := r.store.DB().TurboRawRead(turboKeyAttrDefList)
+	var codes []string
+	if data != nil && len(data) > 0 {
+		json.Unmarshal(data, &codes)
+	}
+	var newCodes []string
+	for _, c := range codes {
+		if c != code {
+			newCodes = append(newCodes, c)
+		}
+	}
+	if len(newCodes) > 0 {
+		buf, _ := json.Marshal(newCodes)
+		_ = r.store.TurboWrite(turboKeyAttrDefList, buf)
+	} else {
+		_ = r.store.TurboWrite(turboKeyAttrDefList, []byte{})
+	}
+
+	return nil
+}
+
+// UpsertCode adds a code to the attrdef system and links it to a category.
+func (r *AttrDefRepo) UpsertCode(code string, catID int64) error {
+	if code == "" || catID == 0 {
+		return nil
+	}
+
+	existing, _ := r.GetByCode(code)
+
+	if existing != nil {
+		cats, _ := r.GetCategories(code)
+		for _, c := range cats {
+			if c == catID {
+				return nil
+			}
+		}
+		cats = append(cats, catID)
+		buf := makodb.TurboBinaryNew(Uint64SliceFromInt64(cats))
+		if err := r.store.TurboWrite(turboKeyAttrDefCats+code, buf); err != nil {
+			return err
+		}
+		return r.addToCatCodes(catID, code)
+	}
+
+	id, err := r.store.NextID("attrdef")
+	if err != nil {
+		return err
+	}
+
+	ad := &model.AttrDef{
+		ID:         id,
+		Code:       code,
+		Categories: []int64{catID},
+		CreatedAt:  time.Now(),
+	}
+
+	data, _ := json.Marshal(ad)
+	if err := r.store.DocPut(fmt.Sprintf("attrdef:%d", id), data); err != nil {
+		return err
+	}
+
+	if err := r.store.TurboWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", id))); err != nil {
+		return err
+	}
+
+	catBuf := makodb.TurboBinaryNew([]uint64{uint64(catID)})
+	if err := r.store.TurboWrite(turboKeyAttrDefCats+code, catBuf); err != nil {
+		return err
+	}
+
+	r.addToCatCodes(catID, code)
+	return r.addToAttrDefList(code)
+}
+
+func (r *AttrDefRepo) addToAttrDefList(code string) error {
+	data, _ := r.store.DB().TurboRawRead(turboKeyAttrDefList)
+	var codes []string
+	if data != nil && len(data) > 0 {
+		json.Unmarshal(data, &codes)
+	}
+	for _, c := range codes {
+		if c == code {
+			return nil
+		}
+	}
+	codes = append(codes, code)
+	buf, _ := json.Marshal(codes)
+	return r.store.TurboWrite(turboKeyAttrDefList, buf)
+}
+
+// BatchUpsertCodes batch-inserts all attr codes with their category links.
+func (r *AttrDefRepo) BatchUpsertCodes(codeCats map[string]map[int64]struct{}) error {
+	if len(codeCats) == 0 {
+		return nil
+	}
+
+	var allCodes []string
+	for code := range codeCats {
+		allCodes = append(allCodes, code)
+	}
+
+	listBuf, _ := json.Marshal(allCodes)
+	if err := r.store.TurboWrite(turboKeyAttrDefList, listBuf); err != nil {
+		return fmt.Errorf("write attrdef_list: %w", err)
+	}
+
+	// Clear old cat->codes indexes
+	r.store.TurboWrite(turboKeyAttrDefCatCodes+"_", []byte{}) // marker
+
+	for code, catSet := range codeCats {
+		cats := make([]int64, 0, len(catSet))
+		for c := range catSet {
+			cats = append(cats, c)
+		}
+
+		catBuf := makodb.TurboBinaryNew(Uint64SliceFromInt64(cats))
+		if err := r.store.TurboWrite(turboKeyAttrDefCats+code, catBuf); err != nil {
+			fmt.Printf("WARN: write attrdef_cats %s: %v\n", code, err)
+		}
+
+		h := uint64(0)
+		for i := 0; i < len(code); i++ {
+			h ^= uint64(code[i])
+			h *= 1099511628211
+		}
+		if err := r.store.TurboWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", h))); err != nil {
+			fmt.Printf("WARN: write attrdef_code %s: %v\n", code, err)
+		}
+
+		// Build cat->codes map in memory
+		for _, catID := range cats {
+			key := turboKeyAttrDefCatCodes + fmt.Sprintf("%d", catID)
+			existingData, _ := r.store.DB().TurboRawRead(key)
+			var existingCodes []string
+			if existingData != nil && len(existingData) > 0 {
+				json.Unmarshal(existingData, &existingCodes)
+			}
+			found := false
+			for _, c := range existingCodes {
+				if c == code {
+					found = true
+					break
+				}
+			}
+			if !found {
+				existingCodes = append(existingCodes, code)
+				buf, _ := json.Marshal(existingCodes)
+				r.store.TurboWrite(key, buf)
+			}
+		}
+	}
+
+	return nil
+}
+
+// BatchWriteAttrValues batch-writes attr value references.
+func (r *AttrDefRepo) BatchWriteAttrValues(codeValues map[string]map[string]struct{}, codeCatValues map[string]map[int64]map[string]struct{}) error {
+	if len(codeValues) == 0 {
+		return nil
+	}
+
+	for code, valSet := range codeValues {
+		if len(valSet) == 0 {
+			continue
+		}
+
+		var hashes []uint64
+		for val := range valSet {
+			h := fnv64(val)
+			hashes = append(hashes, h)
+
+			hexH := fmt.Sprintf("%x", h)
+			labelKey := "attr_label:" + code + ":" + hexH
+			if err := r.store.TurboWrite(labelKey, []byte(val)); err != nil {
+				fmt.Printf("WARN: write attr_label %s: %v\n", labelKey, err)
+			}
+		}
+
+		if catVals, ok := codeCatValues[code]; ok {
+			for catID, catValSet := range catVals {
+				if len(catValSet) == 0 {
+					continue
+				}
+				var catHashes []uint64
+				for val := range catValSet {
+					catHashes = append(catHashes, fnv64(val))
+				}
+				catBuf := makodb.TurboBinaryNew(catHashes)
+				catKey := turboKeyAttrValuesCat + code + ":" + fmt.Sprintf("%d", catID)
+				if err := r.store.TurboWrite(catKey, catBuf); err != nil {
+					fmt.Printf("WARN: write attr_values_cat %s: %v\n", catKey, err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func fnv64(s string) uint64 {
+	h := uint64(14695981039346656037)
+	for i := 0; i < len(s); i++ {
+		h ^= uint64(s[i])
+		h *= 1099511628211
+	}
+	return h
+}
+
+func Uint64SliceFromInt64(in []int64) []uint64 {
+	out := make([]uint64, len(in))
+	for i, v := range in {
+		out[i] = uint64(v)
+	}
+	return out
+}
+
+// ---------- List ----------
+
+func (r *AttrDefRepo) List() ([]model.AttrDef, error) {
+	data, err := r.store.DB().TurboRawRead(turboKeyAttrDefList)
+	if err != nil || len(data) == 0 {
+		return nil, nil
+	}
+
+	var codes []string
+	if err := json.Unmarshal(data, &codes); err != nil {
+		return nil, err
+	}
+
+	var result []model.AttrDef
+	for _, code := range codes {
+		ad, err := r.GetByCode(code)
+		if err != nil {
+			continue
+		}
+		result = append(result, *ad)
+	}
+	return result, nil
+}
+
+// RebuildCatCodesIndex rebuilds the cat->codes index from existing data.
+func (r *AttrDefRepo) RebuildCatCodesIndex() error {
+	codesData, err := r.store.DB().TurboRawRead(turboKeyAttrDefList)
+	if err != nil || len(codesData) == 0 {
+		return nil
+	}
+
+	var codes []string
+	if err := json.Unmarshal(codesData, &codes); err != nil {
+		return err
+	}
+
+	for _, code := range codes {
+		cats, err := r.GetCategories(code)
+		if err != nil {
+			continue
+		}
+		for _, catID := range cats {
+			key := turboKeyAttrDefCatCodes + fmt.Sprintf("%d", catID)
+			existingData, _ := r.store.DB().TurboRawRead(key)
+			var existingCodes []string
+			if existingData != nil && len(existingData) > 0 {
+				json.Unmarshal(existingData, &existingCodes)
+			}
+			found := false
+			for _, c := range existingCodes {
+				if c == code {
+					found = true
+					break
+				}
+			}
+			if !found {
+				existingCodes = append(existingCodes, code)
+				buf, _ := json.Marshal(existingCodes)
+				r.store.TurboWrite(key, buf)
+			}
+		}
+	}
+
+	fmt.Printf("[ATTRDEF] Rebuilt cat_codes index: %d codes\n", len(codes))
+	return nil
 }

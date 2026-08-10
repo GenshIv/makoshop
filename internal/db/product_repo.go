@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -413,24 +414,40 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*ListResult, error) {
 			return nil, fmt.Errorf("scupage list: %w", err)
 		}
 
-		// Convert SCUPageListItem -> ProductListItem (for API compatibility)
+		// Return raw SCUPage JSON directly (front-end will parse it)
 		items := make([]ProductListItem, 0, len(result.Items))
-		for _, sp := range result.Items {
-			item := ProductListItem{
-				ID:         sp.ID,
-				Name:       sp.Title,
-				SKU:        sp.SCU,
-				CategoryID: sp.CategoryID,
-				Brand:      sp.Brand,
-				Price:      sp.MinPrice,
-				Currency:   sp.Currency,
-				Attributes: sp.Attributes,
-				Images:     sp.Images,
-				Status:     model.ProductStatusActive,
+		for _, raw := range result.Items {
+			var m map[string]any
+			if err := json.Unmarshal(raw, &m); err != nil {
+				continue
 			}
-			// Use first product's company_id if available
-			if len(sp.Products) > 0 {
-				item.CompanyID = sp.Products[0].CompanyID
+			item := ProductListItem{
+				ID:       toInt64(m["id"]),
+				Name:     toString(m["title"]),
+				SKU:      toString(m["scu"]),
+				Brand:    toString(m["brand"]),
+				Currency: toString(m["currency"]),
+				Status:   model.ProductStatusActive,
+			}
+			if v, ok := m["category_id"]; ok {
+				item.CategoryID = toInt64(v)
+			}
+			if v, ok := m["min_price"]; ok {
+				item.Price = toFloat64Val(v)
+			}
+			if v, ok := m["attributes"]; ok {
+				item.Attributes = toAttrMap(v)
+			}
+			if v, ok := m["images"]; ok {
+				item.Images = toStringSlice(v)
+			}
+			// CompanyID from first product in products[]
+			if prods, ok := m["products"]; ok {
+				if arr, ok := prods.([]any); ok && len(arr) > 0 {
+					if first, ok := arr[0].(map[string]any); ok {
+						item.CompanyID = toInt64(first["company_id"])
+					}
+				}
 			}
 			items = append(items, item)
 		}
@@ -520,6 +537,74 @@ func toFloat64Safe(v interface{}) float64 {
 		return f
 	}
 	return 0
+}
+
+// toInt64 extracts int64 from any JSON-decoded value.
+func toInt64(v any) int64 {
+	switch val := v.(type) {
+	case int64:
+		return val
+	case int:
+		return int64(val)
+	case float64:
+		return int64(val)
+	case string:
+		if n, err := strconv.ParseInt(val, 10, 64); err == nil {
+			return n
+		}
+	}
+	return 0
+}
+
+// toString extracts string from any JSON-decoded value.
+func toString(v any) string {
+	if v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		return val
+	case float64:
+		return strconv.FormatFloat(val, 'f', -1, 64)
+	case int64:
+		return strconv.FormatInt(val, 10)
+	case int:
+		return strconv.Itoa(val)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+// toFloat64Val extracts float64 from any JSON-decoded value (no bool).
+func toFloat64Val(v any) float64 {
+	if f, ok := toFloat64(v); ok {
+		return f
+	}
+	return 0
+}
+
+// toAttrMap converts a JSON-decoded value to map[string]interface{}.
+func toAttrMap(v any) map[string]interface{} {
+	if m, ok := v.(map[string]any); ok {
+		out := make(map[string]interface{}, len(m))
+		for k, val := range m {
+			out[k] = val
+		}
+		return out
+	}
+	return nil
+}
+
+// toStringSlice converts a JSON-decoded value to []string.
+func toStringSlice(v any) []string {
+	if arr, ok := v.([]any); ok {
+		out := make([]string, 0, len(arr))
+		for _, val := range arr {
+			out = append(out, toString(val))
+		}
+		return out
+	}
+	return nil
 }
 
 // loadProductsFromIDs loads products from a set of IDs and applies price/attr-range filters.

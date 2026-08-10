@@ -357,7 +357,7 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 		// Batch write brand indexes
 		if len(brands) > 0 {
 			fmt.Printf("[IMPORT-NORMALIZED] Building brand indexes (%d brands)\n", len(brands))
-			if err := h.batchWriteBrands(db.DB(), brands); err != nil {
+			if err := h.batchWriteBrands(h.store, brands); err != nil {
 				fmt.Printf("[IMPORT-NORMALIZED] WARN: batch write brands: %v\n", err)
 			}
 		}
@@ -928,7 +928,7 @@ func (h *Handlers) importNormalizedFileBatched(
 }
 
 // batchWriteBrands writes brand_list and brand_name:<ID> indexes.
-func (h *Handlers) batchWriteBrands(db *makodb.ShardedDB, brands map[int64]string) error {
+func (h *Handlers) batchWriteBrands(store *db.Store, brands map[int64]string) error {
 	var brandIDs []uint64
 	for id := range brands {
 		brandIDs = append(brandIDs, uint64(id))
@@ -936,14 +936,14 @@ func (h *Handlers) batchWriteBrands(db *makodb.ShardedDB, brands map[int64]strin
 
 	// Write brand_list
 	buf := makodb.TurboBinaryNew(brandIDs)
-	if err := db.TurboRawWrite("brand_list", buf); err != nil {
+	if err := store.TurboWrite("brand_list", buf); err != nil {
 		return fmt.Errorf("write brand_list: %w", err)
 	}
 
 	// Write brand_name:<ID>
 	for id, name := range brands {
 		key := "brand_name:" + strconv.FormatInt(id, 10)
-		if err := db.TurboRawWrite(key, []byte(name)); err != nil {
+		if err := store.TurboWrite(key, []byte(name)); err != nil {
 			fmt.Printf("WARN: write brand_name %d: %v\n", id, err)
 		}
 	}

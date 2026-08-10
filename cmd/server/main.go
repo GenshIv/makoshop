@@ -245,10 +245,37 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}), model.RoleAdmin))
 
+	// POST /admin/rebuild-scupage-sort-indexes — rebuild sort indexes for SCU pages
+	mux.Handle("/admin/rebuild-scupage-sort-indexes", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			h.HandleAdminRebuildSCUPageSortIndexes(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}), model.RoleAdmin))
+
 	// POST /admin/rebuild-category-slugs — rebuild slugs for all categories
 	mux.Handle("/admin/rebuild-category-slugs", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			h.HandleAdminRebuildCategorySlugs(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}), model.RoleAdmin))
+
+	// POST /admin/rebuild-category-indexes — rebuild all category turbo indexes
+	mux.Handle("/admin/rebuild-category-indexes", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			h.HandleAdminRebuildCategoryIndexes(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}), model.RoleAdmin))
+
+	// POST /admin/rebuild-attrdef-indexes — rebuild attrdef cat_codes indexes
+	mux.Handle("/admin/rebuild-attrdef-indexes", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			h.HandleAdminRebuildAttrDefIndexes(w, r)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

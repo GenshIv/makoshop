@@ -491,7 +491,11 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 	// Build category filter attributes
 	var categoryAttrs []interface{}
 	if catID > 0 && h.attrDefRepo != nil {
-		codes, _ := h.attrDefRepo.GetCodesForCategoryTree(catID, h.categoryRepo)
+		codes, err := h.attrDefRepo.GetCodesForCategoryTree(catID, h.categoryRepo)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+			return
+		}
 		for _, code := range codes {
 			values, _ := h.attrDefRepo.GetAttrValuesForCategory(code, catID)
 			if len(values) > 0 {
@@ -521,8 +525,14 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 
+		// Add seo_url to each item via text replacement (no unmarshal)
+		items := make([]json.RawMessage, 0, len(result.Items))
+		for _, raw := range result.Items {
+			items = append(items, injectSeoURL(raw, h.categoryRepo))
+		}
+
 		respData := map[string]interface{}{
-			"items":          result.Items,
+			"items":          items,
 			"total":          result.Total,
 			"page":           result.Page,
 			"limit":          result.Limit,
@@ -808,7 +818,11 @@ func renderSSRContent(jsonData []byte) string {
 // renderSSRProductCard renders a single product card for catalog SSR.
 func renderSSRProductCard(m map[string]interface{}) string {
 	title, _ := m["title"].(string)
+	slug, _ := m["slug"].(string)
 	seoURL, _ := m["seo_url"].(string)
+	if seoURL == "" && slug != "" {
+		seoURL = "/shop/" + slug
+	}
 	minPrice, _ := m["min_price"].(float64)
 	currency, _ := m["currency"].(string)
 	brand, _ := m["brand"].(string)
@@ -845,57 +859,42 @@ func (h *Handlers) findCategoryByPath(slugs []string) (int64, error) {
 		return 0, fmt.Errorf("empty path")
 	}
 
-	// Get all categories
-	allCats, err := h.categoryRepo.ListAll()
-	if err != nil {
-		return 0, err
-	}
-
-	// Build map by slug
-	bySlug := make(map[string]*model.Category)
-	for i := range allCats {
-		if allCats[i].Slug != "" {
-			bySlug[allCats[i].Slug] = &allCats[i]
+	// Try O(1) lookup by path hash first
+	cat, err := h.categoryRepo.GetByPath(slugs)
+	if err == nil && cat != nil {
+		if !cat.IsActive {
+			return 0, fmt.Errorf("category not found") // hide inactive
 		}
+		return cat.ID, nil
 	}
 
-	// Walk down the tree
+	// Fallback: walk slug by slug using GetBySlug (O(1) each)
 	var currentID *int64
 	var lastCat *model.Category
 	for i, slug := range slugs {
-		found := false
-		for _, cat := range allCats {
-			if cat.Slug == slug {
-				if i == 0 {
-					// First slug: accept any category with this slug (don't require parent=nil)
-					currentID = &cat.ID
-					lastCat = &cat
-					found = true
-					break
-				} else if currentID != nil && cat.ParentID != nil && *cat.ParentID == *currentID {
-					currentID = &cat.ID
-					lastCat = &cat
-					found = true
-					break
-				}
-			}
+		cat, err := h.categoryRepo.GetBySlug(slug)
+		if err != nil || cat == nil {
+			return 0, fmt.Errorf("category not found in path: %s", slug)
 		}
-		if !found {
-			fmt.Printf("[SHOP] Category not found in path: slug=%s, currentID=%v\n", slug, currentID)
+
+		if i == 0 {
+			currentID = &cat.ID
+			lastCat = cat
+		} else if currentID != nil && cat.ParentID != nil && *cat.ParentID == *currentID {
+			currentID = &cat.ID
+			lastCat = cat
+		} else {
 			return 0, fmt.Errorf("category not found in path: %s", slug)
 		}
 	}
 
-	// Check if the final category is active
 	if lastCat != nil && !lastCat.IsActive {
-		fmt.Printf("[SHOP] Category is inactive: id=%d, slug=%s\n", lastCat.ID, lastCat.Slug)
-		return 0, fmt.Errorf("category not found") // hide inactive categories
+		return 0, fmt.Errorf("category not found")
 	}
 
 	if currentID == nil {
 		return 0, fmt.Errorf("path resolution failed")
 	}
-	fmt.Printf("[SHOP] Resolved path %v -> category ID=%d\n", slugs, *currentID)
 	return *currentID, nil
 }
 
@@ -903,6 +902,93 @@ func (h *Handlers) findCategoryByPath(slugs []string) (int64, error) {
 func buildSEOURL(sp *model.SCUPage, treePath []string) string {
 	parts := append(treePath, sp.Slug)
 	return "/shop/" + strings.Join(parts, "/")
+}
+
+// injectSeoURL adds "seo_url" field to a raw SCUPage JSON via text operations.
+// Reads slug and category_id from JSON, builds canonical URL, inserts field before closing brace.
+func injectSeoURL(raw json.RawMessage, catRepo *db.CategoryRepo) json.RawMessage {
+	if len(raw) == 0 || raw[len(raw)-1] != '}' {
+		return raw
+	}
+
+	s := string(raw)
+
+	// Extract slug: find "slug":"value"
+	slug := extractJSONStringField(s, "slug")
+	if slug == "" {
+		return raw
+	}
+
+	// Extract category_id: find "category_id":123
+	catID := extractJSONIntField(s, "category_id")
+
+	// Build seo_url
+	seoURL := "/shop/" + slug
+	if catID != 0 && catRepo != nil {
+		if treePath, err := catRepo.GetTreePath(catID); err == nil && len(treePath) > 0 {
+			seoURL = "/shop/" + strings.Join(treePath, "/") + "/" + slug
+		}
+	}
+
+	// Insert "seo_url":"..." before closing brace
+	// Escape quotes in seo_url
+	escaped := strings.ReplaceAll(seoURL, "\"", "\\\"")
+	insert := fmt.Sprintf(`,"seo_url":"%s"`, escaped)
+
+	buf := make([]byte, 0, len(raw)+len(insert))
+	buf = append(buf, raw[:len(raw)-1]...) // everything except closing brace
+	buf = append(buf, insert...)
+	buf = append(buf, '}')
+	return json.RawMessage(buf)
+}
+
+// extractJSONStringField extracts a string value for a given key from JSON text.
+// Looks for "key":"value" pattern. Simple and fast, no full parse.
+func extractJSONStringField(s, key string) string {
+	search := `"` + key + `":"`
+	idx := strings.Index(s, search)
+	if idx == -1 {
+		return ""
+	}
+	start := idx + len(search)
+	if start >= len(s) {
+		return ""
+	}
+	// Find closing quote (handle escaped quotes)
+	for i := start; i < len(s); i++ {
+		if s[i] == '\\' {
+			i++ // skip escaped char
+			continue
+		}
+		if s[i] == '"' {
+			return s[start:i]
+		}
+	}
+	return ""
+}
+
+// extractJSONIntField extracts an integer value for a given key from JSON text.
+// Looks for "key":123 pattern.
+func extractJSONIntField(s, key string) int64 {
+	search := `"` + key + `":`
+	idx := strings.Index(s, search)
+	if idx == -1 {
+		return 0
+	}
+	start := idx + len(search)
+	if start >= len(s) {
+		return 0
+	}
+	// Read digits
+	end := start
+	for end < len(s) && s[end] >= '0' && s[end] <= '9' {
+		end++
+	}
+	if end == start {
+		return 0
+	}
+	v, _ := strconv.ParseInt(s[start:end], 10, 64)
+	return v
 }
 
 // --- Request types ---
@@ -1130,6 +1216,35 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 	})
 }
 
+// HandleAdminRebuildSCUPageSortIndexes rebuilds sort indexes for SCU pages.
+func (h *Handlers) HandleAdminRebuildSCUPageSortIndexes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	if h.scuPageSearch == nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "scupage search not initialized")
+		return
+	}
+
+	fmt.Println("[REBUILD-SCUPAGE-SORT-INDEXES] Starting...")
+	startTime := time.Now()
+
+	if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	elapsed := time.Since(startTime)
+	fmt.Printf("[REBUILD-SCUPAGE-SORT-INDEXES] Completed in %v\n", elapsed)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "completed",
+		"elapsed": elapsed.String(),
+	})
+}
+
 // HandleAdminRebuildSCUPageIndexes indexes all SCU pages into SCUPageSearch.
 func (h *Handlers) HandleAdminRebuildSCUPageIndexes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -1213,12 +1328,54 @@ func (h *Handlers) HandleAdminRebuildCategorySlugs(w http.ResponseWriter, r *htt
 	}
 
 	elapsed := time.Since(startTime)
-	fmt.Printf("[REBUILD-CAT-SLUGS] Completed: %d categories updated in %v\n", updated, elapsed)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":  "completed",
-		"total":   len(cats),
+		"status":  "ok",
 		"updated": updated,
+		"elapsed": elapsed.String(),
+	})
+}
+
+// HandleAdminRebuildCategoryIndexes rebuilds all category turbo indexes.
+func (h *Handlers) HandleAdminRebuildCategoryIndexes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	fmt.Println("[REBUILD-CAT-INDEXES] Starting...")
+	startTime := time.Now()
+
+	if err := h.categoryRepo.RebuildAllIndexes(); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	elapsed := time.Since(startTime)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "ok",
+		"elapsed": elapsed.String(),
+	})
+}
+
+// HandleAdminRebuildAttrDefIndexes rebuilds attrdef cat_codes indexes.
+func (h *Handlers) HandleAdminRebuildAttrDefIndexes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	fmt.Println("[REBUILD-ATTRDEF-INDEXES] Starting...")
+	startTime := time.Now()
+
+	if err := h.attrDefRepo.RebuildCatCodesIndex(); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	elapsed := time.Since(startTime)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "ok",
 		"elapsed": elapsed.String(),
 	})
 }

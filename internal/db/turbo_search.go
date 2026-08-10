@@ -14,7 +14,7 @@ import (
 
 // TurboProductSearch — строго по turbo_index_guide.md.
 type TurboProductSearch struct {
-	db           *makodb.ShardedDB
+	store        *Store
 	repo         *ProductRepo
 	categoryRepo *CategoryRepo
 	landingRepo  *LandingRepo
@@ -23,9 +23,9 @@ type TurboProductSearch struct {
 	enabled      bool
 }
 
-func NewTurboProductSearch(db *makodb.ShardedDB, repo *ProductRepo, categoryRepo *CategoryRepo, enabled bool) *TurboProductSearch {
+func NewTurboProductSearch(store *Store, repo *ProductRepo, categoryRepo *CategoryRepo, enabled bool) *TurboProductSearch {
 	return &TurboProductSearch{
-		db:           db,
+		store:        store,
 		repo:         repo,
 		categoryRepo: categoryRepo,
 		enabled:      enabled,
@@ -42,9 +42,9 @@ func (t *TurboProductSearch) SetSCUPageRepo(sr *SCUPageRepo) {
 	t.scuPageRepo = sr
 }
 
-// DB returns the underlying ShardedDB for direct turbo operations.
+// DB returns the underlying ShardedDB for direct turbo operations (reads only).
 func (t *TurboProductSearch) DB() *makodb.ShardedDB {
-	return t.db
+	return t.store.db
 }
 
 // ---------- key helpers (по доке) ----------
@@ -82,7 +82,7 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 	docID := uint64(p.ID)
 
 	if p.BrandID != 0 {
-		if _, err := t.db.TurboPutIndex(turboKeyBrand(p.BrandID), docID); err != nil {
+		if _, err := t.store.db.TurboPutIndex(turboKeyBrand(p.BrandID), docID); err != nil {
 			return fmt.Errorf("turbo brand index: %w", err)
 		}
 		// Обновляем справочник брендов
@@ -90,7 +90,7 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 	}
 
 	if p.CompanyID != 0 {
-		if _, err := t.db.TurboPutIndex(turboKeyVendor(p.CompanyID), docID); err != nil {
+		if _, err := t.store.db.TurboPutIndex(turboKeyVendor(p.CompanyID), docID); err != nil {
 			return fmt.Errorf("turbo vendor index: %w", err)
 		}
 	}
@@ -101,7 +101,7 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 			ancestors = []int64{p.CategoryID}
 		}
 		for _, cid := range ancestors {
-			if _, err := t.db.TurboPutIndex(turboKeyCategory(cid), docID); err != nil {
+			if _, err := t.store.db.TurboPutIndex(turboKeyCategory(cid), docID); err != nil {
 				return fmt.Errorf("turbo category index: %w", err)
 			}
 		}
@@ -109,7 +109,7 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 
 	for code, val := range p.Attributes {
 		if valStr, ok := val.(string); ok && valStr != "" {
-			if _, err := t.db.TurboPutIndex(turboKeyAttr(code, valStr), docID); err != nil {
+			if _, err := t.store.db.TurboPutIndex(turboKeyAttr(code, valStr), docID); err != nil {
 				return fmt.Errorf("turbo attr index: %w", err)
 			}
 			// Обновляем справочник значений атрибута
@@ -118,7 +118,7 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 	}
 
 	for _, tok := range tokenizeProduct(p) {
-		if _, err := t.db.TurboPutIndex(turboKeyText(tok), docID); err != nil {
+		if _, err := t.store.db.TurboPutIndex(turboKeyText(tok), docID); err != nil {
 			return fmt.Errorf("turbo text index: %w", err)
 		}
 	}
@@ -129,7 +129,7 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 	// SCU index: links product to landing page
 	if p.SCU != "" {
 		scuKey := "scu:" + p.SCU
-		if _, err := t.db.TurboPutIndex(scuKey, docID); err != nil {
+		if _, err := t.store.db.TurboPutIndex(scuKey, docID); err != nil {
 			return fmt.Errorf("turbo scu index: %w", err)
 		}
 		// Update landing page product list
@@ -161,7 +161,7 @@ func (t *TurboProductSearch) indexPriceRanges(price float64, docID uint64) {
 	ranges := priceRanges()
 	for _, r := range ranges {
 		if price >= r.min && price < r.max {
-			t.db.TurboPutIndex(r.key, docID)
+			t.store.db.TurboPutIndex(r.key, docID)
 		}
 	}
 }
@@ -223,7 +223,7 @@ func (t *TurboProductSearch) ensureBrandInRef(brandID int64, name string) {
 	defer t.mu.Unlock()
 
 	// Добавляем в список брендов
-	brandListData, err := t.db.TurboRawRead(turboKeyBrandList)
+	brandListData, err := t.store.db.TurboRawRead(turboKeyBrandList)
 	if err != nil {
 		brandListData = nil
 	}
@@ -239,12 +239,12 @@ func (t *TurboProductSearch) ensureBrandInRef(brandID int64, name string) {
 	}
 	brandList = append(brandList, uint64(brandID))
 	buf := makodb.TurboBinaryNew(brandList)
-	t.db.TurboRawWrite(turboKeyBrandList, buf)
+	t.store.TurboWrite(turboKeyBrandList, buf)
 
 	// Записываем имя бренда
 	key := turboKeyBrandNamePrefix + strconv.FormatInt(brandID, 10)
 	label := []byte(name)
-	t.db.TurboRawWrite(key, label)
+	t.store.TurboWrite(key, label)
 }
 
 // ensureAttrValueInRef записывает label значения атрибута.
@@ -258,7 +258,7 @@ func (t *TurboProductSearch) ensureAttrValueInRef(code, value string) {
 
 	labelKey := turboKeyAttrLabel(code, value)
 	label := []byte(value)
-	t.db.TurboRawWrite(labelKey, label)
+	t.store.TurboWrite(labelKey, label)
 }
 
 // UnindexProduct — для удаления/обновления.
@@ -269,10 +269,10 @@ func (t *TurboProductSearch) UnindexProduct(p *model.Product) error {
 	docID := uint64(p.ID)
 
 	if p.BrandID != 0 {
-		t.db.TurboDeleteIndex(turboKeyBrand(p.BrandID), docID)
+		t.store.db.TurboDeleteIndex(turboKeyBrand(p.BrandID), docID)
 	}
 	if p.CompanyID != 0 {
-		t.db.TurboDeleteIndex(turboKeyVendor(p.CompanyID), docID)
+		t.store.db.TurboDeleteIndex(turboKeyVendor(p.CompanyID), docID)
 	}
 	if p.CategoryID != 0 {
 		ancestors, err := t.GetCategoryAncestors(p.CategoryID)
@@ -280,22 +280,22 @@ func (t *TurboProductSearch) UnindexProduct(p *model.Product) error {
 			ancestors = []int64{p.CategoryID}
 		}
 		for _, cid := range ancestors {
-			t.db.TurboDeleteIndex(turboKeyCategory(cid), docID)
+			t.store.db.TurboDeleteIndex(turboKeyCategory(cid), docID)
 		}
 	}
 	for code, val := range p.Attributes {
 		if valStr, ok := val.(string); ok && valStr != "" {
-			t.db.TurboDeleteIndex(turboKeyAttr(code, valStr), docID)
+			t.store.db.TurboDeleteIndex(turboKeyAttr(code, valStr), docID)
 		}
 	}
 	for _, tok := range tokenizeProduct(p) {
-		t.db.TurboDeleteIndex(turboKeyText(tok), docID)
+		t.store.db.TurboDeleteIndex(turboKeyText(tok), docID)
 	}
 
 	// Remove SCU index
 	if p.SCU != "" {
 		scuKey := "scu:" + p.SCU
-		t.db.TurboDeleteIndex(scuKey, docID)
+		t.store.db.TurboDeleteIndex(scuKey, docID)
 		// Remove product from landing page
 		if t.landingRepo != nil {
 			if lp, err := t.landingRepo.GetBySCU(p.SCU); err == nil {
@@ -372,7 +372,7 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 		if len(docIDs) == 0 {
 			continue
 		}
-		if _, err := t.db.TurboPutBatchIndex(key, docIDs); err != nil {
+		if _, err := t.store.db.TurboPutBatchIndex(key, docIDs); err != nil {
 			fmt.Printf("WARN: turbo batch index %s: %v\n", key, err)
 		}
 	}
@@ -381,7 +381,7 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 	t.mu.Lock()
 	for bid, name := range brandRef {
 		// Добавляем в brand_list
-		brandListData, _ := t.db.TurboRawRead(turboKeyBrandList)
+		brandListData, _ := t.store.db.TurboRawRead(turboKeyBrandList)
 		var brandList []uint64
 		if brandListData != nil && len(brandListData) > 0 {
 			brandList = makodb.TurboUnsafeReadTokens(brandListData)
@@ -397,18 +397,18 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 			brandList = append(brandList, bid)
 		}
 		buf := makodb.TurboBinaryNew(brandList)
-		t.db.TurboRawWrite(turboKeyBrandList, buf)
+		t.store.TurboWrite(turboKeyBrandList, buf)
 
 		// Записываем имя
 		key := turboKeyBrandNamePrefix + strconv.FormatUint(bid, 10)
-		t.db.TurboRawWrite(key, []byte(name))
+		t.store.TurboWrite(key, []byte(name))
 	}
 
 	// Записываем метки атрибутов (справочник attr_values_cat заполняется при batch-импорте)
 	for code, values := range attrRef {
 		for _, val := range values {
 			labelKey := turboKeyAttrLabel(code, val)
-			t.db.TurboRawWrite(labelKey, []byte(val))
+			t.store.TurboWrite(labelKey, []byte(val))
 		}
 	}
 	t.mu.Unlock()
@@ -496,7 +496,7 @@ func (t *TurboProductSearch) BuildSortIndexes() error {
 	}
 
 	writeSortIndex := func(name string, docIDs []uint64) error {
-		if err := t.db.TurboPutSortIndex(name, docIDs); err != nil {
+		if err := t.store.db.TurboPutSortIndex(name, docIDs); err != nil {
 			return fmt.Errorf("turbo put sort index %s: %w", name, err)
 		}
 		return nil
@@ -563,7 +563,7 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 		params.Limit = 200
 	}
 
-	start := time.Now()
+	// start := time.Now()
 
 	// 1) AND-индексы
 	var andTokens []string
@@ -589,7 +589,7 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 	var candidates []uint64
 	var err error
 	if len(andTokens) > 0 {
-		candidates, err = t.db.TurboBulkIntersect(andTokens)
+		candidates, err = t.store.db.TurboBulkIntersect(andTokens)
 		if err != nil {
 			return nil, fmt.Errorf("turbo intersect: %w", err)
 		}
@@ -604,7 +604,7 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 	if params.PriceMin > 0 || params.PriceMax > 0 {
 		priceRangeKey := t.priceRangeKeyForFilter(params.PriceMin, params.PriceMax)
 		if priceRangeKey != "" {
-			priceIdx, err := t.db.TurboRawRead(priceRangeKey)
+			priceIdx, err := t.store.db.TurboRawRead(priceRangeKey)
 			if err == nil && len(priceIdx) > 0 {
 				priceTokens := makodb.TurboUnsafeReadTokens(priceIdx)
 				if candidates == nil {
@@ -628,7 +628,7 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 		for _, v := range values {
 			attrTokens = append(attrTokens, turboKeyAttr(code, v))
 		}
-		attrIDs, err := t.db.TurboBulkUnion(attrTokens)
+		attrIDs, err := t.store.db.TurboBulkUnion(attrTokens)
 		if err != nil {
 			return &TurboListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
@@ -667,7 +667,7 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 	}
 
 	// TurboSortIndexPageWithDocsFromDB: пересечение + сортировка + пагинация + загрузка документов
-	res, err := t.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
+	res, err := t.store.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
 		Name:       sortKey,
 		Candidates: candidates,      // []uint64 от фасетов (или nil для всех)
 		Page:       params.Page - 1, // 0-based
@@ -707,9 +707,9 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 
 	total := int64(res.Total)
 
-	elapsed := time.Since(start)
-	fmt.Printf("DEBUG TurboListWithTurbo: total=%d page=%d items=%d time=%v\n",
-		total, params.Page, len(items), elapsed)
+	//elapsed := time.Since(start)
+	// fmt.Printf("DEBUG TurboListWithTurbo: total=%d page=%d items=%d time=%v\n",
+	//	total, params.Page, len(items), elapsed)
 
 	// 7) Фасеты (только для запрошенных кодов)
 	var facets *TurboFacets
@@ -743,7 +743,7 @@ func (t *TurboProductSearch) computeFacets(candidates []uint64, params TurboList
 		var valueHashes []uint64
 		if params.CategoryID != 0 {
 			catKey := "attr_values_cat:" + code + ":" + strconv.FormatInt(params.CategoryID, 10)
-			catData, err := t.db.TurboRawRead(catKey)
+			catData, err := t.store.db.TurboRawRead(catKey)
 			if err == nil && len(catData) > 0 {
 				valueHashes = makodb.TurboUnsafeReadTokens(catData)
 			}
@@ -757,7 +757,7 @@ func (t *TurboProductSearch) computeFacets(candidates []uint64, params TurboList
 		for _, h := range valueHashes {
 			hexH := strconv.FormatUint(h, 16)
 			attrKey := "attr:" + code + ":" + hexH
-			idxData, err := t.db.TurboRawRead(attrKey)
+			idxData, err := t.store.db.TurboRawRead(attrKey)
 			if err != nil || len(idxData) == 0 {
 				continue
 			}
@@ -765,7 +765,7 @@ func (t *TurboProductSearch) computeFacets(candidates []uint64, params TurboList
 			count := len(intersectSorted(candidates, idxTokens))
 			if count > 0 {
 				// Получаем значение
-				labelData, _ := t.db.TurboRawRead("attr_label:" + code + ":" + hexH)
+				labelData, _ := t.store.db.TurboRawRead("attr_label:" + code + ":" + hexH)
 				value := string(labelData)
 				if value == "" {
 					value = hexH
@@ -836,7 +836,7 @@ func tokenizeQuery(text string) []string {
 // GetBrands returns all brands from brand_list index.
 // If catID != 0, filters to brands that have products in that category.
 func (t *TurboProductSearch) GetBrands(catID int64) ([]BrandInfo, error) {
-	data, err := t.db.TurboRawRead(turboKeyBrandList)
+	data, err := t.store.db.TurboRawRead(turboKeyBrandList)
 	if err != nil || len(data) == 0 {
 		return nil, nil
 	}
@@ -847,7 +847,7 @@ func (t *TurboProductSearch) GetBrands(catID int64) ([]BrandInfo, error) {
 	for _, bid := range brandIDs {
 		// Get brand name
 		nameKey := turboKeyBrandNamePrefix + strconv.FormatUint(bid, 10)
-		nameData, _ := t.db.TurboRawRead(nameKey)
+		nameData, _ := t.store.db.TurboRawRead(nameKey)
 		name := string(nameData)
 		if name == "" {
 			name = strconv.FormatUint(bid, 10)
@@ -855,11 +855,11 @@ func (t *TurboProductSearch) GetBrands(catID int64) ([]BrandInfo, error) {
 
 		// If category filter, check if brand has products in that category
 		if catID != 0 {
-			brandIdx, err := t.db.TurboRawRead("brand:" + strconv.FormatUint(bid, 10))
+			brandIdx, err := t.store.db.TurboRawRead("brand:" + strconv.FormatUint(bid, 10))
 			if err != nil || len(brandIdx) == 0 {
 				continue
 			}
-			catIdx, err := t.db.TurboRawRead("cat:" + strconv.FormatInt(catID, 10))
+			catIdx, err := t.store.db.TurboRawRead("cat:" + strconv.FormatInt(catID, 10))
 			if err != nil || len(catIdx) == 0 {
 				continue
 			}
@@ -893,7 +893,7 @@ func (t *TurboProductSearch) GetAllProducts() ([]model.Product, error) {
 	}
 
 	// Read from price sort index (contains all products)
-	sortData, err := t.db.TurboRawRead(turboSortPriceAsc)
+	sortData, err := t.store.db.TurboRawRead(turboSortPriceAsc)
 	if err != nil || len(sortData) == 0 {
 		return nil, nil
 	}
@@ -922,7 +922,7 @@ func (t *TurboProductSearch) GetProductsBySCU(scu string) ([]model.Product, erro
 	}
 
 	scuKey := "scu:" + scu
-	data, err := t.db.TurboRawRead(scuKey)
+	data, err := t.store.db.TurboRawRead(scuKey)
 	if err != nil || len(data) == 0 {
 		return nil, nil
 	}
