@@ -63,9 +63,13 @@ func (a *BatchAccum) WriteBatch(tmpDir string, batchID int) error {
 	return nil
 }
 
-// MergeIndexes reads all idx_* files, merges by key, radix sorts, writes to DB.
+// MergeIndexes reads all idx_* files, merges by key, radix sorts, and appends to DB indexes via TurboPutBatchIndex.
 func MergeIndexes(db *makodb.ShardedDB, tmpDir string) error {
-	keyFiles := map[string][]string{}
+	type keyFiles struct {
+		files []string
+		total int // total elements across all files
+	}
+	keyFilesMap := map[string]*keyFiles{}
 
 	entries, err := os.ReadDir(tmpDir)
 	if err != nil {
@@ -77,13 +81,33 @@ func MergeIndexes(db *makodb.ShardedDB, tmpDir string) error {
 			name := e.Name()[4 : len(e.Name())-4] // remove "idx_" and ".dat"
 			lastUnderscore := strings.LastIndex(name, "_")
 			safeKey := name[:lastUnderscore]
-			keyFiles[safeKey] = append(keyFiles[safeKey], filepath.Join(tmpDir, e.Name()))
+			kf, ok := keyFilesMap[safeKey]
+			if !ok {
+				kf = &keyFiles{}
+				keyFilesMap[safeKey] = kf
+			}
+			kf.files = append(kf.files, filepath.Join(tmpDir, e.Name()))
 		}
 	}
 
-	for safeKey, files := range keyFiles {
-		var all []uint64
-		for _, f := range files {
+	// Pre-count elements for each key to avoid reallocations
+	for safeKey, kf := range keyFilesMap {
+		for _, f := range kf.files {
+			if count, err := countUint64Slice(f); err == nil {
+				kf.total += count
+			}
+		}
+		keyFilesMap[safeKey] = kf
+	}
+
+	for safeKey, kf := range keyFilesMap {
+		if kf.total == 0 {
+			continue
+		}
+
+		// Pre-allocate slice
+		all := make([]uint64, 0, kf.total)
+		for _, f := range kf.files {
 			data, err := readUint64Slice(f)
 			if err != nil {
 				return fmt.Errorf("read index file %s: %w", f, err)
@@ -94,17 +118,21 @@ func MergeIndexes(db *makodb.ShardedDB, tmpDir string) error {
 			continue
 		}
 		RadixSortUint64(all)
-		buf := makodb.TurboBinaryNew(all)
-		if err := db.TurboRawWrite(decodeSafeKey(safeKey), buf); err != nil {
-			return fmt.Errorf("write index %s: %w", decodeSafeKey(safeKey), err)
+		key := decodeSafeKey(safeKey)
+		if _, err := db.TurboPutBatchIndex(key, all); err != nil {
+			return fmt.Errorf("batch add to index %s: %w", key, err)
 		}
 	}
 	return nil
 }
 
-// MergeSortIndexes reads all sort_* files, merges by key, sorts, writes to DB.
+// MergeSortIndexes reads all sort_* files, sorts items within each batch, and writes via TurboPutSortIndex.
 func MergeSortIndexes(db *makodb.ShardedDB, tmpDir string) error {
-	keyFiles := map[string][]string{}
+	type sortKeyFiles struct {
+		files []string
+		total int
+	}
+	keyFilesMap := map[string]*sortKeyFiles{}
 
 	entries, err := os.ReadDir(tmpDir)
 	if err != nil {
@@ -116,13 +144,33 @@ func MergeSortIndexes(db *makodb.ShardedDB, tmpDir string) error {
 			name := e.Name()[5 : len(e.Name())-4] // remove "sort_" and ".dat"
 			lastUnderscore := strings.LastIndex(name, "_")
 			safeKey := name[:lastUnderscore]
-			keyFiles[safeKey] = append(keyFiles[safeKey], filepath.Join(tmpDir, e.Name()))
+			kf, ok := keyFilesMap[safeKey]
+			if !ok {
+				kf = &sortKeyFiles{}
+				keyFilesMap[safeKey] = kf
+			}
+			kf.files = append(kf.files, filepath.Join(tmpDir, e.Name()))
 		}
 	}
 
-	for safeKey, files := range keyFiles {
-		var items []ItemWithScore
-		for _, f := range files {
+	// Pre-count elements
+	for safeKey, kf := range keyFilesMap {
+		for _, f := range kf.files {
+			if count, err := countItemWithScoreSlice(f); err == nil {
+				kf.total += count
+			}
+		}
+		keyFilesMap[safeKey] = kf
+	}
+
+	for safeKey, kf := range keyFilesMap {
+		if kf.total == 0 {
+			continue
+		}
+
+		// Pre-allocate slice
+		items := make([]ItemWithScore, 0, kf.total)
+		for _, f := range kf.files {
 			data, err := readItemWithScoreSlice(f)
 			if err != nil {
 				return fmt.Errorf("read sort file %s: %w", f, err)
@@ -132,6 +180,8 @@ func MergeSortIndexes(db *makodb.ShardedDB, tmpDir string) error {
 		if len(items) == 0 {
 			continue
 		}
+
+		// Sort items within this batch by score (O(n log n))
 		asc := strings.Contains(safeKey, "asc")
 		sort.Slice(items, func(i, j int) bool {
 			if asc {
@@ -139,11 +189,13 @@ func MergeSortIndexes(db *makodb.ShardedDB, tmpDir string) error {
 			}
 			return items[i].Score > items[j].Score
 		})
+
+		// Extract docIDs in sorted order
 		docIDs := make([]uint64, len(items))
 		for i, it := range items {
 			docIDs[i] = it.DocID
 		}
-		// Use TurboPutSortIndex to create proper TurboSortIndex with position cache.
+
 		indexName := decodeSafeKey(safeKey)
 		if err := db.TurboPutSortIndex(indexName, docIDs); err != nil {
 			return fmt.Errorf("write sort index %s: %w", indexName, err)
@@ -187,6 +239,36 @@ func writeUint64Slice(path string, data []uint64) error {
 		}
 	}
 	return nil
+}
+
+// countUint64Slice reads only the count header from a uint64 slice file.
+func countUint64Slice(path string) (int, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	var count uint64
+	if err := binary.Read(f, binary.LittleEndian, &count); err != nil {
+		return 0, err
+	}
+	return int(count), nil
+}
+
+// countItemWithScoreSlice reads only the count header from an ItemWithScore slice file.
+func countItemWithScoreSlice(path string) (int, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	var count uint64
+	if err := binary.Read(f, binary.LittleEndian, &count); err != nil {
+		return 0, err
+	}
+	return int(count), nil
 }
 
 func readUint64Slice(path string) ([]uint64, error) {

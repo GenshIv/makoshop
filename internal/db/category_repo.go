@@ -169,25 +169,32 @@ type CategoryTreeNode struct {
 	Children  []*CategoryTreeNode `json:"children,omitempty"`
 }
 
-// GetTree returns the full category tree.
+// GetTree returns the full category tree (only active categories).
 func (r *CategoryRepo) GetTree() ([]CategoryTreeNode, error) {
 	categories, err := r.ListAll()
 	if err != nil {
 		return nil, err
 	}
-	return r.buildTree(categories, nil)
+	// Filter only active categories
+	var active []model.Category
+	for _, c := range categories {
+		if c.IsActive {
+			active = append(active, c)
+		}
+	}
+	return r.buildTree(active, nil)
 }
 
-// GetTreeByParent returns subtree rooted at the given parent category ID.
+// GetTreeByParent returns subtree rooted at the given parent category ID (only active).
 func (r *CategoryRepo) GetTreeByParent(parentID int64) ([]CategoryTreeNode, error) {
 	categories, err := r.ListAll()
 	if err != nil {
 		return nil, err
 	}
-	// Filter only descendants of parentID
+	// Filter only active descendants of parentID
 	var filtered []model.Category
 	for _, c := range categories {
-		if r.isDescendantOrSelf(&c, parentID) {
+		if c.IsActive && r.isDescendantOrSelf(&c, parentID) {
 			filtered = append(filtered, c)
 		}
 	}
@@ -284,4 +291,76 @@ func (r *CategoryRepo) sortChildren(node *CategoryTreeNode) {
 	for _, child := range node.Children {
 		r.sortChildren(child)
 	}
+}
+
+// BuildPathMap builds a map of category paths ("Cat1 -> Cat2 -> Cat3") to category IDs.
+// Used during import to find existing categories without creating new ones.
+func (r *CategoryRepo) BuildPathMap() (map[string]int64, error) {
+	cats, err := r.ListAll()
+	if err != nil {
+		return nil, err
+	}
+
+	// Build tree to compute full paths
+	byID := make(map[int64]*model.Category)
+	for i := range cats {
+		byID[cats[i].ID] = &cats[i]
+	}
+
+	pathMap := make(map[string]int64)
+
+	var buildPaths func(catID int64, prefix string)
+	buildPaths = func(catID int64, prefix string) {
+		cat, ok := byID[catID]
+		if !ok {
+			return
+		}
+
+		path := prefix
+		if path == "" {
+			path = cat.Name
+		} else {
+			path = prefix + " -> " + cat.Name
+		}
+
+		pathMap[path] = cat.ID
+
+		// Recurse children
+		for id, c := range byID {
+			if c.ParentID != nil && *c.ParentID == cat.ID {
+				buildPaths(id, path)
+			}
+		}
+	}
+
+	// Start from root categories
+	for id, c := range byID {
+		if c.ParentID == nil {
+			buildPaths(id, "")
+		}
+	}
+
+	return pathMap, nil
+}
+
+// GetTreePath returns the path from root to the given category as [slug1, slug2, ...].
+func (r *CategoryRepo) GetTreePath(catID int64) ([]string, error) {
+	var path []string
+	currentID := catID
+	for currentID != 0 {
+		cat, err := r.Get(currentID)
+		if err != nil {
+			return nil, err
+		}
+		path = append(path, cat.Slug)
+		if cat.ParentID == nil {
+			break
+		}
+		currentID = *cat.ParentID
+	}
+	// Reverse path (root first)
+	for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
+		path[i], path[j] = path[j], path[i]
+	}
+	return path, nil
 }

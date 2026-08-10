@@ -1,6 +1,7 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import api from '../api';
 
 const route = useRoute();
@@ -8,16 +9,17 @@ const router = useRouter();
 const order = ref(null);
 const loading = ref(true);
 const error = ref(null);
+const { t } = useI18n();
 
-const statusLabels = {
-  pending: 'Ожидает оплаты',
-  paid: 'Оплачен',
-  processing: 'В обработке',
-  shipped: 'Отправлен',
-  delivered: 'Доставлен',
-  cancelled: 'Отменён',
-  refunded: 'Возврат',
-};
+const statusLabels = computed(() => ({
+  pending: t('orders.statuses.pending'),
+  paid: t('orders.statuses.paid'),
+  processing: t('orders.statuses.processing'),
+  shipped: t('orders.statuses.shipped'),
+  delivered: t('orders.statuses.delivered'),
+  cancelled: t('orders.statuses.cancelled'),
+  refunded: t('orders.statuses.refunded'),
+}));
 
 const statusColors = {
   pending: 'text-yellow-600 bg-yellow-50',
@@ -49,7 +51,7 @@ const fetchOrder = async () => {
     const response = await api.get(`/orders/${route.params.id}`);
     order.value = response.data;
   } catch (e) {
-    error.value = 'Заказ не найден';
+    error.value = t('order_detail.not_found');
     console.error(e);
   } finally {
     loading.value = false;
@@ -63,7 +65,7 @@ onMounted(fetchOrder);
   <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <!-- Back -->
     <router-link to="/orders" class="text-sm text-indigo-600 hover:underline mb-4 inline-block">
-      ← Назад к заказам
+      {{ t('order_detail.back_to_orders') }}
     </router-link>
 
     <!-- Loading -->
@@ -81,7 +83,7 @@ onMounted(fetchOrder);
       <!-- Header -->
       <div class="p-4 border-b flex items-center justify-between">
         <div>
-          <h1 class="text-xl font-bold">Заказ #{{ order.id }}</h1>
+          <h1 class="text-xl font-bold">{{ t('order_detail.order', { id: order.id }) }}</h1>
           <div class="text-sm text-gray-500">{{ formatDate(order.created_at) }}</div>
         </div>
         <span
@@ -94,7 +96,7 @@ onMounted(fetchOrder);
 
       <!-- Items -->
       <div class="p-4">
-        <h2 class="font-medium mb-3">Товары</h2>
+        <h2 class="font-medium mb-3">{{ t('order_detail.items') }}</h2>
         <div v-for="item in order.items" :key="item.product_id" class="flex items-center gap-4 py-3 border-b last:border-b-0">
           <div class="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
             <img
@@ -103,7 +105,7 @@ onMounted(fetchOrder);
               :alt="item.name"
               class="w-full h-full object-cover"
             />
-            <div v-else class="w-full h-full flex items-center justify-center text-gray-400 text-xs">Нет фото</div>
+            <div v-else class="w-full h-full flex items-center justify-center text-gray-400 text-xs">{{ t('order_detail.no_photo') }}</div>
           </div>
           <div class="flex-1">
             <router-link
@@ -122,26 +124,26 @@ onMounted(fetchOrder);
 
       <!-- Shipping info -->
       <div v-if="order.shipping_info" class="p-4 border-t">
-        <h2 class="font-medium mb-2">Доставка</h2>
+        <h2 class="font-medium mb-2">{{ t('order_detail.shipping') }}</h2>
         <div class="text-sm text-gray-700 space-y-1">
           <div>{{ order.shipping_info.name }}</div>
           <div>{{ order.shipping_info.phone }}</div>
           <div>{{ order.shipping_info.city }}, {{ order.shipping_info.address }}</div>
-          <div v-if="order.shipping_info.zip">Индекс: {{ order.shipping_info.zip }}</div>
+          <div v-if="order.shipping_info.zip">{{ t('order_detail.zip', { zip: order.shipping_info.zip }) }}</div>
         </div>
       </div>
 
       <!-- Payment info -->
       <div class="p-4 border-t">
-        <h2 class="font-medium mb-2">Оплата</h2>
+        <h2 class="font-medium mb-2">{{ t('order_detail.payment') }}</h2>
         <div class="text-sm text-gray-700">
-          <div>Статус: {{ statusLabels[order.payment_status] || order.payment_status }}</div>
+          <div>{{ t('order_detail.status', { status: statusLabels[order.payment_status] || order.payment_status }) }}</div>
         </div>
       </div>
 
       <!-- Total -->
       <div class="p-4 border-t bg-gray-50 flex items-center justify-between">
-        <span class="font-medium">Итого:</span>
+        <span class="font-medium">{{ t('order_detail.total') }}</span>
         <span class="text-xl font-bold">{{ formatPrice(order.total_amount || order.total) }}</span>
       </div>
     </div>

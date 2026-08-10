@@ -5,20 +5,39 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
   server: {
+    host: '0.0.0.0',
     port: 5173,
     proxy: {
-      // Proxy API routes to backend, exclude vite internal paths and static assets
-      '/products': { target: 'http://localhost:9090', changeOrigin: true },
-      '/auth': { target: 'http://localhost:9090', changeOrigin: true },
-      '/cart': { target: 'http://localhost:9090', changeOrigin: true },
-      '/orders': { target: 'http://localhost:9090', changeOrigin: true },
-      '/payments': { target: 'http://localhost:9090', changeOrigin: true },
-      '/users': { target: 'http://localhost:9090', changeOrigin: true },
-      '/reviews': { target: 'http://localhost:9090', changeOrigin: true },
-      '/companies': { target: 'http://localhost:9090', changeOrigin: true },
-      '/admin': { target: 'http://localhost:9090', changeOrigin: true },
-      '/categories': { target: 'http://localhost:9090', changeOrigin: true },
-      '/promo': { target: 'http://localhost:9090', changeOrigin: true },
+      // Proxy /api/* to backend, strip /api prefix
+      '/api': {
+        target: 'http://localhost:9090',
+        changeOrigin: true,
+        followRedirects: false,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+      // Proxy /shop/* to backend for SSR (HTML with data)
+      '/shop': {
+        target: 'http://localhost:9090',
+        changeOrigin: true,
+        followRedirects: false,
+      },
+      // Proxy robots.txt and sitemap to backend
+      '/robots.txt': {
+        target: 'http://localhost:9090',
+        changeOrigin: true,
+      },
+      '/sitemap.xml': {
+        target: 'http://localhost:9090',
+        changeOrigin: true,
+      },
+      '/sitemap-categories.xml': {
+        target: 'http://localhost:9090',
+        changeOrigin: true,
+      },
+      '/sitemap-scupage': {
+        target: 'http://localhost:9090',
+        changeOrigin: true,
+      },
     },
   },
 })

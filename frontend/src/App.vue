@@ -1,9 +1,31 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from './stores/auth';
 import { useCartStore } from './stores/cart';
 import CategoryTree from './components/CategoryTree.vue';
+import CookieConsentBanner from './components/CookieConsentBanner.vue';
+import ShardUsageBar from './components/ShardUsageBar.vue';
+import { useCookieConsent } from './composables/useCookieConsent';
+import { setLocale, SUPPORTED_LOCALES } from './i18n';
+
+const { showSettings } = useCookieConsent();
+const { t, locale } = useI18n();
+
+const langLabels = {
+  ru: 'RU',
+  en: 'EN',
+  uk: 'UK',
+  pl: 'PL',
+};
+
+const showLangMenu = ref(false);
+
+const switchLang = (lang) => {
+  setLocale(lang);
+  showLangMenu.value = false;
+};
 
 const router = useRouter();
 const route = useRoute();
@@ -16,38 +38,47 @@ const categoriesSidebarOpen = ref(false);
 const isAuthenticated = computed(() => auth.isAuthenticated);
 const userRole = computed(() => auth.user?.role || null);
 
-// SEO page titles
-const pageTitles = {
-  catalog: 'Каталог товаров — MakoShop',
-  product: 'Товар — MakoShop',
-  cart: 'Корзина — MakoShop',
-  checkout: 'Оформление заказа — MakoShop',
-  login: 'Вход — MakoShop',
-  register: 'Регистрация — MakoShop',
-  profile: 'Личный кабинет — MakoShop',
-  orders: 'Мои заказы — MakoShop',
-  'order-detail': 'Заказ — MakoShop',
-  reviews: 'Мои отзывы — MakoShop',
-  'seller-dashboard': 'Кабинет продавца — MakoShop',
-  'seller-products': 'Товары — Кабинет продавца',
-  'seller-product-new': 'Добавить товар — Кабинет продавца',
-  'seller-product-edit': 'Редактировать товар — Кабинет продавца',
-  'seller-orders': 'Заказы — Кабинет продавца',
-  'seller-promo': 'Продвижение — Кабинет продавца',
-  'admin-dashboard': 'Админ-панель — MakoShop',
-  'admin-users': 'Пользователи — Админ-панель',
-  'admin-companies': 'Компании — Админ-панель',
-  'admin-categories': 'Категории — Админ-панель',
-  'admin-analytics': 'Аналитика — Админ-панель',
-  'admin-promo': 'Промо — Админ-панель',
-};
+// SEO page titles (computed to react to locale changes)
+const pageTitles = computed(() => ({
+  catalog: t('pages.catalog_title'),
+  product: t('pages.product_title'),
+  cart: t('pages.cart_title'),
+  checkout: t('pages.checkout_title'),
+  login: t('pages.login_title'),
+  register: t('pages.register_title'),
+  profile: t('pages.profile_title'),
+  orders: t('pages.orders_title'),
+  'order-detail': t('pages.order_detail_title'),
+  reviews: t('pages.reviews_title'),
+  'seller-dashboard': t('pages.seller_dashboard_title'),
+  'seller-products': t('pages.seller_products_title'),
+  'seller-product-new': t('pages.seller_product_new_title'),
+  'seller-product-edit': t('pages.seller_product_edit_title'),
+  'seller-orders': t('pages.seller_orders_title'),
+  'seller-promo': t('pages.seller_promo_title'),
+  'admin-dashboard': t('pages.admin_dashboard_title'),
+  'admin-users': t('pages.admin_users_title'),
+  'admin-companies': t('pages.admin_companies_title'),
+  'admin-categories': t('pages.admin_categories_title'),
+  'admin-analytics': t('pages.admin_analytics_title'),
+  'admin-promo': t('pages.admin_promo_title'),
+}));
 
 watch(
   () => route.name,
   (name) => {
-    document.title = pageTitles[name] || 'MakoShop — Маркетплейс';
+    document.title = pageTitles.value[name] || t('pages.default_title');
   },
   { immediate: true }
+);
+
+// Update title on locale change
+watch(
+  () => t('pages.default_title'),
+  () => {
+    const name = route.name;
+    document.title = pageTitles.value[name] || t('pages.default_title');
+  }
 );
 
 const handleLogout = () => {
@@ -91,7 +122,7 @@ watch(() => route.fullPath, () => {
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h10M4 18h6" />
               </svg>
-              Категории
+              {{ t('common.categories') }}
             </button>
 
             <!-- Logo -->
@@ -108,7 +139,7 @@ watch(() => route.fullPath, () => {
             <input
               ref="search"
               type="text"
-              placeholder="Поиск товаров..."
+              :placeholder="t('common.search_placeholder')"
               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
             />
           </form>
@@ -127,8 +158,8 @@ watch(() => route.fullPath, () => {
 
             <!-- Desktop auth links -->
             <template v-if="!isAuthenticated" class="hidden sm:flex items-center gap-2">
-              <router-link to="/login" class="text-sm text-gray-700 hover:text-indigo-600 px-2 py-1">Войти</router-link>
-              <router-link to="/register" class="text-sm px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Регистрация</router-link>
+              <router-link to="/login" class="text-sm text-gray-700 hover:text-indigo-600 px-2 py-1">{{ t('common.login') }}</router-link>
+              <router-link to="/register" class="text-sm px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">{{ t('common.register') }}</router-link>
             </template>
 
             <template v-else class="hidden sm:flex items-center gap-2">
@@ -141,12 +172,12 @@ watch(() => route.fullPath, () => {
                 </span>
               </div>
               <router-link v-if="userRole === 'seller' || userRole === 'admin'" to="/seller" class="text-xs text-indigo-600 hover:underline px-1">
-                Продавец
+                {{ t('common.seller_cabinet') }}
               </router-link>
               <router-link v-if="userRole === 'admin'" to="/admin" class="text-xs text-purple-600 hover:underline px-1">
-                Админ
+                {{ t('common.admin_panel') }}
               </router-link>
-              <button @click="handleLogout" class="text-xs text-gray-500 hover:text-red-600 px-1">Выйти</button>
+              <button @click="handleLogout" class="text-xs text-gray-500 hover:text-red-600 px-1">{{ t('common.logout') }}</button>
             </template>
 
             <!-- Mobile auth dropdown trigger -->
@@ -157,6 +188,37 @@ watch(() => route.fullPath, () => {
                 </svg>
               </button>
             </div>
+
+            <!-- Language switcher -->
+            <div class="relative">
+              <button
+                @click="showLangMenu = !showLangMenu"
+                class="hidden sm:flex items-center gap-1 px-1.5 py-1 text-xs rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200"
+                title="Change language"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.588 9a18.023 18.023 0 01-6.588-9m5.012-5l3 3m0 0l-3 3m3-3H3" />
+                </svg>
+                <span>{{ langLabels[locale] || locale }}</span>
+              </button>
+              <div
+                v-if="showLangMenu"
+                class="absolute right-0 mt-1 z-50 bg-white border border-gray-200 rounded-md shadow-lg overflow-hidden text-xs"
+              >
+                <button
+                  v-for="lang in SUPPORTED_LOCALES"
+                  :key="lang"
+                  @click="switchLang(lang)"
+                  class="block w-full px-3 py-1.5 text-left hover:bg-gray-100"
+                  :class="locale === lang ? 'bg-gray-100 font-medium' : 'text-gray-700'"
+                >
+                  {{ langLabels[lang] }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Shard usage bar (admin only) -->
+            <ShardUsageBar v-if="userRole === 'admin'" />
           </nav>
         </div>
       </div>
@@ -170,7 +232,7 @@ watch(() => route.fullPath, () => {
     >
       <div class="bg-white w-72 h-full shadow-lg p-4 overflow-y-auto" @click.stop>
         <div class="flex items-center justify-between mb-4">
-          <span class="font-bold">Меню</span>
+          <span class="font-bold">{{ t('common.menu') }}</span>
           <button @click="mobileMenuOpen = false" class="p-1">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -183,25 +245,25 @@ watch(() => route.fullPath, () => {
           <input
             ref="mobileSearch"
             type="text"
-            placeholder="Поиск товаров..."
+            :placeholder="t('common.search_placeholder')"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
           />
         </form>
 
         <nav class="space-y-1">
-          <router-link to="/" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-100" @click="mobileMenuOpen = false">Каталог</router-link>
-          <router-link to="/cart" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-100" @click="mobileMenuOpen = false">Корзина</router-link>
+          <router-link to="/" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-100" @click="mobileMenuOpen = false">{{ t('common.catalog') }}</router-link>
+          <router-link to="/cart" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-100" @click="mobileMenuOpen = false">{{ t('common.cart') }}</router-link>
 
           <template v-if="!isAuthenticated">
-            <router-link to="/login" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-100" @click="mobileMenuOpen = false">Войти</router-link>
-            <router-link to="/register" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-100" @click="mobileMenuOpen = false">Регистрация</router-link>
+            <router-link to="/login" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-100" @click="mobileMenuOpen = false">{{ t('common.login') }}</router-link>
+            <router-link to="/register" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-100" @click="mobileMenuOpen = false">{{ t('common.register') }}</router-link>
           </template>
           <template v-else>
-            <router-link to="/profile" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-100" @click="mobileMenuOpen = false">Профиль</router-link>
-            <router-link to="/orders" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-100" @click="mobileMenuOpen = false">Мои заказы</router-link>
-            <router-link v-if="userRole === 'seller' || userRole === 'admin'" to="/seller" class="block px-3 py-2 rounded-lg text-sm text-indigo-600 hover:bg-gray-100" @click="mobileMenuOpen = false">Кабинет продавца</router-link>
-            <router-link v-if="userRole === 'admin'" to="/admin" class="block px-3 py-2 rounded-lg text-sm text-purple-600 hover:bg-gray-100" @click="mobileMenuOpen = false">Админ-панель</router-link>
-            <button @click="handleLogout; mobileMenuOpen = false" class="w-full text-left px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-gray-100">Выйти</button>
+            <router-link to="/profile" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-100" @click="mobileMenuOpen = false">{{ t('common.profile') }}</router-link>
+            <router-link to="/orders" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-100" @click="mobileMenuOpen = false">{{ t('common.my_orders') }}</router-link>
+            <router-link v-if="userRole === 'seller' || userRole === 'admin'" to="/seller" class="block px-3 py-2 rounded-lg text-sm text-indigo-600 hover:bg-gray-100" @click="mobileMenuOpen = false">{{ t('common.seller_cabinet') }}</router-link>
+            <router-link v-if="userRole === 'admin'" to="/admin" class="block px-3 py-2 rounded-lg text-sm text-purple-600 hover:bg-gray-100" @click="mobileMenuOpen = false">{{ t('common.admin_panel') }}</router-link>
+            <button @click="handleLogout; mobileMenuOpen = false" class="w-full text-left px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-gray-100">{{ t('common.logout') }}</button>
           </template>
         </nav>
       </div>
@@ -211,7 +273,7 @@ watch(() => route.fullPath, () => {
     <!-- Desktop sidebar -->
     <aside class="hidden lg:block fixed left-0 top-16 w-64 h-[calc(100vh-4rem)] bg-white border-r border-gray-200 overflow-y-auto z-20">
       <div class="p-3">
-        <h3 class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">Категории</h3>
+        <h3 class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">{{ t('common.categories') }}</h3>
         <CategoryTree />
       </div>
     </aside>
@@ -224,7 +286,7 @@ watch(() => route.fullPath, () => {
     >
       <div class="bg-white w-72 h-full shadow-lg flex flex-col" @click.stop>
         <div class="flex items-center justify-between px-4 py-3 border-b">
-          <span class="font-semibold text-sm">Категории</span>
+          <span class="font-semibold text-sm">{{ t('common.categories') }}</span>
           <button @click="categoriesSidebarOpen = false" class="p-1 rounded hover:bg-gray-100">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -244,9 +306,18 @@ watch(() => route.fullPath, () => {
 
     <!-- Footer -->
     <footer class="bg-white border-t py-4 lg:ml-64">
-      <div class="max-w-7xl mx-auto px-4 text-center text-sm text-gray-500">
-        © {{ new Date().getFullYear() }} MakoShop — B2B/B2C маркетплейс
+      <div class="max-w-7xl mx-auto px-4">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-gray-500">
+          <span>© {{ new Date().getFullYear() }} {{ t('common.app_name') }} — {{ t('common.app_tagline') }}</span>
+          <div class="flex items-center gap-4">
+            <a href="/privacy-policy" class="hover:text-indigo-600">{{ t('common.privacy_policy') }}</a>
+            <button @click="showSettings" class="hover:text-indigo-600">{{ t('common.cookie_settings') }}</button>
+          </div>
+        </div>
       </div>
     </footer>
+
+    <!-- Cookie Consent Banner -->
+    <CookieConsentBanner />
   </div>
 </template>

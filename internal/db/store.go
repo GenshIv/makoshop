@@ -72,11 +72,20 @@ func (s *Store) DB() *makodb.ShardedDB {
 }
 
 // NextID generates and persists the next ID for the given entity type.
+// On first call for an entity type, it reads the last persisted ID from DB.
 func (s *Store) NextID(entityType string) (int64, error) {
 	ai, ok := s.nextIDs[entityType]
 	if !ok {
+		// Read last ID from DB
+		key := fmt.Sprintf("state:next_id:%s", entityType)
+		data, _ := s.db.TurboRawRead(key)
+		var lastID int64 = 0
+		if len(data) > 0 {
+			_, _ = fmt.Sscanf(string(data), "%d", &lastID)
+		}
+
 		ai = new(atomic.Int64)
-		ai.Store(1)
+		ai.Store(lastID)
 		s.nextIDs[entityType] = ai
 	}
 

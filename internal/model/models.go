@@ -42,10 +42,18 @@ type User struct {
 // AttrDef — attribute definition linked to categories.
 // Code is unique (from normalized data, e.g. "diagonal-ekrana").
 type AttrDef struct {
-	ID         int64     `json:"id"`
-	Code       string    `json:"code"`       // unique attribute code
-	Categories []int64   `json:"categories"` // category IDs where this attribute is used
-	CreatedAt  time.Time `json:"created_at"`
+	ID           int64     `json:"id"`
+	Code         string    `json:"code"`                   // unique attribute code
+	Name         string    `json:"name,omitempty"`         // human-readable name (e.g. "Диагональ экрана")
+	Categories   []int64   `json:"categories"`             // category IDs where this attribute is used
+	Type         AttrType  `json:"type"`                   // string, int, float, bool, enum, range
+	IsActive     bool      `json:"is_active"`              // if false, excluded from filters/sort indexes
+	IsFilterable bool      `json:"is_filterable"`          // shown in filter sidebar
+	IsSortable   bool      `json:"is_sortable"`            // can sort by this attribute
+	SortOrder    int       `json:"sort_order"`             // display order in admin/filter
+	RangeParams  []string  `json:"range_params,omitempty"` // for range type: ["weight"], ["width","height","depth"], ["diagonal"]
+	Unit         string    `json:"unit,omitempty"`         // display unit: "кг", "см", "дюймов", etc.
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // Company
@@ -66,6 +74,13 @@ type CompanyLegalInfo struct {
 	Address string `json:"address,omitempty"`
 }
 
+type CompanyContacts struct {
+	Email    string `json:"email,omitempty"`
+	Phone    string `json:"phone,omitempty"`
+	Website  string `json:"website,omitempty"`
+	Telegram string `json:"telegram,omitempty"`
+}
+
 type CompanySettings struct {
 	Currency            string `json:"currency"`
 	VatEnabled          bool   `json:"vat_enabled"`
@@ -75,7 +90,11 @@ type CompanySettings struct {
 type Company struct {
 	ID          int64            `json:"id"`
 	Name        string           `json:"name"`
+	Slug        string           `json:"slug"`                  // URL-friendly name
+	Description string           `json:"description,omitempty"` // company description
+	LogoURL     string           `json:"logo_url,omitempty"`    // company logo
 	LegalInfo   CompanyLegalInfo `json:"legal_info,omitempty"`
+	Contacts    CompanyContacts  `json:"contacts,omitempty"`
 	Settings    CompanySettings  `json:"settings"`
 	Status      CompanyStatus    `json:"status"`
 	OwnerUserID int64            `json:"owner_user_id"`
@@ -157,6 +176,7 @@ type ProductSEO struct {
 type Product struct {
 	ID          int64                  `json:"id"`
 	SKU         string                 `json:"sku"`
+	SCU         string                 `json:"scu,omitempty"` // Standard Catalog Unit — links to landing page
 	Name        string                 `json:"name"`
 	Description string                 `json:"description,omitempty"`
 	CategoryID  int64                  `json:"category_id"`
@@ -172,6 +192,48 @@ type Product struct {
 	SEO         ProductSEO             `json:"seo,omitempty"`
 	CreatedAt   time.Time              `json:"created_at"`
 	UpdatedAt   time.Time              `json:"updated_at"`
+}
+
+// LandingPage — посадочная страница для группы товаров с одинаковым SCU.
+// Все товары с этим SCU редиректятся на эту страницу.
+
+type LandingPage struct {
+	ID          int64     `json:"id"`
+	SCU         string    `json:"scu"`         // unique identifier
+	Slug        string    `json:"slug"`        // URL-friendly path
+	Title       string    `json:"title"`       // page title
+	Description string    `json:"description"` // meta description
+	Content     string    `json:"content"`     // HTML/markdown content
+	Images      []string  `json:"images"`      // page images
+	IsActive    bool      `json:"is_active"`
+	ProductIDs  []int64   `json:"product_ids"` // cached list of product IDs with this SCU
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// SCUPage — SEO-страница для группы товаров с одинаковым SCU.
+// Основная сущность каталога: каталог и поиск работают по SCUPage, не по товарам.
+// Путь: /shop/{category_tree}/{slug}
+
+type SCUPage struct {
+	ID           int64                  `json:"id"`
+	SCU          string                 `json:"scu"`         // unique identifier from supplier
+	Slug         string                 `json:"slug"`        // URL-friendly slug (unique)
+	Title        string                 `json:"title"`       // SEO title (from first product name)
+	Description  string                 `json:"description"` // SEO meta description
+	Content      string                 `json:"content"`     // full HTML content
+	Images       []string               `json:"images"`      // unique product images (merged from all products)
+	CategoryID   int64                  `json:"category_id"` // main category
+	Brand        string                 `json:"brand"`       // brand name
+	BrandID      int64                  `json:"brand_id"`    // brand ID
+	IsActive     bool                   `json:"is_active"`
+	MinPrice     float64                `json:"min_price"`            // minimum price among all products
+	Currency     string                 `json:"currency"`             // currency (default: RUB)
+	Attributes   map[string]interface{} `json:"attributes,omitempty"` // merged attributes (no duplicates)
+	ProductIDs   []int64                `json:"product_ids"`          // linked product IDs (cached)
+	ProductCount int                    `json:"product_count"`        // number of products with this SCU
+	CreatedAt    time.Time              `json:"created_at"`
+	UpdatedAt    time.Time              `json:"updated_at"`
 }
 
 // Cart

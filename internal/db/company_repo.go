@@ -3,9 +3,16 @@ package db
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
+	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
+)
+
+const (
+	turboKeyCompanyList = "company_list"
+	turboKeyCompanyName = "company_name:" // prefix for name lookup
 )
 
 type CompanyRepo struct {
@@ -31,17 +38,27 @@ func (r *CompanyRepo) Create(c *model.Company) error {
 	if c.Settings.Currency == "" {
 		c.Settings.Currency = "RUB"
 	}
+	if c.Slug == "" {
+		c.Slug = toSlug(c.Name)
+	}
 
 	data := MarshalCompany(*c)
 	if err := r.Store.DocPut(KeyCompany(c.ID), data); err != nil {
 		return fmt.Errorf("save company: %w", err)
 	}
 
-	// Index: company by owner user
-	ownerKey := fmt.Sprintf("company:owner:%d", c.OwnerUserID)
-	if err := r.Store.DocPut(ownerKey, []byte(fmt.Sprintf("%d", c.ID))); err != nil {
+	// Turbo index: company_list
+	if _, err := r.Store.db.TurboPutIndex(turboKeyCompanyList, uint64(id)); err != nil {
 		_ = r.Store.DocDelete(KeyCompany(c.ID))
-		return fmt.Errorf("index company owner: %w", err)
+		return fmt.Errorf("turbo index company_list: %w", err)
+	}
+
+	// Turbo index: company_name:<slug>
+	nameKey := turboKeyCompanyName + c.Slug
+	if err := r.Store.db.TurboRawWrite(nameKey, []byte(strconv.FormatInt(id, 10))); err != nil {
+		_, _ = r.Store.db.TurboDeleteIndex(turboKeyCompanyList, uint64(id))
+		_ = r.Store.DocDelete(KeyCompany(c.ID))
+		return fmt.Errorf("turbo index company_name: %w", err)
 	}
 
 	return nil
@@ -59,20 +76,31 @@ func (r *CompanyRepo) Get(id int64) (*model.Company, error) {
 	return UnmarshalCompany(data)
 }
 
-// GetCompanyIDByUserID returns the company ID for a given user (seller).
-func (r *CompanyRepo) GetCompanyIDByUserID(userID int64) (int64, error) {
-	ownerKey := fmt.Sprintf("company:owner:%d", userID)
-	data, err := r.Store.DocGet(ownerKey)
-	if err != nil {
-		if errors.Is(err, ErrKeyNotFound) {
-			return 0, fmt.Errorf("no company found for user %d", userID)
-		}
-		return 0, fmt.Errorf("get company by owner: %w", err)
+// GetBySlug returns a company by slug.
+func (r *CompanyRepo) GetBySlug(slug string) (*model.Company, error) {
+	nameKey := turboKeyCompanyName + slug
+	data, err := r.Store.db.TurboRawRead(nameKey)
+	if err != nil || len(data) == 0 {
+		return nil, fmt.Errorf("company with slug %q not found", slug)
 	}
-
 	var id int64
 	_, _ = fmt.Sscanf(string(data), "%d", &id)
-	return id, nil
+	return r.Get(id)
+}
+
+// GetCompanyIDByUserID returns the company ID for a given user (seller).
+// Uses the first company where owner_user_id matches.
+func (r *CompanyRepo) GetCompanyIDByUserID(userID int64) (int64, error) {
+	companies, err := r.List()
+	if err != nil {
+		return 0, err
+	}
+	for _, c := range companies {
+		if c.OwnerUserID == userID {
+			return c.ID, nil
+		}
+	}
+	return 0, fmt.Errorf("no company found for user %d", userID)
 }
 
 // Update updates a company.
@@ -82,6 +110,7 @@ func (r *CompanyRepo) Update(id int64, updater func(*model.Company)) error {
 		return err
 	}
 
+	oldSlug := c.Slug
 	updater(c)
 	c.UpdatedAt = time.Now()
 
@@ -90,13 +119,34 @@ func (r *CompanyRepo) Update(id int64, updater func(*model.Company)) error {
 		return fmt.Errorf("update company: %w", err)
 	}
 
+	// Update company_name index if slug changed
+	if oldSlug != c.Slug {
+		_ = r.Store.db.TurboRawWrite(turboKeyCompanyName+oldSlug, []byte{}) // clear old
+		if err := r.Store.db.TurboRawWrite(turboKeyCompanyName+c.Slug, []byte(strconv.FormatInt(id, 10))); err != nil {
+			return fmt.Errorf("update company_name index: %w", err)
+		}
+	}
+
 	return nil
 }
 
-// List returns all companies. Note: without a turbo index for companies,
-// this is a placeholder. In production, maintain a company_list turbo index.
+// List returns all companies via turbo index.
 func (r *CompanyRepo) List() ([]model.Company, error) {
-	return nil, nil
+	data, err := r.Store.db.TurboRawRead(turboKeyCompanyList)
+	if err != nil || len(data) == 0 {
+		return nil, nil
+	}
+
+	ids := makodb.TurboUnsafeReadTokens(data)
+	var result []model.Company
+	for _, id := range ids {
+		c, err := r.Get(int64(id))
+		if err != nil {
+			continue
+		}
+		result = append(result, *c)
+	}
+	return result, nil
 }
 
 // Delete removes a company.
@@ -106,9 +156,42 @@ func (r *CompanyRepo) Delete(id int64) error {
 		return err
 	}
 
-	_ = r.Store.DocDelete(fmt.Sprintf("company:owner:%d", c.OwnerUserID))
+	// Remove turbo indexes
+	_, _ = r.Store.db.TurboDeleteIndex(turboKeyCompanyList, uint64(id))
+	_ = r.Store.db.TurboRawWrite(turboKeyCompanyName+c.Slug, []byte{})
+
 	if err := r.Store.DocDelete(KeyCompany(id)); err != nil {
 		return fmt.Errorf("delete company: %w", err)
 	}
 	return nil
+}
+
+// toSlug creates a URL-friendly slug from a string.
+func toSlug(s string) string {
+	// Simple slug: lowercase, replace spaces with hyphens, remove special chars
+	result := []rune{}
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			result = append(result, r)
+		} else if r == ' ' || r == '-' {
+			result = append(result, '-')
+		}
+	}
+	// Collapse multiple hyphens
+	collapsed := []rune{}
+	for i, r := range result {
+		if r == '-' && i > 0 && result[i-1] == '-' {
+			continue
+		}
+		collapsed = append(collapsed, r)
+	}
+	// Trim leading/trailing hyphens
+	start, end := 0, len(collapsed)
+	for start < end && collapsed[start] == '-' {
+		start++
+	}
+	for end > start && collapsed[end-1] == '-' {
+		end--
+	}
+	return string(collapsed[start:end])
 }

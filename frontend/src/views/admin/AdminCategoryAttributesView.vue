@@ -1,7 +1,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import api from '../../api';
+
+const { t } = useI18n();
 
 const route = useRoute();
 const router = useRouter();
@@ -11,8 +14,13 @@ const category = ref(null);
 const attributes = ref([]);
 const loading = ref(true);
 const error = ref(null);
+const showAddForm = ref(false);
+const newCode = ref('');
 
-// Search filters per attribute
+// Edit modal
+const editingAttr = ref(null);
+const editForm = ref({});
+
 const searchFilters = ref({});
 
 const fetchCategory = async () => {
@@ -32,10 +40,85 @@ const fetchAttributes = async () => {
     const items = response.data.attributes || response.data.items || response.data || [];
     attributes.value = Array.isArray(items) ? items : [];
   } catch (e) {
-    error.value = e.response?.data?.message || 'Ошибка загрузки атрибутов';
+    error.value = e.response?.data?.message || t('admin.attr_load_error');
     console.error(e);
   } finally {
     loading.value = false;
+  }
+};
+
+const addAttribute = async () => {
+  if (!newCode.value.trim()) return alert(t('admin.enter_attr_code'));
+  try {
+    await api.post(`/admin/categories/${categoryId.value}/attributes`, { code: newCode.value.trim() });
+    newCode.value = '';
+    showAddForm.value = false;
+    await fetchAttributes();
+  } catch (e) {
+    alert(e.response?.data?.message || t('admin.add_error'));
+  }
+};
+
+const removeAttribute = async (code) => {
+  if (!confirm(t('admin.remove_attr_confirm', { code }))) return;
+  try {
+    await api.delete(`/admin/categories/${categoryId.value}/attributes?code=${encodeURIComponent(code)}`);
+    await fetchAttributes();
+  } catch (e) {
+    alert(e.response?.data?.message || t('admin.remove_error'));
+  }
+};
+
+// Edit attribute definition
+const openEdit = async (attr) => {
+  try {
+    const response = await api.get(`/admin/attrdefs/${attr.code}`);
+    editingAttr.value = attr.code;
+    editForm.value = { ...response.data };
+  } catch (e) {
+    // If no definition yet, create defaults
+    editingAttr.value = attr.code;
+    editForm.value = {
+      code: attr.code,
+      name: humanizeAttrName(attr.code),
+      type: 'string',
+      is_active: true,
+      is_filterable: true,
+      is_sortable: false,
+      sort_order: 0,
+      unit: '',
+      range_params: [],
+    };
+  }
+};
+
+const saveEdit = async () => {
+  try {
+    const payload = {
+      name: editForm.value.name || '',
+      type: editForm.value.type || 'string',
+      is_active: !!editForm.value.is_active,
+      is_filterable: !!editForm.value.is_filterable,
+      is_sortable: !!editForm.value.is_sortable,
+      sort_order: parseInt(editForm.value.sort_order) || 0,
+      unit: editForm.value.unit || '',
+      range_params: editForm.value.range_params || [],
+    };
+    await api.patch(`/admin/attrdefs/${editingAttr.value}`, payload);
+    editingAttr.value = null;
+    editForm.value = {};
+  } catch (e) {
+    alert(e.response?.data?.message || t('admin.save_error'));
+  }
+};
+
+const deleteAttrDef = async (code) => {
+  if (!confirm(t('admin.delete_attrdef_confirm', { code }))) return;
+  try {
+    await api.delete(`/admin/attrdefs/${code}`);
+    await fetchAttributes();
+  } catch (e) {
+    alert(e.response?.data?.message || t('admin.delete_attrdef_error'));
   }
 };
 
@@ -43,25 +126,18 @@ const setSearch = (code, value) => {
   searchFilters.value[code] = value;
 };
 
-// Group attributes by type
 const groupedAttrs = computed(() => {
   const groups = {};
   for (const attr of attributes.value) {
     const type = attr.type || 'text';
-    if (!groups[type]) {
-      groups[type] = [];
-    }
+    if (!groups[type]) groups[type] = [];
     groups[type].push(attr);
   }
   return groups;
 });
 
-// Get options/values for an attribute (backend returns "values", not "options")
-const getOptions = (attr) => {
-  return attr.options || attr.values || [];
-};
+const getOptions = (attr) => attr.options || attr.values || [];
 
-// Filter options for an attribute
 const filteredOptions = (attr) => {
   const opts = getOptions(attr);
   if (!Array.isArray(opts)) return [];
@@ -70,21 +146,10 @@ const filteredOptions = (attr) => {
   return opts.filter(opt => String(opt).toLowerCase().includes(search));
 };
 
-// Max tags to show without scroll
 const MAX_TAGS = 7;
-
-const visibleTags = (attr) => {
-  const opts = filteredOptions(attr);
-  return opts.slice(0, MAX_TAGS);
-};
-
-const hiddenTags = (attr) => {
-  const opts = filteredOptions(attr);
-  return opts.slice(MAX_TAGS);
-};
-
+const visibleTags = (attr) => filteredOptions(attr).slice(0, MAX_TAGS);
+const hiddenTags = (attr) => filteredOptions(attr).slice(MAX_TAGS);
 const hasMoreTags = (attr) => hiddenTags(attr).length > 0;
-
 const hasOptions = (attr) => getOptions(attr).length > 0;
 
 const humanizeAttrName = (code) => {
@@ -94,14 +159,26 @@ const humanizeAttrName = (code) => {
 };
 
 const typeLabels = {
-  text: 'Текст',
-  number: 'Число',
-  boolean: 'Да/Нет',
-  select: 'Выбор',
-  multiselect: 'Множественный выбор',
-  date: 'Дата',
-  enum: 'Значения',
+  string: () => t('admin.attr_types.string'),
+  int: () => t('admin.attr_types.int'),
+  float: () => t('admin.attr_types.float'),
+  bool: () => t('admin.attr_types.bool'),
+  enum: () => t('admin.attr_types.enum'),
+  multi_enum: () => t('admin.attr_types.multi_enum'),
+  date: () => t('admin.attr_types.date'),
+  range: () => t('admin.attr_types.range'),
 };
+
+const attrTypes = [
+  { value: 'string', label: () => t('admin.attr_types.string') },
+  { value: 'int', label: () => t('admin.attr_types.int') },
+  { value: 'float', label: () => t('admin.attr_types.float') },
+  { value: 'bool', label: () => t('admin.attr_types.bool') },
+  { value: 'enum', label: () => t('admin.attr_types.enum') },
+  { value: 'multi_enum', label: () => t('admin.attr_types.multi_enum') },
+  { value: 'date', label: () => t('admin.attr_types.date') },
+  { value: 'range', label: () => t('admin.attr_types.range') },
+];
 
 onMounted(() => {
   fetchCategory();
@@ -112,22 +189,126 @@ onMounted(() => {
 <template>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <!-- Header -->
-    <div class="flex items-center gap-4 mb-6">
-      <button
-        @click="router.push({ name: 'admin-categories' })"
-        class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
+    <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center gap-4">
+        <button @click="router.push({ name: 'admin-categories' })" class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div>
+          <h1 class="text-2xl font-bold text-gray-800">
+            {{ category?.name || `#${categoryId}` }} — {{ t('admin.attributes') }}
+          </h1>
+          <p class="text-sm text-gray-500 mt-0.5">{{ t('admin.attr_count', { count: attributes.length }) }}</p>
+        </div>
+      </div>
+      <button @click="showAddForm = true" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">
+        {{ t('admin.add_attr') }}
       </button>
-      <div>
-        <h1 class="text-2xl font-bold text-gray-800">
-          {{ category?.name || `Категория #${categoryId}` }} — Атрибуты
-        </h1>
-        <p class="text-sm text-gray-500 mt-0.5">
-          {{ attributes.length }} атрибутов
-        </p>
+    </div>
+
+    <!-- Add form -->
+    <div v-if="showAddForm" class="mb-4 bg-white rounded-lg shadow-sm p-4 border border-purple-200">
+      <h3 class="font-medium mb-2">{{ t('admin.add_attr') }}</h3>
+      <p class="text-xs text-gray-500 mb-2">{{ t('admin.attr_hint') }}</p>
+      <div class="flex gap-2">
+        <input v-model="newCode" type="text" :placeholder="t('admin.attr_code_placeholder')" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+        <button @click="addAttribute" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
+          {{ t('admin.create') }}
+        </button>
+        <button @click="showAddForm = false" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">
+          {{ t('admin.cancel') }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Edit modal -->
+    <div v-if="editingAttr" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div class="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div class="px-5 py-4 border-b flex items-center justify-between">
+          <h3 class="font-semibold">{{ t('admin.edit_attrdef', { code: editingAttr }) }}</h3>
+          <button @click="editingAttr = null" class="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <div class="px-5 py-4 space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">{{ t('admin.attr_display_name') }}</label>
+            <input v-model="editForm.name" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">{{ t('admin.attr_type') }}</label>
+            <select v-model="editForm.type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+              <option v-for="t in attrTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
+            </select>
+          </div>
+
+          <!-- Range params for range type -->
+          <div v-if="editForm.type === 'range'" class="space-y-2">
+            <label class="block text-xs font-medium text-gray-600">{{ t('admin.attr_range_params_label') }}</label>
+            <p class="text-[10px] text-gray-400">{{ t('admin.attr_range_params_hint') }}</p>
+            <div class="flex flex-wrap gap-2">
+              <input
+                v-for="(p, i) in editForm.range_params"
+                :key="i"
+                v-model="editForm.range_params[i]"
+                type="text"
+                :placeholder="t('admin.attr_range_param_placeholder')"
+                class="px-3 py-2 border border-gray-300 rounded-lg text-sm w-40"
+              />
+            </div>
+            <button
+              v-if="(editForm.range_params || []).length < 3"
+              @click="editForm.range_params = (editForm.range_params || []).concat('')"
+              class="text-xs text-purple-600 hover:underline"
+            >
+              {{ t('admin.attr_range_add_param') }}
+            </button>
+            <button
+              v-if="(editForm.range_params || []).length > 0"
+              @click="editForm.range_params.pop()"
+              class="text-xs text-red-600 hover:underline ml-2"
+            >
+              {{ t('admin.attr_range_remove_last') }}
+            </button>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">{{ t('admin.attr_unit') }}</label>
+            <input v-model="editForm.unit" type="text" :placeholder="t('admin.attr_unit_placeholder')" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+
+          <div class="flex items-center gap-4">
+            <label class="flex items-center gap-2 text-sm">
+              <input v-model="editForm.is_active" type="checkbox" />
+              {{ t('admin.attr_active') }}
+            </label>
+          </div>
+          <div class="flex items-center gap-4">
+            <label class="flex items-center gap-2 text-sm">
+              <input v-model="editForm.is_filterable" type="checkbox" />
+              {{ t('admin.attr_filterable') }}
+            </label>
+            <label class="flex items-center gap-2 text-sm">
+              <input v-model="editForm.is_sortable" type="checkbox" />
+              {{ t('admin.attr_sortable') }}
+            </label>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">{{ t('admin.attr_order') }}</label>
+            <input v-model.number="editForm.sort_order" type="number" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+        </div>
+        <div class="px-5 py-3 border-t flex gap-2 justify-end">
+          <button @click="deleteAttrDef(editingAttr)" class="px-3 py-2 text-sm text-red-600 hover:underline">
+            {{ t('admin.attr_delete_definition') }}
+          </button>
+          <button @click="editingAttr = null" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">
+            {{ t('admin.cancel') }}
+          </button>
+          <button @click="saveEdit" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
+            {{ t('admin.save') }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -137,89 +318,66 @@ onMounted(() => {
     </div>
 
     <!-- Error -->
-    <div v-else-if="error" class="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
-      {{ error }}
-    </div>
+    <div v-else-if="error" class="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">{{ error }}</div>
 
     <!-- Empty -->
     <div v-else-if="attributes.length === 0" class="text-center py-12 text-gray-500">
-      <p>Атрибутов у этой категории нет</p>
+      <p>{{ t('admin.attr_no_attrs') }}</p>
+      <button @click="showAddForm = true" class="mt-3 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
+        {{ t('admin.attr_add_first') }}
+      </button>
     </div>
 
-    <!-- Attributes by type -->
-    <div v-else class="space-y-6">
-      <div
-        v-for="(attrs, type) in groupedAttrs"
-        :key="type"
-        class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
-      >
-        <!-- Group header -->
-        <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
-          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
-            {{ typeLabels[type] || type }}
-          </span>
-          <span class="text-xs text-gray-500">{{ attrs.length }} шт.</span>
-        </div>
-
-        <!-- Attributes list -->
-        <div class="p-4 space-y-4">
-          <div v-for="attr in attrs" :key="attr.code" class="space-y-2">
-            <!-- Attribute name + search -->
-            <div class="flex items-center gap-3">
-              <label class="text-sm font-medium text-gray-700">
+    <!-- Attributes list -->
+    <div v-else class="space-y-4">
+      <div v-for="attr in attributes" :key="attr.code" class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-medium text-gray-800">
                 {{ attr.name || humanizeAttrName(attr.code) }}
-              </label>
+              </span>
               <span class="text-xs text-gray-400 font-mono">{{ attr.code }}</span>
-              <span v-if="attr.is_required" class="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-600">
-                обязательно
+              <span v-if="attr.type" class="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
+                {{ typeof typeLabels[attr.type] === 'function' ? typeLabels[attr.type]() : (typeLabels[attr.type] || attr.type) }}
               </span>
-              <span v-if="attr.is_filterable" class="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-600">
-                фильтр
+              <span v-if="attr.unit" class="text-[10px] text-gray-500">({{ attr.unit }})</span>
+              <span v-if="attr.range_params?.length" class="text-[10px] text-blue-600">
+                {{ attr.range_params.join(' × ') }}
               </span>
-              <!-- Search input for this attribute -->
-              <input
-                v-if="getOptions(attr).length > MAX_TAGS"
-                v-model="searchFilters[attr.code]"
-                type="text"
-                placeholder="Поиск тегов..."
-                class="ml-auto px-2 py-1 border border-gray-300 rounded text-xs w-40 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
+              <span v-if="!attr.is_active" class="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-500">
+                {{ t('admin.attr_inactive') }}
+              </span>
+              <span v-if="attr.is_filterable" class="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                {{ t('admin.attr_filter') }}
+              </span>
+              <span v-if="attr.is_sortable" class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                {{ t('admin.attr_sort') }}
+              </span>
             </div>
-
-            <!-- Tags -->
-            <div v-if="hasOptions(attr)" class="space-y-2">
-              <!-- Visible tags -->
+            <div v-if="hasOptions(attr)" class="mt-2">
               <div class="flex flex-wrap gap-1.5">
-                <span
-                  v-for="tag in visibleTags(attr)"
-                  :key="tag"
-                  class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition cursor-default"
-                >
+                <span v-for="tag in visibleTags(attr)" :key="tag" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-purple-50 text-purple-700 border border-purple-200">
                   {{ tag }}
                 </span>
               </div>
-
-              <!-- Scrollable area for hidden tags -->
-              <div
-                v-if="hasMoreTags(attr)"
-                class="border border-gray-200 rounded-lg p-2 max-h-48 overflow-y-auto bg-gray-50"
-              >
+              <div v-if="hasMoreTags(attr)" class="border border-gray-200 rounded-lg p-2 max-h-48 overflow-y-auto bg-gray-50 mt-1">
                 <div class="flex flex-wrap gap-1.5">
-                  <span
-                    v-for="tag in hiddenTags(attr)"
-                    :key="tag"
-                    class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition cursor-default"
-                  >
+                  <span v-for="tag in hiddenTags(attr)" :key="tag" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-purple-50 text-purple-700 border border-purple-200">
                     {{ tag }}
                   </span>
                 </div>
               </div>
             </div>
-
-            <!-- No options -->
-            <div v-else class="text-xs text-gray-400 italic">
-              Значений нет
-            </div>
+            <div v-else class="text-xs text-gray-400 italic mt-1">{{ t('admin.attr_no_values') }}</div>
+          </div>
+          <div class="flex flex-col gap-1">
+            <button @click="openEdit(attr)" class="text-xs text-blue-600 hover:underline text-right">
+              {{ t('admin.edit') }}
+            </button>
+            <button @click="removeAttribute(attr.code)" class="text-xs text-red-600 hover:underline text-right">
+              {{ t('admin.delete') }}
+            </button>
           </div>
         </div>
       </div>

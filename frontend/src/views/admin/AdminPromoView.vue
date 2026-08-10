@@ -1,6 +1,9 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import api from '../../api';
+
+const { t } = useI18n();
 
 const campaigns = ref([]);
 const plans = ref([]);
@@ -38,7 +41,7 @@ const createPlan = async () => {
     Object.assign(planForm, { name: '', price_per_click: 0, price_per_impression: 0 });
     await fetchPlans();
   } catch (e) {
-    alert(e.response?.data?.message || 'Ошибка');
+    alert(e.response?.data?.message || t('admin.error'));
   }
 };
 
@@ -54,7 +57,7 @@ onMounted(() => {
 
 <template>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <h1 class="text-2xl font-bold mb-6 text-purple-700">Промо</h1>
+    <h1 class="text-2xl font-bold mb-6 text-purple-700">{{ t('admin.promo_title') }}</h1>
 
     <div v-if="loading" class="flex justify-center py-12">
       <div class="animate-spin h-8 w-8 border-4 border-purple-600 border-t-transparent rounded-full"></div>
@@ -64,30 +67,30 @@ onMounted(() => {
       <!-- Plans -->
       <div class="bg-white rounded-lg shadow-sm p-4">
         <div class="flex items-center justify-between mb-3">
-          <h2 class="font-bold">Планы продвижения</h2>
+          <h2 class="font-bold">{{ t('admin.promo_plans') }}</h2>
           <button @click="showPlanForm = true" class="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
-            + План
+            {{ t('admin.add_plan') }}
           </button>
         </div>
 
         <!-- Plan form -->
         <div v-if="showPlanForm" class="mb-3 p-3 bg-gray-50 rounded-lg">
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <input v-model="planForm.name" type="text" placeholder="Название" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-            <input v-model.number="planForm.price_per_click" type="number" placeholder="Цена за клик" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-            <input v-model.number="planForm.price_per_impression" type="number" placeholder="Цена за показ" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input v-model="planForm.name" type="text" :placeholder="t('admin.plan_name_placeholder')" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input v-model.number="planForm.price_per_click" type="number" :placeholder="t('admin.price_per_click_placeholder')" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input v-model.number="planForm.price_per_impression" type="number" :placeholder="t('admin.price_per_impression_placeholder')" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
           <div class="flex gap-2 mt-2">
             <button @click="createPlan" class="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
-              Создать
+              {{ t('admin.create') }}
             </button>
             <button @click="showPlanForm = false" class="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50">
-              Отмена
+              {{ t('admin.cancel') }}
             </button>
           </div>
         </div>
 
-        <div v-if="plans.length === 0" class="text-sm text-gray-500">Планов пока нет</div>
+        <div v-if="plans.length === 0" class="text-sm text-gray-500">{{ t('admin.no_plans') }}</div>
         <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div v-for="plan in plans" :key="plan.id" class="border rounded-lg p-3 text-sm">
             <div class="font-medium">{{ plan.name }}</div>
@@ -100,18 +103,18 @@ onMounted(() => {
 
       <!-- Campaigns -->
       <div class="bg-white rounded-lg shadow-sm p-4">
-        <h2 class="font-bold mb-3">Кампании</h2>
-        <div v-if="campaigns.length === 0" class="text-sm text-gray-500">Кампаний пока нет</div>
+        <h2 class="font-bold mb-3">{{ t('admin.campaigns') }}</h2>
+        <div v-if="campaigns.length === 0" class="text-sm text-gray-500">{{ t('admin.no_campaigns') }}</div>
         <div v-else class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead class="bg-gray-50">
               <tr>
                 <th class="px-4 py-3 text-left">ID</th>
-                <th class="px-4 py-3 text-left">Компания</th>
-                <th class="px-4 py-3 text-left">План</th>
-                <th class="px-4 py-3 text-left">Бюджет</th>
-                <th class="px-4 py-3 text-left">Использовано</th>
-                <th class="px-4 py-3 text-left">Статус</th>
+                <th class="px-4 py-3 text-left">{{ t('admin.company') }}</th>
+                <th class="px-4 py-3 text-left">{{ t('admin.plan') }}</th>
+                <th class="px-4 py-3 text-left">{{ t('admin.budget') }}</th>
+                <th class="px-4 py-3 text-left">{{ t('admin.used') }}</th>
+                <th class="px-4 py-3 text-left">{{ t('admin.status') }}</th>
               </tr>
             </thead>
             <tbody>

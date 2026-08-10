@@ -24,8 +24,10 @@ func KeyReview(id int64) string        { return fmt.Sprintf("review:%d", id) }
 func KeyPromoPlan(id int64) string     { return fmt.Sprintf("promo_plan:%d", id) }
 func KeyPromoCampaign(id int64) string { return fmt.Sprintf("promo_campaign:%d", id) }
 func KeyPromoLog(id int64) string      { return fmt.Sprintf("promo_log:%d", id) }
+func KeyLandingPage(id int64) string   { return fmt.Sprintf("landing:%d", id) }
+func KeySCUPage(id int64) string       { return fmt.Sprintf("scupage:%d", id) }
 
-// Index keys
+// Index keys — all turbo-based. Helpers for hashing used by turbo_search.go.
 
 // attrValueHash returns a stable hash for an attribute value string.
 func attrValueHash(value string) int64 {
@@ -40,59 +42,6 @@ func attrCodeHash(code string) int64 {
 // brandHash returns a stable hash for a brand string.
 func brandHash(brand string) int64 {
 	return intHache.Sum([]byte(brand))
-}
-
-func IndexKeyAttr(categoryID int64, code, value string) string {
-	return fmt.Sprintf("idx:attr:%d:%d:%d", categoryID, attrCodeHash(code), attrValueHash(value))
-}
-
-// IndexKeyGlobalAttr is a category-agnostic attribute index for filtering without category_id.
-func IndexKeyGlobalAttr(code, value string) string {
-	return fmt.Sprintf("idx:gattr:%d:%d", attrCodeHash(code), attrValueHash(value))
-}
-
-func IndexKeyBrand(brand string) string {
-	return fmt.Sprintf("idx:brand:%d", brandHash(brand))
-}
-
-func IndexKeyCompany(companyID int64) string {
-	return fmt.Sprintf("idx:company:%d", companyID)
-}
-
-func IndexKeyCategory(categoryID int64) string {
-	return fmt.Sprintf("idx:category:%d", categoryID)
-}
-
-func IndexKeySearch(token string) string {
-	return fmt.Sprintf("idx:search:%d", intHache.Sum([]byte(token)))
-}
-
-func SortKeyProductPrice() string {
-	return "sort:product:price"
-}
-
-func SortKeyProductCreatedAt() string {
-	return "sort:product:created_at"
-}
-
-func SortKeyProductAttr(categoryID int64, code string) string {
-	return fmt.Sprintf("sort:product:attr:%d:%d", categoryID, attrCodeHash(code))
-}
-
-// SortKeyProductAttrRange is a numeric sort index for attribute range filtering.
-func SortKeyProductAttrRange(categoryID int64, code string) string {
-	return fmt.Sprintf("sort:product:attrrange:%d:%d", categoryID, attrCodeHash(code))
-}
-
-// IndexTokenAllProducts is the token used with IndexMultiworld/GetIDsByIndexFiltered
-// to represent the global set of all products.
-func IndexTokenAllProducts() string {
-	return "allproducts"
-}
-
-// IndexTokenCategory returns the makodb token for a category index.
-func IndexTokenCategory(categoryID int64) string {
-	return fmt.Sprintf("category%d", categoryID)
 }
 
 // Auth keys
@@ -121,20 +70,6 @@ func OrderKeyByUser(userID int64) string {
 
 func PaymentKeyByOrder(orderID int64) string {
 	return fmt.Sprintf("payment:order:%d", orderID)
-}
-
-// Promo keys
-
-func PromoKeyActive() string {
-	return "promo:active"
-}
-
-func PromoKeyTargetCategory(categoryID int64) string {
-	return fmt.Sprintf("promo:target:category:%d", categoryID)
-}
-
-func PromoKeyTargetFilter(filterHash string) string {
-	return fmt.Sprintf("promo:target:filter:%s", filterHash)
 }
 
 // Serialization helpers (using standard json for stability)
@@ -345,4 +280,30 @@ func UnmarshalBrand(data []byte) (*model.Brand, error) {
 		return nil, err
 	}
 	return &b, nil
+}
+
+func MarshalLandingPage(l model.LandingPage) []byte {
+	b, _ := json.Marshal(l)
+	return b
+}
+
+func UnmarshalLandingPage(data []byte) (*model.LandingPage, error) {
+	var l model.LandingPage
+	if err := json.Unmarshal(data, &l); err != nil {
+		return nil, err
+	}
+	return &l, nil
+}
+
+func MarshalSCUPage(s model.SCUPage) []byte {
+	b, _ := json.Marshal(s)
+	return b
+}
+
+func UnmarshalSCUPage(data []byte) (*model.SCUPage, error) {
+	var s model.SCUPage
+	if err := json.Unmarshal(data, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
 }

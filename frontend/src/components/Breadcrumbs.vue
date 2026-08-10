@@ -1,11 +1,8 @@
 <script setup>
 import { computed } from 'vue';
-import { useRouter } from 'vue-router';
-
-const router = useRouter();
 
 const props = defineProps({
-  // Array of { id, name } for category path
+  // Array of { slug, name } for category path
   categories: {
     type: Array,
     default: () => [],
@@ -21,16 +18,15 @@ const crumbs = computed(() => {
   const items = [];
   
   // Always start with catalog
-  items.push({ name: 'Каталог', to: { name: 'catalog' } });
+  items.push({ name: 'Каталог', to: { path: '/' } });
   
-  // Add category path
+  // Add category path using slugs
+  let path = '/shop';
   for (const cat of props.categories) {
+    path += '/' + (cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9а-яё]+/g, '-'));
     items.push({
       name: cat.name,
-      to: {
-        name: 'catalog',
-        query: { category_id: String(cat.id) },
-      },
+      to: { path },
     });
   }
   

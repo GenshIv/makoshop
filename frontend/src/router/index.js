@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import CatalogView from '../views/CatalogView.vue';
 import ProductView from '../views/ProductView.vue';
+import SCUPageView from '../views/SCUPageView.vue';
 import CartView from '../views/CartView.vue';
 import CheckoutView from '../views/CheckoutView.vue';
 import LoginView from '../views/LoginView.vue';
@@ -9,6 +10,7 @@ import ProfileView from '../views/ProfileView.vue';
 import OrdersView from '../views/OrdersView.vue';
 import OrderDetailView from '../views/OrderDetailView.vue';
 import ReviewsView from '../views/ReviewsView.vue';
+import PrivacyPolicyView from '../views/PrivacyPolicyView.vue';
 
 // Seller views
 import SellerDashboardView from '../views/seller/SellerDashboardView.vue';
@@ -29,11 +31,15 @@ import AdminPromoView from '../views/admin/AdminPromoView.vue';
 const routes = [
   // Public
   { path: '/', name: 'catalog', component: CatalogView },
+  { path: '/shop', name: 'shop-catalog', component: CatalogView },
+  { path: '/shop/:pathMatch(.*)*', name: 'shop-catalog-path', component: CatalogView },
+  { path: '/scupage/:pathMatch(.*)*', name: 'scupage', component: SCUPageView },
   { path: '/products/:id', name: 'product', component: ProductView },
   { path: '/cart', name: 'cart', component: CartView },
   { path: '/checkout', name: 'checkout', component: CheckoutView },
   { path: '/login', name: 'login', component: LoginView },
   { path: '/register', name: 'register', component: RegisterView },
+  { path: '/privacy-policy', name: 'privacy-policy', component: PrivacyPolicyView },
 
   // Buyer
   { path: '/profile', name: 'profile', component: ProfileView, meta: { requiresAuth: true } },

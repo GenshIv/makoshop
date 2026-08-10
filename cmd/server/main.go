@@ -1,21 +1,30 @@
 package main
 
 import (
+	"embed"
 	"fmt"
 	"log"
 	"net/http"
 	"net/http/pprof"
+	"os"
 	"strings"
 
 	"github.com/GenshIv/makoshop/internal/api"
 	"github.com/GenshIv/makoshop/internal/auth"
 	"github.com/GenshIv/makoshop/internal/db"
+	"github.com/GenshIv/makoshop/internal/i18n"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/makoshop/pkg/config"
 )
 
+//go:embed i18n/*.json
+var i18nFS embed.FS
+
 func main() {
 	cfg := config.DefaultConfig()
+
+	// Load i18n translations
+	loadI18n()
 
 	store, err := db.NewStore(cfg.Database)
 	if err != nil {
@@ -33,6 +42,8 @@ func main() {
 
 	h := api.NewHandlers(store)
 	authHandlers := api.NewAuthHandlers(userRepo, companyRepo, cartRepo, jwtMiddleware, cfg.Auth.JWTSecret)
+	// Attach turboSearch to authHandlers for company products endpoint
+	authHandlers.SetTurboSearch(h.TurboSearch())
 
 	mux := http.NewServeMux()
 
@@ -106,6 +117,15 @@ func main() {
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
+	}), model.RoleAdmin))
+
+	// POST /admin/companies/create-test — create test companies
+	mux.Handle("/admin/companies/create-test", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		authHandlers.HandleAdminCreateTestCompanies(w, r)
 	}), model.RoleAdmin))
 
 	// GET/PATCH /admin/companies/{id}
@@ -193,6 +213,42 @@ func main() {
 	mux.Handle("/admin/products/import", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			h.HandleAdminProductsImport(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}), model.RoleAdmin))
+
+	// POST /admin/rebuild-sort-indexes — rebuild all sort indexes from products
+	mux.Handle("/admin/rebuild-sort-indexes", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			h.HandleAdminRebuildSortIndexes(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}), model.RoleAdmin))
+
+	// POST /admin/rebuild-scupages — rebuild all SCU pages from products
+	mux.Handle("/admin/rebuild-scupages", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			h.HandleAdminRebuildSCUPages(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}), model.RoleAdmin))
+
+	// POST /admin/rebuild-scupage-indexes — index all SCU pages into SCUPageSearch
+	mux.Handle("/admin/rebuild-scupage-indexes", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			h.HandleAdminRebuildSCUPageIndexes(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}), model.RoleAdmin))
+
+	// POST /admin/rebuild-category-slugs — rebuild slugs for all categories
+	mux.Handle("/admin/rebuild-category-slugs", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			h.HandleAdminRebuildCategorySlugs(w, r)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -321,6 +377,144 @@ func main() {
 		h.HandleBrandsList(w, r)
 	})
 
+	// Companies (public read, admin write)
+	// Unified handler for /companies, /companies/{id}, /companies/slug/{slug}, /companies/{id}/products
+	mux.HandleFunc("/companies", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		parts := strings.Split(strings.TrimPrefix(path, "/companies"), "/")
+
+		// /companies — list
+		if path == "/companies" || (len(parts) == 1 && parts[0] == "") {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			authHandlers.HandleCompaniesList(w, r)
+			return
+		}
+
+		// /companies/slug/{slug}
+		if len(parts) >= 2 && parts[0] == "slug" && parts[1] != "" {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			authHandlers.HandleCompanyGetBySlug(w, r)
+			return
+		}
+
+		// /companies/{id}/products
+		if len(parts) >= 3 && parts[0] != "" && parts[1] == "products" {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			authHandlers.HandleCompanyProducts(w, r)
+			return
+		}
+
+		// /companies/{id}
+		if len(parts) == 2 && parts[0] != "" {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			authHandlers.HandleCompanyGet(w, r)
+			return
+		}
+
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	// Landing pages (public)
+	// GET /landing/{slug}
+	mux.HandleFunc("/landing/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		parts := strings.Split(strings.TrimPrefix(path, "/landing/"), "/")
+
+		if len(parts) == 0 || parts[0] == "" {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// /landing/scu/{scu}
+		if parts[0] == "scu" && len(parts) >= 2 {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			h.HandleLandingPageBySCU(w, r)
+			return
+		}
+
+		// /landing/{slug}/products
+		if len(parts) >= 2 && parts[1] == "products" {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			h.HandleLandingPageProducts(w, r)
+			return
+		}
+
+		// /landing/{slug}
+		if len(parts) == 1 {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			h.HandleLandingPageBySlug(w, r)
+			return
+		}
+
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	// Admin landing pages
+	// GET /admin/landings
+	mux.Handle("/admin/landings", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleLandingPagesList(w, r)
+		case http.MethodPost:
+			h.HandleLandingPageCreate(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}), model.RoleAdmin))
+
+	// /admin/landings/{id}
+	mux.Handle("/admin/landings/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleLandingPageGet(w, r)
+		case http.MethodPut:
+			h.HandleLandingPageUpdate(w, r)
+		case http.MethodDelete:
+			h.HandleLandingPageDelete(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}), model.RoleAdmin))
+
+	// SCUPage SEO pages
+	// GET /shop — root catalog
+	// GET /shop/{category_tree}/{slug}
+	mux.HandleFunc("/shop", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.HandleSCUPageByPath(w, r)
+	})
+	mux.HandleFunc("/shop/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.HandleSCUPageByPath(w, r)
+	})
+
 	// Attribute values (turbo-based)
 	// GET /attributes/{code}/values
 	mux.HandleFunc("/attributes/", func(w http.ResponseWriter, r *http.Request) {
@@ -330,6 +524,34 @@ func main() {
 		}
 		h.HandleAttributeValues(w, r)
 	})
+
+	// --- Admin AttrDef management ---
+
+	// GET/POST /admin/attrdefs
+	mux.Handle("/admin/attrdefs", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleAdminAttrDefsList(w, r)
+		case http.MethodPost:
+			h.HandleAdminAttrDefCreate(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}), model.RoleAdmin))
+
+	// GET/PATCH/DELETE /admin/attrdefs/{code}
+	mux.Handle("/admin/attrdefs/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleAdminAttrDefGet(w, r)
+		case http.MethodPatch:
+			h.HandleAdminAttrDefUpdate(w, r)
+		case http.MethodDelete:
+			h.HandleAdminAttrDefDelete(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}), model.RoleAdmin))
 
 	// --- Products ---
 
@@ -555,9 +777,103 @@ func main() {
 		h.HandlePaymentTimeoutCleanup(w, r)
 	}), model.RoleAdmin))
 
+	// --- Admin: DB shard usage ---
+
+	// GET /admin/db/shards — fast stats
+	mux.Handle("/admin/db/shards", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleAdminDBShards(w, r)
+	}), model.RoleAdmin))
+
+	// GET /admin/db/shards/active — precise stats (slow)
+	mux.Handle("/admin/db/shards/active", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleAdminDBShardsActive(w, r)
+	}), model.RoleAdmin))
+
+	// POST /admin/db/compact — compact all shards (slow, admin only)
+	mux.Handle("/admin/db/compact", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.HandleAdminDBCompact(w, r)
+	}), model.RoleAdmin))
+
+	// --- SEO: robots.txt and sitemap ---
+
+	// GET /robots.txt
+	mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleRobotsTXT(w, r)
+	})
+
+	// GET /sitemap.xml — sitemap index
+	mux.HandleFunc("/sitemap.xml", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleSitemapIndex(w, r)
+	})
+
+	// GET /sitemap-categories.xml
+	mux.HandleFunc("/sitemap-categories.xml", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleSitemapCategories(w, r)
+	})
+
+	// SPA fallback: for any unmatched path that wants HTML, serve index.html
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Handle /sitemap-scupage-{N}.xml (Go ServeMux doesn't match this pattern directly)
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/sitemap-scupage") {
+			h.HandleSitemapSCUPage(w, r)
+			return
+		}
+
+		if r.Method == http.MethodGet &&
+			strings.Contains(r.Header.Get("Accept"), "text/html") &&
+			!strings.Contains(r.URL.Path, ".") {
+			// Serve frontend index.html for SPA routes
+			index, err := os.ReadFile("frontend/dist/index.html")
+			if err != nil {
+				// Fallback to src/index.html in dev mode
+				index, err = os.ReadFile("frontend/index.html")
+				if err != nil {
+					http.Error(w, "frontend not built", http.StatusServiceUnavailable)
+					return
+				}
+			}
+			w.Header().Set("Content-Type", "text/html")
+			w.Write(index)
+			return
+		}
+		http.NotFound(w, r)
+	})
+
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("Makoshop API server starting on %s", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("server failed: %v", err)
+	}
+}
+
+func loadI18n() {
+	files, err := i18nFS.ReadDir("i18n")
+	if err != nil {
+		log.Printf("i18n dir not found, using defaults: %v", err)
+		return
+	}
+	for _, f := range files {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".json") {
+			continue
+		}
+		lang := strings.TrimSuffix(f.Name(), ".json")
+		data, err := i18nFS.ReadFile(fmt.Sprintf("i18n/%s", f.Name()))
+		if err != nil {
+			log.Printf("i18n load %s failed: %v", lang, err)
+			continue
+		}
+		if err := i18n.Load(lang, data); err != nil {
+			log.Printf("i18n parse %s failed: %v", lang, err)
+			continue
+		}
+		log.Printf("i18n loaded: %s", lang)
+	}
+	// Default language can be set via env or hardcoded
+	if lang := os.Getenv("I18N_LANG"); lang != "" {
+		i18n.SetCurrent(lang)
 	}
 }

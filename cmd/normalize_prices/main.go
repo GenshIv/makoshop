@@ -384,16 +384,48 @@ func processFile(
 }
 
 func parsePrice(s string) float64 {
-	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.ReplaceAll(s, "\r", " ")
+	// First: remove ALL whitespace (spaces, tabs, newlines, non-breaking spaces)
+	s = strings.Map(func(r rune) rune {
+		if r == ' ' || r == '\u00a0' || r == '\t' || r == '\n' || r == '\r' {
+			return -1
+		}
+		return r
+	}, s)
 	s = strings.TrimSpace(s)
-	parts := strings.Fields(s)
-	if len(parts) > 0 {
-		s = parts[0]
+	if s == "" {
+		return 0
 	}
-	s = strings.ReplaceAll(s, " ", "")
-	s = strings.ReplaceAll(s, "\u00a0", "")
-	s = strings.ReplaceAll(s, ",", ".")
+	if s == "" {
+		return 0
+	}
+
+	// Determine decimal separator
+	// If both . and , present: last one is decimal separator
+	lastDot := strings.LastIndex(s, ".")
+	lastComma := strings.LastIndex(s, ",")
+
+	if lastDot >= 0 && lastComma >= 0 {
+		if lastDot > lastComma {
+			// . is decimal separator, , is thousands separator
+			s = strings.ReplaceAll(s, ",", "")
+		} else {
+			// , is decimal separator, . is thousands separator
+			s = strings.ReplaceAll(s, ".", "")
+			s = strings.ReplaceAll(s, ",", ".")
+		}
+	} else if lastComma >= 0 {
+		// Only comma: could be decimal (1,5) or thousands (1,000)
+		// If digits after comma <= 2, treat as decimal separator
+		afterComma := s[lastComma+1:]
+		if len(afterComma) <= 2 {
+			s = strings.ReplaceAll(s, ",", ".")
+		} else {
+			// Thousands separator
+			s = strings.ReplaceAll(s, ",", "")
+		}
+	}
+	// If only dot: it's decimal separator, nothing to do
+
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return 0

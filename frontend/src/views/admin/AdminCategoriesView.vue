@@ -1,16 +1,22 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import api from '../../api';
 
+const { t } = useI18n();
+
 const categories = ref([]);
+const tree = ref([]);
 const loading = ref(true);
 const showForm = ref(false);
+const editingId = ref(null);
 
 const form = reactive({
   name: '',
-  parent_id: 0,
+  parent_id: null,
   description: '',
   is_active: true,
+  sort_order: 0,
 });
 
 const fetchCategories = async () => {
@@ -25,27 +31,125 @@ const fetchCategories = async () => {
   }
 };
 
-const createCategory = async () => {
-  if (!form.name) return;
+const fetchTree = async () => {
   try {
-    await api.post('/admin/categories', form);
-    showForm.value = false;
-    Object.assign(form, { name: '', parent_id: 0, description: '', is_active: true });
-    await fetchCategories();
+    const response = await api.get('/categories/tree');
+    tree.value = response.data || [];
   } catch (e) {
-    alert(e.response?.data?.message || 'Ошибка');
+    console.error(e);
   }
 };
 
-onMounted(fetchCategories);
+// Flatten tree for dropdown (exclude self and descendants when editing)
+const parentOptions = ref([]);
+
+const updateParentOptions = () => {
+  const excludeId = editingId.value;
+  const flatten = (nodes, result = []) => {
+    for (const node of nodes) {
+      if (node.id !== excludeId) {
+        result.push({ id: node.id, name: node.name, level: node._level || 0 });
+        if (node.children?.length) {
+          flatten(node.children, result);
+        }
+      }
+    }
+    return result;
+  };
+  const flat = flatten(tree.value);
+  // Set _level during flatten
+  const setLevel = (nodes, level = 0) => {
+    for (const node of nodes) {
+      node._level = level;
+      if (node.children?.length) setLevel(node.children, level + 1);
+    }
+  };
+  setLevel(tree.value);
+  parentOptions.value = [{ id: null, name: t('admin.root_category'), level: -1 }, ...flatten(tree.value)];
+};
+
+const resetForm = () => {
+  Object.assign(form, { name: '', parent_id: null, description: '', is_active: true, sort_order: 0 });
+  editingId.value = null;
+  showForm.value = false;
+};
+
+const editCategory = (cat) => {
+  editingId.value = cat.id;
+  form.name = cat.name;
+  form.parent_id = cat.parent_id || null;
+  form.description = cat.description || '';
+  form.is_active = cat.is_active;
+  form.sort_order = cat.sort_order || 0;
+  showForm.value = true;
+  updateParentOptions();
+};
+
+const saveCategory = async () => {
+  if (!form.name) return alert(t('admin.category_name_placeholder').replace('*','').trim());
+  try {
+    const payload = {
+      name: form.name,
+      parent_id: form.parent_id,
+      description: form.description,
+      is_active: form.is_active,
+      sort_order: form.sort_order,
+    };
+
+    if (editingId.value) {
+      await api.patch(`/admin/categories/${editingId.value}`, payload);
+    } else {
+      await api.post('/admin/categories', payload);
+    }
+    resetForm();
+    await fetchCategories();
+    await fetchTree();
+  } catch (e) {
+    alert(e.response?.data?.message || e.response?.data?.error?.message || t('admin.save_error'));
+  }
+};
+
+const deleteCategory = async (cat) => {
+  if (!confirm(t('admin.delete_confirm', { name: cat.name }))) return;
+  try {
+    await api.delete(`/admin/categories/${cat.id}`);
+    await fetchCategories();
+    await fetchTree();
+  } catch (e) {
+    alert(e.response?.data?.message || e.response?.data?.error?.message || t('admin.delete_error'));
+  }
+};
+
+const toggleActive = async (cat) => {
+  try {
+    await api.patch(`/admin/categories/${cat.id}`, { is_active: !cat.is_active });
+    await fetchCategories();
+    await fetchTree();
+  } catch (e) {
+    alert(t('admin.error'));
+  }
+};
+
+const goToAttributes = (cat) => {
+  window.open(`/admin/categories/${cat.id}/attributes`, '_blank');
+};
+
+onMounted(() => {
+  fetchCategories();
+  fetchTree();
+});
+
+watch(showForm, (val) => {
+  if (val) updateParentOptions();
+});
 </script>
 
 <template>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-purple-700">Категории</h1>
+      <h1 class="text-2xl font-bold text-purple-700">{{ t('admin.categories_title') }}</h1>
       <button @click="showForm = true" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
-        + Категория
+        {{ t('admin.add_category') }}
       </button>
     </div>
 
@@ -54,26 +158,43 @@ onMounted(fetchCategories);
     </div>
 
     <!-- Form -->
-    <div v-if="showForm" class="mb-6 bg-white rounded-lg shadow-sm p-4">
-      <h3 class="font-medium mb-3">Новая категория</h3>
+    <div v-if="showForm" class="mb-6 bg-white rounded-lg shadow-sm p-4 border border-purple-200">
+      <h3 class="font-medium mb-3">
+        {{ editingId ? t('admin.edit_category') : t('admin.new_category') }}
+      </h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <input v-model="form.name" type="text" placeholder="Название" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-        <input v-model.number="form.parent_id" type="number" placeholder="Parent ID (0 = root)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-        <textarea v-model="form.description" placeholder="Описание" rows="2" class="sm:col-span-2 px-3 py-2 border border-gray-300 rounded-lg text-sm"></textarea>
+        <input v-model="form.name" type="text" :placeholder="t('admin.category_name_placeholder')" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+        <select v-model="form.parent_id" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+          <option :value="null">{{ t('admin.root_category') }}</option>
+          <option v-for="opt in parentOptions.filter(o => o.id !== null)" :key="opt.id" :value="opt.id">
+            {{ '  '.repeat(opt.level) }}{{ opt.name }}
+          </option>
+        </select>
+        <textarea v-model="form.description" :placeholder="t('admin.description_placeholder')" rows="2" class="sm:col-span-2 px-3 py-2 border border-gray-300 rounded-lg text-sm"></textarea>
+        <div class="flex items-center gap-4">
+          <label class="flex items-center gap-2 text-sm">
+            <input v-model="form.is_active" type="checkbox" />
+            {{ t('admin.is_active') }}
+          </label>
+          <div class="flex items-center gap-2">
+            <span class="text-sm">{{ t('admin.order') }}</span>
+            <input v-model.number="form.sort_order" type="number" class="w-20 px-2 py-1 border border-gray-300 rounded text-sm" />
+          </div>
+        </div>
       </div>
       <div class="flex gap-2 mt-3">
-        <button @click="createCategory" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
-          Создать
+        <button @click="saveCategory" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
+          {{ editingId ? t('admin.save') : t('admin.create') }}
         </button>
-        <button @click="showForm = false" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">
-          Отмена
+        <button @click="resetForm" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">
+          {{ t('admin.cancel') }}
         </button>
       </div>
     </div>
 
     <!-- List -->
     <div v-else-if="categories.length === 0" class="text-center py-12 text-gray-500">
-      Категорий пока нет
+      {{ t('admin.no_categories') }}
     </div>
 
     <div v-else class="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -81,20 +202,40 @@ onMounted(fetchCategories);
         <thead class="bg-gray-50">
           <tr>
             <th class="px-4 py-3 text-left">ID</th>
-            <th class="px-4 py-3 text-left">Название</th>
-            <th class="px-4 py-3 text-left">Parent</th>
-            <th class="px-4 py-3 text-left">Статус</th>
+            <th class="px-4 py-3 text-left">{{ t('admin.name') }}</th>
+            <th class="px-4 py-3 text-left">{{ t('admin.parent') }}</th>
+            <th class="px-4 py-3 text-left">{{ t('admin.status') }}</th>
+            <th class="px-4 py-3 text-left">{{ t('admin.actions') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="cat in categories" :key="cat.id" class="border-t hover:bg-gray-50">
             <td class="px-4 py-3">{{ cat.id }}</td>
-            <td class="px-4 py-3">{{ cat.name }}</td>
-            <td class="px-4 py-3 text-gray-500">{{ cat.parent_id || '—' }}</td>
+            <td class="px-4 py-3 font-medium">{{ cat.name }}</td>
+            <td class="px-4 py-3 text-gray-500">
+              {{ cat.parent_id ? `#${cat.parent_id}` : '—' }}
+            </td>
             <td class="px-4 py-3">
-              <span :class="cat.is_active ? 'text-green-600' : 'text-gray-400'">
-                {{ cat.is_active ? 'Активна' : 'Неактивна' }}
-              </span>
+              <button
+                @click="toggleActive(cat)"
+                :class="cat.is_active ? 'text-green-600 hover:text-green-700' : 'text-gray-400 hover:text-gray-600'"
+                class="text-xs underline cursor-pointer"
+              >
+                {{ cat.is_active ? t('admin.active') : t('admin.inactive') }}
+              </button>
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex gap-2">
+                <button @click="editCategory(cat)" class="text-xs text-blue-600 hover:underline">
+                  {{ t('admin.edit') }}
+                </button>
+                <button @click="goToAttributes(cat)" class="text-xs text-purple-600 hover:underline">
+                  {{ t('admin.attributes') }}
+                </button>
+                <button @click="deleteCategory(cat)" class="text-xs text-red-600 hover:underline">
+                  {{ t('admin.delete') }}
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>

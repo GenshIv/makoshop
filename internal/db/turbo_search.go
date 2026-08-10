@@ -17,6 +17,8 @@ type TurboProductSearch struct {
 	db           *makodb.ShardedDB
 	repo         *ProductRepo
 	categoryRepo *CategoryRepo
+	landingRepo  *LandingRepo
+	scuPageRepo  *SCUPageRepo
 	mu           sync.RWMutex
 	enabled      bool
 }
@@ -28,6 +30,16 @@ func NewTurboProductSearch(db *makodb.ShardedDB, repo *ProductRepo, categoryRepo
 		categoryRepo: categoryRepo,
 		enabled:      enabled,
 	}
+}
+
+// SetLandingRepo attaches a LandingRepo for SCU/landing page management.
+func (t *TurboProductSearch) SetLandingRepo(lr *LandingRepo) {
+	t.landingRepo = lr
+}
+
+// SetSCUPageRepo attaches a SCUPageRepo for SEO page management.
+func (t *TurboProductSearch) SetSCUPageRepo(sr *SCUPageRepo) {
+	t.scuPageRepo = sr
 }
 
 // DB returns the underlying ShardedDB for direct turbo operations.
@@ -113,6 +125,32 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 
 	// Диапазоны цен (по доке, вариант 1)
 	t.indexPriceRanges(p.Price, docID)
+
+	// SCU index: links product to landing page
+	if p.SCU != "" {
+		scuKey := "scu:" + p.SCU
+		if _, err := t.db.TurboPutIndex(scuKey, docID); err != nil {
+			return fmt.Errorf("turbo scu index: %w", err)
+		}
+		// Update landing page product list
+		if t.landingRepo != nil {
+			_, _ = t.landingRepo.UpsertBySCU(p.SCU, func(lp *model.LandingPage) {
+				if lp.Title == p.SCU {
+					lp.Title = p.Name
+				}
+				if lp.Description == "" {
+					lp.Description = p.Description
+				}
+			})
+			if lp, err := t.landingRepo.GetBySCU(p.SCU); err == nil {
+				_ = t.landingRepo.AddProduct(lp.ID, p.ID)
+			}
+		}
+		// Link to SCUPage (SEO page)
+		if t.scuPageRepo != nil {
+			_ = t.scuPageRepo.LinkProductBySCU(p.SCU, p)
+		}
+	}
 
 	return nil
 }
@@ -253,6 +291,25 @@ func (t *TurboProductSearch) UnindexProduct(p *model.Product) error {
 	for _, tok := range tokenizeProduct(p) {
 		t.db.TurboDeleteIndex(turboKeyText(tok), docID)
 	}
+
+	// Remove SCU index
+	if p.SCU != "" {
+		scuKey := "scu:" + p.SCU
+		t.db.TurboDeleteIndex(scuKey, docID)
+		// Remove product from landing page
+		if t.landingRepo != nil {
+			if lp, err := t.landingRepo.GetBySCU(p.SCU); err == nil {
+				_ = t.landingRepo.RemoveProduct(lp.ID, p.ID)
+			}
+		}
+		// Remove product from SCUPage
+		if t.scuPageRepo != nil {
+			if sp, err := t.scuPageRepo.GetBySCU(p.SCU); err == nil {
+				_ = t.scuPageRepo.RemoveProduct(sp.ID, p.ID)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -301,6 +358,12 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 		}
 		for _, tok := range tokenizeProduct(p) {
 			indexes[turboKeyText(tok)] = append(indexes[turboKeyText(tok)], docID)
+		}
+
+		// SCU index
+		if p.SCU != "" {
+			scuKey := "scu:" + p.SCU
+			indexes[scuKey] = append(indexes[scuKey], docID)
 		}
 	}
 
@@ -432,10 +495,9 @@ func (t *TurboProductSearch) BuildSortIndexes() error {
 		return out
 	}
 
-	writeSortIndex := func(key string, docIDs []uint64) error {
-		buf := makodb.TurboBinaryNew(docIDs)
-		if err := t.db.TurboRawWrite(key, buf); err != nil {
-			return fmt.Errorf("turbo raw write %s: %w", key, err)
+	writeSortIndex := func(name string, docIDs []uint64) error {
+		if err := t.db.TurboPutSortIndex(name, docIDs); err != nil {
+			return fmt.Errorf("turbo put sort index %s: %w", name, err)
 		}
 		return nil
 	}
@@ -674,40 +736,8 @@ func (t *TurboProductSearch) computeFacets(candidates []uint64, params TurboList
 		Attrs:  make(map[string]map[string]int),
 	}
 
-	// Бренды: всегда считаем, если есть хотя бы один запрошенный фасет
-	brandListData, err := t.db.TurboRawRead(turboKeyBrandList)
-	if err == nil && len(brandListData) > 0 {
-		brandIDs := makodb.TurboUnsafeReadTokens(brandListData)
-		for _, bid := range brandIDs {
-			// Не показываем выбранный бренд как фасет
-			if params.BrandID != 0 && int64(bid) == params.BrandID {
-				continue
-			}
-			key := turboKeyBrand(int64(bid))
-			idxData, err := t.db.TurboRawRead(key)
-			if err != nil || len(idxData) == 0 {
-				continue
-			}
-			idxTokens := makodb.TurboUnsafeReadTokens(idxData)
-			count := len(intersectSorted(candidates, idxTokens))
-			if count > 0 {
-				// Получаем имя бренда
-				nameData, _ := t.db.TurboRawRead(turboKeyBrandNamePrefix + strconv.FormatInt(int64(bid), 10))
-				name := string(nameData)
-				if name == "" {
-					name = strconv.FormatInt(int64(bid), 10)
-				}
-				facets.Brands[name] = count
-			}
-		}
-	}
-
 	// Атрибуты: только запрошенные коды
 	for _, code := range params.FacetCodes {
-		// Пропускаем бренд — он уже обработан выше
-		if code == "brand" {
-			continue
-		}
 
 		// Если есть CategoryID, берём значения только для неё
 		var valueHashes []uint64
@@ -869,6 +899,35 @@ func (t *TurboProductSearch) GetAllProducts() ([]model.Product, error) {
 	}
 
 	docIDs := makodb.TurboUnsafeReadTokens(sortData)
+	if len(docIDs) == 0 {
+		return nil, nil
+	}
+
+	var result []model.Product
+	for _, docID := range docIDs {
+		p, err := t.repo.Get(int64(docID))
+		if err != nil {
+			continue
+		}
+		result = append(result, *p)
+	}
+
+	return result, nil
+}
+
+// GetProductsBySCU returns all products with a given SCU.
+func (t *TurboProductSearch) GetProductsBySCU(scu string) ([]model.Product, error) {
+	if !t.enabled || scu == "" {
+		return nil, nil
+	}
+
+	scuKey := "scu:" + scu
+	data, err := t.db.TurboRawRead(scuKey)
+	if err != nil || len(data) == 0 {
+		return nil, nil
+	}
+
+	docIDs := makodb.TurboUnsafeReadTokens(data)
 	if len(docIDs) == 0 {
 		return nil, nil
 	}

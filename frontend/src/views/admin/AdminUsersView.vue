@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import api from '../../api';
+
+const { t } = useI18n();
 
 const users = ref([]);
 const loading = ref(true);
@@ -13,7 +16,7 @@ const fetchUsers = async () => {
     const response = await api.get('/admin/users');
     users.value = response.data.items || response.data || [];
   } catch (e) {
-    error.value = 'Ошибка загрузки пользователей';
+    error.value = t('admin.users_load_error');
     console.error(e);
   } finally {
     loading.value = false;
@@ -26,7 +29,7 @@ const updateUserStatus = async (id, status) => {
     const user = users.value.find(u => u.id === id);
     if (user) user.status = status;
   } catch (e) {
-    alert(e.response?.data?.message || 'Ошибка');
+    alert(e.response?.data?.message || t('admin.error'));
   }
 };
 
@@ -35,7 +38,7 @@ onMounted(fetchUsers);
 
 <template>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <h1 class="text-2xl font-bold mb-6 text-purple-700">Пользователи</h1>
+    <h1 class="text-2xl font-bold mb-6 text-purple-700">{{ t('admin.users') }}</h1>
 
     <div v-if="loading" class="flex justify-center py-12">
       <div class="animate-spin h-8 w-8 border-4 border-purple-600 border-t-transparent rounded-full"></div>
@@ -50,11 +53,11 @@ onMounted(fetchUsers);
         <thead class="bg-gray-50">
           <tr>
             <th class="px-4 py-3 text-left">ID</th>
-            <th class="px-4 py-3 text-left">Email</th>
-            <th class="px-4 py-3 text-left">Роль</th>
-            <th class="px-4 py-3 text-left">Статус</th>
-            <th class="px-4 py-3 text-left">Создан</th>
-            <th class="px-4 py-3 text-right">Действия</th>
+            <th class="px-4 py-3 text-left">{{ t('common.email') }}</th>
+            <th class="px-4 py-3 text-left">{{ t('admin.role') }}</th>
+            <th class="px-4 py-3 text-left">{{ t('admin.status') }}</th>
+            <th class="px-4 py-3 text-left">{{ t('admin.created') }}</th>
+            <th class="px-4 py-3 text-right">{{ t('admin.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -86,7 +89,7 @@ onMounted(fetchUsers);
               {{ user.created_at ? new Date(user.created_at).toLocaleDateString('ru-RU') : '—' }}
             </td>
             <td class="px-4 py-3 text-right">
-              <button class="text-indigo-600 hover:underline text-xs">Подробнее</button>
+              <button class="text-indigo-600 hover:underline text-xs">{{ t('admin.details') }}</button>
             </td>
           </tr>
         </tbody>

@@ -1,25 +1,27 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import api from '../../api';
 import { useAuthStore } from '../../stores/auth';
 
 const router = useRouter();
 const auth = useAuthStore();
+const { t } = useI18n();
 const orders = ref([]);
 const loading = ref(true);
 const error = ref(null);
 
-const statusLabels = {
-  new: 'Новый',
-  pending: 'Ожидает оплаты',
-  paid: 'Оплачен',
-  processing: 'В обработке',
-  shipped: 'Отправлен',
-  delivered: 'Доставлен',
-  cancelled: 'Отменён',
-  refunded: 'Возврат',
-};
+const statusLabels = computed(() => ({
+  new: t('orders.statuses.new'),
+  pending: t('orders.statuses.pending'),
+  paid: t('orders.statuses.paid'),
+  processing: t('orders.statuses.processing'),
+  shipped: t('orders.statuses.shipped'),
+  delivered: t('orders.statuses.delivered'),
+  cancelled: t('orders.statuses.cancelled'),
+  refunded: t('orders.statuses.refunded'),
+}));
 
 const statusColors = {
   new: 'text-blue-600 bg-blue-50',
@@ -54,7 +56,7 @@ const fetchOrders = async () => {
     const response = await api.get(`/companies/${companyId}/orders`);
     orders.value = response.data.items || response.data.orders || [];
   } catch (e) {
-    error.value = 'Ошибка загрузки заказов';
+    error.value = t('seller.orders_load_error');
     console.error(e);
   } finally {
     loading.value = false;
@@ -66,7 +68,7 @@ onMounted(fetchOrders);
 
 <template>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <h1 class="text-2xl font-bold mb-6">Заказы</h1>
+    <h1 class="text-2xl font-bold mb-6">{{ t('seller.orders') }}</h1>
 
     <!-- Loading -->
     <div v-if="loading" class="flex justify-center py-12">
@@ -80,7 +82,7 @@ onMounted(fetchOrders);
 
     <!-- Empty -->
     <div v-else-if="orders.length === 0" class="text-center py-12 text-gray-500">
-      Заказов пока нет
+      {{ t('seller.no_orders') }}
     </div>
 
     <!-- Orders table -->
@@ -89,12 +91,12 @@ onMounted(fetchOrders);
         <thead class="bg-gray-50">
           <tr>
             <th class="px-4 py-3 text-left">ID</th>
-            <th class="px-4 py-3 text-left">Дата</th>
-            <th class="px-4 py-3 text-left">Покупатель</th>
-            <th class="px-4 py-3 text-left">Товаров</th>
-            <th class="px-4 py-3 text-left">Сумма</th>
-            <th class="px-4 py-3 text-left">Статус</th>
-            <th class="px-4 py-3 text-right">Действия</th>
+            <th class="px-4 py-3 text-left">{{ t('seller.date') }}</th>
+            <th class="px-4 py-3 text-left">{{ t('seller.buyer') }}</th>
+            <th class="px-4 py-3 text-left">{{ t('seller.items_count') }}</th>
+            <th class="px-4 py-3 text-left">{{ t('seller.amount') }}</th>
+            <th class="px-4 py-3 text-left">{{ t('seller.status') }}</th>
+            <th class="px-4 py-3 text-right">{{ t('seller.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -111,7 +113,7 @@ onMounted(fetchOrders);
             </td>
             <td class="px-4 py-3 text-right">
               <router-link :to="{ name: 'order-detail', params: { id: order.id } }" class="text-indigo-600 hover:underline">
-                Детали
+                {{ t('seller.details') }}
               </router-link>
             </td>
           </tr>

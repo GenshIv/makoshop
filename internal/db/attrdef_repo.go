@@ -24,7 +24,8 @@ func NewAttrDefRepo(store *Store) *AttrDefRepo {
 	return &AttrDefRepo{store: store}
 }
 
-// GetByCode returns attrdef by code.
+// GetByCode returns attrdef by code. If document doesn't exist (e.g. created by BatchUpsertCodes),
+// it creates a default AttrDef on the fly.
 func (r *AttrDefRepo) GetByCode(code string) (*model.AttrDef, error) {
 	key := turboKeyAttrDefCode + code
 	data, err := r.store.DB().TurboRawRead(key)
@@ -35,7 +36,36 @@ func (r *AttrDefRepo) GetByCode(code string) (*model.AttrDef, error) {
 	var docID uint64
 	_, _ = fmt.Sscanf(string(data), "%d", &docID)
 
-	return r.Get(int64(docID))
+	ad, err := r.Get(int64(docID))
+	if err == nil {
+		return ad, nil
+	}
+
+	// Document doesn't exist (e.g. created by BatchUpsertCodes with hash as pseudo-ID).
+	// Create a default AttrDef.
+	cats, _ := r.GetCategories(code)
+	if cats == nil {
+		cats = []int64{}
+	}
+
+	ad = &model.AttrDef{
+		ID:           int64(docID),
+		Code:         code,
+		Name:         "",
+		Categories:   cats,
+		Type:         "string",
+		IsActive:     true,
+		IsFilterable: true,
+		IsSortable:   false,
+		SortOrder:    0,
+		CreatedAt:    time.Now(),
+	}
+
+	// Persist the document so future calls work
+	buf, _ := json.Marshal(ad)
+	_ = r.store.DocPut(fmt.Sprintf("attrdef:%d", ad.ID), buf)
+
+	return ad, nil
 }
 
 // Get returns attrdef by ID.
@@ -288,7 +318,7 @@ func (r *AttrDefRepo) UpsertCode(code string, catID int64) error {
 		}
 		// Append category
 		cats = append(cats, catID)
-		buf := makodb.TurboBinaryNew(uint64SliceFromInt64(cats))
+		buf := makodb.TurboBinaryNew(Uint64SliceFromInt64(cats))
 		return r.store.DB().TurboRawWrite(turboKeyAttrDefCats+code, buf)
 	}
 
@@ -346,7 +376,7 @@ func (r *AttrDefRepo) addToAttrDefList(code string) error {
 	return r.store.DB().TurboRawWrite(turboKeyAttrDefList, buf)
 }
 
-func uint64SliceFromInt64(in []int64) []uint64 {
+func Uint64SliceFromInt64(in []int64) []uint64 {
 	out := make([]uint64, len(in))
 	for i, v := range in {
 		out[i] = uint64(v)
@@ -380,7 +410,7 @@ func (r *AttrDefRepo) BatchUpsertCodes(codeCats map[string]map[int64]struct{}) e
 		}
 
 		// attrdef_cats:<code> -> [categoryIDs]
-		catBuf := makodb.TurboBinaryNew(uint64SliceFromInt64(cats))
+		catBuf := makodb.TurboBinaryNew(Uint64SliceFromInt64(cats))
 		if err := r.store.DB().TurboRawWrite(turboKeyAttrDefCats+code, catBuf); err != nil {
 			fmt.Printf("WARN: write attrdef_cats %s: %v\n", code, err)
 		}
@@ -455,4 +485,130 @@ func fnv64(s string) uint64 {
 		h *= 1099511628211
 	}
 	return h
+}
+
+// List returns all AttrDef entries.
+func (r *AttrDefRepo) List() ([]model.AttrDef, error) {
+	data, err := r.store.DB().TurboRawRead(turboKeyAttrDefList)
+	if err != nil || len(data) == 0 {
+		return nil, nil
+	}
+
+	var codes []string
+	if err := json.Unmarshal(data, &codes); err != nil {
+		return nil, err
+	}
+
+	var result []model.AttrDef
+	for _, code := range codes {
+		ad, err := r.GetByCode(code)
+		if err != nil {
+			continue
+		}
+		result = append(result, *ad)
+	}
+	return result, nil
+}
+
+// Update updates an AttrDef by code.
+func (r *AttrDefRepo) Update(code string, updater func(*model.AttrDef)) error {
+	ad, err := r.GetByCode(code)
+	if err != nil {
+		return err
+	}
+
+	updater(ad)
+
+	data, err := json.Marshal(ad)
+	if err != nil {
+		return err
+	}
+
+	return r.store.DocPut(fmt.Sprintf("attrdef:%d", ad.ID), data)
+}
+
+// Delete removes an AttrDef by code.
+func (r *AttrDefRepo) Delete(code string) error {
+	ad, err := r.GetByCode(code)
+	if err != nil {
+		return err
+	}
+
+	// Remove from doc store
+	_ = r.store.DocDelete(fmt.Sprintf("attrdef:%d", ad.ID))
+
+	// Remove indexes
+	_ = r.store.DB().TurboRawWrite(turboKeyAttrDefCode+code, []byte{})
+	_ = r.store.DB().TurboRawWrite(turboKeyAttrDefCats+code, []byte{})
+
+	// Remove from list
+	data, _ := r.store.DB().TurboRawRead(turboKeyAttrDefList)
+	var codes []string
+	if data != nil && len(data) > 0 {
+		json.Unmarshal(data, &codes)
+	}
+	var newCodes []string
+	for _, c := range codes {
+		if c != code {
+			newCodes = append(newCodes, c)
+		}
+	}
+	if len(newCodes) > 0 {
+		buf, _ := json.Marshal(newCodes)
+		_ = r.store.DB().TurboRawWrite(turboKeyAttrDefList, buf)
+	} else {
+		_ = r.store.DB().TurboRawWrite(turboKeyAttrDefList, []byte{})
+	}
+
+	return nil
+}
+
+// Create creates a new AttrDef.
+func (r *AttrDefRepo) Create(code string, ad *model.AttrDef) error {
+	if code == "" {
+		return fmt.Errorf("code is required")
+	}
+
+	// Check if exists
+	_, err := r.GetByCode(code)
+	if err == nil {
+		return fmt.Errorf("attrdef %s already exists", code)
+	}
+
+	id, err := r.store.NextID("attrdef")
+	if err != nil {
+		return err
+	}
+
+	ad.ID = id
+	ad.Code = code
+	ad.CreatedAt = time.Now()
+	if ad.IsActive == false {
+		ad.IsActive = true
+	}
+
+	data, err := json.Marshal(ad)
+	if err != nil {
+		return err
+	}
+
+	if err := r.store.DocPut(fmt.Sprintf("attrdef:%d", id), data); err != nil {
+		return err
+	}
+
+	// Index: code -> docID
+	if err := r.store.DB().TurboRawWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", id))); err != nil {
+		return err
+	}
+
+	// Index: code -> categories
+	if len(ad.Categories) > 0 {
+		catBuf := makodb.TurboBinaryNew(Uint64SliceFromInt64(ad.Categories))
+		if err := r.store.DB().TurboRawWrite(turboKeyAttrDefCats+code, catBuf); err != nil {
+			return err
+		}
+	}
+
+	// Add to list
+	return r.addToAttrDefList(code)
 }

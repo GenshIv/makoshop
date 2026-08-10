@@ -1,23 +1,25 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import api from '../api';
 
 const router = useRouter();
 const orders = ref([]);
 const loading = ref(true);
 const error = ref(null);
+const { t } = useI18n();
 
-const statusLabels = {
-  new: 'Новый',
-  pending: 'Ожидает оплаты',
-  paid: 'Оплачен',
-  processing: 'В обработке',
-  shipped: 'Отправлен',
-  delivered: 'Доставлен',
-  cancelled: 'Отменён',
-  refunded: 'Возврат',
-};
+const statusLabels = computed(() => ({
+  new: t('orders.statuses.new'),
+  pending: t('orders.statuses.pending'),
+  paid: t('orders.statuses.paid'),
+  processing: t('orders.statuses.processing'),
+  shipped: t('orders.statuses.shipped'),
+  delivered: t('orders.statuses.delivered'),
+  cancelled: t('orders.statuses.cancelled'),
+  refunded: t('orders.statuses.refunded'),
+}));
 
 const statusColors = {
   pending: 'text-yellow-600 bg-yellow-50',
@@ -49,7 +51,7 @@ const fetchOrders = async () => {
     const response = await api.get('/orders');
     orders.value = response.data.items || response.data.orders || response.data || [];
   } catch (e) {
-    error.value = 'Ошибка загрузки заказов';
+    error.value = t('orders.load_error');
     console.error(e);
   } finally {
     loading.value = false;
@@ -61,7 +63,7 @@ onMounted(fetchOrders);
 
 <template>
   <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <h1 class="text-2xl font-bold mb-6">Мои заказы</h1>
+    <h1 class="text-2xl font-bold mb-6">{{ t('orders.title') }}</h1>
 
     <!-- Loading -->
     <div v-if="loading" class="flex justify-center py-12">
@@ -75,8 +77,8 @@ onMounted(fetchOrders);
 
     <!-- Empty -->
     <div v-else-if="orders.length === 0" class="text-center py-12 text-gray-500">
-      У вас пока нет заказов
-      <router-link to="/" class="block mt-2 text-indigo-600 hover:underline">Перейти в каталог</router-link>
+      {{ t('orders.no_orders') }}
+      <router-link to="/" class="block mt-2 text-indigo-600 hover:underline">{{ t('orders.go_to_catalog') }}</router-link>
     </div>
 
     <!-- Orders list -->
@@ -89,7 +91,7 @@ onMounted(fetchOrders);
       >
         <div class="flex items-center justify-between">
           <div>
-            <div class="font-medium">Заказ #{{ order.id }}</div>
+            <div class="font-medium">{{ t('orders.order', { id: order.id }) }}</div>
             <div class="text-sm text-gray-500">{{ formatDate(order.created_at) }}</div>
           </div>
           <div class="flex items-center gap-4">
@@ -103,7 +105,7 @@ onMounted(fetchOrders);
           </div>
         </div>
         <div class="mt-2 text-sm text-gray-500">
-          {{ order.items?.length || 0 }} товар(ов)
+          {{ t('orders.items', { count: order.items?.length || 0 }) }}
         </div>
       </div>
     </div>

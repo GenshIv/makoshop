@@ -1,8 +1,10 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '../stores/auth';
 
 const auth = useAuthStore();
+const { t } = useI18n();
 const editing = ref(false);
 const saving = ref(false);
 const error = ref(null);
@@ -33,10 +35,10 @@ const saveProfile = async () => {
       email: form.email,
       phone: form.phone,
     });
-    success.value = 'Профиль обновлён';
+    success.value = t('profile.updated');
     editing.value = false;
   } catch (e) {
-    error.value = e.response?.data?.message || 'Ошибка обновления профиля';
+    error.value = e.response?.data?.message || t('profile.update_error');
   } finally {
     saving.value = false;
   }
@@ -47,10 +49,10 @@ onMounted(loadProfile);
 
 <template>
   <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <h1 class="text-2xl font-bold mb-6">Личный кабинет</h1>
+    <h1 class="text-2xl font-bold mb-6">{{ t('profile.title') }}</h1>
 
     <div v-if="!auth.user" class="text-gray-500">
-      Не удалось загрузить профиль
+      {{ t('profile.load_error') }}
     </div>
 
     <div v-else class="bg-white rounded-lg shadow-sm p-6">
@@ -65,13 +67,13 @@ onMounted(loadProfile);
           <div class="font-medium">{{ auth.user.email }}</div>
         </div>
         <div>
-          <label class="block text-sm text-gray-500">Роль</label>
+          <label class="block text-sm text-gray-500">{{ t('common.role') }}</label>
           <div class="font-medium capitalize">{{ auth.user.role }}</div>
         </div>
 
         <!-- Editable fields -->
         <div>
-          <label class="block text-sm text-gray-500">Имя</label>
+          <label class="block text-sm text-gray-500">{{ t('common.name') }}</label>
           <template v-if="editing">
             <input v-model="form.name" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg mt-1" />
           </template>
@@ -79,7 +81,7 @@ onMounted(loadProfile);
         </div>
 
         <div>
-          <label class="block text-sm text-gray-500">Телефон</label>
+          <label class="block text-sm text-gray-500">{{ t('common.phone') }}</label>
           <template v-if="editing">
             <input v-model="form.phone" type="tel" class="w-full px-3 py-2 border border-gray-300 rounded-lg mt-1" />
           </template>
@@ -90,13 +92,13 @@ onMounted(loadProfile);
         <div class="flex gap-3 pt-4">
           <template v-if="!editing">
             <button @click="editing = true" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-              Редактировать
+              {{ t('profile.edit') }}
             </button>
             <router-link to="/orders" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
-              Мои заказы
+              {{ t('profile.my_orders') }}
             </router-link>
             <router-link to="/reviews" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-              Мои отзывы
+              {{ t('profile.my_reviews') }}
             </router-link>
           </template>
           <template v-else>
@@ -105,10 +107,10 @@ onMounted(loadProfile);
               :disabled="saving"
               class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40"
             >
-              {{ saving ? 'Сохранение...' : 'Сохранить' }}
+              {{ saving ? t('profile.saving') : t('profile.save') }}
             </button>
             <button @click="editing = false; loadProfile()" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-              Отмена
+              {{ t('profile.cancel') }}
             </button>
           </template>
         </div>

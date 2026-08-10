@@ -9,16 +9,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/auth"
 	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
 type Handlers struct {
+	store             *db.Store
 	categoryRepo      *db.CategoryRepo
 	attrDefRepo       *db.AttrDefRepo
 	productRepo       *db.ProductRepo
 	turboSearch       *db.TurboProductSearch
+	scuPageSearch     *db.SCUPageSearch
+	landingRepo       *db.LandingRepo
+	scuPageRepo       *db.SCUPageRepo
 	companyRepo       *db.CompanyRepo
 	userRepo          *db.UserRepo
 	cartRepo          *db.CartRepo
@@ -44,7 +49,18 @@ func NewHandlers(store *db.Store) *Handlers {
 	turboSearch := db.NewTurboProductSearch(store.DB(), productRepo, categoryRepo, turboEnabled)
 	productRepo.SetTurboSearch(turboSearch)
 
+	landingRepo := db.NewLandingRepo(store)
+	turboSearch.SetLandingRepo(landingRepo)
+
+	scuPageRepo := db.NewSCUPageRepo(store)
+	turboSearch.SetSCUPageRepo(scuPageRepo)
+
+	// SCUPage search (catalog works on SCU pages)
+	scuPageSearch := db.NewSCUPageSearch(store.DB(), scuPageRepo, productRepo, categoryRepo, turboEnabled)
+	productRepo.SetSCUPageSearch(scuPageSearch)
+
 	return &Handlers{
+		store:             store,
 		categoryRepo:      categoryRepo,
 		attrDefRepo:       attrDefRepo,
 		companyRepo:       db.NewCompanyRepo(store),
@@ -59,7 +75,15 @@ func NewHandlers(store *db.Store) *Handlers {
 		promoLogRepo:      promoLogRepo,
 		productRepo:       productRepo,
 		turboSearch:       turboSearch,
+		scuPageSearch:     scuPageSearch,
+		landingRepo:       landingRepo,
+		scuPageRepo:       scuPageRepo,
 	}
+}
+
+// TurboSearch returns the attached TurboProductSearch.
+func (h *Handlers) TurboSearch() *db.TurboProductSearch {
+	return h.turboSearch
 }
 
 // --- helpers ---
@@ -181,6 +205,21 @@ func (h *Handlers) HandleCategoriesList(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
+	}
+
+	// Filter by parent_id if provided
+	if parentIDStr := r.URL.Query().Get("parent_id"); parentIDStr != "" {
+		var parentID int64
+		_, err := fmt.Sscanf(parentIDStr, "%d", &parentID)
+		if err == nil {
+			var filtered []model.Category
+			for _, c := range cats {
+				if c.ParentID != nil && *c.ParentID == parentID {
+					filtered = append(filtered, c)
+				}
+			}
+			cats = filtered
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -342,14 +381,8 @@ func (h *Handlers) HandleCategoryDelete(w http.ResponseWriter, r *http.Request) 
 
 // --- Category Attributes ---
 
-// GET /admin/categories/{id}/attributes — returns all attribute codes for a category
-// with their values. Attributes are linked to categories via AttrDefRepo.
+// HandleCategoryAttributes handles GET, POST, DELETE for /admin/categories/{id}/attributes
 func (h *Handlers) HandleCategoryAttributes(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
-		return
-	}
-
 	// Parse category ID from path: /admin/categories/{id}/attributes
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) < 5 || parts[len(parts)-1] != "attributes" {
@@ -370,6 +403,20 @@ func (h *Handlers) HandleCategoryAttributes(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	switch r.Method {
+	case http.MethodGet:
+		h.handleGetCategoryAttributes(w, r, catID)
+	case http.MethodPost:
+		h.handleAddCategoryAttribute(w, r, catID)
+	case http.MethodDelete:
+		h.handleRemoveCategoryAttribute(w, r, catID)
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+	}
+}
+
+// GET /admin/categories/{id}/attributes
+func (h *Handlers) handleGetCategoryAttributes(w http.ResponseWriter, r *http.Request, catID int64) {
 	// Get attribute codes for this category
 	codes, err := h.attrDefRepo.GetCodesForCategoryTree(catID, h.categoryRepo)
 	if err != nil {
@@ -377,7 +424,6 @@ func (h *Handlers) HandleCategoryAttributes(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Build result with values for each code
 	type attrInfo struct {
 		Code   string   `json:"code"`
 		Values []string `json:"values"`
@@ -387,7 +433,7 @@ func (h *Handlers) HandleCategoryAttributes(w http.ResponseWriter, r *http.Reque
 	for _, code := range codes {
 		values, _ := h.attrDefRepo.GetAttrValuesForCategory(code, catID)
 		if len(values) == 0 {
-			continue // не отдаём атрибуты без значений
+			continue
 		}
 		attrs = append(attrs, attrInfo{Code: code, Values: values})
 	}
@@ -395,6 +441,69 @@ func (h *Handlers) HandleCategoryAttributes(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"category_id": catID,
 		"attributes":  attrs,
+	})
+}
+
+// POST /admin/categories/{id}/attributes — add attribute code to category
+// Body: { "code": "attribute-code" }
+func (h *Handlers) handleAddCategoryAttribute(w http.ResponseWriter, r *http.Request, catID int64) {
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json")
+		return
+	}
+	if req.Code == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "code is required")
+		return
+	}
+
+	if err := h.attrDefRepo.UpsertCode(req.Code, catID); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "attribute added",
+		"code":    req.Code,
+	})
+}
+
+// DELETE /admin/categories/{id}/attributes — remove attribute code from category
+// Query: ?code=attribute-code
+func (h *Handlers) handleRemoveCategoryAttribute(w http.ResponseWriter, r *http.Request, catID int64) {
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "code query param is required")
+		return
+	}
+
+	// Remove category from attribute's category list
+	cats, err := h.attrDefRepo.GetCategories(code)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "attribute not found")
+		return
+	}
+
+	var newCats []int64
+	for _, c := range cats {
+		if c != catID {
+			newCats = append(newCats, c)
+		}
+	}
+
+	if len(newCats) == 0 {
+		// No more categories use this attribute — clear it
+		_ = h.store.DB().TurboRawWrite("attrdef_cats:"+code, []byte{})
+	} else {
+		buf := makodb.TurboBinaryNew(db.Uint64SliceFromInt64(newCats))
+		_ = h.store.DB().TurboRawWrite("attrdef_cats:"+code, buf)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "attribute removed",
+		"code":    code,
 	})
 }
 
@@ -468,6 +577,7 @@ func (h *Handlers) HandleAttributeValues(w http.ResponseWriter, r *http.Request)
 
 type CreateProductRequest struct {
 	SKU         string                 `json:"sku"`
+	SCU         string                 `json:"scu,omitempty"` // Standard Catalog Unit — links to landing page
 	Name        string                 `json:"name"`
 	Description string                 `json:"description,omitempty"`
 	CategoryID  int64                  `json:"category_id"`
@@ -608,6 +718,8 @@ func (h *Handlers) HandleProductGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// No redirect — return product directly.
+	// SCU pages are accessed via /shop/{tree}/{slug}, not via product redirect.
 	writeJSON(w, http.StatusOK, p)
 }
 
@@ -624,6 +736,7 @@ func (h *Handlers) HandleProductCreate(w http.ResponseWriter, r *http.Request) {
 
 	p := &model.Product{
 		SKU:         req.SKU,
+		SCU:         req.SCU,
 		Name:        req.Name,
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
@@ -659,6 +772,12 @@ func (h *Handlers) HandleProductCreate(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+
+	// Product must belong to a company.
+	if p.CompanyID == 0 {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "company_id is required for products")
+		return
 	}
 
 	if err := h.productRepo.Create(p); err != nil {
@@ -2841,4 +2960,150 @@ func (h *Handlers) HandleUserReviewsList(w http.ResponseWriter, r *http.Request)
 		"total": total,
 		"items": reviews,
 	})
+}
+
+// --- Admin AttrDef handlers ---
+
+// GET /admin/attrdefs — list all attribute definitions
+func (h *Handlers) HandleAdminAttrDefsList(w http.ResponseWriter, r *http.Request) {
+	defs, err := h.attrDefRepo.List()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+	if defs == nil {
+		defs = []model.AttrDef{}
+	}
+	writeJSON(w, http.StatusOK, defs)
+}
+
+// GET /admin/attrdefs/{code} — get attribute definition by code
+func (h *Handlers) HandleAdminAttrDefGet(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 || parts[3] == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "code is required")
+		return
+	}
+	code := parts[3]
+
+	ad, err := h.attrDefRepo.GetByCode(code)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "attribute not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, ad)
+}
+
+// POST /admin/attrdefs — create attribute definition
+func (h *Handlers) HandleAdminAttrDefCreate(w http.ResponseWriter, r *http.Request) {
+	var req model.AttrDef
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json")
+		return
+	}
+	if req.Code == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "code is required")
+		return
+	}
+
+	if err := h.attrDefRepo.Create(req.Code, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, req)
+}
+
+// PATCH /admin/attrdefs/{code} — update attribute definition
+func (h *Handlers) HandleAdminAttrDefUpdate(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 || parts[3] == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "code is required")
+		return
+	}
+	code := parts[3]
+
+	var updates map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json")
+		return
+	}
+
+	if err := h.attrDefRepo.Update(code, func(ad *model.AttrDef) {
+		if v, ok := updates["name"].(string); ok {
+			ad.Name = v
+		}
+		if v, ok := updates["type"].(string); ok && v != "" {
+			ad.Type = model.AttrType(v)
+		}
+		if v, ok := updates["is_active"].(bool); ok {
+			ad.IsActive = v
+		}
+		if v, ok := updates["is_filterable"].(bool); ok {
+			ad.IsFilterable = v
+		}
+		if v, ok := updates["is_sortable"].(bool); ok {
+			ad.IsSortable = v
+		}
+		if v, ok := updates["sort_order"].(float64); ok {
+			ad.SortOrder = int(v)
+		}
+		if v, ok := updates["unit"].(string); ok {
+			ad.Unit = v
+		}
+		if v, ok := updates["range_params"].([]interface{}); ok {
+			params := make([]string, len(v))
+			for i, p := range v {
+				if s, ok := p.(string); ok {
+					params[i] = s
+				}
+			}
+			ad.RangeParams = params
+		}
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	// Return updated attrdef
+	ad, _ := h.attrDefRepo.GetByCode(code)
+	writeJSON(w, http.StatusOK, ad)
+}
+
+// DELETE /admin/attrdefs/{code} — delete attribute definition
+func (h *Handlers) HandleAdminAttrDefDelete(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 || parts[3] == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "code is required")
+		return
+	}
+	code := parts[3]
+
+	if err := h.attrDefRepo.Delete(code); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "deleted", "code": code})
+}
+
+// GET /admin/db/shards — fast shard usage stats (based on FreeOffset)
+func (h *Handlers) HandleAdminDBShards(w http.ResponseWriter, r *http.Request) {
+	usages := h.store.DB().ShardUsages()
+	writeJSON(w, http.StatusOK, usages)
+}
+
+// GET /admin/db/shards/active — precise shard usage stats (full scan, slow)
+func (h *Handlers) HandleAdminDBShardsActive(w http.ResponseWriter, r *http.Request) {
+	usages := h.store.DB().ActiveUsage()
+	writeJSON(w, http.StatusOK, usages)
+}
+
+// POST /admin/db/compact — compact all shards (slow, admin only)
+func (h *Handlers) HandleAdminDBCompact(w http.ResponseWriter, r *http.Request) {
+	db := h.store.DB()
+	if err := db.CompactAllShards(1000); err != nil {
+		writeError(w, http.StatusInternalServerError, "COMPACT_ERROR", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "compact completed successfully"})
 }

@@ -220,25 +220,3 @@ func (r *UserRepo) indexUserID(id int64) error {
 	_, err := r.store.db.TurboPutIndex(turboKeyAllUsers, uint64(id))
 	return err
 }
-
-// IndexMultiworld is a helper wrapper around makodb's Index function for multi-word indexing.
-func IndexMultiworld(store *Store, key string, text string) error {
-	if text == "" {
-		return nil
-	}
-	// Simple tokenization: split by non-alphanumeric characters.
-	words := strings.FieldsFunc(text, func(r rune) bool {
-		return !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9'))
-	})
-
-	for _, word := range words {
-		if len(word) < 2 {
-			continue
-		}
-		word = strings.ToLower(word)
-		// Use makodb's Index to create inverted index entries.
-		// We'll wrap it via store.db directly.
-		_ = store.db.Index(IndexKeySearch(word), key)
-	}
-	return nil
-}

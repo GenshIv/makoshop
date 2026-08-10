@@ -1,11 +1,16 @@
 <script setup>
-import { ref, reactive, onMounted, watch, computed } from 'vue';
+import { ref, reactive, onMounted, watch, computed, defineAsyncComponent } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import api from '../api';
 import Breadcrumbs from '../components/Breadcrumbs.vue';
 
+// Lazy-load SCUPageView to avoid circular imports
+const SCUPageView = defineAsyncComponent(() => import('../views/SCUPageView.vue'));
+
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 
 const products = ref([]);
 const categoryAttrs = ref([]);
@@ -13,6 +18,22 @@ const categoryPath = ref([]); // [{id, name}, ...]
 const pagination = reactive({ page: 1, per_page: 50, total: 0, total_pages: 0 });
 const loading = ref(false);
 const error = ref(null);
+
+// If API returns SCUPage data, render SCUPageView instead
+const scuPageData = ref(null);
+
+// Current category path for tree/breadcrumbs (without SCUPage slug)
+const currentCategoryPath = computed(() => {
+  // If showing SCUPage, use its tree_path
+  if (scuPageData.value && scuPageData.value.tree_path) {
+    return scuPageData.value.tree_path;
+  }
+  // Otherwise derive from route path
+  if (route.path.startsWith('/shop/')) {
+    return route.path.slice(6).split('/').filter(Boolean);
+  }
+  return [];
+});
 
 // Adjust per_page based on screen width
 const getPerPageForScreen = () => {
@@ -33,7 +54,6 @@ const updatePerPage = () => {
 
 const filters = reactive({
   q: '',
-  category_id: '',
   price_min: '',
   price_max: '',
   sort: 'relevance',
@@ -42,13 +62,11 @@ const filters = reactive({
 const attrFilters = reactive({});
 
 const buildQueryParams = () => {
-  const params = {
-    q: filters.q || undefined,
-    category_id: filters.category_id || undefined,
-    price_min: filters.price_min || undefined,
-    price_max: filters.price_max || undefined,
-    sort: filters.sort || undefined,
-  };
+  const params = {};
+  if (filters.q) params.q = filters.q;
+  if (filters.price_min) params.price_min = filters.price_min;
+  if (filters.price_max) params.price_max = filters.price_max;
+  if (filters.sort && filters.sort !== 'relevance') params.sort = filters.sort;
 
   for (const [key, value] of Object.entries(attrFilters)) {
     if (Array.isArray(value) && value.length > 0) {
@@ -64,20 +82,36 @@ const buildQueryParams = () => {
 const fetchProducts = async () => {
   loading.value = true;
   error.value = null;
+  scuPageData.value = null; // Reset SCUPage data
   try {
     const params = {
       ...buildQueryParams(),
       page: pagination.page,
-      per_page: pagination.per_page,
+      limit: pagination.per_page,
     };
-    const response = await api.get('/products', { params });
+
+    // Build URL from current route path (use /shop/{category_slugs} if in shop)
+    let url = '/shop';
+    if (route.path.startsWith('/shop/')) {
+      url = route.path; // preserve category slugs from URL
+    }
+
+    const response = await api.get(url, { params });
     const data = response.data;
+
+    // If response is an SCUPage (page is an object with scu/slug), render SCUPageView
+    if (data.page && typeof data.page === 'object' && data.page.scu) {
+      scuPageData.value = data;
+      return;
+    }
+
     products.value = data.items || [];
     pagination.total = data.total || 0;
     const perPage = data.limit || pagination.per_page;
     pagination.total_pages = Math.ceil(pagination.total / perPage);
+    categoryAttrs.value = data.category_attrs || [];
   } catch (e) {
-    error.value = e.response?.data?.message || 'Ошибка загрузки товаров';
+    error.value = e.response?.data?.message || t('catalog.load_error');
     console.error(e);
   } finally {
     loading.value = false;
@@ -110,14 +144,14 @@ const fetchCategoryPath = async (categoryId) => {
       categoryPath.value = [];
       return;
     }
-    const path = [{ id: cat.id, name: cat.name }];
+    const path = [{ id: cat.id, name: cat.name, slug: cat.slug }];
     // Walk up the tree
     let currentId = cat.parent_id;
     while (currentId) {
       const parentResponse = await api.get(`/admin/categories/${currentId}`);
       const parent = parentResponse.data;
       if (!parent) break;
-      path.unshift({ id: parent.id, name: parent.name });
+      path.unshift({ id: parent.id, name: parent.name, slug: parent.slug });
       currentId = parent.parent_id;
     }
     categoryPath.value = path;
@@ -153,11 +187,11 @@ const humanizeAttrName = (code) => {
   // Try to detect "komplektatsiya <item>" pattern
   if (s.toLowerCase().startsWith('komplektatsiya ')) {
     const rest = s.slice('komplektatsiya '.length);
-    return 'Комплектация: ' + rest.charAt(0).toUpperCase() + rest.slice(1);
+    return t('catalog.config_prefix') + rest.charAt(0).toUpperCase() + rest.slice(1);
   }
   if (s.toLowerCase().startsWith('v komplekte ')) {
     const rest = s.slice('v komplekte '.length);
-    return 'В комплекте: ' + rest.charAt(0).toUpperCase() + rest.slice(1);
+    return t('catalog.bundle_prefix') + rest.charAt(0).toUpperCase() + rest.slice(1);
   }
 
   return s;
@@ -230,35 +264,24 @@ const visibleBrands = computed(() => {
 const applyFilters = () => {
   pagination.page = 1;
   const query = { ...route.query };
+  delete query.category_id;
   if (filters.q) query.q = filters.q; else delete query.q;
-  if (filters.category_id) query.category_id = filters.category_id; else delete query.category_id;
   if (filters.price_min) query.price_min = filters.price_min; else delete query.price_min;
   if (filters.price_max) query.price_max = filters.price_max; else delete query.price_max;
   if (filters.sort && filters.sort !== 'relevance') query.sort = filters.sort; else delete query.sort;
-  router.replace({ name: 'catalog', query });
+
+  // Always preserve current route path (category slugs)
+  router.replace({ path: route.path, query });
 };
 
 const resetFilters = () => {
-  const categoryId = filters.category_id; // Preserve category
   filters.q = '';
-  filters.category_id = categoryId; // Keep category
   filters.price_min = '';
   filters.price_max = '';
   filters.sort = 'relevance';
   Object.keys(attrFilters).forEach(key => delete attrFilters[key]);
   pagination.page = 1;
-  const query = {};
-  if (categoryId) query.category_id = categoryId;
-  router.push({ name: 'catalog', query });
-  // Re-fetch category attrs if needed
-  if (categoryId) {
-    fetchCategoryAttrs(parseInt(categoryId, 10));
-    fetchCategoryPath(parseInt(categoryId, 10));
-  } else {
-    categoryAttrs.value = [];
-    categoryPath.value = [];
-  }
-  fetchProducts();
+  applyFilters();
 };
 
 const formatPrice = (price) => {
@@ -266,47 +289,57 @@ const formatPrice = (price) => {
 };
 
 const pageTitle = computed(() => {
-  if (filters.q) return `Результаты поиска: "${filters.q}"`;
-  return 'Каталог товаров';
+  if (filters.q) return t('catalog.search_results', { q: filters.q });
+  return t('catalog.catalog_title');
 });
+
+
 
 // Sync filters from route
 const syncFiltersFromRoute = () => {
   filters.q = route.query.q || '';
-  filters.category_id = route.query.category_id || '';
   filters.price_min = route.query.price_min || '';
   filters.price_max = route.query.price_max || '';
   filters.sort = route.query.sort || 'relevance';
   if (route.query.page) pagination.page = parseInt(route.query.page, 10);
 };
 
-// Main init: ensure categoryAttrs loaded before fetching products
-const initCategoryAndProducts = async (categoryId) => {
-  if (categoryId) {
-    await fetchCategoryAttrs(parseInt(categoryId, 10));
-    await fetchCategoryPath(parseInt(categoryId, 10));
-  } else {
-    categoryAttrs.value = [];
-    categoryPath.value = [];
-  }
-  // Clear attr filters when category changes
-  Object.keys(attrFilters).forEach(key => delete attrFilters[key]);
-  fetchProducts();
-};
-
-onMounted(() => {
+onMounted(async () => {
   syncFiltersFromRoute();
   updatePerPage();
-  initCategoryAndProducts(filters.category_id);
+
+  // Use pre-rendered data if available (from SSR/proxy)
+  if (typeof window !== 'undefined' && window.__INITIAL_DATA__) {
+    const data = window.__INITIAL_DATA__;
+    delete window.__INITIAL_DATA__; // consume once
+
+    // If it's an SCUPage
+    if (data.page && typeof data.page === 'object' && data.page.scu) {
+      scuPageData.value = data;
+      loading.value = false;
+      return;
+    }
+
+    // Catalog data
+    products.value = data.items || [];
+    pagination.total = data.total || 0;
+    const perPage = data.limit || pagination.per_page;
+    pagination.total_pages = Math.ceil(pagination.total / perPage);
+    categoryAttrs.value = data.category_attrs || [];
+    loading.value = false;
+    return;
+  }
+
+  fetchProducts();
   window.addEventListener('resize', updatePerPage);
 });
 
-// Watch route changes — ensure categoryAttrs is ready first
+// Watch route changes
 watch(
-  () => route.query,
+  () => [route.query, route.path],
   async () => {
     syncFiltersFromRoute();
-    await initCategoryAndProducts(filters.category_id);
+    fetchProducts();
   },
   { deep: true }
 );
@@ -333,15 +366,46 @@ watch(
 const goToPage = (page) => {
   if (page < 1 || page > pagination.total_pages) return;
   pagination.page = page;
-  router.push({ name: 'catalog', query: { ...route.query, page: page.toString() } });
+  router.push({ path: route.path, query: { ...route.query, page: page.toString() } });
   fetchProducts();
+};
+
+// Navigate to SCU page (landing page for product group)
+const goToSCUPage = (product) => {
+  // Use canonical SEO URL if available (from API response)
+  if (product.seo_url) {
+    router.push({ path: product.seo_url });
+    return;
+  }
+  
+  // Fallback: build URL from slug
+  if (product.slug) {
+    router.push({ path: '/shop/' + product.slug });
+    return;
+  }
+  
+  // Fallback to product detail
+  router.push({ name: 'product', params: { id: product.id } });
+};
+
+// Russian pluralization: 1 вариант, 2-4 варианта, 5+ вариантов
+const pluralize = (n, one, few, many) => {
+  const abs = Math.abs(n) % 100;
+  const lastDigit = abs % 10;
+  if (abs > 10 && abs < 20) return many;
+  if (lastDigit === 1) return one;
+  if (lastDigit >= 2 && lastDigit <= 4) return few;
+  return many;
 };
 
 defineOptions({ name: 'CatalogView' });
 </script>
 
 <template>
-  <div class="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  <!-- Render SCUPageView if API returned an SCUPage -->
+  <SCUPageView v-if="scuPageData" :data="scuPageData" />
+
+  <div v-else class="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <!-- Breadcrumbs -->
     <Breadcrumbs :categories="categoryPath" />
 
@@ -478,7 +542,7 @@ defineOptions({ name: 'CatalogView' });
             @click="resetFilters"
             class="w-full px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
           >
-            Сбросить фильтры
+            {{ t('catalog.reset_filters') }}
           </button>
         </div>
       </aside>
@@ -508,7 +572,7 @@ defineOptions({ name: 'CatalogView' });
         <div v-else-if="products.length === 0" class="text-center py-12 text-gray-500">
           <p class="mb-2">Товары не найдены</p>
           <button @click="resetFilters" class="text-indigo-600 hover:underline text-sm">
-            Сбросить фильтры
+            {{ t('catalog.reset_filters') }}
           </button>
         </div>
 
@@ -517,10 +581,13 @@ defineOptions({ name: 'CatalogView' });
             v-for="product in products"
             :key="product.id"
             class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md hover:border-indigo-200 transition cursor-pointer relative"
-            @click="$router.push({ name: 'product', params: { id: product.id } })"
+            @click="goToSCUPage(product)"
           >
             <span v-if="product.promoted" class="absolute top-2 left-2 z-10 bg-yellow-400 text-yellow-900 text-[10px] font-semibold px-2 py-0.5 rounded-full">
               Реклама
+            </span>
+            <span v-if="product.product_count && product.product_count > 1" class="absolute top-2 right-2 z-10 bg-indigo-600 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+              {{ product.product_count }} {{ pluralize(product.product_count, 'вариант', 'варианта', 'вариантов') }}
             </span>
 
             <div class="aspect-square bg-gray-100 flex items-center justify-center">
@@ -537,7 +604,7 @@ defineOptions({ name: 'CatalogView' });
               <h3 class="font-medium text-sm line-clamp-2 text-gray-800">{{ product.name }}</h3>
               <div v-if="product.brand" class="text-xs text-gray-500 mt-0.5">{{ product.brand }}</div>
               <div class="flex items-center justify-between mt-2">
-                <span class="font-semibold text-indigo-600">{{ formatPrice(product.price) }}</span>
+                <span class="font-semibold text-indigo-600">{{ formatPrice(product.price || product.min_price) }}</span>
                 <span v-if="product.avg_rating" class="text-xs text-yellow-500">
                   ★ {{ product.avg_rating.toFixed(1) }}
                 </span>

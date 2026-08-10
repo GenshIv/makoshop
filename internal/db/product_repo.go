@@ -16,9 +16,15 @@ type ProductRepo struct {
 	promoPlanRepo     *PromoPlanRepo
 	promoLogRepo      *PromoLogRepo
 	turboSearch       *TurboProductSearch
+	scuPageSearch     *SCUPageSearch
 
 	// Single-writer channel for batch operations
 	batchChan chan batchTask
+}
+
+// Store returns the underlying Store for direct access (emergency use only).
+func (r *ProductRepo) Store() *Store {
+	return r.store
 }
 
 type batchTask struct {
@@ -49,6 +55,11 @@ func NewProductRepo(store *Store, promoCampaignRepo *PromoCampaignRepo, promoPla
 // Call this after creating both ProductRepo and TurboProductSearch to avoid circular deps.
 func (r *ProductRepo) SetTurboSearch(t *TurboProductSearch) {
 	r.turboSearch = t
+}
+
+// SetSCUPageSearch attaches a SCUPageSearch instance to this repo.
+func (r *ProductRepo) SetSCUPageSearch(s *SCUPageSearch) {
+	r.scuPageSearch = s
 }
 
 // TurboSearch returns the attached TurboProductSearch (may be nil).
@@ -139,6 +150,50 @@ func (r *ProductRepo) CreateBatchWithIdxBuild(products []*model.Product) ([]*mod
 			continue
 		}
 		p.ID = id
+		p.CreatedAt = time.Now()
+		p.UpdatedAt = time.Now()
+		if p.Status == "" {
+			p.Status = model.ProductStatusDraft
+		}
+		if p.Currency == "" {
+			p.Currency = "RUB"
+		}
+	}
+
+	// Step 2: Write all products
+	var createdProducts []*model.Product
+	for _, p := range products {
+		if p.ID == 0 {
+			continue
+		}
+		data := MarshalProduct(*p)
+		if err := r.store.DocPut(KeyProduct(p.ID), data); err != nil {
+			fmt.Printf("WARN: save product %d: %v\n", p.ID, err)
+			continue
+		}
+		createdProducts = append(createdProducts, p)
+	}
+
+	// Step 3: NO indexing here — caller uses idxbuild.BatchAccum
+
+	return createdProducts, len(createdProducts)
+}
+
+// CreateBatchWithIdxBuildAndOffset is like CreateBatchWithIdxBuild but adds idOffset to each product ID.
+// Used for multi-company imports to ensure unique IDs across companies.
+func (r *ProductRepo) CreateBatchWithIdxBuildAndOffset(products []*model.Product, idOffset int64) ([]*model.Product, int) {
+	if len(products) == 0 {
+		return nil, 0
+	}
+
+	// Step 1: Assign IDs with offset
+	for _, p := range products {
+		id, err := r.store.NextID("product")
+		if err != nil {
+			fmt.Printf("WARN: next_id product: %v\n", err)
+			continue
+		}
+		p.ID = id + idOffset
 		p.CreatedAt = time.Now()
 		p.UpdatedAt = time.Now()
 		if p.Status == "" {
@@ -327,8 +382,8 @@ func (r *ProductRepo) List(params ListParams) ([]ProductListItem, int64, error) 
 	return result.Items, result.Total, nil
 }
 
-// ListWithFacets returns paginated product list with optional facets.
-// Now uses TurboProductSearch as primary backend.
+// ListWithFacets returns paginated list with optional facets.
+// Now uses SCUPageSearch as primary backend (catalog shows SCU pages, not individual products).
 func (r *ProductRepo) ListWithFacets(params ListParams) (*ListResult, error) {
 	if params.Page < 1 {
 		params.Page = 1
@@ -340,11 +395,58 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*ListResult, error) {
 		params.Limit = 200
 	}
 
+	// Primary: use SCUPageSearch (catalog shows SCU pages)
+	if r.scuPageSearch != nil {
+		scuParams := SCUPageListParams{
+			Q:           params.Q,
+			CategoryID:  params.CategoryID,
+			CompanyID:   params.CompanyID,
+			BrandID:     params.BrandID,
+			AttrFilters: params.AttrFilters,
+			Sort:        params.Sort,
+			Page:        params.Page,
+			Limit:       params.Limit,
+		}
+
+		result, err := r.scuPageSearch.ListWithTurbo(scuParams)
+		if err != nil {
+			return nil, fmt.Errorf("scupage list: %w", err)
+		}
+
+		// Convert SCUPageListItem -> ProductListItem (for API compatibility)
+		items := make([]ProductListItem, 0, len(result.Items))
+		for _, sp := range result.Items {
+			item := ProductListItem{
+				ID:         sp.ID,
+				Name:       sp.Title,
+				SKU:        sp.SCU,
+				CategoryID: sp.CategoryID,
+				Brand:      sp.Brand,
+				Price:      sp.MinPrice,
+				Currency:   sp.Currency,
+				Attributes: sp.Attributes,
+				Images:     sp.Images,
+				Status:     model.ProductStatusActive,
+			}
+			// Use first product's company_id if available
+			if len(sp.Products) > 0 {
+				item.CompanyID = sp.Products[0].CompanyID
+			}
+			items = append(items, item)
+		}
+
+		return &ListResult{
+			Items: items,
+			Total: result.Total,
+			Page:  result.Page,
+			Limit: result.Limit,
+		}, nil
+	}
+
+	// Fallback: use TurboProductSearch (legacy)
 	if r.turboSearch != nil {
-		// Map ListParams -> TurboListParams
 		facetCodes := params.FacetBrandCodes
 		if len(facetCodes) == 0 {
-			// По умолчанию считаем фасеты для brand
 			facetCodes = []string{"brand"}
 		}
 		priceMin := 0.0
@@ -375,7 +477,6 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*ListResult, error) {
 			return nil, fmt.Errorf("turbo list: %w", err)
 		}
 
-		// Конвертируем TurboFacets -> Facets
 		var facets *Facets
 		if result.Facets != nil {
 			facets = &Facets{
@@ -393,7 +494,6 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*ListResult, error) {
 		}, nil
 	}
 
-	// Fallback: should not happen if turbo is enabled.
 	return &ListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 }
 

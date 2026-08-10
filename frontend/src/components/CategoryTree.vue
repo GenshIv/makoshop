@@ -12,14 +12,42 @@ const loading = ref(false);
 const expanded = ref(new Set());
 const activeCategoryId = ref(null);
 
-watch(() => route.query.category_id, (val) => {
-  if (!val) {
-    activeCategoryId.value = null;
-  } else {
-    const id = Number(val);
-    activeCategoryId.value = Number.isFinite(id) ? id : null;
+watch(() => route.path, () => {
+  if (rootCategories.value.length > 0) {
+    resolveActiveCategory();
   }
 });
+
+const findCategoryBySlugs = (slugs, nodes) => {
+  if (slugs.length === 0) return null;
+  for (const node of nodes) {
+    if (node.slug === slugs[0]) {
+      if (slugs.length === 1) return node;
+      if (node.children) {
+        const result = findCategoryBySlugs(slugs.slice(1), node.children);
+        if (result) return result;
+      }
+    }
+  }
+  return null;
+};
+
+// Expand all parent categories for a given category ID
+const expandParents = (targetId) => {
+  const findAndExpand = (nodes) => {
+    for (const node of nodes) {
+      if (node.id === targetId) return true;
+      if (node.children && node.children.length > 0) {
+        if (findAndExpand(node.children)) {
+          expanded.value.add(node.id);
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  findAndExpand(rootCategories.value);
+};
 
 const fetchTree = async () => {
   try {
@@ -31,17 +59,62 @@ const fetchTree = async () => {
   }
 };
 
+// Build path from root to category by walking the tree
+const buildCategoryPath = (targetId, nodes, path = []) => {
+  for (const node of nodes) {
+    path.push(node.slug);
+    if (node.id === targetId) {
+      return path;
+    }
+    if (node.children && node.children.length > 0) {
+      const result = buildCategoryPath(targetId, node.children, path);
+      if (result) return result;
+    }
+    path.pop();
+  }
+  return null;
+};
+
 const goToCategory = (cat) => {
+  const slugs = buildCategoryPath(cat.id, rootCategories.value);
   const query = { ...route.query };
-  query.category_id = String(cat.id);
   delete query.page;
-  router.push({ path: '/', query });
+
+  let path = '/shop';
+  if (slugs && slugs.length > 0) {
+    path = '/shop/' + slugs.join('/');
+  }
+
+  router.push({ path, query });
+};
+
+// Resolve active category from current route path
+const resolveActiveCategory = () => {
+  if (!route.path.startsWith('/shop/')) {
+    activeCategoryId.value = null;
+    return;
+  }
+  const pathSlugs = route.path.slice(6).split('/').filter(Boolean);
+  // Try full path first
+  let found = findCategoryBySlugs(pathSlugs, rootCategories.value);
+  // If not found, last slug might be product/SCU - try without it
+  if (!found && pathSlugs.length > 1) {
+    found = findCategoryBySlugs(pathSlugs.slice(0, -1), rootCategories.value);
+  }
+  if (found) {
+    activeCategoryId.value = found.id;
+    expandParents(found.id);
+  } else {
+    activeCategoryId.value = null;
+  }
 };
 
 onMounted(async () => {
   loading.value = true;
   rootCategories.value = await fetchTree();
   loading.value = false;
+  // Resolve active category after tree is loaded
+  resolveActiveCategory();
 });
 
 defineOptions({ name: 'CategoryTree' });
@@ -59,9 +132,8 @@ defineOptions({ name: 'CategoryTree' });
         @toggle="() => {}"
         @go="() => {
           const query = { ...route.query };
-          delete query.category_id;
           delete query.page;
-          router.push({ path: '/', query });
+          router.push({ path: '/shop', query });
         }"
       />
 

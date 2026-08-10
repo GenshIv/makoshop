@@ -121,21 +121,21 @@ onMounted(() => {
             <input v-model.number="form.stock_qty" type="number" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg" />
           </div>
           <div>
-            <label class="block text-sm text-gray-700 mb-1">Статус</label>
+            <label class="block text-sm text-gray-700 mb-1">{{ t('seller.status') }}</label>
             <select v-model="form.status" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-              <option value="active">Активен</option>
-              <option value="draft">Черновик</option>
-              <option value="hidden">Скрыт</option>
+              <option value="active">{{ t('seller.status_active') }}</option>
+              <option value="draft">{{ t('seller.status_draft') }}</option>
+              <option value="hidden">{{ t('seller.status_hidden') }}</option>
             </select>
           </div>
         </div>
 
         <div class="flex gap-3 pt-4">
           <button type="submit" :disabled="submitting" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40">
-            {{ submitting ? 'Сохранение...' : 'Сохранить' }}
+            {{ submitting ? t('seller.saving') : t('seller.save') }}
           </button>
           <router-link to="/seller/products" class="px-4 py-2 border rounded-lg hover:bg-gray-50">
-            Отмена
+            {{ t('seller.cancel') }}
           </router-link>
         </div>
       </form>

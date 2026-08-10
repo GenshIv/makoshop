@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted, watch, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import api from '../api';
 import { useCartStore } from '../stores/cart';
 import Breadcrumbs from '../components/Breadcrumbs.vue';
@@ -8,6 +9,7 @@ import Breadcrumbs from '../components/Breadcrumbs.vue';
 const route = useRoute();
 const router = useRouter();
 const cart = useCartStore();
+const { t } = useI18n();
 
 const product = ref(null);
 const reviews = ref([]);
@@ -35,7 +37,7 @@ const fetchProduct = async () => {
       categoryPath.value = [];
     }
   } catch (e) {
-    error.value = 'Товар не найден';
+    error.value = t('product.not_found');
     console.error(e);
   } finally {
     loading.value = false;
@@ -90,9 +92,9 @@ const fetchReviews = async () => {
 const addToCart = async () => {
   try {
     await cart.addItem(product.value.id, 1);
-    addToast('Товар добавлен в корзину', 'success');
+    addToast(t('cart.added_to_cart'), 'success');
   } catch (e) {
-    addToast(e.response?.data?.message || 'Ошибка добавления в корзину', 'error');
+    addToast(e.response?.data?.message || t('cart.add_to_cart_error'), 'error');
   }
 };
 
@@ -115,7 +117,7 @@ const isInStock = () => {
 
 const submitReview = async () => {
   if (!reviewForm.comment.trim()) {
-    alert('Введите комментарий');
+    alert(t('product.add_comment_prompt'));
     return;
   }
   submittingReview.value = true;
@@ -129,7 +131,7 @@ const submitReview = async () => {
     await fetchReviews();
     await fetchProduct();
   } catch (e) {
-    alert(e.response?.data?.message || 'Ошибка отправки отзыва');
+    alert(e.response?.data?.message || t('product.review_error'));
   } finally {
     submittingReview.value = false;
   }
@@ -152,7 +154,7 @@ onMounted(() => {
 
     <!-- Back link -->
     <router-link to="/" class="text-sm text-indigo-600 hover:underline mb-4 inline-block">
-      ← Вернуться в каталог
+      {{ t('catalog.back_to_catalog') }}
     </router-link>
 
     <!-- Error -->
@@ -177,7 +179,7 @@ onMounted(() => {
             class="w-full h-full object-cover"
           />
           <div v-else class="w-full h-full flex items-center justify-center text-gray-400">
-            Нет фото
+            {{ t('common.no_photo') }}
           </div>
         </div>
         <!-- Thumbnails -->
@@ -209,7 +211,7 @@ onMounted(() => {
         <div class="mt-6 flex items-center gap-4 flex-wrap">
           <span class="text-3xl font-bold text-indigo-600">{{ formatPrice(product.price) }}</span>
           <span :class="isInStock() ? 'text-green-600' : 'text-red-600'" class="text-sm">
-            {{ isInStock() ? 'В наличии' : 'Нет в наличии' }}
+            {{ isInStock() ? t('catalog.in_stock') : t('catalog.out_of_stock') }}
           </span>
         </div>
 
@@ -217,7 +219,7 @@ onMounted(() => {
         <div v-if="product.avg_rating !== undefined && product.avg_rating !== null" class="mt-2 flex items-center gap-2">
           <span class="text-yellow-500">★</span>
           <span class="font-medium">{{ product.avg_rating.toFixed(1) }}</span>
-          <span class="text-sm text-gray-500">({{ product.review_count || 0 }} отзывов)</span>
+          <span class="text-sm text-gray-500">{{ t('catalog.reviews_count', { count: product.review_count || 0 }) }}</span>
         </div>
 
         <!-- Add to cart -->
@@ -226,12 +228,12 @@ onMounted(() => {
           :disabled="!isInStock()"
           class="mt-6 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
-          В корзину
+          {{ t('catalog.add_to_cart') }}
         </button>
 
         <!-- Attributes -->
         <div v-if="product.attrs && Object.keys(product.attrs).length" class="mt-6">
-          <h3 class="font-medium text-gray-700">Характеристики</h3>
+          <h3 class="font-medium text-gray-700">{{ t('catalog.characteristics') }}</h3>
           <dl class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
             <div v-for="(value, key) in product.attrs" :key="key" class="flex flex-col sm:flex-row sm:items-center">
               <dt class="text-gray-500 text-xs sm:text-sm capitalize">{{ key }}</dt>
@@ -244,13 +246,13 @@ onMounted(() => {
 
     <!-- Reviews section -->
     <div class="mt-12">
-      <h2 class="text-xl font-bold mb-4">Отзывы ({{ reviewsPagination.total }})</h2>
+      <h2 class="text-xl font-bold mb-4">{{ t('catalog.reviews') }} ({{ reviewsPagination.total }})</h2>
 
       <!-- Write review -->
       <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <h3 class="font-medium mb-3">Написать отзыв</h3>
+        <h3 class="font-medium mb-3">{{ t('catalog.write_review') }}</h3>
         <div class="flex items-center gap-2 mb-3">
-          <span class="text-sm">Оценка:</span>
+          <span class="text-sm">{{ t('catalog.rating') }}:</span>
           <select v-model="reviewForm.rating" class="px-2 py-1 border rounded text-sm">
             <option v-for="n in 5" :key="n" :value="n">{{ n }} ★</option>
           </select>
@@ -258,7 +260,7 @@ onMounted(() => {
         <textarea
           v-model="reviewForm.comment"
           rows="3"
-          placeholder="Ваш отзыв..."
+          :placeholder="t('catalog.review_placeholder')"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         ></textarea>
         <button
@@ -266,19 +268,19 @@ onMounted(() => {
           :disabled="submittingReview"
           class="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-40"
         >
-          {{ submittingReview ? 'Отправка...' : 'Отправить отзыв' }}
+          {{ submittingReview ? t('catalog.sending_review') : t('catalog.send_review') }}
         </button>
       </div>
 
       <!-- Reviews list -->
       <div v-if="reviews.length === 0" class="text-gray-500 text-sm">
-        Пока нет отзывов
+        {{ t('catalog.no_reviews_yet') }}
       </div>
       <div v-else class="space-y-4">
         <div v-for="review in reviews" :key="review.id" class="bg-white rounded-lg shadow-sm p-4">
           <div class="flex items-center justify-between flex-wrap gap-1">
             <div class="flex items-center gap-2">
-              <span class="font-medium text-sm">{{ review.user_name || 'Пользователь' }}</span>
+              <span class="font-medium text-sm">{{ review.user_name || t('catalog.user') }}</span>
               <span class="text-yellow-500 text-sm">
                 {{ '★'.repeat(review.rating) }}
               </span>
@@ -296,7 +298,7 @@ onMounted(() => {
           :disabled="reviewsPagination.page <= 1"
           class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-40 hover:bg-gray-50"
         >
-          ← Назад
+          {{ t('common.back') }}
         </button>
         <span class="px-3 py-1.5 text-sm">
           {{ reviewsPagination.page }} / {{ reviewsPagination.total_pages }}
@@ -306,7 +308,7 @@ onMounted(() => {
           :disabled="reviewsPagination.page >= reviewsPagination.total_pages"
           class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-40 hover:bg-gray-50"
         >
-          Далее →
+          {{ t('common.next') }}
         </button>
       </div>
     </div>

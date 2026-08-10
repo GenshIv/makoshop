@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ type AuthHandlers struct {
 	userRepo    *db.UserRepo
 	companyRepo *db.CompanyRepo
 	cartRepo    *db.CartRepo
+	turboSearch *db.TurboProductSearch
 	jwt         *auth.JWTMiddleware
 	secret      string
 }
@@ -26,6 +28,16 @@ func NewAuthHandlers(userRepo *db.UserRepo, companyRepo *db.CompanyRepo, cartRep
 		jwt:         jwtMiddleware,
 		secret:      secret,
 	}
+}
+
+// SetTurboSearch attaches a TurboProductSearch instance to AuthHandlers.
+func (h *AuthHandlers) SetTurboSearch(t *db.TurboProductSearch) {
+	h.turboSearch = t
+}
+
+// getTurboSearch returns the attached TurboProductSearch.
+func (h *AuthHandlers) getTurboSearch() *db.TurboProductSearch {
+	return h.turboSearch
 }
 
 // --- Request/Response types ---
@@ -347,11 +359,15 @@ func (h *AuthHandlers) HandleAdminUserUpdate(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, user)
 }
 
-// --- Company handlers (admin) ---
+// --- Company handlers (admin + public read) ---
 
 type CreateCompanyRequest struct {
 	Name        string                 `json:"name"`
+	Slug        string                 `json:"slug,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	LogoURL     string                 `json:"logo_url,omitempty"`
 	LegalInfo   model.CompanyLegalInfo `json:"legal_info,omitempty"`
+	Contacts    model.CompanyContacts  `json:"contacts,omitempty"`
 	Settings    model.CompanySettings  `json:"settings,omitempty"`
 	OwnerUserID int64                  `json:"owner_user_id"`
 }
@@ -396,7 +412,11 @@ func (h *AuthHandlers) HandleAdminCompanyCreate(w http.ResponseWriter, r *http.R
 
 	c := &model.Company{
 		Name:        req.Name,
+		Slug:        req.Slug,
+		Description: req.Description,
+		LogoURL:     req.LogoURL,
 		LegalInfo:   req.LegalInfo,
+		Contacts:    req.Contacts,
 		Settings:    req.Settings,
 		OwnerUserID: req.OwnerUserID,
 	}
@@ -522,3 +542,241 @@ func (h *AuthHandlers) HandleAdminCompanyVerify(w http.ResponseWriter, r *http.R
 	c, _ := h.companyRepo.Get(id)
 	writeJSON(w, http.StatusOK, c)
 }
+
+// --- Public company endpoints ---
+
+// HandleCompaniesList returns all companies (public).
+// GET /companies
+func (h *AuthHandlers) HandleCompaniesList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	companies, err := h.companyRepo.List()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	if companies == nil {
+		companies = []model.Company{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"items": companies,
+	})
+}
+
+// HandleCompanyGet returns a company by ID (public).
+// GET /companies/{id}
+func (h *AuthHandlers) HandleCompanyGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	id, ok := parseID(w, r, "company_id")
+	if !ok {
+		return
+	}
+
+	c, err := h.companyRepo.Get(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "company not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, c)
+}
+
+// HandleCompanyGetBySlug returns a company by slug (public).
+// GET /companies/slug/{slug}
+func (h *AuthHandlers) HandleCompanyGetBySlug(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	// Extract slug from path: /companies/slug/{slug}
+	path := r.URL.Path
+	prefix := "/companies/slug/"
+	if !strings.HasPrefix(path, prefix) {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
+		return
+	}
+	slug := strings.TrimPrefix(path, prefix)
+	if slug == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "missing slug")
+		return
+	}
+
+	c, err := h.companyRepo.GetBySlug(slug)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "company not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, c)
+}
+
+// HandleCompanyProducts returns products for a company (public).
+// GET /companies/{id}/products
+func (h *AuthHandlers) HandleCompanyProducts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	id, ok := parseID(w, r, "company_id")
+	if !ok {
+		return
+	}
+
+	// Verify company exists
+	if _, err := h.companyRepo.Get(id); err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "company not found")
+		return
+	}
+
+	q := r.URL.Query().Get("q")
+	pageStr := r.URL.Query().Get("page")
+	limitStr := r.URL.Query().Get("limit")
+	sortStr := r.URL.Query().Get("sort")
+
+	page := 1
+	if pageStr != "" {
+		p, _ := strconv.Atoi(pageStr)
+		if p < 1 {
+			p = 1
+		}
+		page = p
+	}
+
+	limit := 50
+	if limitStr != "" {
+		l, _ := strconv.Atoi(limitStr)
+		if l < 1 {
+			l = 1
+		}
+		if l > 200 {
+			l = 200
+		}
+		limit = l
+	}
+
+	// Use turbo search with company filter
+	turboSearch := h.getTurboSearch()
+	if turboSearch == nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "turbo search not initialized")
+		return
+	}
+
+	result, err := turboSearch.ListWithTurbo(db.TurboListParams{
+		Q:         q,
+		CompanyID: id,
+		Sort:      sortStr,
+		Page:      page,
+		Limit:     limit,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"items": result.Items,
+		"total": result.Total,
+		"page":  result.Page,
+		"limit": result.Limit,
+	})
+}
+
+// HandleAdminCreateTestCompanies creates 6-7 test companies for import testing.
+// POST /admin/companies/create-test
+func (h *AuthHandlers) HandleAdminCreateTestCompanies(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	// Find or create admin user
+	adminUser, err := h.userRepo.GetByEmail("admin@mako.com")
+	if err != nil {
+		adminUser = &model.User{
+			Email: "admin@mako.com",
+			Role:  model.RoleAdmin,
+		}
+		if err := h.userRepo.Create(adminUser, "admin123"); err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+			return
+		}
+	}
+
+	testCompanies := []struct {
+		Name        string
+		Description string
+		Slug        string
+		LogoURL     string
+	}{
+		{"Magazilla", "Крупнейший интернет-магазин электроники и товаров для дома", "magazilla", ""},
+		{"DNS", "Цепочка магазинов цифровой техники и электроники", "dns-shop", ""},
+		{"Ситилинк", "Онлайн-магазин электроники и бытовой техники", "citilink", ""},
+		{"М.Видео", "Крупнейшая розничная сеть бытовой техники", "mvideo", ""},
+		{"Эльдорадо", "Магазин бытовой техники и электроники", "eldorado", ""},
+		{"Ozon", "Маркетплейс с широким ассортиментом товаров", "ozon", ""},
+		{"Wildberries", "Крупнейший маркетплейс одежды и товаров для дома", "wildberries", ""},
+	}
+
+	var created []model.Company
+	var existing []string
+
+	for _, tc := range testCompanies {
+		// Check if exists
+		companies, _ := h.companyRepo.List()
+		exists := false
+		for _, c := range companies {
+			if c.Name == tc.Name {
+				existing = append(existing, tc.Name)
+				exists = true
+				break
+			}
+		}
+		if exists {
+			continue
+		}
+
+		c := &model.Company{
+			Name:        tc.Name,
+			Slug:        tc.Slug,
+			Description: tc.Description,
+			LogoURL:     tc.LogoURL,
+			Contacts: model.CompanyContacts{
+				Email:   "info@" + tc.Slug + ".ru",
+				Website: "https://" + tc.Slug + ".ru",
+			},
+			Settings: model.CompanySettings{
+				Currency:   "RUB",
+				VatEnabled: false,
+			},
+			OwnerUserID: adminUser.ID,
+			Status:      model.CompanyStatusVerified,
+		}
+
+		if err := h.companyRepo.Create(c); err != nil {
+			fmt.Printf("WARN: create test company %s: %v\n", tc.Name, err)
+			continue
+		}
+		created = append(created, *c)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":   "ok",
+		"created":  created,
+		"existing": existing,
+		"total":    len(created) + len(existing),
+	})
+}
+
+// turboSearch field and helpers
+var _ = db.TurboListParams{}

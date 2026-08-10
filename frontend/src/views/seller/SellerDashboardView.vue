@@ -1,9 +1,11 @@
 <script setup>
 import { ref, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import api from '../../api';
 import { useAuthStore } from '../../stores/auth';
 
 const auth = useAuthStore();
+const { t } = useI18n();
 const stats = ref({ products: 0, orders: 0, revenue: 0, campaigns: 0 });
 const loading = ref(true);
 
@@ -55,7 +57,7 @@ onMounted(fetchStats);
 
 <template>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <h1 class="text-2xl font-bold mb-6">Кабинет продавца</h1>
+    <h1 class="text-2xl font-bold mb-6">{{ t('seller.dashboard_title') }}</h1>
 
     <!-- Loading -->
     <div v-if="loading" class="flex justify-center py-12">
@@ -66,19 +68,19 @@ onMounted(fetchStats);
       <!-- Stats cards -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div class="bg-white rounded-lg shadow-sm p-4">
-          <div class="text-sm text-gray-500">Товары</div>
+          <div class="text-sm text-gray-500">{{ t('seller.products') }}</div>
           <div class="text-2xl font-bold">{{ stats.products }}</div>
         </div>
         <div class="bg-white rounded-lg shadow-sm p-4">
-          <div class="text-sm text-gray-500">Заказы</div>
+          <div class="text-sm text-gray-500">{{ t('seller.orders') }}</div>
           <div class="text-2xl font-bold">{{ stats.orders }}</div>
         </div>
         <div class="bg-white rounded-lg shadow-sm p-4">
-          <div class="text-sm text-gray-500">Выручка</div>
+          <div class="text-sm text-gray-500">{{ t('seller.revenue') }}</div>
           <div class="text-2xl font-bold text-green-600">{{ formatPrice(stats.revenue) }}</div>
         </div>
         <div class="bg-white rounded-lg shadow-sm p-4">
-          <div class="text-sm text-gray-500">Кампании</div>
+          <div class="text-sm text-gray-500">{{ t('seller.campaigns') }}</div>
           <div class="text-2xl font-bold">{{ stats.campaigns }}</div>
         </div>
       </div>
@@ -86,20 +88,20 @@ onMounted(fetchStats);
       <!-- Quick links -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <router-link to="/seller/products" class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition">
-          <div class="font-medium">Управление товарами</div>
-          <div class="text-sm text-gray-500 mt-1">Создание и редактирование</div>
+          <div class="font-medium">{{ t('seller.manage_products') }}</div>
+          <div class="text-sm text-gray-500 mt-1">{{ t('seller.manage_products_desc') }}</div>
         </router-link>
         <router-link to="/seller/orders" class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition">
-          <div class="font-medium">Заказы</div>
-          <div class="text-sm text-gray-500 mt-1">Просмотр и обработка</div>
+          <div class="font-medium">{{ t('seller.orders_title') }}</div>
+          <div class="text-sm text-gray-500 mt-1">{{ t('seller.orders_desc') }}</div>
         </router-link>
         <router-link to="/seller/promo" class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition">
-          <div class="font-medium">Продвижение</div>
-          <div class="text-sm text-gray-500 mt-1">Рекламные кампании</div>
+          <div class="font-medium">{{ t('seller.promotion_title') }}</div>
+          <div class="text-sm text-gray-500 mt-1">{{ t('seller.promotion_desc') }}</div>
         </router-link>
         <a href="#" class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition cursor-not-allowed opacity-60">
-          <div class="font-medium">Аналитика</div>
-          <div class="text-sm text-gray-500 mt-1">Скоро</div>
+          <div class="font-medium">{{ t('seller.analytics_title') }}</div>
+          <div class="text-sm text-gray-500 mt-1">{{ t('seller.analytics_desc') }}</div>
         </a>
       </div>
     </div>

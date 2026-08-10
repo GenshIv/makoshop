@@ -1,11 +1,13 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import api from '../api';
 import { useAuthStore } from '../stores/auth';
 
 const router = useRouter();
 const auth = useAuthStore();
+const { t } = useI18n();
 const reviews = ref([]);
 const loading = ref(true);
 const error = ref(null);
@@ -22,7 +24,7 @@ const fetchReviews = async () => {
     });
     reviews.value = response.data.reviews || response.data || [];
   } catch (e) {
-    error.value = 'Ошибка загрузки отзывов';
+    error.value = t('reviews.load_error');
     console.error(e);
   } finally {
     loading.value = false;
@@ -34,7 +36,7 @@ onMounted(fetchReviews);
 
 <template>
   <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <h1 class="text-2xl font-bold mb-6">Мои отзывы</h1>
+    <h1 class="text-2xl font-bold mb-6">{{ t('reviews.title') }}</h1>
 
     <!-- Loading -->
     <div v-if="loading" class="flex justify-center py-12">
@@ -48,7 +50,7 @@ onMounted(fetchReviews);
 
     <!-- Empty -->
     <div v-else-if="reviews.length === 0" class="text-center py-12 text-gray-500">
-      Вы ещё не оставляли отзывов
+      {{ t('reviews.no_reviews') }}
     </div>
 
     <!-- Reviews list -->
@@ -59,7 +61,7 @@ onMounted(fetchReviews);
             :to="{ name: 'product', params: { id: review.product_id } }"
             class="font-medium hover:text-indigo-600"
           >
-            {{ review.product_name || `Товар #${review.product_id}` }}
+            {{ review.product_name || t('reviews.product', { id: review.product_id }) }}
           </router-link>
           <span class="text-yellow-500">{{ '★'.repeat(review.rating) }}</span>
         </div>

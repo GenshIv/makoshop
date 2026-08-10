@@ -1,11 +1,13 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import api from '../../api';
 import { useAuthStore } from '../../stores/auth';
 
 const router = useRouter();
 const auth = useAuthStore();
+const { t } = useI18n();
 const products = ref([]);
 const loading = ref(true);
 const error = ref(null);
@@ -30,7 +32,7 @@ const fetchProducts = async () => {
       products.value = items;
     }
   } catch (e) {
-    error.value = 'Ошибка загрузки товаров';
+    error.value = t('seller.load_products_error');
     console.error(e);
   } finally {
     loading.value = false;
@@ -38,12 +40,12 @@ const fetchProducts = async () => {
 };
 
 const deleteProduct = async (id) => {
-  if (!confirm('Удалить товар?')) return;
+  if (!confirm(t('seller.delete_confirm'))) return;
   try {
     await api.delete(`/products/${id}`);
     products.value = products.value.filter(p => p.id !== id);
   } catch (e) {
-    alert(e.response?.data?.message || 'Ошибка удаления');
+    alert(e.response?.data?.message || t('seller.delete_error'));
   }
 };
 
@@ -53,9 +55,9 @@ onMounted(fetchProducts);
 <template>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold">Товары</h1>
+      <h1 class="text-2xl font-bold">{{ t('seller.title') }}</h1>
       <router-link to="/seller/products/new" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
-        + Добавить товар
+        {{ t('seller.add_product') }}
       </router-link>
     </div>
 
@@ -71,9 +73,9 @@ onMounted(fetchProducts);
 
     <!-- Empty -->
     <div v-else-if="products.length === 0" class="text-center py-12 text-gray-500">
-      У вас пока нет товаров
+      {{ t('seller.no_products') }}
       <router-link to="/seller/products/new" class="block mt-2 text-indigo-600 hover:underline">
-        Добавить первый товар
+        {{ t('seller.add_first_product') }}
       </router-link>
     </div>
 
@@ -83,11 +85,11 @@ onMounted(fetchProducts);
         <thead class="bg-gray-50">
           <tr>
             <th class="px-4 py-3 text-left">ID</th>
-            <th class="px-4 py-3 text-left">Название</th>
+            <th class="px-4 py-3 text-left">{{ t('seller.name') }}</th>
             <th class="px-4 py-3 text-left">SKU</th>
-            <th class="px-4 py-3 text-left">Цена</th>
-            <th class="px-4 py-3 text-left">Статус</th>
-            <th class="px-4 py-3 text-right">Действия</th>
+            <th class="px-4 py-3 text-left">{{ t('seller.price') }}</th>
+            <th class="px-4 py-3 text-left">{{ t('seller.status') }}</th>
+            <th class="px-4 py-3 text-right">{{ t('seller.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -103,10 +105,10 @@ onMounted(fetchProducts);
             </td>
             <td class="px-4 py-3 text-right">
               <router-link :to="{ name: 'seller-product-edit', params: { id: product.id } }" class="text-indigo-600 hover:underline mr-3">
-                Изменить
+                {{ t('seller.edit') }}
               </router-link>
               <button @click="deleteProduct(product.id)" class="text-red-600 hover:underline">
-                Удалить
+                {{ t('seller.delete') }}
               </button>
             </td>
           </tr>
