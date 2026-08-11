@@ -90,6 +90,14 @@ onMounted(fetchStats);
           <div class="font-medium">{{ t('admin.promo') }}</div>
           <div class="text-sm text-gray-500 mt-1">{{ t('admin.promo_desc') }}</div>
         </router-link>
+        <router-link to="/admin/scupages" class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">{{ t('admin.scupage_title') || 'SCU Pages' }}</div>
+          <div class="text-sm text-gray-500 mt-1">{{ t('admin.scupage_manage_desc') || 'Manage SEO product pages' }}</div>
+        </router-link>
+        <router-link to="/admin/catalogizer" class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">{{ t('admin.catalogizer_title') || 'Auto-Catalogizer' }}</div>
+          <div class="text-sm text-gray-500 mt-1">{{ t('admin.catalogizer_desc_short') || 'Auto-assign products to categories' }}</div>
+        </router-link>
       </div>
     </div>
   </div>

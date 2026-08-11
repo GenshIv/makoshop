@@ -55,11 +55,15 @@ const (
 // ---------- indexing ----------
 
 // IndexSCUPage indexes a single SCU page into turbo indexes.
+// Collects all indexes in memory, then writes in batch (no repeated writes to same key).
 func (s *SCUPageSearch) IndexSCUPage(sp *model.SCUPage) error {
 	if !s.enabled {
 		return nil
 	}
 	docID := uint64(sp.ID)
+
+	// Collect all indexes in memory
+	indexes := make(map[string][]uint64)
 
 	// Category index + ancestors
 	if sp.CategoryID != 0 {
@@ -68,36 +72,37 @@ func (s *SCUPageSearch) IndexSCUPage(sp *model.SCUPage) error {
 			ancestors = []int64{sp.CategoryID}
 		}
 		for _, cid := range ancestors {
-			if _, err := s.db.TurboPutIndex(scupageKeyCategory(cid), docID); err != nil {
-				return fmt.Errorf("turbo scupage category index: %w", err)
-			}
+			indexes[scupageKeyCategory(cid)] = append(indexes[scupageKeyCategory(cid)], docID)
 		}
 	}
 
 	// Brand index
 	if sp.BrandID != 0 {
-		if _, err := s.db.TurboPutIndex(scupageKeyBrand(sp.BrandID), docID); err != nil {
-			return fmt.Errorf("turbo scupage brand index: %w", err)
-		}
+		indexes[scupageKeyBrand(sp.BrandID)] = append(indexes[scupageKeyBrand(sp.BrandID)], docID)
 	}
 
-	// Attributes index (from merged SCUPage attributes)
+	// Attributes index
 	for code, val := range sp.Attributes {
 		if valStr, ok := val.(string); ok && valStr != "" {
-			if _, err := s.db.TurboPutIndex(scupageKeyAttr(code, valStr), docID); err != nil {
-				return fmt.Errorf("turbo scupage attr index: %w", err)
-			}
+			indexes[scupageKeyAttr(code, valStr)] = append(indexes[scupageKeyAttr(code, valStr)], docID)
 		}
 	}
 
-	// Text index (title + description)
+	// Text index
 	for _, tok := range tokenizeSCUPage(sp) {
-		if _, err := s.db.TurboPutIndex(scupageKeyText(tok), docID); err != nil {
-			return fmt.Errorf("turbo scupage text index: %w", err)
+		indexes[scupageKeyText(tok)] = append(indexes[scupageKeyText(tok)], docID)
+	}
+
+	// Write all indexes in batch (one write per key)
+	for key, docIDs := range indexes {
+		if len(docIDs) == 0 {
+			continue
+		}
+		if _, err := s.db.TurboPutBatchIndex(key, docIDs); err != nil {
+			return fmt.Errorf("turbo scupage batch index %s: %w", key, err)
 		}
 	}
 
-	// Sort indexes are built once by BuildSortIndexes(), not per-page.
 	return nil
 }
 

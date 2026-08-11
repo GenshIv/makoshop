@@ -720,12 +720,85 @@ func (r *CategoryRepo) BuildPathMap() (map[string]int64, error) {
 	return pathMap, nil
 }
 
+// RebuildIndexesFromDocs rebuilds all category indexes by scanning documents
+// directly from docstore (using ID range from state:next_id:category).
+// Use this when turbo indexes are empty/corrupted but documents exist.
+func (r *CategoryRepo) RebuildIndexesFromDocs() error {
+	// Read max ID from state
+	key := "state:next_id:category"
+	data, _ := r.store.DB().TurboRawRead(key)
+	var maxID int64 = 1000
+	if len(data) > 0 {
+		_, _ = fmt.Sscanf(string(data), "%d", &maxID)
+	}
+
+	var cats []model.Category
+	for id := int64(1); id <= maxID; id++ {
+		cat, err := r.Get(id)
+		if err != nil {
+			continue
+		}
+		cats = append(cats, *cat)
+	}
+
+	if len(cats) == 0 {
+		fmt.Println("[CATEGORY] No categories found in docstore")
+		return nil
+	}
+
+	fmt.Printf("[CATEGORY] Found %d categories in docstore, rebuilding indexes...\n", len(cats))
+
+	// Clear all indexes
+	r.store.TurboWrite(turboKeyCategoryList, []byte{})
+	r.store.TurboWrite(turboKeyCategoryActive, []byte{})
+
+	for _, cat := range cats {
+		// Slug index
+		if cat.Slug != "" {
+			r.store.TurboWrite(turboKeyCategorySlug+cat.Slug, []byte(fmt.Sprintf("%d", cat.ID)))
+		}
+
+		// Path index
+		ancestors := r.computeAncestors(cat.ID)
+		path := r.buildPathFromAncestors(ancestors, cat.Slug)
+		if path != "" {
+			r.store.TurboWrite(turboKeyCategoryPath+hashPath(path), []byte(fmt.Sprintf("%d", cat.ID)))
+		}
+
+		// Parent index
+		if cat.ParentID != nil {
+			r.addToParentChildrenList(*cat.ParentID, cat.ID)
+		}
+
+		// Ancestors cache
+		r.rebuildAncestorsCache(cat.ID)
+
+		// Descendants cache
+		r.rebuildDescendantsCache(cat.ID)
+
+		// Active list
+		if cat.IsActive {
+			r.addToActiveList(cat.ID)
+		}
+
+		// Category list
+		r.addToCategoryList(cat.ID)
+	}
+
+	fmt.Printf("[CATEGORY] Rebuilt indexes from docs: %d categories\n", len(cats))
+	return nil
+}
+
 // RebuildAllIndexes rebuilds all category indexes from existing documents.
 // Call this once after upgrading to the new index-based category repo.
 func (r *CategoryRepo) RebuildAllIndexes() error {
 	cats, err := r.ListAll()
 	if err != nil {
 		return err
+	}
+	if len(cats) == 0 {
+		// If ListAll returns empty, try rebuilding from docs directly
+		return r.RebuildIndexesFromDocs()
 	}
 
 	// Clear all indexes
@@ -760,6 +833,9 @@ func (r *CategoryRepo) RebuildAllIndexes() error {
 		if cat.IsActive {
 			r.addToActiveList(cat.ID)
 		}
+
+		// Category list
+		r.addToCategoryList(cat.ID)
 	}
 
 	fmt.Printf("[CATEGORY] Rebuilt all indexes: %d categories\n", len(cats))

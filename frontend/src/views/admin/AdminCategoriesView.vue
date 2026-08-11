@@ -17,13 +17,14 @@ const form = reactive({
   description: '',
   is_active: true,
   sort_order: 0,
+  anchor_keywords: '', // comma-separated
 });
 
 const fetchCategories = async () => {
   loading.value = true;
   try {
     const response = await api.get('/categories');
-    categories.value = response.data.items || response.data || [];
+    categories.value = Array.isArray(response.data.items) ? response.data.items : [];
   } catch (e) {
     console.error(e);
   } finally {
@@ -34,7 +35,7 @@ const fetchCategories = async () => {
 const fetchTree = async () => {
   try {
     const response = await api.get('/categories/tree');
-    tree.value = response.data || [];
+    tree.value = Array.isArray(response.data) ? response.data : [];
   } catch (e) {
     console.error(e);
   }
@@ -69,7 +70,7 @@ const updateParentOptions = () => {
 };
 
 const resetForm = () => {
-  Object.assign(form, { name: '', parent_id: null, description: '', is_active: true, sort_order: 0 });
+  Object.assign(form, { name: '', parent_id: null, description: '', is_active: true, sort_order: 0, anchor_keywords: '' });
   editingId.value = null;
   showForm.value = false;
 };
@@ -81,6 +82,7 @@ const editCategory = (cat) => {
   form.description = cat.description || '';
   form.is_active = cat.is_active;
   form.sort_order = cat.sort_order || 0;
+  form.anchor_keywords = (cat.anchor_keywords || []).join(', ');
   showForm.value = true;
   updateParentOptions();
 };
@@ -88,12 +90,19 @@ const editCategory = (cat) => {
 const saveCategory = async () => {
   if (!form.name) return alert(t('admin.category_name_placeholder').replace('*','').trim());
   try {
+    // Parse anchor_keywords: split by comma, trim, filter empty
+    const keywords = form.anchor_keywords
+      .split(',')
+      .map(k => k.trim())
+      .filter(k => k.length > 0);
+
     const payload = {
       name: form.name,
       parent_id: form.parent_id,
       description: form.description,
       is_active: form.is_active,
       sort_order: form.sort_order,
+      anchor_keywords: keywords,
     };
 
     if (editingId.value) {
@@ -134,6 +143,18 @@ const goToAttributes = (cat) => {
   window.open(`/admin/categories/${cat.id}/attributes`, '_blank');
 };
 
+const rebuildIndexes = async () => {
+  if (!confirm('Rebuild category indexes from documents?')) return;
+  try {
+    const response = await api.post('/admin/rebuild-category-indexes?force=1');
+    alert(`Done: ${JSON.stringify(response.data)}`);
+    await fetchCategories();
+    await fetchTree();
+  } catch (e) {
+    alert(e.response?.data?.message || e.response?.data?.error?.message || 'Rebuild failed');
+  }
+};
+
 onMounted(() => {
   fetchCategories();
   fetchTree();
@@ -148,9 +169,14 @@ watch(showForm, (val) => {
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold text-purple-700">{{ t('admin.categories_title') }}</h1>
-      <button @click="showForm = true" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
-        {{ t('admin.add_category') }}
-      </button>
+      <div class="flex gap-2">
+        <button @click="rebuildIndexes" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700">
+          {{ t('admin.rebuild_indexes') || 'Rebuild Indexes' }}
+        </button>
+        <button @click="showForm = true" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+          {{ t('admin.add_category') }}
+        </button>
+      </div>
     </div>
 
     <div v-if="loading" class="flex justify-center py-12">
@@ -180,6 +206,17 @@ watch(showForm, (val) => {
             <span class="text-sm">{{ t('admin.order') }}</span>
             <input v-model.number="form.sort_order" type="number" class="w-20 px-2 py-1 border border-gray-300 rounded text-sm" />
           </div>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            {{ t('admin.anchor_keywords') || 'Anchor keywords (comma-separated)' }}
+          </label>
+          <input v-model="form.anchor_keywords" type="text"
+            placeholder="ноутбук, монитор, видеокарта, процессор"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          <p class="text-xs text-gray-500 mt-1">
+            {{ t('admin.anchor_keywords_hint') || 'Root words for auto-catalogization. One per product type.' }}
+          </p>
         </div>
       </div>
       <div class="flex gap-2 mt-3">

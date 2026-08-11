@@ -203,28 +203,26 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// importNormalized imports products from _tmp/normalized
-// using batch indexing via idxbuild (no TurboPutIndex in import loop).
+// importNormalized imports products from _tmp/normalized using phased approach:
+// Phase 0: collect brands + attr codes → save in DB once
+// Phase 1: parse + batch create products (no indexes)
+// Phase 2: batch upsert SCU pages
+// Phase 3: batch index products + SCU pages
+// Phase 4: train catalogizer
 // Query params:
 //   - company=NAME            company name (default: "Magazilla Import")
-//   - create_cats=1           create missing categories (default: 0)
 //   - limit=N                 max products to import
-//   - batch=N                 batch size (default: 100000)
 //   - id_offset=N             add this offset to each product ID (for multi-company imports)
+//
+// NOTE: categories are NOT processed here — handled by catalogizer only.
 func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 	inputDir := "_tmp/normalized"
-	tmpDir := "_tmp"
 	limit := 0
-	batchSize := 100_000
 	companyName := "Magazilla Import"
-	createCats := r.URL.Query().Get("create_cats") == "1"
 	idOffset := int64(0)
 
 	if v := r.URL.Query().Get("limit"); v != "" {
 		limit, _ = strconv.Atoi(v)
-	}
-	if v := r.URL.Query().Get("batch"); v != "" {
-		batchSize, _ = strconv.Atoi(v)
 	}
 	if v := r.URL.Query().Get("company"); v != "" {
 		companyName = v
@@ -232,12 +230,9 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 	if v := r.URL.Query().Get("id_offset"); v != "" {
 		idOffset, _ = strconv.ParseInt(v, 10, 64)
 	}
-	if batchSize < 10_000 {
-		batchSize = 10_000
-	}
 
-	fmt.Println("[IMPORT-NORMALIZED] Starting batch import from", inputDir)
-	fmt.Printf("[IMPORT-NORMALIZED] Config: limit=%d batchSize=%d company=%s create_cats=%v id_offset=%d\n", limit, batchSize, companyName, createCats, idOffset)
+	fmt.Println("[IMPORT-NORMALIZED] Starting phased import from", inputDir)
+	fmt.Printf("[IMPORT-NORMALIZED] Config: limit=%d company=%s id_offset=%d\n", limit, companyName, idOffset)
 	startTime := time.Now()
 
 	// Ensure company
@@ -248,137 +243,305 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Printf("[IMPORT-NORMALIZED] Using company: %s (ID=%d)\n", company.Name, company.ID)
 
-	// Step 1: Import categories (or use existing)
-	fmt.Println("[IMPORT-NORMALIZED] Processing categories...")
-	catFile := filepath.Join(inputDir, "categories.jsonl")
-	pathToID, oldIDToPath, catCount, err := h.importCategories(catFile, createCats)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("import categories: %v", err))
-		return
+	// Auto-calculate idOffset based on company.ID if not explicitly set
+	if idOffset == 0 {
+		idOffset = company.ID * 1_000_000_000
+		fmt.Printf("[IMPORT-NORMALIZED] Auto-calculated id_offset=%d for company ID=%d\n", idOffset, company.ID)
 	}
-	fmt.Printf("[IMPORT-NORMALIZED] Processed %d categories\n", catCount)
 
-	// Step 1.5: Pre-build ancestors cache for all categories (avoid lazy DB calls during import)
-	fmt.Println("[IMPORT-NORMALIZED] Building category ancestors cache...")
-	catAncestorsCache := h.buildCategoryAncestorsCache(pathToID)
-	fmt.Printf("[IMPORT-NORMALIZED] Ancestors cache built for %d categories\n", len(catAncestorsCache))
-
-	// Step 2: Import products with batch indexing
+	// Find product files
 	productFiles, err := filepath.Glob(filepath.Join(inputDir, "products-*.jsonl"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("glob: %v", err))
 		return
 	}
 	sort.Strings(productFiles)
-
 	if len(productFiles) == 0 {
 		writeJSON(w, http.StatusOK, ImportPricesResult{Status: "no_files"})
 		return
 	}
+	fmt.Printf("[IMPORT-NORMALIZED] Found %d product files\n", len(productFiles))
 
-	fmt.Printf("[IMPORT-NORMALIZED] Found %d product files to import\n", len(productFiles))
+	// ============================================
+	// Phase 0: Collect brands + attr codes → save in DB once
+	// ============================================
+	fmt.Println("[IMPORT-NORMALIZED] Phase 0: Collecting brands and attr codes...")
+	phase0Start := time.Now()
 
-	// Batch accumulator for idxbuild
-	accum := idxbuild.NewBatchAccum()
-	batchID := 1
-
-	// AttrDef collection: code -> set of category IDs
-	codeCats := make(map[string]map[int64]struct{})
-
-	// Attr values collection: code -> set of value strings
-	codeValues := make(map[string]map[string]struct{})
-
-	// Attr values per category: code -> catID -> set of value strings
-	codeCatValues := make(map[string]map[int64]map[string]struct{})
-
-	// Brand collection: brandID -> name
-	brands := make(map[int64]string)
-
-	var totalImported int
-	var totalSkipped int
+	brands := make(map[int64]string)       // brandID -> name
+	attrCodes := make(map[string]struct{}) // attr code -> exists
 
 	for _, file := range productFiles {
-		if limit > 0 && totalImported >= limit {
+		if err := h.collectBrandsAndAttrs(file, brands, attrCodes); err != nil {
+			fmt.Printf("[IMPORT-NORMALIZED] WARN: collect from %s: %v\n", file, err)
+		}
+	}
+
+	// Save brands in DB (one shot)
+	fmt.Printf("[IMPORT-NORMALIZED] Saving %d brands to DB...\n", len(brands))
+	if err := h.batchWriteBrands(h.store, brands); err != nil {
+		fmt.Printf("[IMPORT-NORMALIZED] WARN: save brands: %v\n", err)
+	}
+
+	// Save attr codes in DB (one shot)
+	fmt.Printf("[IMPORT-NORMALIZED] Saving %d attr codes to DB...\n", len(attrCodes))
+	for code := range attrCodes {
+		_, _ = h.attrDefRepo.GetOrCreate(code)
+	}
+
+	fmt.Printf("[IMPORT-NORMALIZED] Phase 0: done in %v\n", time.Since(phase0Start))
+
+	// ============================================
+	// Phase 1: Parse + batch create products (no indexes)
+	// ============================================
+	fmt.Println("[IMPORT-NORMALIZED] Phase 1: Parsing and creating products...")
+	phase1Start := time.Now()
+
+	var allProducts []*model.Product
+	var skipped int
+	var imported int
+
+	for _, file := range productFiles {
+		if limit > 0 && imported >= limit {
 			break
 		}
-
-		// Передаём оставшееся количество для импорта
-		remaining := 0
-		if limit > 0 {
-			remaining = limit - totalImported
-		}
-
-		imported, skipped, err := h.importNormalizedFileBatched(
-			file, remaining, batchSize, pathToID, oldIDToPath,
-			&accum, &batchID, codeCats, codeValues, codeCatValues, brands,
-			company.ID, company.Name, idOffset, catAncestorsCache,
-		)
+		prods, skip, err := h.parseProductsFile(file, company.ID, company.Name, idOffset, limit-imported)
 		if err != nil {
-			fmt.Printf("[IMPORT-NORMALIZED] WARN: file %s error: %v\n", file, err)
+			fmt.Printf("[IMPORT-NORMALIZED] WARN: parse file %s: %v\n", file, err)
+			continue
 		}
-		totalImported += imported
-		totalSkipped += skipped
-		fmt.Printf("[IMPORT-NORMALIZED] File %s: imported=%d skipped=%d (total: %d)\n",
-			filepath.Base(file), imported, skipped, totalImported)
+		allProducts = append(allProducts, prods...)
+		skipped += skip
+		imported += len(prods)
+		fmt.Printf("[IMPORT-NORMALIZED]   %s: parsed=%d skipped=%d\n",
+			filepath.Base(file), len(prods), skip)
 	}
+	fmt.Printf("[IMPORT-NORMALIZED] Phase 1: parsed %d products in %v\n", len(allProducts), time.Since(phase1Start))
 
-	fmt.Printf("[IMPORT-NORMALIZED] Pre-merge: imported=%d skipped=%d\n", totalImported, totalSkipped)
-
-	// Step 3: Merge indexes from tmp files into DB
-	if totalImported > 0 {
-		db := h.productRepo.TurboSearch()
-		if db == nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "turbo search not initialized")
-			return
-		}
-
-		fmt.Println("[IMPORT-NORMALIZED] Merging indexes...")
-		mergeStart := time.Now()
-
-		if err := idxbuild.MergeIndexes(db.DB(), tmpDir); err != nil {
-			fmt.Printf("[IMPORT-NORMALIZED] WARN: merge indexes: %v\n", err)
-		}
-		// Sort indexes are rebuilt separately after all imports via /admin/rebuild-sort-indexes
-
-		fmt.Printf("[IMPORT-NORMALIZED] Merge completed in %v\n", time.Since(mergeStart))
-
-		// Batch upsert attribute definitions
-		fmt.Printf("[IMPORT-NORMALIZED] Building attrdefs (%d unique codes)\n", len(codeCats))
-		if err := h.attrDefRepo.BatchUpsertCodes(codeCats); err != nil {
-			fmt.Printf("[IMPORT-NORMALIZED] WARN: batch upsert attrdefs: %v\n", err)
-		}
-
-		// Batch write attribute value references (global + per-category)
-		fmt.Printf("[IMPORT-NORMALIZED] Building attr value refs\n")
-		if err := h.attrDefRepo.BatchWriteAttrValues(codeValues, codeCatValues); err != nil {
-			fmt.Printf("[IMPORT-NORMALIZED] WARN: batch write attr values: %v\n", err)
-		}
-
-		// Batch write brand indexes
-		if len(brands) > 0 {
-			fmt.Printf("[IMPORT-NORMALIZED] Building brand indexes (%d brands)\n", len(brands))
-			if err := h.batchWriteBrands(h.store, brands); err != nil {
-				fmt.Printf("[IMPORT-NORMALIZED] WARN: batch write brands: %v\n", err)
-			}
-		}
-	}
-
-	elapsed := time.Since(startTime)
-	fmt.Printf("[IMPORT-NORMALIZED] Completed: imported=%d skipped=%d time=%v (%.0f products/sec)\n",
-		totalImported, totalSkipped, elapsed, float64(totalImported)/elapsed.Seconds())
-
-	if totalImported == 0 && totalSkipped == 0 {
+	if len(allProducts) == 0 {
 		writeJSON(w, http.StatusOK, ImportPricesResult{Status: "no_products"})
 		return
 	}
 
+	// Batch create products (no indexes)
+	fmt.Println("[IMPORT-NORMALIZED] Creating products in DB (batch, no indexes)...")
+	createStart := time.Now()
+	createdProducts, createdCount := h.productRepo.CreateBatchWithIdxBuildAndOffset(allProducts, idOffset)
+	fmt.Printf("[IMPORT-NORMALIZED] Created %d products in %v\n", createdCount, time.Since(createStart))
+
+	if createdCount == 0 {
+		writeJSON(w, http.StatusOK, ImportPricesResult{Status: "no_products_created"})
+		return
+	}
+
+	// ============================================
+	// Phase 2: Batch upsert SCU pages
+	// ============================================
+	fmt.Println("[IMPORT-NORMALIZED] Phase 2: Batch upserting SCU pages...")
+	phase2Start := time.Now()
+
+	// Load catalogizer cache ONCE before batch upsert
+	if err := h.scuPageRepo.LoadCatalogizerCache(); err != nil {
+		fmt.Printf("[IMPORT-NORMALIZED] WARN: load catalogizer cache: %v (will use slow path)\n", err)
+	}
+
+	productToSCU := h.scuPageRepo.BatchUpsertFromProducts(createdProducts)
+	fmt.Printf("[IMPORT-NORMALIZED] Phase 2: SCU pages processed in %v (mapped %d products)\n",
+		time.Since(phase2Start), len(productToSCU))
+
+	// ============================================
+	// Phase 3: Batch index products + SCU pages
+	// ============================================
+	fmt.Println("[IMPORT-NORMALIZED] Phase 3: Building indexes...")
+	phase3Start := time.Now()
+
+	// Index products in batch
+	if h.productRepo.TurboSearch() != nil {
+		if err := h.productRepo.TurboSearch().IndexProductBatch(createdProducts); err != nil {
+			fmt.Printf("[IMPORT-NORMALIZED] WARN: index products: %v\n", err)
+		}
+	}
+
+	// Index SCU pages in batch
+	if h.scuPageSearch != nil {
+		allSCUs, _ := h.scuPageRepo.ListAll()
+		scuPtrs := make([]*model.SCUPage, len(allSCUs))
+		for i := range allSCUs {
+			scuPtrs[i] = &allSCUs[i]
+		}
+		if err := h.scuPageSearch.IndexSCUPageBatch(scuPtrs); err != nil {
+			fmt.Printf("[IMPORT-NORMALIZED] WARN: index SCU pages: %v\n", err)
+		}
+	}
+	fmt.Printf("[IMPORT-NORMALIZED] Phase 3: Indexes built in %v\n", time.Since(phase3Start))
+
+	// ============================================
+	// Phase 4: Train catalogizer
+	// ============================================
+	fmt.Println("[IMPORT-NORMALIZED] Phase 4: Training catalogizer...")
+	phase4Start := time.Now()
+	if err := h.catalogizer.RebuildAllCategoryTokens(); err != nil {
+		fmt.Printf("[IMPORT-NORMALIZED] WARN: train catalogizer: %v\n", err)
+	}
+	fmt.Printf("[IMPORT-NORMALIZED] Phase 4: Catalogizer trained in %v\n", time.Since(phase4Start))
+
+	elapsed := time.Since(startTime)
+	fmt.Printf("[IMPORT-NORMALIZED] Completed: created=%d skipped=%d time=%v (%.0f products/sec)\n",
+		createdCount, skipped, elapsed, float64(createdCount)/elapsed.Seconds())
+
 	writeJSON(w, http.StatusOK, ImportPricesResult{
 		Status:           "completed",
-		Categories:       0, // categories not imported in this mode
-		ProductsImported: totalImported,
-		ProductsSkipped:  totalSkipped,
-		Brands:           0,
+		ProductsImported: createdCount,
+		ProductsSkipped:  skipped,
 	})
+}
+
+// collectBrandsAndAttrs scans a products-*.jsonl file and collects brands + attr codes.
+func (h *Handlers) collectBrandsAndAttrs(file string, brands map[int64]string, attrCodes map[string]struct{}) error {
+	f, err := os.Open(file)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 256*1024), 4*1024*1024)
+
+	type productRow struct {
+		BrandID    int64                  `json:"brand_id"`
+		Brand      string                 `json:"brand"`
+		Attributes map[string]interface{} `json:"attributes,omitempty"`
+	}
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var row productRow
+		if err := json.Unmarshal(line, &row); err != nil {
+			continue
+		}
+		if row.BrandID != 0 && row.Brand != "" {
+			brands[row.BrandID] = row.Brand
+		}
+		for code := range row.Attributes {
+			attrCodes[code] = struct{}{}
+		}
+	}
+	return scanner.Err()
+}
+
+// parseProductsFile reads a products-*.jsonl file and returns product structs ready for creation.
+func (h *Handlers) parseProductsFile(file string, companyID int64, companyName string, idOffset int64, limit int) ([]*model.Product, int, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 256*1024), 4*1024*1024)
+
+	var products []*model.Product
+	var skipped int
+
+	type productRow struct {
+		SKU         string                 `json:"sku"`
+		SCU         string                 `json:"scu"`
+		Name        string                 `json:"name"`
+		Description string                 `json:"description"`
+		CategoryID  int64                  `json:"category_id"`
+		BrandID     int64                  `json:"brand_id"`
+		Brand       string                 `json:"brand"`
+		Price       interface{}            `json:"price"`
+		StockQty    int64                  `json:"stock_qty"`
+		Images      []string               `json:"images,omitempty"`
+		Attributes  map[string]interface{} `json:"attributes,omitempty"`
+	}
+
+	for scanner.Scan() {
+		if limit > 0 && len(products) >= limit {
+			break
+		}
+
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var row productRow
+		if err := json.Unmarshal(line, &row); err != nil {
+			skipped++
+			continue
+		}
+
+		if row.SKU == "" || row.Name == "" {
+			skipped++
+			continue
+		}
+
+		price := parsePriceValue(row.Price)
+		if price <= 0 {
+			skipped++
+			continue
+		}
+
+		// SCU: use explicit SCU or derive from SKU
+		scu := row.SCU
+		if scu == "" {
+			parts := strings.SplitN(row.SKU, "-", 2)
+			scu = parts[0]
+			if scu == "" {
+				parts = strings.SplitN(row.SKU, "_", 2)
+				scu = parts[0]
+			}
+		}
+
+		// Option: append to name if SKU differs from SCU
+		name := row.Name
+		if scu != "" && row.SKU != scu {
+			option := strings.TrimPrefix(row.SKU, scu)
+			option = strings.TrimPrefix(option, "-")
+			option = strings.TrimPrefix(option, "_")
+			if option != "" {
+				name = name + " " + formatOption(option)
+			}
+		}
+
+		// Append company name suffix for uniqueness
+		if companyName != "" {
+			name = name + " — " + companyName
+		}
+
+		p := &model.Product{
+			SKU:         row.SKU,
+			SCU:         scu,
+			Name:        name,
+			Description: row.Description,
+			CategoryID:  0, // handled by catalogizer
+			CompanyID:   companyID,
+			BrandID:     row.BrandID,
+			Brand:       row.Brand,
+			Price:       price,
+			Currency:    "RUB",
+			StockQty:    row.StockQty,
+			Status:      model.ProductStatusActive,
+			Attributes:  row.Attributes,
+			Images:      row.Images,
+			SEO: model.ProductSEO{
+				Title: fmt.Sprintf("%s — MakoShop", name),
+			},
+		}
+
+		products = append(products, p)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return products, skipped, err
+	}
+
+	return products, skipped, nil
 }
 
 // importCategories imports categories from a JSONL file.
@@ -594,15 +757,10 @@ func (h *Handlers) importBrands(file string) (map[int64]int64, int, error) {
 // codeValues: global attr code -> value set (populated during import)
 // codeCatValues: global attr code -> catID -> value set (populated during import)
 // brands: global brandID -> name (populated during import)
-// companyID: the company ID to assign to all imported products
-// companyName: company name (added to product name for uniqueness)
-// idOffset: add this offset to each product ID (for multi-company imports)
-// catAncestorsCache: pre-built cache of category ancestors (catID -> []ancestorIDs)
+// NOTE: categories are NOT processed here — handled by catalogizer only.
 func (h *Handlers) importNormalizedFileBatched(
 	file string,
 	limit, batchSize int,
-	pathToID map[string]int64,
-	oldIDToPath map[int64]string,
 	batchAccum **idxbuild.BatchAccum,
 	batchID *int,
 	codeCats map[string]map[int64]struct{},
@@ -612,7 +770,6 @@ func (h *Handlers) importNormalizedFileBatched(
 	companyID int64,
 	companyName string,
 	idOffset int64,
-	catAncestorsCache map[int64][]int64,
 ) (int, int, error) {
 	f, err := os.Open(file)
 	if err != nil {
@@ -623,43 +780,10 @@ func (h *Handlers) importNormalizedFileBatched(
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 256*1024), 4*1024*1024)
 
-	// Первый проход: собираем все уникальные oldCategoryID из файла
-	uniqueOldCatIDs := make(map[int64]struct{})
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-		var row struct {
-			CategoryID int64 `json:"category_id"`
-		}
-		if err := json.Unmarshal(line, &row); err == nil && row.CategoryID != 0 {
-			uniqueOldCatIDs[row.CategoryID] = struct{}{}
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return 0, 0, err
-	}
-
-	// Строим локальную мапу oldCategoryID -> dbCategoryID для этого файла
-	fileCatMap := make(map[int64]int64, len(uniqueOldCatIDs))
-	for oldID := range uniqueOldCatIDs {
-		if path, ok := oldIDToPath[oldID]; ok {
-			if dbID, ok := pathToID[path]; ok {
-				fileCatMap[oldID] = dbID
-			}
-		}
-	}
-	uniqueOldCatIDs = nil
-
-	// Перезапускаем сканер для второго прохода
-	f.Seek(0, 0)
-	scanner = bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 256*1024), 4*1024*1024)
-
 	var imported int
 	var skipped int
 	var batch []*model.Product
+	var allCreated []*model.Product // collect all new products for batch SCU page upsert
 
 	type productRow struct {
 		SKU         string                 `json:"sku"`
@@ -680,144 +804,63 @@ func (h *Handlers) importNormalizedFileBatched(
 			return false
 		}
 
-		// Create products via CreateBatchWithIdxBuildAndOffset (no indexing)
-		created, count := h.productRepo.CreateBatchWithIdxBuildAndOffset(batch, idOffset)
-		imported += count
+		var created []*model.Product
 
-		// Check limit after flush
-		if limit > 0 && imported >= limit {
-			return true
-		}
-
-		// Batch create/update SCU pages from products (much faster than per-product)
-		if len(created) > 0 {
-			_ = h.scuPageRepo.BatchUpsertFromProducts(created)
-		}
-
-		accum := *batchAccum
-
-		// Build indexes in accumulator
-		for _, p := range created {
-			docID := uint64(p.ID)
-
-			// brand index
-			if p.BrandID != 0 {
-				accum.AddIndex("brand:"+strconv.FormatInt(p.BrandID, 10), docID)
-				// Collect brand name
-				if p.Brand != "" {
-					brands[p.BrandID] = p.Brand
-				}
+		// Use GetOrCreateByKey to avoid duplicate products (SKU+company+attrs)
+		for _, p := range batch {
+			id, isNew, err := h.productRepo.GetOrCreateByKey(p)
+			if err != nil {
+				skipped++
+				continue
 			}
 
-			// vendor index (company)
-			if p.CompanyID != 0 {
-				accum.AddIndex("vendor:"+strconv.FormatInt(p.CompanyID, 10), docID)
-			}
+			if isNew {
+				// Get the created product for indexing
+				if prod, err := h.productRepo.Get(id); err == nil {
+					created = append(created, prod)
+					allCreated = append(allCreated, prod) // collect for batch SCU upsert
+					docID := uint64(prod.ID)
 
-			// category index + ancestors (pre-built cache)
-			if p.CategoryID != 0 {
-				ancestors := catAncestorsCache[p.CategoryID]
-				if len(ancestors) == 0 {
-					ancestors = []int64{p.CategoryID}
-				}
-				for _, cid := range ancestors {
-					accum.AddIndex("cat:"+strconv.FormatInt(cid, 10), docID)
-				}
-			}
+					// product_list
+					(*batchAccum).AddIndex("product_list", docID)
 
-			// Brand as attribute "brand"
-			if p.Brand != "" {
-				code := "brand"
-				valStr := p.Brand
-				h := db.Fnv64(valStr)
-				accum.AddIndex("attr:"+code+":"+strconv.FormatUint(h, 16), docID)
-
-				// Collect for attrdef: code -> category
-				if p.CategoryID != 0 {
-					if codeCats[code] == nil {
-						codeCats[code] = make(map[int64]struct{})
-					}
-					codeCats[code][p.CategoryID] = struct{}{}
-				}
-
-				// Collect for attr values ref: code -> values
-				if codeValues[code] == nil {
-					codeValues[code] = make(map[string]struct{})
-				}
-				codeValues[code][valStr] = struct{}{}
-
-				// Collect for attr values per category: code -> catID -> values
-				if p.CategoryID != 0 {
-					if codeCatValues[code] == nil {
-						codeCatValues[code] = make(map[int64]map[string]struct{})
-					}
-					if codeCatValues[code][p.CategoryID] == nil {
-						codeCatValues[code][p.CategoryID] = make(map[string]struct{})
-					}
-					codeCatValues[code][p.CategoryID][valStr] = struct{}{}
-				}
-			}
-
-			// attr index + attrdef collection
-			for code, val := range p.Attributes {
-				if valStr, ok := val.(string); ok && valStr != "" {
-					h := db.Fnv64(valStr)
-					accum.AddIndex("attr:"+code+":"+strconv.FormatUint(h, 16), docID)
-
-					// Collect for attrdef: code -> category
-					if p.CategoryID != 0 {
-						if codeCats[code] == nil {
-							codeCats[code] = make(map[int64]struct{})
+					// brand
+					if prod.BrandID != 0 {
+						(*batchAccum).AddIndex("brand:"+strconv.FormatInt(prod.BrandID, 10), docID)
+						if prod.Brand != "" {
+							brands[prod.BrandID] = prod.Brand
 						}
-						codeCats[code][p.CategoryID] = struct{}{}
 					}
 
-					// Collect for attr values ref: code -> values
-					if codeValues[code] == nil {
-						codeValues[code] = make(map[string]struct{})
+					// vendor
+					if prod.CompanyID != 0 {
+						(*batchAccum).AddIndex("vendor:"+strconv.FormatInt(prod.CompanyID, 10), docID)
 					}
-					codeValues[code][valStr] = struct{}{}
 
-					// Collect for attr values per category: code -> catID -> values
-					if p.CategoryID != 0 {
-						if codeCatValues[code] == nil {
-							codeCatValues[code] = make(map[int64]map[string]struct{})
+					// attributes
+					for code, val := range prod.Attributes {
+						if valStr, ok := val.(string); ok && valStr != "" {
+							h := db.Fnv64(valStr)
+							(*batchAccum).AddIndex("attr:"+code+":"+strconv.FormatUint(h, 16), docID)
 						}
-						if codeCatValues[code][p.CategoryID] == nil {
-							codeCatValues[code][p.CategoryID] = make(map[string]struct{})
-						}
-						codeCatValues[code][p.CategoryID][valStr] = struct{}{}
+					}
+
+					// text
+					for _, tok := range tokenizeProduct(prod) {
+						(*batchAccum).AddIndex("text:"+tok, docID)
 					}
 				}
+				imported++
+			} else {
+				// Existing product updated (price), count it
+				imported++
 			}
 
-			// text index
-			tokens := tokenizeProduct(p)
-			for _, tok := range tokens {
-				accum.AddIndex("text:"+tok, docID)
+			if limit > 0 && imported >= limit {
+				batch = batch[:0]
+				return true
 			}
-
-			// price range index
-			indexPriceRanges(accum, p.Price, docID)
-
-			// sort indexes
-			accum.AddSort("sort:price_asc", idxbuild.ItemWithScore{DocID: docID, Score: p.Price})
-			accum.AddSort("sort:price_desc", idxbuild.ItemWithScore{DocID: docID, Score: p.Price})
-			accum.AddSort("sort:created_at_desc", idxbuild.ItemWithScore{
-				DocID: docID,
-				Score: float64(-p.CreatedAt.UnixNano()),
-			})
 		}
-
-		// Write batch to tmp files
-		if err := accum.WriteBatch("_tmp", *batchID); err != nil {
-			fmt.Printf("[IMPORT-NORMALIZED]   WARN: write batch %d: %v\n", *batchID, err)
-		}
-		*batchID++
-
-		// Reset accumulator for next batch
-		*batchAccum = idxbuild.NewBatchAccum()
-
 		batch = batch[:0]
 		return false
 	}
@@ -850,11 +893,8 @@ func (h *Handlers) importNormalizedFileBatched(
 		}
 
 		// Map category_id: oldID -> dbID
-		catID, ok := fileCatMap[row.CategoryID]
-		if !ok {
-			skipped++
-			continue
-		}
+		// Category handled by catalogizer only
+		catID := int64(0)
 
 		// SCU: use explicit SCU from JSONL, or derive from SKU (base without option)
 		scu := row.SCU
@@ -922,6 +962,13 @@ func (h *Handlers) importNormalizedFileBatched(
 
 	if err := scanner.Err(); err != nil {
 		return imported, skipped, err
+	}
+
+	// Batch upsert SCU pages from all created products (category via catalogizer only for new SCU pages)
+	if len(allCreated) > 0 {
+		fmt.Printf("[IMPORT-NORMALIZED] Batch upserting SCU pages for %d products...\n", len(allCreated))
+		_ = h.scuPageRepo.BatchUpsertFromProducts(allCreated)
+		fmt.Printf("[IMPORT-NORMALIZED] SCU pages batch upsert done.\n")
 	}
 
 	return imported, skipped, nil

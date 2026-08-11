@@ -36,7 +36,6 @@ const mobileMenuOpen = ref(false);
 const categoriesSidebarOpen = ref(false);
 
 const isAuthenticated = computed(() => auth.isAuthenticated);
-const userRole = computed(() => auth.user?.role || null);
 
 // SEO page titles (computed to react to locale changes)
 const pageTitles = computed(() => ({
@@ -171,10 +170,10 @@ watch(() => route.fullPath, () => {
                   {{ userRole }}
                 </span>
               </div>
-              <router-link v-if="userRole === 'seller' || userRole === 'admin'" to="/seller" class="text-xs text-indigo-600 hover:underline px-1">
+              <router-link v-if="isAuthenticated" to="/seller" class="text-xs text-indigo-600 hover:underline px-1">
                 {{ t('common.seller_cabinet') }}
               </router-link>
-              <router-link v-if="userRole === 'admin'" to="/admin" class="text-xs text-purple-600 hover:underline px-1">
+              <router-link v-if="isAuthenticated" to="/admin" class="text-xs text-purple-600 hover:underline px-1">
                 {{ t('common.admin_panel') }}
               </router-link>
               <button @click="handleLogout" class="text-xs text-gray-500 hover:text-red-600 px-1">{{ t('common.logout') }}</button>
@@ -217,8 +216,8 @@ watch(() => route.fullPath, () => {
               </div>
             </div>
 
-            <!-- Shard usage bar (admin only) -->
-            <ShardUsageBar v-if="userRole === 'admin'" />
+            <!-- Shard usage bar -->
+            <ShardUsageBar v-if="isAuthenticated" />
           </nav>
         </div>
       </div>
@@ -261,8 +260,8 @@ watch(() => route.fullPath, () => {
           <template v-else>
             <router-link to="/profile" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-100" @click="mobileMenuOpen = false">{{ t('common.profile') }}</router-link>
             <router-link to="/orders" class="block px-3 py-2 rounded-lg text-sm hover:bg-gray-100" @click="mobileMenuOpen = false">{{ t('common.my_orders') }}</router-link>
-            <router-link v-if="userRole === 'seller' || userRole === 'admin'" to="/seller" class="block px-3 py-2 rounded-lg text-sm text-indigo-600 hover:bg-gray-100" @click="mobileMenuOpen = false">{{ t('common.seller_cabinet') }}</router-link>
-            <router-link v-if="userRole === 'admin'" to="/admin" class="block px-3 py-2 rounded-lg text-sm text-purple-600 hover:bg-gray-100" @click="mobileMenuOpen = false">{{ t('common.admin_panel') }}</router-link>
+            <router-link v-if="isAuthenticated" to="/seller" class="block px-3 py-2 rounded-lg text-sm text-indigo-600 hover:bg-gray-100" @click="mobileMenuOpen = false">{{ t('common.seller_cabinet') }}</router-link>
+            <router-link v-if="isAuthenticated" to="/admin" class="block px-3 py-2 rounded-lg text-sm text-purple-600 hover:bg-gray-100" @click="mobileMenuOpen = false">{{ t('common.admin_panel') }}</router-link>
             <button @click="handleLogout; mobileMenuOpen = false" class="w-full text-left px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-gray-100">{{ t('common.logout') }}</button>
           </template>
         </nav>

@@ -27,6 +27,8 @@ import AdminCategoriesView from '../views/admin/AdminCategoriesView.vue';
 import AdminCategoryAttributesView from '../views/admin/AdminCategoryAttributesView.vue';
 import AdminAnalyticsView from '../views/admin/AdminAnalyticsView.vue';
 import AdminPromoView from '../views/admin/AdminPromoView.vue';
+import AdminSCUPageView from '../views/admin/AdminSCUPageView.vue';
+import AdminCatalogizerView from '../views/admin/AdminCatalogizerView.vue';
 
 const routes = [
   // Public
@@ -61,6 +63,8 @@ const routes = [
   { path: '/admin/companies', name: 'admin-companies', component: AdminCompaniesView, meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/categories', name: 'admin-categories', component: AdminCategoriesView, meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/categories/:id/attributes', name: 'admin-category-attributes', component: AdminCategoryAttributesView, meta: { requiresAuth: true, requiresRole: 'admin' } },
+  { path: '/admin/scupages', name: 'admin-scupages', component: AdminSCUPageView, meta: { requiresAuth: true, requiresRole: 'admin' } },
+  { path: '/admin/catalogizer', name: 'admin-catalogizer', component: AdminCatalogizerView, meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/analytics', name: 'admin-analytics', component: AdminAnalyticsView, meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/promo', name: 'admin-promo', component: AdminPromoView, meta: { requiresAuth: true, requiresRole: 'admin' } },
 ];
@@ -79,15 +83,6 @@ router.beforeEach((to, from) => {
 
   if (to.meta.requiresAuth && !token) {
     return { name: 'login', query: { redirect: to.fullPath } };
-  }
-
-  if (to.meta.requiresRole && token) {
-    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-    const role = storedUser.role;
-    // Admin can access seller routes too
-    if (role !== to.meta.requiresRole && role !== 'admin') {
-      return { name: 'catalog' };
-    }
   }
 });
 

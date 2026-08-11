@@ -17,6 +17,37 @@ const error = ref(null);
 const showAddForm = ref(false);
 const newCode = ref('');
 
+// Anchor keywords
+const editingKeywords = ref(false);
+const keywordsInput = ref('');
+
+const saveKeywords = async () => {
+  if (!category.value) return;
+  const keywords = keywordsInput.value
+    .split(',')
+    .map(k => k.trim().toLowerCase())
+    .filter(k => k.length > 0);
+
+  try {
+    await api.patch(`/admin/categories/${categoryId.value}`, {
+      anchor_keywords: keywords,
+    });
+    category.value.anchor_keywords = keywords;
+    editingKeywords.value = false;
+  } catch (e) {
+    alert(e.response?.data?.message || t('admin.save_error'));
+  }
+};
+
+const startEditKeywords = () => {
+  keywordsInput.value = (category.value?.anchor_keywords || []).join(', ');
+  editingKeywords.value = true;
+};
+
+const cancelEditKeywords = () => {
+  editingKeywords.value = false;
+};
+
 // Edit modal
 const editingAttr = ref(null);
 const editForm = ref({});
@@ -206,6 +237,49 @@ onMounted(() => {
       <button @click="showAddForm = true" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">
         {{ t('admin.add_attr') }}
       </button>
+    </div>
+
+    <!-- Anchor Keywords -->
+    <div class="mb-4 bg-white rounded-lg shadow-sm p-4 border border-purple-200">
+      <div class="flex items-center justify-between mb-2">
+        <div>
+          <h3 class="font-medium">{{ t('admin.anchor_keywords') || 'Anchor Keywords' }}</h3>
+          <p class="text-xs text-gray-500">{{ t('admin.anchor_keywords_hint') || 'Keywords used for auto-catalogization. Comma-separated.' }}</p>
+        </div>
+        <button
+          v-if="!editingKeywords"
+          @click="startEditKeywords"
+          class="px-3 py-1 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+        >
+          {{ t('common.edit') || 'Edit' }}
+        </button>
+      </div>
+      <div v-if="!editingKeywords">
+        <div v-if="category?.anchor_keywords?.length" class="flex flex-wrap gap-1">
+          <span
+            v-for="kw in category.anchor_keywords"
+            :key="kw"
+            class="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full"
+          >
+            {{ kw }}
+          </span>
+        </div>
+        <p v-else class="text-xs text-gray-400">{{ t('admin.anchor_keywords_empty') || 'No keywords set' }}</p>
+      </div>
+      <div v-else class="flex gap-2">
+        <input
+          v-model="keywordsInput"
+          type="text"
+          :placeholder="t('admin.anchor_keywords_placeholder') || 'tv, television, samsung, lg...'"
+          class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+        />
+        <button @click="saveKeywords" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
+          {{ t('common.save') || 'Save' }}
+        </button>
+        <button @click="cancelEditKeywords" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">
+          {{ t('common.cancel') || 'Cancel' }}
+        </button>
+      </div>
     </div>
 
     <!-- Add form -->

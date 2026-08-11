@@ -571,19 +571,9 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 
 // writeSCUPageResponse writes the SCU page with its products.
 func (h *Handlers) writeSCUPageResponse(w http.ResponseWriter, r *http.Request, sp *model.SCUPage) {
-	// Get products with this SCU via turbo index
+	// Get products with this SCU via turbo index "scu:{scu}"
 	products, err := h.turboSearch.GetProductsBySCU(sp.SCU)
-	if err != nil || len(products) == 0 {
-		// Fallback: load products by IDs from SCUPage
-		products = make([]model.Product, 0, len(sp.ProductIDs))
-		for _, pid := range sp.ProductIDs {
-			p, err := h.productRepo.Get(pid)
-			if err == nil && p != nil {
-				products = append(products, *p)
-			}
-		}
-	}
-	if products == nil {
+	if err != nil || products == nil {
 		products = []model.Product{}
 	}
 
@@ -1139,14 +1129,13 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 			existing.Title = title
 			existing.Description = first.Description
 			existing.Content = first.Description
-			existing.Images = images
+			existing.Images = limitStrings(images, 50)
 			existing.CategoryID = first.CategoryID
 			existing.Brand = first.Brand
 			existing.BrandID = first.BrandID
 			existing.MinPrice = minPrice
 			existing.Currency = first.Currency
 			existing.Attributes = attrs
-			existing.ProductIDs = productIDs
 			existing.ProductCount = len(products)
 			existing.IsActive = true
 			existing.UpdatedAt = time.Now()
@@ -1167,14 +1156,13 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 				Title:        title,
 				Description:  first.Description,
 				Content:      first.Description,
-				Images:       images,
+				Images:       limitStrings(images, 50),
 				CategoryID:   first.CategoryID,
 				Brand:        first.Brand,
 				BrandID:      first.BrandID,
 				MinPrice:     minPrice,
 				Currency:     first.Currency,
 				Attributes:   attrs,
-				ProductIDs:   productIDs,
 				ProductCount: len(products),
 				IsActive:     true,
 				CreatedAt:    time.Now(),
@@ -1337,16 +1325,25 @@ func (h *Handlers) HandleAdminRebuildCategorySlugs(w http.ResponseWriter, r *htt
 }
 
 // HandleAdminRebuildCategoryIndexes rebuilds all category turbo indexes.
+// POST /admin/rebuild-category-indexes?force=1 — force rebuild from docs
 func (h *Handlers) HandleAdminRebuildCategoryIndexes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
-	fmt.Println("[REBUILD-CAT-INDEXES] Starting...")
+	force := r.URL.Query().Get("force") == "1"
+
+	fmt.Printf("[REBUILD-CAT-INDEXES] Starting (force=%v)\n", force)
 	startTime := time.Now()
 
-	if err := h.categoryRepo.RebuildAllIndexes(); err != nil {
+	var err error
+	if force {
+		err = h.categoryRepo.RebuildIndexesFromDocs()
+	} else {
+		err = h.categoryRepo.RebuildAllIndexes()
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
@@ -1411,4 +1408,12 @@ func toSlugLocal(s string) string {
 	slug = strings.Trim(slug, "-")
 
 	return strings.ToLower(slug)
+}
+
+// limitStrings truncates a slice to at most maxLen elements.
+func limitStrings(s []string, maxLen int) []string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen]
 }

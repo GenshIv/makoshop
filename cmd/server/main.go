@@ -4,10 +4,12 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/http/pprof"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/GenshIv/makoshop/internal/api"
 	"github.com/GenshIv/makoshop/internal/auth"
@@ -19,6 +21,57 @@ import (
 
 //go:embed i18n/*.json
 var i18nFS embed.FS
+
+// bootstrapSuperAdmin creates a superadmin if no admins exist.
+func bootstrapSuperAdmin(userRepo *db.UserRepo) {
+	users, _, err := userRepo.List(db.ListUsersParams{})
+	if err != nil {
+		fmt.Printf("WARN: failed to list users during bootstrap: %v\n", err)
+		return
+	}
+
+	// Check if any admin exists
+	for _, u := range users {
+		if u.Role == model.RoleAdmin {
+			return // admins already exist
+		}
+	}
+
+	// Generate random password (16 chars)
+	password := generateRandomPassword(16)
+
+	// Create superadmin
+	superadmin := &model.User{
+		Email:        "admin@mako.com",
+		PasswordHash: "", // will be set by userRepo.Create
+		Role:         model.RoleAdmin,
+		Status:       model.UserStatusActive,
+		IsFirstLogin: true,
+	}
+
+	if err := userRepo.Create(superadmin, password); err != nil {
+		fmt.Printf("WARN: failed to create superadmin: %v\n", err)
+		return
+	}
+
+	fmt.Println("========================================")
+	fmt.Println("SUPERADMIN CREATED (no admins existed)")
+	fmt.Printf("Email:    admin@mako.com\n")
+	fmt.Printf("Password: %s\n", password)
+	fmt.Println("Please change the password after first login.")
+	fmt.Println("========================================")
+}
+
+// generateRandomPassword creates a random alphanumeric password.
+func generateRandomPassword(length int) string {
+	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, length)
+	rand.Seed(time.Now().UnixNano())
+	for i := range b {
+		b[i] = chars[rand.Intn(len(chars))]
+	}
+	return string(b)
+}
 
 func main() {
 	cfg := config.DefaultConfig()
@@ -32,11 +85,17 @@ func main() {
 	}
 	defer store.Close()
 
+	// Repositories (needed for superadmin bootstrap)
+	userRepo := db.NewUserRepo(store)
+
+	// Bootstrap superadmin if no admins exist
+	bootstrapSuperAdmin(userRepo)
+
 	// Auth middleware
 	jwtMiddleware := auth.NewJWTMiddleware(cfg.Auth.JWTSecret)
 
 	// Repositories
-	userRepo := db.NewUserRepo(store)
+	userRepo = db.NewUserRepo(store)
 	companyRepo := db.NewCompanyRepo(store)
 	cartRepo := db.NewCartRepo(store)
 
@@ -368,8 +427,18 @@ func main() {
 	mux.HandleFunc("/admin/categories", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
+			// GET /admin/categories/export
+			if r.URL.Query().Get("export") == "1" {
+				h.HandleAdminCategoriesExport(w, r)
+				return
+			}
 			h.HandleCategoriesList(w, r)
 		case http.MethodPost:
+			// POST /admin/categories/import
+			if r.URL.Query().Get("import") == "1" {
+				h.HandleAdminCategoriesImport(w, r)
+				return
+			}
 			h.HandleCategoryCreate(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -580,6 +649,57 @@ func main() {
 		}
 	}), model.RoleAdmin))
 
+	// --- SCUPage Admin ---
+
+	// GET /admin/scupages
+	mux.Handle("/admin/scupages", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.HandleAdminSCUPageList(w, r)
+	}), model.RoleAdmin))
+
+	// GET/PATCH/DELETE /admin/scupages/{id}
+	mux.Handle("/admin/scupages/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		// POST /admin/scupages/relink
+		if path == "/admin/scupages/relink" && r.Method == http.MethodPost {
+			h.HandleAdminSCUPageRelink(w, r)
+			return
+		}
+
+		// POST /admin/scupages/catalogize-all
+		if path == "/admin/scupages/catalogize-all" && r.Method == http.MethodPost {
+			h.HandleAdminSCUPageCatalogizeAll(w, r)
+			return
+		}
+
+		// POST /admin/scupages/rebuild-tokens
+		if path == "/admin/scupages/rebuild-tokens" && r.Method == http.MethodPost {
+			h.HandleAdminSCUPageRebuildTokens(w, r)
+			return
+		}
+
+		// POST /admin/scupages/rebuild-tokens/{id}
+		if strings.HasPrefix(path, "/admin/scupages/rebuild-tokens/") && r.Method == http.MethodPost {
+			h.HandleAdminSCUPageRebuildToken(w, r)
+			return
+		}
+
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleAdminSCUPageGet(w, r)
+		case http.MethodPatch:
+			h.HandleAdminSCUPageUpdate(w, r)
+		case http.MethodDelete:
+			h.HandleAdminSCUPageDelete(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}), model.RoleAdmin))
+
 	// --- Products ---
 
 	// POST /admin/products/reindex — rebuild all product indexes (admin only)
@@ -589,6 +709,15 @@ func main() {
 			return
 		}
 		h.HandleAdminProductsReindex(w, r)
+	}), model.RoleAdmin))
+
+	// POST /admin/products/delete-all — delete all products (admin only, destructive)
+	mux.Handle("/admin/products/delete-all", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.HandleAdminProductsDeleteAll(w, r)
 	}), model.RoleAdmin))
 
 	// GET /products (public catalog)
@@ -823,6 +952,53 @@ func main() {
 			return
 		}
 		h.HandleAdminDBCompact(w, r)
+	}), model.RoleAdmin))
+
+	// --- Catalogizer ---
+
+	// POST /admin/catalogizer/train — train token index from normalized files
+	mux.Handle("/admin/catalogizer/train", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.HandleAdminCatalogizerTrain(w, r)
+	}), model.RoleAdmin))
+
+	// POST /admin/catalogizer/test — test catalogization on a product name
+	mux.Handle("/admin/catalogizer/test", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.HandleAdminCatalogizerTest(w, r)
+	}), model.RoleAdmin))
+
+	// GET /admin/catalogizer/coverage — coverage statistics
+	mux.Handle("/admin/catalogizer/coverage", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.HandleAdminCatalogizerCoverage(w, r)
+	}), model.RoleAdmin))
+
+	// POST /admin/catalogize — run auto-catalogization
+	mux.Handle("/admin/catalogize", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.HandleAdminCatalogize(w, r)
+	}), model.RoleAdmin))
+
+	// POST /admin/catalogize/product/{id} — catalogize single product
+	mux.Handle("/admin/catalogize/product/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.HandleAdminCatalogizeSingle(w, r)
 	}), model.RoleAdmin))
 
 	// --- SEO: robots.txt and sitemap ---

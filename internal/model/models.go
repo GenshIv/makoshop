@@ -35,6 +35,7 @@ type User struct {
 	Role         UserRole    `json:"role"`
 	Status       UserStatus  `json:"status"`
 	Profile      UserProfile `json:"profile,omitempty"`
+	IsFirstLogin bool        `json:"is_first_login"` // for superadmin initial setup
 	CreatedAt    time.Time   `json:"created_at"`
 	UpdatedAt    time.Time   `json:"updated_at"`
 }
@@ -114,15 +115,16 @@ type Brand struct {
 // Category
 
 type Category struct {
-	ID        int64     `json:"id"`
-	ParentID  *int64    `json:"parent_id,omitempty"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	Desc      string    `json:"description,omitempty"`
-	IsActive  bool      `json:"is_active"`
-	SortOrder int       `json:"sort_order"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID             int64     `json:"id"`
+	ParentID       *int64    `json:"parent_id,omitempty"`
+	Name           string    `json:"name"`
+	Slug           string    `json:"slug"`
+	Desc           string    `json:"description,omitempty"`
+	IsActive       bool      `json:"is_active"`
+	SortOrder      int       `json:"sort_order"`
+	AnchorKeywords []string  `json:"anchor_keywords,omitempty"` // keywords for auto-catalogization
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // AttributeDefinition
@@ -222,7 +224,7 @@ type SCUPage struct {
 	Title        string                 `json:"title"`       // SEO title (from first product name)
 	Description  string                 `json:"description"` // SEO meta description
 	Content      string                 `json:"content"`     // full HTML content
-	Images       []string               `json:"images"`      // unique product images (merged from all products)
+	Images       []string               `json:"images"`      // unique product images (limited to maxSCUPageImages)
 	CategoryID   int64                  `json:"category_id"` // main category
 	Brand        string                 `json:"brand"`       // brand name
 	BrandID      int64                  `json:"brand_id"`    // brand ID
@@ -230,11 +232,14 @@ type SCUPage struct {
 	MinPrice     float64                `json:"min_price"`            // minimum price among all products
 	Currency     string                 `json:"currency"`             // currency (default: RUB)
 	Attributes   map[string]interface{} `json:"attributes,omitempty"` // merged attributes (no duplicates)
-	ProductIDs   []int64                `json:"product_ids"`          // linked product IDs (cached)
 	ProductCount int                    `json:"product_count"`        // number of products with this SCU
 	CreatedAt    time.Time              `json:"created_at"`
 	UpdatedAt    time.Time              `json:"updated_at"`
 }
+
+// NOTE: ProductIDs removed from SCUPage to prevent DB bloat.
+// Product→SCU link is stored in Product.SCU field.
+// SCU→Products query via turbo index "scu:{scu}" in TurboProductSearch.
 
 // Cart
 

@@ -6,6 +6,7 @@ export const useAuthStore = defineStore('auth', {
     user: JSON.parse(localStorage.getItem('user') || 'null'),
     token: localStorage.getItem('jwt') || null,
     loading: false,
+    firstLogin: false, // true if user must change password
   }),
 
   getters: {
@@ -19,12 +20,11 @@ export const useAuthStore = defineStore('auth', {
       try {
         const response = await api.post('/auth/login', { email, password });
         const data = response.data;
-        // Backend may return {token, user} or {token, user_id, email, role}
         this.token = data.token;
-        this.user = data.user || {
+        // Don't store role in localStorage — fetch from backend when needed
+        this.user = {
           id: data.user_id,
           email: data.email,
-          role: data.role,
         };
         localStorage.setItem('jwt', this.token);
         localStorage.setItem('user', JSON.stringify(this.user));
@@ -40,10 +40,10 @@ export const useAuthStore = defineStore('auth', {
         const response = await api.post('/auth/register', data);
         const result = response.data;
         this.token = result.token;
-        this.user = result.user || {
+        // Don't store role in localStorage
+        this.user = {
           id: result.user_id,
           email: result.email,
-          role: result.role,
         };
         localStorage.setItem('jwt', this.token);
         localStorage.setItem('user', JSON.stringify(this.user));
@@ -73,8 +73,19 @@ export const useAuthStore = defineStore('auth', {
     logout() {
       this.token = null;
       this.user = null;
+      this.firstLogin = false;
       localStorage.removeItem('jwt');
       localStorage.removeItem('user');
+    },
+
+    // Change password (for first-time superadmin setup)
+    async changePassword(newPassword) {
+      try {
+        await api.post('/auth/change-password', { password: newPassword });
+        this.firstLogin = false;
+      } catch (e) {
+        throw e;
+      }
     },
   },
 });

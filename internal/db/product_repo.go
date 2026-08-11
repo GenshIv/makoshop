@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -289,6 +290,95 @@ func (r *ProductRepo) Update(id int64, updater func(*model.Product)) error {
 	return nil
 }
 
+// TurboKeyProductList — глобальный индекс всех product ID для быстрого перебора и удаления.
+const TurboKeyProductList = "product_list"
+
+// productUniqueKeyPrefix — префикс для индекса уникальности продукта (SKU+Company+Attributes).
+const productUniqueKeyPrefix = "product_unique:"
+
+// attrsHash возвращает стабильный хеш от map[string]interface{} атрибутов.
+// Используется для определения уникальности модификации продукта.
+func attrsHash(attrs map[string]interface{}) string {
+	if len(attrs) == 0 {
+		return ""
+	}
+	// Сортируем ключи для стабильности
+	keys := make([]string, 0, len(attrs))
+	for k := range attrs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var b strings.Builder
+	for _, k := range keys {
+		b.WriteString(k)
+		b.WriteString("=")
+		b.WriteString(fmt.Sprintf("%v", attrs[k]))
+		b.WriteString(";")
+	}
+	return fmt.Sprintf("%x", Fnv64(b.String()))
+}
+
+// productUniqueKey строит ключ уникальности: SKU + CompanyID + option.
+// option — модификатор товара (цвет и т.п.), последняя колонка в прайсе.
+func productUniqueKey(sku string, companyID int64, attrs map[string]interface{}) string {
+	var option string
+	if attrs != nil {
+		if v, ok := attrs["option"]; ok && v != nil {
+			option = fmt.Sprintf("%v", v)
+		}
+	}
+	if option != "" {
+		return fmt.Sprintf("%s:%d:%s", sku, companyID, option)
+	}
+	return fmt.Sprintf("%s:%d", sku, companyID)
+}
+
+// GetOrCreateByKey находит продукт по уникальному ключу (SKU+Company+Attrs) или создаёт новый.
+// Если продукт найден — обновляет цену и возвращает существующий ID.
+// Если не найден — создаёт новый и возвращает его ID.
+func (r *ProductRepo) GetOrCreateByKey(p *model.Product) (int64, bool, error) {
+	if p.SKU == "" || p.CompanyID == 0 {
+		// Без SKU/Company создаём как обычно
+		if err := r.Create(p); err != nil {
+			return 0, false, err
+		}
+		return p.ID, true, nil
+	}
+
+	key := productUniqueKey(p.SKU, p.CompanyID, p.Attributes)
+	keyPath := productUniqueKeyPrefix + key
+
+	// Проверяем, есть ли уже такой продукт
+	data, err := r.store.db.TurboRawRead(keyPath)
+	if err == nil && len(data) > 0 {
+		var existingID int64
+		_, _ = fmt.Sscanf(string(data), "%d", &existingID)
+
+		// Продукт найден — обновляем цену
+		existing, err := r.Get(existingID)
+		if err == nil {
+			// Обновляем цену, если изменилась
+			if existing.Price != p.Price {
+				existing.Price = p.Price
+				existing.UpdatedAt = time.Now()
+				_ = r.store.DocPut(KeyProduct(existingID), MarshalProduct(*existing))
+			}
+			return existingID, false, nil
+		}
+	}
+
+	// Продукта нет — создаём новый
+	if err := r.Create(p); err != nil {
+		return 0, false, err
+	}
+
+	// Записываем уникальный ключ
+	_ = r.store.TurboWrite(keyPath, []byte(fmt.Sprintf("%d", p.ID)))
+
+	return p.ID, true, nil
+}
+
 func (r *ProductRepo) Delete(id int64) error {
 	p, err := r.Get(id)
 	if err != nil {
@@ -297,9 +387,120 @@ func (r *ProductRepo) Delete(id int64) error {
 	if r.turboSearch != nil {
 		_ = r.turboSearch.UnindexProduct(p)
 	}
+	// Remove from product_list index
+	if p.ID != 0 {
+		_, _ = r.store.db.TurboDeleteIndex(TurboKeyProductList, uint64(p.ID))
+	}
 	if err := r.store.DocDelete(KeyProduct(id)); err != nil {
 		return fmt.Errorf("delete product: %w", err)
 	}
+	return nil
+}
+
+// DeleteProductByID deletes a product by ID, removing it from all indexes and its SCUPage.
+// Returns error if product not found.
+func (r *ProductRepo) DeleteProductByID(id int64) error {
+	p, err := r.Get(id)
+	if err != nil {
+		return fmt.Errorf("product %d not found: %w", id, err)
+	}
+
+	// Unindex from turbo search
+	if r.turboSearch != nil {
+		_ = r.turboSearch.UnindexProduct(p)
+	}
+
+	// Remove from product_list
+	_, _ = r.store.db.TurboDeleteIndex(TurboKeyProductList, uint64(id))
+
+	// Remove from SCUPage if linked
+	if r.scuPageSearch != nil && p.SCU != "" {
+		if sp, err := r.scuPageSearch.repo.GetBySCU(p.SCU); err == nil {
+			_ = r.scuPageSearch.repo.RemoveProduct(sp.ID, id)
+		}
+	}
+
+	// Delete document
+	if err := r.store.DocDelete(KeyProduct(id)); err != nil {
+		return fmt.Errorf("delete product %d: %w", id, err)
+	}
+	return nil
+}
+
+// DeleteAllProducts removes all products and related indexes.
+// This is a destructive operation intended for admin use only.
+func (r *ProductRepo) DeleteAllProducts() error {
+	// Collect all product IDs from product_list
+	data, err := r.store.db.TurboRawRead(TurboKeyProductList)
+	if err != nil || len(data) == 0 {
+		// No products to delete
+		return nil
+	}
+
+	ids := makodb.TurboUnsafeReadTokens(data)
+	if len(ids) == 0 {
+		return nil
+	}
+
+	fmt.Printf("[DELETE-ALL] Deleting %d products from product_list...\n", len(ids))
+
+	// Delete each product
+	for _, docID := range ids {
+		id := int64(docID)
+		p, err := r.Get(id)
+		if err != nil {
+			// Product doc already gone, try to clean indexes manually
+			continue
+		}
+		// Unindex from turbo search
+		if r.turboSearch != nil {
+			_ = r.turboSearch.UnindexProduct(p)
+		}
+		// Delete document
+		_ = r.store.DocDelete(KeyProduct(id))
+	}
+
+	// Clear product_list
+	_ = r.store.TurboWrite(TurboKeyProductList, []byte{})
+
+	// Now delete all SCU pages (they become empty without products)
+	if r.scuPageSearch != nil {
+		_ = r.deleteAllSCUPages()
+	}
+
+	fmt.Println("[DELETE-ALL] All products and SCU pages deleted.")
+	return nil
+}
+
+// deleteAllSCUPages removes all SCU pages and their indexes.
+func (r *ProductRepo) deleteAllSCUPages() error {
+	if r.scuPageSearch == nil {
+		return nil
+	}
+
+	data, err := r.store.db.TurboRawRead(TurboKeySCUPageList)
+	if err != nil || len(data) == 0 {
+		return nil
+	}
+
+	ids := makodb.TurboUnsafeReadTokens(data)
+	fmt.Printf("[DELETE-ALL] Deleting %d SCU pages...\n", len(ids))
+
+	for _, docID := range ids {
+		id := int64(docID)
+		sp, err := r.scuPageSearch.repo.Get(id)
+		if err != nil {
+			continue
+		}
+		// Unindex from SCUPageSearch turbo indexes
+		if err := r.scuPageSearch.UnindexSCUPage(sp); err != nil {
+			fmt.Printf("[DELETE-ALL] WARN: unindex scupage %d: %v\n", id, err)
+		}
+		// Delete SCU page doc and its indexes
+		_ = r.scuPageSearch.repo.Delete(id)
+	}
+
+	fmt.Println("[DELETE-ALL] All SCU pages deleted.")
 	return nil
 }
 

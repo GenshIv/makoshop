@@ -81,6 +81,11 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 	}
 	docID := uint64(p.ID)
 
+	// product_list index
+	if _, err := t.store.db.TurboPutIndex(TurboKeyProductList, docID); err != nil {
+		return fmt.Errorf("turbo product_list index: %w", err)
+	}
+
 	if p.BrandID != 0 {
 		if _, err := t.store.db.TurboPutIndex(turboKeyBrand(p.BrandID), docID); err != nil {
 			return fmt.Errorf("turbo brand index: %w", err)
@@ -268,6 +273,9 @@ func (t *TurboProductSearch) UnindexProduct(p *model.Product) error {
 	}
 	docID := uint64(p.ID)
 
+	// Remove from product_list
+	t.store.db.TurboDeleteIndex(TurboKeyProductList, docID)
+
 	if p.BrandID != 0 {
 		t.store.db.TurboDeleteIndex(turboKeyBrand(p.BrandID), docID)
 	}
@@ -326,6 +334,9 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 
 	for _, p := range products {
 		docID := uint64(p.ID)
+
+		// product_list index — global index of all product IDs
+		indexes[TurboKeyProductList] = append(indexes[TurboKeyProductList], docID)
 
 		if p.BrandID != 0 {
 			indexes[turboKeyBrand(p.BrandID)] = append(indexes[turboKeyBrand(p.BrandID)], docID)

@@ -9,20 +9,121 @@ import (
 
 	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
+	"github.com/GenshIv/makoshop/internal/tokenizer"
 )
 
 const (
 	TurboKeySCUPageList = "scupage_list"
 	turboKeySCUPageSCU  = "scupage_scu:"  // prefix for SCU lookup
 	turboKeySCUPageSlug = "scupage_slug:" // prefix for slug lookup
+
+	// Limits to prevent SCU pages from growing too large in DB
+	maxSCUPageProductIDs = 500 // max product IDs to store in SCUPage
+	maxSCUPageImages     = 50  // max images to store in SCUPage
 )
 
 type SCUPageRepo struct {
-	Store *Store
+	Store            *Store
+	CategoryRepo     *CategoryRepo
+	CatalogizeNew    bool                             // if true, auto-catalogize new SCU pages
+	Catalogizer      interface{}                      // *catalogizer.Catalogizer (interface to avoid import cycle)
+	catalogizerCache []tokenizer.CachedCategoryTokens // pre-loaded for batch operations
 }
 
 func NewSCUPageRepo(store *Store) *SCUPageRepo {
 	return &SCUPageRepo{Store: store}
+}
+
+// SetCategoryRepo attaches a CategoryRepo for auto-catalogization.
+func (r *SCUPageRepo) SetCategoryRepo(cr *CategoryRepo) {
+	r.CategoryRepo = cr
+}
+
+// EnableCatalogizeNew enables auto-catalogization for new SCU pages.
+func (r *SCUPageRepo) EnableCatalogizeNew(enabled bool) {
+	r.CatalogizeNew = enabled
+}
+
+// LoadCatalogizerCache loads category token indexes for fast batch auto-catalogization.
+// Call this before BatchUpsertFromProducts to avoid repeated TurboRawRead calls.
+func (r *SCUPageRepo) LoadCatalogizerCache() error {
+	if r.Store == nil {
+		return nil
+	}
+
+	categories, err := r.CategoryRepo.ListAll()
+	if err != nil {
+		return fmt.Errorf("list categories for cache: %w", err)
+	}
+
+	const turboKeyCatTokens = "cat_tokens:"
+	var cached []tokenizer.CachedCategoryTokens
+	for _, cat := range categories {
+		if !cat.IsActive {
+			continue
+		}
+
+		data, err := r.Store.DB().TurboRawRead(turboKeyCatTokens + fmt.Sprintf("%d", cat.ID))
+		if err != nil || len(data) == 0 {
+			continue
+		}
+
+		tokens := makodb.TurboUnsafeReadTokens(data)
+		if len(tokens) == 0 {
+			continue
+		}
+
+		cached = append(cached, tokenizer.CachedCategoryTokens{
+			ID:       cat.ID,
+			IsActive: true,
+			Tokens:   tokens,
+		})
+	}
+
+	r.catalogizerCache = cached
+	fmt.Printf("[SCUPAGE] Loaded catalogizer cache: %d categories with tokens\n", len(cached))
+	return nil
+}
+
+// CreateNoListIndex creates a new SCU page WITHOUT adding to scupage_list index.
+// Used in batch operations where list index is updated once after all creations.
+func (r *SCUPageRepo) CreateNoListIndex(s *model.SCUPage) error {
+	if s.SCU == "" {
+		return fmt.Errorf("scu is required")
+	}
+
+	id, err := r.Store.NextID("scupage")
+	if err != nil {
+		return fmt.Errorf("next_id scupage: %w", err)
+	}
+	s.ID = id
+	s.CreatedAt = time.Now()
+	s.UpdatedAt = time.Now()
+	if s.Slug == "" {
+		s.Slug = toSCUPageSlug(s.SCU, s.Title)
+	}
+
+	data := MarshalSCUPage(*s)
+	if err := r.Store.DocPut(KeySCUPage(s.ID), data); err != nil {
+		return fmt.Errorf("save scupage: %w", err)
+	}
+
+	// Turbo index: scupage_scu:<scu>
+	scuKey := turboKeySCUPageSCU + s.SCU
+	if err := r.Store.TurboWrite(scuKey, []byte(strconv.FormatInt(id, 10))); err != nil {
+		_ = r.Store.DocDelete(KeySCUPage(s.ID))
+		return fmt.Errorf("turbo index scupage_scu: %w", err)
+	}
+
+	// Turbo index: scupage_slug:<slug>
+	slugKey := turboKeySCUPageSlug + s.Slug
+	if err := r.Store.TurboWrite(slugKey, []byte(strconv.FormatInt(id, 10))); err != nil {
+		_ = r.Store.TurboWrite(scuKey, []byte{})
+		_ = r.Store.DocDelete(KeySCUPage(s.ID))
+		return fmt.Errorf("turbo index scupage_slug: %w", err)
+	}
+
+	return nil
 }
 
 // Create creates a new SCU page.
@@ -201,44 +302,32 @@ func (r *SCUPageRepo) Delete(id int64) error {
 	return nil
 }
 
-// AddProduct adds a product ID to the SCU page's product list.
+// AddProduct increments product count for this SCU page.
+// NOTE: Product→SCU link is stored in Product.SCU field.
+// SCU→Products query via turbo index "scu:{scu}" in TurboProductSearch.
 func (r *SCUPageRepo) AddProduct(id int64, productID int64) error {
 	s, err := r.Get(id)
 	if err != nil {
 		return err
 	}
-
-	// Check if already present
-	for _, pid := range s.ProductIDs {
-		if pid == productID {
-			return nil
-		}
-	}
-
-	s.ProductIDs = append(s.ProductIDs, productID)
+	s.ProductCount++
 	s.UpdatedAt = time.Now()
-
 	data := MarshalSCUPage(*s)
 	return r.Store.DocPut(KeySCUPage(s.ID), data)
 }
 
-// RemoveProduct removes a product ID from the SCU page's product list.
+// RemoveProduct decrements product count for this SCU page.
+// NOTE: Product→SCU link is stored in Product.SCU field.
+// SCU→Products query via turbo index "scu:{scu}" in TurboProductSearch.
 func (r *SCUPageRepo) RemoveProduct(id int64, productID int64) error {
 	s, err := r.Get(id)
 	if err != nil {
 		return err
 	}
-
-	var newIDs []int64
-	for _, pid := range s.ProductIDs {
-		if pid != productID {
-			newIDs = append(newIDs, pid)
-		}
+	if s.ProductCount > 0 {
+		s.ProductCount--
 	}
-
-	s.ProductIDs = newIDs
 	s.UpdatedAt = time.Now()
-
 	data := MarshalSCUPage(*s)
 	return r.Store.DocPut(KeySCUPage(s.ID), data)
 }
@@ -295,21 +384,28 @@ func (r *SCUPageRepo) UpsertFromProduct(product *model.Product) error {
 	}
 
 	// Create new SCU page from product
+	// Category is determined ONLY by catalogizer (anchor keywords), ignoring product.CategoryID.
+	categoryID := int64(0)
+	if r.CatalogizeNew && r.CategoryRepo != nil {
+		if catID, err := r.autoCatalogize(product); err == nil && catID > 0 {
+			categoryID = catID
+		}
+	}
+
 	s = &model.SCUPage{
 		SCU:          product.SCU,
 		Slug:         toSCUPageSlug(product.SCU, product.Name),
 		Title:        parseTitleFromProductName(product.Name),
 		Description:  product.Description,
 		Content:      product.Description,
-		Images:       deduplicateStrings(product.Images),
-		CategoryID:   product.CategoryID,
+		Images:       limitStrings(deduplicateStrings(product.Images), maxSCUPageImages),
+		CategoryID:   categoryID,
 		Brand:        product.Brand,
 		BrandID:      product.BrandID,
 		IsActive:     true,
 		MinPrice:     product.Price,
 		Currency:     product.Currency,
 		Attributes:   mergeAttributes(nil, product.Attributes),
-		ProductIDs:   []int64{product.ID},
 		ProductCount: 1,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
@@ -320,27 +416,16 @@ func (r *SCUPageRepo) UpsertFromProduct(product *model.Product) error {
 
 // updateSCUPageFromProduct merges product data into an existing SCU page.
 func (r *SCUPageRepo) updateSCUPageFromProduct(s *model.SCUPage, product *model.Product) error {
-	// Check if product already linked
-	alreadyLinked := false
-	for _, pid := range s.ProductIDs {
-		if pid == product.ID {
-			alreadyLinked = true
-			break
-		}
-	}
-
-	if !alreadyLinked {
-		s.ProductIDs = append(s.ProductIDs, product.ID)
-		s.ProductCount++
-	}
+	// Increment product count (link is in Product.SCU, not stored here)
+	s.ProductCount++
 
 	// Update min_price
 	if product.Price < s.MinPrice || s.MinPrice == 0 {
 		s.MinPrice = product.Price
 	}
 
-	// Merge images (unique)
-	s.Images = mergeUniqueStrings(s.Images, product.Images)
+	// Merge images (unique, limited)
+	s.Images = limitStrings(mergeUniqueStrings(s.Images, product.Images), maxSCUPageImages)
 
 	// Merge attributes (no duplicates)
 	s.Attributes = mergeAttributes(s.Attributes, product.Attributes)
@@ -393,6 +478,72 @@ func (r *SCUPageRepo) LinkProductBySCU(scu string, product *model.Product) error
 	return r.AddProduct(s.ID, product.ID)
 }
 
+// autoCatalogize determines the best category for a product based on anchor keywords.
+// Uses pre-built token indexes from catalogizer (cat_tokens:{catID}).
+// Returns category ID or 0 if no match found.
+func (r *SCUPageRepo) autoCatalogize(p *model.Product) (int64, error) {
+	if r.CategoryRepo == nil || r.Store == nil {
+		return 0, nil
+	}
+
+	// Tokenize product name (same as catalogizer)
+	productTokens := tokenizer.Tokenize(p.Name)
+	if len(productTokens) == 0 {
+		return 0, nil
+	}
+
+	productHashes := make([]uint64, len(productTokens))
+	for i, t := range productTokens {
+		productHashes[i] = t.Hash
+	}
+
+	// Load category IDs from turbo index list or via ListAll
+	categories, err := r.CategoryRepo.ListAll()
+	if err != nil {
+		return 0, err
+	}
+
+	var bestCatID int64
+	var bestScore int
+
+	for _, cat := range categories {
+		if !cat.IsActive {
+			continue
+		}
+
+		// Read pre-built tokens from catalogizer index
+		data, err := r.Store.DB().TurboRawRead("cat_tokens:" + fmt.Sprintf("%d", cat.ID))
+		if err != nil || len(data) == 0 {
+			continue
+		}
+
+		catTokens := makodb.TurboUnsafeReadTokens(data)
+		if len(catTokens) == 0 {
+			continue
+		}
+
+		// Count overlap using set
+		catSet := make(map[uint64]bool, len(catTokens))
+		for _, h := range catTokens {
+			catSet[h] = true
+		}
+
+		score := 0
+		for _, h := range productHashes {
+			if catSet[h] {
+				score++
+			}
+		}
+
+		if score > bestScore {
+			bestScore = score
+			bestCatID = cat.ID
+		}
+	}
+
+	return bestCatID, nil
+}
+
 // --- helpers ---
 
 // toSCUPageSlug creates a URL-friendly slug from SCU and title.
@@ -438,6 +589,14 @@ func parseTitleFromProductName(name string) string {
 	}
 
 	return result
+}
+
+// limitStrings truncates a slice to at most maxLen elements.
+func limitStrings(s []string, maxLen int) []string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen]
 }
 
 // mergeUniqueStrings merges two string slices, keeping only unique values.
@@ -519,6 +678,7 @@ func copyMap(m map[string]interface{}) map[string]interface{} {
 // This is much faster than calling UpsertFromProduct in a loop because:
 // - Reads all existing SCU pages once (batch)
 // - Writes all new/updated SCU pages in batch
+// - Uses cached catalogizer tokens (call LoadCatalogizerCache() first)
 func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int64]int64 {
 	if len(products) == 0 {
 		return nil
@@ -555,7 +715,7 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 			// Update existing in memory
 			updatedPages[p.SCU] = s
 		} else {
-			// Create new
+			// Create new (category will be set after creation via TurboTopNByIntersection)
 			if _, ok := newPages[p.SCU]; !ok {
 				newPages[p.SCU] = &model.SCUPage{
 					SCU:          p.SCU,
@@ -563,15 +723,14 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 					Title:        parseTitleFromProductName(p.Name),
 					Description:  p.Description,
 					Content:      p.Description,
-					Images:       deduplicateStrings(p.Images),
-					CategoryID:   p.CategoryID,
+					Images:       limitStrings(deduplicateStrings(p.Images), maxSCUPageImages),
+					CategoryID:   0, // will be set after creation
 					Brand:        p.Brand,
 					BrandID:      p.BrandID,
 					IsActive:     true,
 					MinPrice:     p.Price,
 					Currency:     p.Currency,
 					Attributes:   mergeAttributes(nil, p.Attributes),
-					ProductIDs:   []int64{p.ID},
 					ProductCount: 1,
 					CreatedAt:    time.Now(),
 					UpdatedAt:    time.Now(),
@@ -586,26 +745,16 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 			continue
 		}
 		if s, ok := updatedPages[p.SCU]; ok {
-			// Add product if not linked
-			alreadyLinked := false
-			for _, pid := range s.ProductIDs {
-				if pid == p.ID {
-					alreadyLinked = true
-					break
-				}
-			}
-			if !alreadyLinked {
-				s.ProductIDs = append(s.ProductIDs, p.ID)
-				s.ProductCount++
-			}
+			// Count products (no need to store IDs — link is in Product.SCU)
+			s.ProductCount++
 
 			// Update min_price
 			if p.Price < s.MinPrice || s.MinPrice == 0 {
 				s.MinPrice = p.Price
 			}
 
-			// Merge images
-			s.Images = mergeUniqueStrings(s.Images, p.Images)
+			// Merge images with limit
+			s.Images = limitStrings(mergeUniqueStrings(s.Images, p.Images), maxSCUPageImages)
 
 			// Merge attributes
 			s.Attributes = mergeAttributes(s.Attributes, p.Attributes)
@@ -622,12 +771,21 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 
 	// Create new pages
 	created := make(map[string]int64)
+	var newSCUPageIDs []uint64
 	for scu, s := range newPages {
-		if err := r.Create(s); err != nil {
+		if err := r.CreateNoListIndex(s); err != nil {
 			fmt.Printf("WARN: create scupage for SCU %s: %v\n", scu, err)
 			continue
 		}
 		created[scu] = s.ID
+		newSCUPageIDs = append(newSCUPageIDs, uint64(s.ID))
+	}
+
+	// Batch add all new SCU pages to scupage_list index (single write)
+	if len(newSCUPageIDs) > 0 {
+		if _, err := r.Store.db.TurboPutBatchIndex(TurboKeySCUPageList, newSCUPageIDs); err != nil {
+			fmt.Printf("WARN: batch add to scupage_list: %v\n", err)
+		}
 	}
 
 	// Update existing pages
@@ -638,6 +796,41 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 			continue
 		}
 		created[scu] = s.ID // reuse ID for mapping
+	}
+
+	// Catalogize new SCU pages using TurboTopNByIntersection
+	if r.CatalogizeNew && r.Catalogizer != nil {
+		// Get catalogizer via type assertion
+		if catz, ok := r.Catalogizer.(interface {
+			BuildSCUTokens(scuPageID int64, name string) error
+			CatalogizeSCUPageByIntersection(scuPageID int64) (int64, error)
+		}); ok {
+			catalogized := 0
+			for scu, s := range newPages {
+				if s.CategoryID != 0 {
+					continue
+				}
+				// Build tokens for this SCU page using all available text
+				fullText := tokenizer.BuildSCUTokensFullText(s.Title, s.Description, s.Content, s.Attributes)
+				if err := catz.BuildSCUTokens(s.ID, fullText); err != nil {
+					fmt.Printf("WARN: build scu tokens for %s (id=%d): %v\n", scu, s.ID, err)
+					continue
+				}
+				// Catalogize using TurboTopNByIntersection
+				if catID, err := catz.CatalogizeSCUPageByIntersection(s.ID); err == nil && catID > 0 {
+					s.CategoryID = catID
+					data := MarshalSCUPage(*s)
+					if err := r.Store.DocPut(KeySCUPage(s.ID), data); err != nil {
+						fmt.Printf("WARN: update scupage category for %s (id=%d): %v\n", scu, s.ID, err)
+					} else {
+						catalogized++
+					}
+				}
+			}
+			if catalogized > 0 {
+				fmt.Printf("[SCUPAGE] Catalogized %d new SCU pages via TurboTopNByIntersection\n", catalogized)
+			}
+		}
 	}
 
 	// Build productID -> SCUPageID map

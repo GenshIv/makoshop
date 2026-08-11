@@ -11,8 +11,10 @@ import (
 
 	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/auth"
+	"github.com/GenshIv/makoshop/internal/catalogizer"
 	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/model"
+	"github.com/GenshIv/makoshop/internal/tokenizer"
 )
 
 type Handlers struct {
@@ -34,6 +36,7 @@ type Handlers struct {
 	promoPlanRepo     *db.PromoPlanRepo
 	promoCampaignRepo *db.PromoCampaignRepo
 	promoLogRepo      *db.PromoLogRepo
+	catalogizer       *catalogizer.Catalogizer
 }
 
 func NewHandlers(store *db.Store) *Handlers {
@@ -53,11 +56,17 @@ func NewHandlers(store *db.Store) *Handlers {
 	turboSearch.SetLandingRepo(landingRepo)
 
 	scuPageRepo := db.NewSCUPageRepo(store)
+	scuPageRepo.SetCategoryRepo(categoryRepo)
+	scuPageRepo.EnableCatalogizeNew(true) // auto-catalogize new SCU pages
 	turboSearch.SetSCUPageRepo(scuPageRepo)
 
 	// SCUPage search (catalog works on SCU pages)
 	scuPageSearch := db.NewSCUPageSearch(store.DB(), scuPageRepo, productRepo, categoryRepo, turboEnabled)
 	productRepo.SetSCUPageSearch(scuPageSearch)
+
+	// Catalogizer
+	catz := catalogizer.New(store, categoryRepo, productRepo)
+	scuPageRepo.Catalogizer = catz // for TurboTopNByIntersection catalogization
 
 	return &Handlers{
 		store:             store,
@@ -78,6 +87,7 @@ func NewHandlers(store *db.Store) *Handlers {
 		scuPageSearch:     scuPageSearch,
 		landingRepo:       landingRepo,
 		scuPageRepo:       scuPageRepo,
+		catalogizer:       catz,
 	}
 }
 
@@ -206,6 +216,9 @@ func (h *Handlers) HandleCategoriesList(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
+	if cats == nil {
+		cats = []model.Category{}
+	}
 
 	// Filter by parent_id if provided
 	if parentIDStr := r.URL.Query().Get("parent_id"); parentIDStr != "" {
@@ -281,13 +294,14 @@ func (h *Handlers) HandleCategoryGet(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreateCategoryRequest struct {
-	ParentID    *int64 `json:"parent_id,omitempty"`
-	ParentIDSet bool   `json:"-"` // tracks if parent_id was explicitly sent
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	Description string `json:"description,omitempty"`
-	IsActive    bool   `json:"is_active"`
-	SortOrder   int    `json:"sort_order"`
+	ParentID       *int64   `json:"parent_id,omitempty"`
+	ParentIDSet    bool     `json:"-"` // tracks if parent_id was explicitly sent
+	Name           string   `json:"name"`
+	Slug           string   `json:"slug"`
+	Description    string   `json:"description,omitempty"`
+	IsActive       bool     `json:"is_active"`
+	SortOrder      int      `json:"sort_order"`
+	AnchorKeywords []string `json:"anchor_keywords,omitempty"` // keywords for auto-catalogization
 }
 
 func (h *Handlers) HandleCategoryCreate(w http.ResponseWriter, r *http.Request) {
@@ -351,12 +365,19 @@ func (h *Handlers) HandleCategoryUpdate(w http.ResponseWriter, r *http.Request) 
 			c.SortOrder = req.SortOrder
 		}
 		c.IsActive = req.IsActive
+		if req.AnchorKeywords != nil {
+			c.AnchorKeywords = req.AnchorKeywords
+		}
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	cat, _ := h.categoryRepo.Get(id)
+	// Rebuild catalogizer tokens for this category
+	if cat != nil {
+		_ = h.catalogizer.BuildTokensForCategory(cat)
+	}
 	writeJSON(w, http.StatusOK, cat)
 }
 
@@ -2674,6 +2695,40 @@ func (h *Handlers) HandleAdminProductsReindex(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, map[string]string{"status": "reindex completed"})
 }
 
+// HandleAdminProductsDeleteAll deletes all products and related indexes.
+// POST /admin/products/delete-all
+// WARNING: This is a destructive operation.
+func (h *Handlers) HandleAdminProductsDeleteAll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	ctxUser, hasUser := auth.ContextUserFrom(r)
+	if !hasUser || ctxUser.Role != model.RoleAdmin {
+		writeError(w, http.StatusForbidden, "FORBIDDEN", "admin access required")
+		return
+	}
+
+	// Optional: require confirmation in body
+	type req struct {
+		Confirm bool `json:"confirm"`
+	}
+	var body req
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if !body.Confirm {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "set confirm=true in body")
+		return
+	}
+
+	if err := h.productRepo.DeleteAllProducts(); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "all products deleted"})
+}
+
 // ================= Product Import handlers =================
 
 // HandleAdminProductsImport starts a product import from JSON file.
@@ -3086,6 +3141,221 @@ func (h *Handlers) HandleAdminAttrDefDelete(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, map[string]string{"message": "deleted", "code": code})
 }
 
+// ================= SCUPage Admin handlers =================
+
+// HandleAdminSCUPageList returns a paginated list of SCU pages.
+// GET /admin/scupages?page=1&limit=50&q=search
+func (h *Handlers) HandleAdminSCUPageList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	q := r.URL.Query().Get("q")
+	pageStr := r.URL.Query().Get("page")
+	limitStr := r.URL.Query().Get("limit")
+
+	page := 1
+	limit := 50
+	if pageStr != "" {
+		page, _ = strconv.Atoi(pageStr)
+	}
+	if limitStr != "" {
+		limit, _ = strconv.Atoi(limitStr)
+	}
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 200 {
+		limit = 50
+	}
+
+	// Use SCUPageSearch for listing with optional search
+	params := db.SCUPageListParams{
+		Q:     q,
+		Page:  page,
+		Limit: limit,
+	}
+
+	result, err := h.scuPageSearch.ListWithTurbo(params)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	// Convert raw JSON items to readable format
+	items := make([]map[string]interface{}, 0, len(result.Items))
+	for _, raw := range result.Items {
+		var m map[string]interface{}
+		if err := json.Unmarshal(raw, &m); err != nil {
+			continue
+		}
+		items = append(items, m)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"items": items,
+		"total": result.Total,
+		"page":  page,
+		"limit": limit,
+	})
+}
+
+// HandleAdminSCUPageGet returns a single SCU page by ID.
+// GET /admin/scupages/{id}
+func (h *Handlers) HandleAdminSCUPageGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 || parts[3] == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "id is required")
+		return
+	}
+	id, err := strconv.ParseInt(parts[3], 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid id")
+		return
+	}
+
+	sp, err := h.scuPageRepo.Get(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, sp)
+}
+
+// HandleAdminSCUPageUpdate updates a SCU page.
+// PATCH /admin/scupages/{id}
+// Body: any subset of SCUPage fields
+func (h *Handlers) HandleAdminSCUPageUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 || parts[3] == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "id is required")
+		return
+	}
+	id, err := strconv.ParseInt(parts[3], 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid id")
+		return
+	}
+
+	var updates map[string]interface{}
+	if !readJSON(w, r, &updates) {
+		return
+	}
+
+	// Apply updates
+	updater := func(sp *model.SCUPage) {
+		if v, ok := updates["title"]; ok {
+			if s, ok := v.(string); ok {
+				sp.Title = s
+			}
+		}
+		if v, ok := updates["description"]; ok {
+			if s, ok := v.(string); ok {
+				sp.Description = s
+			}
+		}
+		if v, ok := updates["content"]; ok {
+			if s, ok := v.(string); ok {
+				sp.Content = s
+			}
+		}
+		if v, ok := updates["slug"]; ok {
+			if s, ok := v.(string); ok {
+				sp.Slug = s
+			}
+		}
+		if v, ok := updates["is_active"]; ok {
+			if b, ok := v.(bool); ok {
+				sp.IsActive = b
+			}
+		}
+		if v, ok := updates["category_id"]; ok {
+			if f, ok := v.(float64); ok {
+				sp.CategoryID = int64(f)
+			}
+		}
+		if v, ok := updates["images"]; ok {
+			if arr, ok := v.([]interface{}); ok {
+				imgs := make([]string, 0, len(arr))
+				for _, img := range arr {
+					if s, ok := img.(string); ok {
+						imgs = append(imgs, s)
+					}
+				}
+				sp.Images = imgs
+			}
+		}
+		if v, ok := updates["attributes"]; ok {
+			if m, ok := v.(map[string]interface{}); ok {
+				sp.Attributes = m
+			}
+		}
+	}
+
+	if err := h.scuPageRepo.Update(id, updater); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	// Reindex SCU page
+	sp, _ := h.scuPageRepo.Get(id)
+	if sp != nil {
+		_ = h.scuPageSearch.UnindexSCUPage(sp)
+		_ = h.scuPageSearch.IndexSCUPage(sp)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+// HandleAdminSCUPageDelete deletes a SCU page.
+// DELETE /admin/scupages/{id}
+func (h *Handlers) HandleAdminSCUPageDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 || parts[3] == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "id is required")
+		return
+	}
+	id, err := strconv.ParseInt(parts[3], 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid id")
+		return
+	}
+
+	sp, err := h.scuPageRepo.Get(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
+		return
+	}
+
+	// Unindex
+	_ = h.scuPageSearch.UnindexSCUPage(sp)
+
+	// Delete
+	if err := h.scuPageRepo.Delete(id); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 // GET /admin/db/shards — fast shard usage stats (based on FreeOffset)
 func (h *Handlers) HandleAdminDBShards(w http.ResponseWriter, r *http.Request) {
 	usages := h.store.DB().ShardUsages()
@@ -3106,4 +3376,790 @@ func (h *Handlers) HandleAdminDBCompact(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "compact completed successfully"})
+}
+
+// ================= Catalogizer handlers =================
+
+// HandleAdminCatalogizerTrain rebuilds token indexes from category anchor_keywords.
+// POST /admin/catalogizer/train
+func (h *Handlers) HandleAdminCatalogizerTrain(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	fmt.Println("[CATALOGIZER-TRAIN] Rebuilding token indexes from anchor_keywords...")
+
+	if err := h.catalogizer.RebuildAllCategoryTokens(); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "completed",
+		"message": "Token indexes rebuilt from anchor_keywords",
+	})
+}
+
+// HandleAdminCatalogizerCoverage returns coverage statistics.
+// GET /admin/catalogizer/coverage
+func (h *Handlers) HandleAdminCatalogizerCoverage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	categories, err := h.categoryRepo.ListAll()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	total := len(categories)
+	withKeywords := 0
+	empty := 0
+	active := 0
+	var fewTokens []map[string]interface{}
+	var manyTokens []map[string]interface{}
+
+	for _, cat := range categories {
+		kwCount := len(cat.AnchorKeywords)
+		if cat.IsActive {
+			active++
+		}
+		if kwCount == 0 {
+			empty++
+		} else {
+			withKeywords++
+			if kwCount < 5 {
+				fewTokens = append(fewTokens, map[string]interface{}{
+					"id":          cat.ID,
+					"name":        cat.Name,
+					"token_count": kwCount,
+				})
+			}
+			if kwCount > 30 {
+				manyTokens = append(manyTokens, map[string]interface{}{
+					"id":          cat.ID,
+					"name":        cat.Name,
+					"token_count": kwCount,
+				})
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"total_categories": total,
+		"with_keywords":    withKeywords,
+		"empty":            empty,
+		"active":           active,
+		"few_tokens":       fewTokens,
+		"many_tokens":      manyTokens,
+	})
+}
+
+// HandleAdminCatalogize runs auto-catalogization on products.
+// POST /admin/catalogize
+//
+//	Body: {
+//	  "apply": true/false,         // if true, updates product categories (default: false)
+//	  "limit": 1000,              // max products to process (default: 1000)
+//	  "category_id": 123,         // optional: only products in this category
+//	  "company_id": 456           // optional: only products from this company
+//	}
+func (h *Handlers) HandleAdminCatalogize(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	type req struct {
+		Apply      bool  `json:"apply"`
+		Limit      int   `json:"limit"`
+		CategoryID int64 `json:"category_id,omitempty"`
+		CompanyID  int64 `json:"company_id,omitempty"`
+	}
+
+	var body req
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if body.Limit <= 0 {
+		body.Limit = 1000
+	}
+	if body.Limit > 10000 {
+		body.Limit = 10000
+	}
+
+	// Collect product IDs to catalogize
+	var productIDs []int64
+
+	// Use turbo search to get products
+	result, err := h.turboSearch.ListWithTurbo(db.TurboListParams{
+		CategoryID: body.CategoryID,
+		CompanyID:  body.CompanyID,
+		Page:       1,
+		Limit:      body.Limit,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	for _, item := range result.Items {
+		productIDs = append(productIDs, item.ID)
+	}
+
+	fmt.Printf("[CATALOGIZE] Processing %d products (apply=%v)...\n", len(productIDs), body.Apply)
+
+	results, err := h.catalogizer.BatchCatalogize(productIDs, body.Apply)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	fmt.Printf("[CATALOGIZE] Done. %d products matched categories.\n", len(results))
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"processed": len(productIDs),
+		"matched":   len(results),
+		"apply":     body.Apply,
+		"results":   results[:min(len(results), 100)], // limit response size
+	})
+}
+
+// HandleAdminCatalogizeSingle catalogizes a single product by ID.
+// POST /admin/catalogize/product/{id}
+// Body: { "apply": true/false }
+func (h *Handlers) HandleAdminCatalogizeSingle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 6 || parts[4] == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "product id is required")
+		return
+	}
+	id, err := strconv.ParseInt(parts[4], 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid product id")
+		return
+	}
+
+	type req struct {
+		Apply bool `json:"apply"`
+	}
+	var body req
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	p, err := h.productRepo.Get(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
+		return
+	}
+
+	result, err := h.catalogizer.CatalogizeProduct(p)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	if result != nil && body.Apply {
+		if err := h.catalogizer.ApplyCategory(p, result); err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"product_id": id,
+		"result":     result,
+	})
+}
+
+// HandleAdminCatalogizerTest tests catalogization on a product name.
+// POST /admin/catalogizer/test
+// Body: { "name": "Product name here" }
+// Returns ALL matching categories sorted by relevance.
+func (h *Handlers) HandleAdminCatalogizerTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	type req struct {
+		Name string `json:"name"`
+	}
+	var body req
+	if !readJSON(w, r, &body) {
+		return
+	}
+
+	if body.Name == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "name is required")
+		return
+	}
+
+	// Get all matching categories
+	matches := h.catalogizer.MatchProductToCategories(body.Name)
+
+	// Get product tokens for display
+	tokens := catalogizer.TokenizeName(body.Name)
+	tokenWords := make([]string, len(tokens))
+	for i, t := range tokens {
+		tokenWords[i] = t.Word
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"name":        body.Name,
+		"tokens":      tokenWords,
+		"matches":     matches,
+		"match_count": len(matches),
+	})
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// ================= Category Import/Export handlers =================
+
+// HandleAdminCategoriesExport exports category tree with anchor keywords and attributes.
+// GET /api/admin/categories/export
+func (h *Handlers) HandleAdminCategoriesExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	categories, err := h.categoryRepo.ListAll()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	// Build export structure
+	type ExportCategory struct {
+		ID             int64    `json:"id,omitempty"`
+		ParentID       *int64   `json:"parent_id,omitempty"`
+		Name           string   `json:"name"`
+		Slug           string   `json:"slug"`
+		Description    string   `json:"description,omitempty"`
+		IsActive       bool     `json:"is_active"`
+		SortOrder      int      `json:"sort_order"`
+		AnchorKeywords []string `json:"anchor_keywords,omitempty"`
+		Attributes     []string `json:"attributes,omitempty"` // attribute codes
+	}
+
+	var export []ExportCategory
+	for _, cat := range categories {
+		// Get attribute codes for this category
+		attrCodes, _ := h.attrDefRepo.GetCodesForCategory(cat.ID)
+
+		export = append(export, ExportCategory{
+			ID:             cat.ID,
+			ParentID:       cat.ParentID,
+			Name:           cat.Name,
+			Slug:           cat.Slug,
+			Description:    cat.Desc,
+			IsActive:       cat.IsActive,
+			SortOrder:      cat.SortOrder,
+			AnchorKeywords: cat.AnchorKeywords,
+			Attributes:     attrCodes,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"exported_at": time.Now().UTC().Format(time.RFC3339),
+		"categories":  export,
+		"total":       len(export),
+	})
+}
+
+// HandleAdminCategoriesImport imports category tree from JSON.
+// POST /api/admin/categories/import
+// Body: { "categories": [ { "name", "parent_id", "slug", "anchor_keywords", "attributes" } ] }
+// Existing categories are matched by name+parent. New ones are created.
+func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	type ImportCategory struct {
+		ID             int64    `json:"id,omitempty"`
+		ParentID       *int64   `json:"parent_id,omitempty"`
+		Name           string   `json:"name"`
+		Slug           string   `json:"slug"`
+		Description    string   `json:"description,omitempty"`
+		IsActive       bool     `json:"is_active"`
+		SortOrder      int      `json:"sort_order"`
+		AnchorKeywords []string `json:"anchor_keywords,omitempty"`
+		Attributes     []string `json:"attributes,omitempty"`
+	}
+
+	type ImportRequest struct {
+		Categories []ImportCategory `json:"categories"`
+	}
+
+	var req ImportRequest
+	if !readJSON(w, r, &req) {
+		return
+	}
+
+	if len(req.Categories) == 0 {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "no categories provided")
+		return
+	}
+
+	// Map: oldID -> newID (for relinking later)
+	oldIDToNewID := make(map[int64]int64)
+	// Map: name+parent -> newID (for finding existing)
+	nameParentToID := make(map[string]int64)
+
+	// Build existing categories map
+	existing, _ := h.categoryRepo.ListAll()
+	for _, cat := range existing {
+		key := cat.Name + "|"
+		if cat.ParentID != nil {
+			key += fmt.Sprintf("%d", *cat.ParentID)
+		}
+		nameParentToID[key] = cat.ID
+	}
+
+	created := 0
+	updated := 0
+
+	// First pass: create/update categories
+	for _, ic := range req.Categories {
+		if ic.Name == "" {
+			continue
+		}
+
+		// Determine parent ID
+		var dbParentID *int64
+		if ic.ParentID != nil {
+			// Map old parent ID to new
+			if newParentID, ok := oldIDToNewID[*ic.ParentID]; ok {
+				dbParentID = &newParentID
+			}
+		}
+
+		// Find existing category by name+parent
+		key := ic.Name + "|"
+		if dbParentID != nil {
+			key += fmt.Sprintf("%d", *dbParentID)
+		}
+
+		if existingID, ok := nameParentToID[key]; ok {
+			// Update existing
+			h.categoryRepo.Update(existingID, func(c *model.Category) {
+				if ic.Slug != "" {
+					c.Slug = ic.Slug
+				}
+				if ic.Description != "" {
+					c.Desc = ic.Description
+				}
+				c.IsActive = ic.IsActive
+				if ic.SortOrder != 0 {
+					c.SortOrder = ic.SortOrder
+				}
+				if ic.AnchorKeywords != nil {
+					c.AnchorKeywords = ic.AnchorKeywords
+				}
+			})
+			updated++
+
+			// Map old ID to existing new ID
+			if ic.ID != 0 {
+				oldIDToNewID[ic.ID] = existingID
+			}
+		} else {
+			// Create new
+			cat := &model.Category{
+				Name:           ic.Name,
+				Slug:           ic.Slug,
+				ParentID:       dbParentID,
+				Desc:           ic.Description,
+				IsActive:       ic.IsActive,
+				SortOrder:      ic.SortOrder,
+				AnchorKeywords: ic.AnchorKeywords,
+			}
+			if err := h.categoryRepo.Create(cat); err != nil {
+				fmt.Printf("WARN: create category %s: %v\n", ic.Name, err)
+				continue
+			}
+			created++
+
+			// Map old ID to new ID
+			if ic.ID != 0 {
+				oldIDToNewID[ic.ID] = cat.ID
+			}
+			nameParentToID[key] = cat.ID
+		}
+	}
+
+	// Second pass: import attributes
+	for _, ic := range req.Categories {
+		newID := oldIDToNewID[ic.ID]
+		if newID == 0 {
+			// Try to find by name+parent
+			key := ic.Name + "|"
+			if ic.ParentID != nil {
+				if newParentID, ok := oldIDToNewID[*ic.ParentID]; ok {
+					key += fmt.Sprintf("%d", newParentID)
+				}
+			}
+			newID = nameParentToID[key]
+		}
+		if newID == 0 {
+			continue
+		}
+
+		for _, code := range ic.Attributes {
+			if code == "" {
+				continue
+			}
+			// Ensure AttrDef exists
+			_, _ = h.attrDefRepo.GetOrCreate(code)
+			// Add to category
+			_ = h.attrDefRepo.AddCodeToCategory(code, newID)
+		}
+	}
+
+	fmt.Printf("[CATEGORY-IMPORT] Done: created=%d updated=%d\n", created, updated)
+
+	// Rebuild category indexes after import
+	fmt.Println("[CATEGORY-IMPORT] Rebuilding category indexes...")
+	if err := h.categoryRepo.RebuildAllIndexes(); err != nil {
+		fmt.Printf("[CATEGORY-IMPORT] WARN: rebuild indexes failed: %v\n", err)
+	}
+
+	// Rebuild catalogizer token indexes from anchor_keywords
+	fmt.Println("[CATEGORY-IMPORT] Rebuilding catalogizer token indexes...")
+	if err := h.catalogizer.RebuildAllCategoryTokens(); err != nil {
+		fmt.Printf("[CATEGORY-IMPORT] WARN: rebuild catalogizer tokens failed: %v\n", err)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":     "completed",
+		"created":    created,
+		"updated":    updated,
+		"total":      created + updated,
+		"old_id_map": oldIDToNewID,
+		"message":    "Categories imported. Indexes and catalogizer rebuilt.",
+	})
+}
+
+// HandleAdminSCUPageRelink reassigns SCU pages to categories based on anchor keywords.
+// POST /api/admin/scupages/relink
+// Body: { "limit": 10000, "apply": true }
+func (h *Handlers) HandleAdminSCUPageRelink(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	type req struct {
+		Limit int  `json:"limit"`
+		Apply bool `json:"apply"`
+	}
+
+	var body req
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if body.Limit <= 0 {
+		body.Limit = 10000
+	}
+	if body.Limit > 50000 {
+		body.Limit = 50000
+	}
+
+	fmt.Printf("[SCUPAGE-RELINK] Relinking SCU pages (limit=%d, apply=%v)...\n", body.Limit, body.Apply)
+
+	// Get all SCU pages
+	all, err := h.scuPageRepo.List()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	if len(all) > body.Limit {
+		all = all[:body.Limit]
+	}
+
+	// Get all categories with anchor keywords
+	categories, err := h.categoryRepo.ListAll()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	relinked := 0
+	type RelinkResult struct {
+		SCUPageID     int64  `json:"scupage_id"`
+		SCU           string `json:"scu"`
+		OldCategoryID int64  `json:"old_category_id"`
+		NewCategoryID int64  `json:"new_category_id"`
+	}
+
+	var results []RelinkResult
+
+	for i := range all {
+		sp := &all[i]
+
+		// Build text from SCU page
+		text := strings.ToLower(sp.Title + " " + sp.Description + " " + sp.Content)
+		for _, v := range sp.Attributes {
+			if s, ok := v.(string); ok {
+				text += " " + strings.ToLower(s)
+			}
+		}
+
+		var bestCatID int64
+		var bestScore float64
+
+		for _, cat := range categories {
+			if !cat.IsActive || len(cat.AnchorKeywords) == 0 {
+				continue
+			}
+
+			score := 0.0
+			for _, kw := range cat.AnchorKeywords {
+				kwLower := strings.ToLower(strings.TrimSpace(kw))
+				if kwLower == "" {
+					continue
+				}
+				if strings.Contains(text, " "+kwLower+" ") ||
+					strings.HasPrefix(text, kwLower+" ") ||
+					strings.HasSuffix(text, " "+kwLower) ||
+					text == kwLower {
+					score += 3.0
+				} else if strings.Contains(text, kwLower) {
+					score += 1.0
+				}
+			}
+
+			if score > bestScore {
+				bestScore = score
+				bestCatID = cat.ID
+			}
+		}
+
+		if bestScore > 0 && bestCatID != sp.CategoryID {
+			if body.Apply {
+				h.scuPageRepo.Update(sp.ID, func(s *model.SCUPage) {
+					s.CategoryID = bestCatID
+				})
+				// Reindex
+				if updated, err := h.scuPageRepo.Get(sp.ID); err == nil {
+					_ = h.scuPageSearch.UnindexSCUPage(updated)
+					_ = h.scuPageSearch.IndexSCUPage(updated)
+				}
+			}
+			relinked++
+			results = append(results, RelinkResult{
+				SCUPageID:     sp.ID,
+				SCU:           sp.SCU,
+				OldCategoryID: sp.CategoryID,
+				NewCategoryID: bestCatID,
+			})
+		}
+	}
+
+	fmt.Printf("[SCUPAGE-RELINK] Done. Relinked %d SCU pages.\n", relinked)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"processed": len(all),
+		"relinked":  relinked,
+		"apply":     body.Apply,
+		"results":   results[:min(len(results), 100)],
+	})
+}
+
+// HandleAdminSCUPageCatalogizeAll re-catalogizes all SCU pages using TurboTopNByIntersection.
+// POST /admin/scupages/catalogize-all
+// Body: { "apply": true }
+func (h *Handlers) HandleAdminSCUPageCatalogizeAll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	type req struct {
+		Apply bool `json:"apply"`
+	}
+
+	var body req
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Starting (apply=%v)...\n", body.Apply)
+
+	// Get all SCU pages
+	all, err := h.scuPageRepo.List()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Total SCU pages to process: %d\n", len(all))
+
+	// Get catalogizer interface
+	catz := h.catalogizer
+
+	catalogized := 0
+	var results []map[string]interface{}
+	var toReindex []*model.SCUPage // collect for batch reindex
+
+	for i := range all {
+		sp := &all[i]
+
+		// Build tokens for this SCU page using all available text
+		fullText := tokenizer.BuildSCUTokensFullText(sp.Title, sp.Description, sp.Content, sp.Attributes)
+		if err := catz.BuildSCUTokens(sp.ID, fullText); err != nil {
+			fmt.Printf("WARN: build tokens for scupage %d: %v\n", sp.ID, err)
+			continue
+		}
+
+		// Catalogize using TurboTopNByIntersection
+		newCatID, err := catz.CatalogizeSCUPageByIntersection(sp.ID)
+		if err != nil {
+			fmt.Printf("WARN: catalogize scupage %d: %v\n", sp.ID, err)
+			continue
+		}
+
+		if newCatID > 0 && newCatID != sp.CategoryID {
+			if body.Apply {
+				if err := h.scuPageRepo.Update(sp.ID, func(s *model.SCUPage) {
+					s.CategoryID = newCatID
+				}); err != nil {
+					fmt.Printf("WARN: update scupage %d: %v\n", sp.ID, err)
+					continue
+				}
+				// Collect for batch reindex (don't reindex one-by-one)
+				if updated, err := h.scuPageRepo.Get(sp.ID); err == nil {
+					toReindex = append(toReindex, updated)
+				}
+			}
+			catalogized++
+			results = append(results, map[string]interface{}{
+				"scupage_id":      sp.ID,
+				"scu":             sp.SCU,
+				"old_category_id": sp.CategoryID,
+				"new_category_id": newCatID,
+			})
+		}
+	}
+
+	// Batch unindex + reindex all changed SCU pages (single pass, no repeated writes)
+	if body.Apply && len(toReindex) > 0 {
+		fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Batch reindexing %d SCU pages...\n", len(toReindex))
+		// Unindex first
+		for _, sp := range toReindex {
+			_ = h.scuPageSearch.UnindexSCUPage(sp)
+		}
+		// Reindex in batch
+		_ = h.scuPageSearch.IndexSCUPageBatch(toReindex)
+		fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Batch reindex done.\n")
+	}
+
+	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Done. Catalogized %d SCU pages.\n", catalogized)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"processed":   len(all),
+		"catalogized": catalogized,
+		"apply":       body.Apply,
+		"results":     results[:min(len(results), 100)],
+	})
+}
+
+// HandleAdminSCUPageRebuildTokens rebuilds token indexes for all SCU pages.
+// POST /admin/scupages/rebuild-tokens
+// Body: { "limit": 0 } (0 = all)
+func (h *Handlers) HandleAdminSCUPageRebuildTokens(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	type req struct {
+		Limit int `json:"limit"`
+	}
+
+	var body req
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	fmt.Printf("[SCUPAGE-REBUILD-TOKENS] Starting (limit=%d)...\n", body.Limit)
+
+	all, err := h.scuPageRepo.List()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	if body.Limit > 0 && len(all) > body.Limit {
+		all = all[:body.Limit]
+	}
+
+	catz := h.catalogizer
+	rebuilt := 0
+
+	for i := range all {
+		sp := &all[i]
+		fullText := tokenizer.BuildSCUTokensFullText(sp.Title, sp.Description, sp.Content, sp.Attributes)
+		if err := catz.BuildSCUTokens(sp.ID, fullText); err != nil {
+			continue
+		}
+		rebuilt++
+	}
+
+	fmt.Printf("[SCUPAGE-REBUILD-TOKENS] Done. Rebuilt %d SCU page tokens.\n", rebuilt)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"processed": len(all),
+		"rebuilt":   rebuilt,
+	})
+}
+
+// HandleAdminSCUPageRebuildToken rebuilds token index for a single SCU page.
+// POST /admin/scupages/rebuild-tokens/{id}
+func (h *Handlers) HandleAdminSCUPageRebuildToken(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 6 || parts[4] == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "scupage id is required")
+		return
+	}
+
+	id, err := strconv.ParseInt(parts[4], 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid scupage id")
+		return
+	}
+
+	sp, err := h.scuPageRepo.Get(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
+		return
+	}
+
+	catz := h.catalogizer
+	fullText := tokenizer.BuildSCUTokensFullText(sp.Title, sp.Description, sp.Content, sp.Attributes)
+	if err := catz.BuildSCUTokens(sp.ID, fullText); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":     "rebuilt",
+		"scupage_id": sp.ID,
+		"scu":        sp.SCU,
+		"full_text":  fullText[:min(len(fullText), 200)],
+	})
 }

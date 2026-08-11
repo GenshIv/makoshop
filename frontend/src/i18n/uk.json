@@ -379,5 +379,30 @@
     "legend_50_75": "50-75%",
     "legend_75_90": "75-90%",
     "legend_over_90": ">90%"
+  },
+  "admin": {
+    "catalogizer_title": "Авто-каталогізатор",
+    "catalogizer_desc_short": "Авто-прив'язка товарів до категорій",
+    "catalogizer_settings": "Налаштування",
+    "catalogizer_limit": "Макс. товарів для обробки",
+    "catalogizer_category": "Категорія (опціонально)",
+    "catalogizer_all_categories": "Усі категорії",
+    "catalogizer_company": "Компанія (опціонально)",
+    "catalogizer_all_companies": "Усі компанії",
+    "catalogizer_apply": "Застосувати зміни",
+    "catalogizer_apply_hint": "Якщо не позначено, покаже лише рекомендації без зміни категорій.",
+    "catalogizer_run": "Запустити каталогізатор",
+    "catalogizer_running": "Виконується...",
+    "catalogizer_results": "Результати",
+    "catalogizer_processed": "Оброблено",
+    "catalogizer_matched": "Збігів",
+    "catalogizer_applied": "Застосовано",
+    "catalogizer_sample": "Приклади збігів",
+    "catalogizer_category_management": "Управління категоріями",
+    "catalogizer_category_mgmt_desc": "Експорт/імпорт дерева категорій з ключовими словами.",
+    "catalogizer_export_categories": "Експорт категорій",
+    "catalogizer_import_categories": "Імпорт категорій",
+    "catalogizer_relink_scupages": "Переприв'язка SCU Pages",
+    "catalogizer_catalogize_all_scupages": "Каталогізація всіх SCU Pages"
   }
 }

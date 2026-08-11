@@ -130,6 +130,23 @@ func (r *UserRepo) VerifyPassword(u *model.User, plainPassword string) bool {
 	return err == nil
 }
 
+// UpdatePassword updates the user's password.
+func (r *UserRepo) UpdatePassword(u *model.User, plainPassword string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(plainPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	u.PasswordHash = string(hash)
+	u.UpdatedAt = time.Now()
+
+	key := KeyUser(u.ID)
+	data := MarshalUser(*u)
+	if err := r.store.DocPut(key, data); err != nil {
+		return fmt.Errorf("update user password: %w", err)
+	}
+	return nil
+}
+
 // ListUsersParams holds parameters for user listing (admin).
 type ListUsersParams struct {
 	Page   int

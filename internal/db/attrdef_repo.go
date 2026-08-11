@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/GenshIv/makodb/v2"
@@ -699,4 +700,84 @@ func (r *AttrDefRepo) RebuildCatCodesIndex() error {
 
 	fmt.Printf("[ATTRDEF] Rebuilt cat_codes index: %d codes\n", len(codes))
 	return nil
+}
+
+// GetOrCreate returns the AttrDef by code, or creates a default one if not found.
+func (r *AttrDefRepo) GetOrCreate(code string) (*model.AttrDef, error) {
+	ad, err := r.GetByCode(code)
+	if err == nil {
+		return ad, nil
+	}
+
+	// Create default
+	ad = &model.AttrDef{
+		Code:         code,
+		Name:         toHumanAttrName(code),
+		Type:         model.AttrTypeString,
+		IsActive:     true,
+		IsFilterable: true,
+		CreatedAt:    time.Now(),
+	}
+
+	if err := r.Create(code, ad); err != nil {
+		return nil, err
+	}
+
+	return ad, nil
+}
+
+// AddCodeToCategory adds an attribute code to a category.
+func (r *AttrDefRepo) AddCodeToCategory(code string, catID int64) error {
+	// Get existing categories for this code
+	cats, err := r.GetCategories(code)
+	if err != nil {
+		cats = nil
+	}
+
+	// Check if already present
+	for _, c := range cats {
+		if c == catID {
+			return nil
+		}
+	}
+
+	// Add
+	cats = append(cats, catID)
+
+	// Update attrdef
+	ad, err := r.GetByCode(code)
+	if err != nil {
+		// Create default
+		ad = &model.AttrDef{
+			Code:         code,
+			Name:         toHumanAttrName(code),
+			Type:         model.AttrTypeString,
+			IsActive:     true,
+			IsFilterable: true,
+			Categories:   cats,
+			CreatedAt:    time.Now(),
+		}
+		return r.Create(code, ad)
+	}
+
+	return r.Update(code, func(a *model.AttrDef) {
+		a.Categories = cats
+	})
+}
+
+// toHumanAttrName converts a code like "diagonal-ekrana" to "Diagonal Ekrana".
+func toHumanAttrName(code string) string {
+	parts := []string{"-", "_"}
+	result := code
+	for _, sep := range parts {
+		result = strings.ReplaceAll(result, sep, " ")
+	}
+	// Capitalize first letter of each word
+	words := strings.Fields(result)
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
 }

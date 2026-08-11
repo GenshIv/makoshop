@@ -7,8 +7,8 @@ const api = axios.create({
   },
   // Don't follow redirects automatically
   maxRedirects: 0,
-  // Allow 301/302 to be handled manually
-  validateStatus: (status) => status >= 200 && status < 500,
+  // Only 2xx are considered success; 4xx/5xx go to error handler
+  validateStatus: (status) => status >= 200 && status < 300,
 });
 
 // Request interceptor: attach JWT if present
@@ -20,7 +20,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor: handle redirects (301/302) and 401
+// Response interceptor: handle redirects (301/302) and auth errors (401)
 api.interceptors.response.use(
   (response) => {
     // Handle 301/302 redirects — full page navigation to canonical URL
@@ -36,25 +36,30 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    // Debug: log redirect-related errors
+    // Handle 301/302 redirects
     if (error.response && (error.response.status === 301 || error.response.status === 302)) {
-      console.log('[API] Redirect error:', error.response.status, error.response.headers);
       const location = error.response.headers['location'];
       if (location) {
-        console.log('[API] Navigating to:', location);
         window.location.replace(location);
         return Promise.reject(new Error('redirect'));
       }
     }
-    const skipRedirect = error.config?.headers?.['X-Skip-Auth-Redirect'] === 'true';
-    if (error.response?.status === 401 && !skipRedirect) {
+
+    // Handle 401 Unauthorized — invalid/expired/missing token
+    // Backend decides: any request with bad token -> 401
+    if (error.response?.status === 401) {
+      console.log('[API] 401 Unauthorized — clearing session, redirecting to /');
       localStorage.removeItem('jwt');
       localStorage.removeItem('user');
-      // Only redirect if not already on login page
-      if (!window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login';
+      // Avoid infinite reload if already on root
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
+      } else {
+        window.location.reload();
       }
+      return Promise.reject(error);
     }
+
     return Promise.reject(error);
   }
 );

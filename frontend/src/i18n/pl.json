@@ -379,5 +379,30 @@
     "legend_50_75": "50-75%",
     "legend_75_90": "75-90%",
     "legend_over_90": ">90%"
+  },
+  "admin": {
+    "catalogizer_title": "Auto-Katalogizator",
+    "catalogizer_desc_short": "Automatyczne przypisywanie produktów do kategorii",
+    "catalogizer_settings": "Ustawienia",
+    "catalogizer_limit": "Maks. produktów do przetworzenia",
+    "catalogizer_category": "Kategoria (opcjonalnie)",
+    "catalogizer_all_categories": "Wszystkie kategorie",
+    "catalogizer_company": "Firma (opcjonalnie)",
+    "catalogizer_all_companies": "Wszystkie firmy",
+    "catalogizer_apply": "Zastosuj zmiany",
+    "catalogizer_apply_hint": "Jeśli nie zaznaczone, pokaże tylko rekomendacje bez zmiany kategorii.",
+    "catalogizer_run": "Uruchom Katalogizator",
+    "catalogizer_running": "Uruchamianie...",
+    "catalogizer_results": "Wyniki",
+    "catalogizer_processed": "Przetworzone",
+    "catalogizer_matched": "Dopasowane",
+    "catalogizer_applied": "Zastosowane",
+    "catalogizer_sample": "Przykładowe dopasowania",
+    "catalogizer_category_management": "Zarządzanie kategoriami",
+    "catalogizer_category_mgmt_desc": "Eksport/import drzewa kategorii z kluczowymi słowami.",
+    "catalogizer_export_categories": "Eksportuj kategorie",
+    "catalogizer_import_categories": "Importuj kategorie",
+    "catalogizer_relink_scupages": "Przypisz SCU Pages",
+    "catalogizer_catalogize_all_scupages": "Katalogizuj wszystkie SCU Pages"
   }
 }

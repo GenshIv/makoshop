@@ -55,10 +55,11 @@ type LoginRequest struct {
 }
 
 type AuthResponse struct {
-	UserID int64          `json:"user_id"`
-	Email  string         `json:"email"`
-	Role   model.UserRole `json:"role"`
-	Token  string         `json:"token"`
+	UserID     int64          `json:"user_id"`
+	Email      string         `json:"email"`
+	Role       model.UserRole `json:"role"`
+	Token      string         `json:"token"`
+	FirstLogin bool           `json:"first_login,omitempty"`
 }
 
 type UpdateProfileRequest struct {
@@ -182,10 +183,11 @@ func (h *AuthHandlers) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, AuthResponse{
-		UserID: user.ID,
-		Email:  user.Email,
-		Role:   user.Role,
-		Token:  token,
+		UserID:     user.ID,
+		Email:      user.Email,
+		Role:       user.Role,
+		Token:      token,
+		FirstLogin: user.IsFirstLogin,
 	})
 }
 
@@ -208,11 +210,12 @@ func (h *AuthHandlers) HandleMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"id":      user.ID,
-		"email":   user.Email,
-		"role":    user.Role,
-		"status":  user.Status,
-		"profile": user.Profile,
+		"id":             user.ID,
+		"email":          user.Email,
+		"role":           user.Role,
+		"status":         user.Status,
+		"profile":        user.Profile,
+		"is_first_login": user.IsFirstLogin,
 	})
 }
 
@@ -776,6 +779,54 @@ func (h *AuthHandlers) HandleAdminCreateTestCompanies(w http.ResponseWriter, r *
 		"existing": existing,
 		"total":    len(created) + len(existing),
 	})
+}
+
+// HandleChangePassword changes the current user's password.
+// POST /auth/change-password
+// Body: { "password": "newpassword" }
+func (h *AuthHandlers) HandleChangePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	ctxUser, ok := auth.ContextUserFrom(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user context")
+		return
+	}
+
+	var req struct {
+		Password string `json:"password"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+
+	if req.Password == "" || len(req.Password) < 6 {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "password must be at least 6 characters")
+		return
+	}
+
+	user, err := h.userRepo.GetByID(ctxUser.ID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
+		return
+	}
+
+	if err := h.userRepo.UpdatePassword(user, req.Password); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	// Clear first_login flag
+	if err := h.userRepo.Update(ctxUser.ID, func(u *model.User) {
+		u.IsFirstLogin = false
+	}); err != nil {
+		fmt.Printf("WARN: failed to clear is_first_login: %v\n", err)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "password changed successfully"})
 }
 
 // turboSearch field and helpers
