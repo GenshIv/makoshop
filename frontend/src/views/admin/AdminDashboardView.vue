@@ -98,6 +98,10 @@ onMounted(fetchStats);
           <div class="font-medium">{{ t('admin.catalogizer_title') || 'Auto-Catalogizer' }}</div>
           <div class="text-sm text-gray-500 mt-1">{{ t('admin.catalogizer_desc_short') || 'Auto-assign products to categories' }}</div>
         </router-link>
+        <router-link to="/admin/stats" class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">Request Stats</div>
+          <div class="text-sm text-gray-500 mt-1">Request metrics, latencies, top routes</div>
+        </router-link>
       </div>
     </div>
   </div>

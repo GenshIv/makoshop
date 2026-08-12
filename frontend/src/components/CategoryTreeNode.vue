@@ -49,10 +49,12 @@ defineOptions({ name: 'CategoryTreeNode' });
       <button
         @click="emit('go', category)"
         class="flex-1 flex items-center justify-between px-2 py-1.5 rounded-md text-left text-sm transition cursor-pointer
-          hover:bg-gray-100
-          text-gray-700
+          hover:bg-gray-100 theme-dark:hover:bg-gray-700
+          text-gray-700 theme-dark:text-gray-200
           focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
-        :class="{ 'bg-indigo-50 text-indigo-700 font-medium': isActive() }"
+        :class="{
+          'bg-indigo-50 text-indigo-700 font-medium theme-dark:bg-slate-800 theme-dark:text-white': isActive()
+        }"
       >
         <span class="truncate">{{ category.name }}</span>
       </button>

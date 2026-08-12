@@ -29,6 +29,7 @@ import AdminAnalyticsView from '../views/admin/AdminAnalyticsView.vue';
 import AdminPromoView from '../views/admin/AdminPromoView.vue';
 import AdminSCUPageView from '../views/admin/AdminSCUPageView.vue';
 import AdminCatalogizerView from '../views/admin/AdminCatalogizerView.vue';
+import AdminStatsView from '../views/admin/AdminStatsView.vue';
 
 const routes = [
   // Public
@@ -65,6 +66,7 @@ const routes = [
   { path: '/admin/categories/:id/attributes', name: 'admin-category-attributes', component: AdminCategoryAttributesView, meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/scupages', name: 'admin-scupages', component: AdminSCUPageView, meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/catalogizer', name: 'admin-catalogizer', component: AdminCatalogizerView, meta: { requiresAuth: true, requiresRole: 'admin' } },
+  { path: '/admin/stats', name: 'admin-stats', component: AdminStatsView, meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/analytics', name: 'admin-analytics', component: AdminAnalyticsView, meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/promo', name: 'admin-promo', component: AdminPromoView, meta: { requiresAuth: true, requiresRole: 'admin' } },
 ];

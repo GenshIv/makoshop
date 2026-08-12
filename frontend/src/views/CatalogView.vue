@@ -47,7 +47,10 @@ const updatePerPage = () => {
   const newPerPage = getPerPageForScreen();
   if (pagination.per_page !== newPerPage) {
     pagination.per_page = newPerPage;
-    pagination.page = 1;
+    // Не сбрасываем page, если он задан в URL
+    if (!route.query.page) {
+      pagination.page = 1;
+    }
     fetchProducts();
   }
 };
@@ -84,6 +87,11 @@ const fetchProducts = async () => {
   error.value = null;
   scuPageData.value = null; // Reset SCUPage data
   try {
+    // Если page задан в URL — используем его и синхронизируем pagination
+    if (route.query.page) {
+      pagination.page = parseInt(route.query.page, 10);
+    }
+
     const params = {
       ...buildQueryParams(),
       page: pagination.page,
@@ -286,6 +294,20 @@ const resetFilters = () => {
 
 const formatPrice = (price) => {
   return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
+};
+
+// Возвращает строку параметров в одну строку через ";"
+const getAttributesString = (attrs) => {
+  if (!attrs || typeof attrs !== 'object') return '';
+  const parts = [];
+  const keys = Object.keys(attrs);
+  for (const key of keys.slice(0, 4)) {
+    const value = attrs[key];
+    if (value != null && String(value).trim() !== '') {
+      parts.push(`${key}: ${String(value).trim()}`);
+    }
+  }
+  return parts.join(' ; ');
 };
 
 const pageTitle = computed(() => {
@@ -576,35 +598,45 @@ defineOptions({ name: 'CatalogView' });
           </button>
         </div>
 
-        <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           <div
             v-for="product in products"
             :key="product.id"
             class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md hover:border-indigo-200 transition cursor-pointer relative"
             @click="goToSCUPage(product)"
           >
-            <span v-if="product.promoted" class="absolute top-2 left-2 z-10 bg-yellow-400 text-yellow-900 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+            <span v-if="product.promoted" class="absolute top-1.5 left-1.5 z-10 bg-yellow-400 text-yellow-900 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
               Реклама
             </span>
-            <span v-if="product.product_count && product.product_count > 1" class="absolute top-2 right-2 z-10 bg-indigo-600 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+            <span v-if="product.product_count && product.product_count > 1" class="absolute top-1.5 right-1.5 z-10 bg-indigo-600 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
               {{ product.product_count }} {{ pluralize(product.product_count, 'вариант', 'варианта', 'вариантов') }}
             </span>
 
-            <div class="aspect-square bg-gray-100 flex items-center justify-center">
+            <div class="aspect-[4/3] bg-gray-100 flex items-center justify-center">
               <img
                 v-if="product.images?.length"
                 :src="product.images[0]"
                 :alt="product.name"
                 class="w-full h-full object-cover"
               />
-              <span v-else class="text-gray-400 text-sm">Нет фото</span>
+              <span v-else class="text-gray-400 text-xs">Нет фото</span>
             </div>
 
-            <div class="p-3">
-              <h3 class="font-medium text-sm line-clamp-2 text-gray-800">{{ product.name }}</h3>
-              <div v-if="product.brand" class="text-xs text-gray-500 mt-0.5">{{ product.brand }}</div>
-              <div class="flex items-center justify-between mt-2">
-                <span class="font-semibold text-indigo-600">{{ formatPrice(product.price || product.min_price) }}</span>
+            <div class="p-2 space-y-0.5">
+              <!-- Название товара -->
+              <h3 class="font-semibold text-sm line-clamp-2 text-gray-900">{{ product.title || product.name }}</h3>
+
+              <!-- Бренд/производитель -->
+              <div v-if="product.brand" class="text-[11px] text-gray-500">{{ product.brand }}</div>
+
+              <!-- Параметры (если есть) -->
+              <div v-if="product.attributes && Object.keys(product.attributes).length" class="text-[10px] text-gray-500 truncate">
+                {{ getAttributesString(product.attributes) }}
+              </div>
+
+              <!-- Цена и рейтинг -->
+              <div class="flex items-center justify-between pt-0.5">
+                <span class="font-bold text-sm text-indigo-600">{{ formatPrice(product.price || product.min_price) }}</span>
                 <span v-if="product.avg_rating" class="text-xs text-yellow-500">
                   ★ {{ product.avg_rating.toFixed(1) }}
                 </span>

@@ -7,12 +7,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/auth"
 	"github.com/GenshIv/makoshop/internal/catalogizer"
 	"github.com/GenshIv/makoshop/internal/db"
+	"github.com/GenshIv/makoshop/internal/metrics"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/makoshop/internal/tokenizer"
 )
@@ -37,6 +39,11 @@ type Handlers struct {
 	promoCampaignRepo *db.PromoCampaignRepo
 	promoLogRepo      *db.PromoLogRepo
 	catalogizer       *catalogizer.Catalogizer
+
+	// Stats cache
+	statsCacheMu sync.Mutex
+	statsCache   *metrics.Stats
+	statsCacheAt time.Time
 }
 
 func NewHandlers(store *db.Store) *Handlers {
@@ -3376,6 +3383,41 @@ func (h *Handlers) HandleAdminDBCompact(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "compact completed successfully"})
+}
+
+// ================= Stats handlers =================
+
+// HandleAdminStats returns aggregated request metrics from ./_tmp/metrics.
+// GET /admin/stats?refresh=1 — force refresh cache
+func (h *Handlers) HandleAdminStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	const cacheTTL = 30 * time.Second
+
+	refresh := r.URL.Query().Get("refresh") == "1"
+
+	h.statsCacheMu.Lock()
+	defer h.statsCacheMu.Unlock()
+
+	now := time.Now()
+	if !refresh && h.statsCache != nil && now.Sub(h.statsCacheAt) < cacheTTL {
+		writeJSON(w, http.StatusOK, h.statsCache)
+		return
+	}
+
+	stats, err := metrics.ParseMetricsStats("./_tmp/metrics")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "STATS_ERROR", err.Error())
+		return
+	}
+
+	h.statsCache = stats
+	h.statsCacheAt = now
+
+	writeJSON(w, http.StatusOK, stats)
 }
 
 // ================= Catalogizer handlers =================

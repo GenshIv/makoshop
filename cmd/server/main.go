@@ -15,6 +15,7 @@ import (
 	"github.com/GenshIv/makoshop/internal/auth"
 	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/i18n"
+	"github.com/GenshIv/makoshop/internal/metrics"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/makoshop/pkg/config"
 )
@@ -954,6 +955,11 @@ func main() {
 		h.HandleAdminDBCompact(w, r)
 	}), model.RoleAdmin))
 
+	// GET /admin/stats — aggregated request metrics
+	mux.Handle("/admin/stats", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleAdminStats(w, r)
+	}), model.RoleAdmin))
+
 	// --- Catalogizer ---
 
 	// POST /admin/catalogizer/train — train token index from normalized files
@@ -1046,9 +1052,19 @@ func main() {
 		http.NotFound(w, r)
 	})
 
+	// Metrics writer (low-overhead, async, batch to ./_tmp/metrics)
+	var handler http.Handler = mux
+	metricsWriter, err := metrics.NewWriter("./_tmp/metrics", 1000, 2*time.Second, 50*1024*1024)
+	if err != nil {
+		log.Printf("WARN: metrics writer init failed: %v", err)
+	} else {
+		defer metricsWriter.Close()
+		handler = metrics.Middleware(metricsWriter)(handler)
+	}
+
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("Makoshop API server starting on %s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatalf("server failed: %v", err)
 	}
 }

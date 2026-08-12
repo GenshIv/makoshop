@@ -1,5 +1,202 @@
 @import "tailwindcss";
 
-body {
-  @apply bg-gray-50 text-gray-900;
+/* Theme variables */
+:root,
+.theme-light {
+  --bg-primary: #f9fafb;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f3f4f6;
+  --text-primary: #111827;
+  --text-secondary: #374151;
+  --text-muted: #6b7280;
+  --border-color: #e5e7eb;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --danger: #ef4444;
+  --success: #10b981;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
+
+.theme-dark {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #e2e8f0;
+  --text-muted: #94a3b8;
+  --border-color: #334155;
+  --accent: #818cf8;
+  --accent-hover: #6366f1;
+  --danger: #f87171;
+  --success: #34d399;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Fix Tailwind divide-gray-100 in dark theme */
+.theme-dark :where(.divide-gray-100 > :not(:last-child)) {
+  border-color: var(--border-color) !important;
+}
+
+/* bg-gray-100 placeholders in dark theme (e.g. image placeholders on SCU pages) */
+.theme-dark .bg-gray-100 {
+  background-color: var(--bg-tertiary) !important;
+}
+
+/* Base */
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* ====== Dark theme overrides ====== */
+
+/* Main background */
+.theme-dark body,
+.theme-dark .bg-gray-50 {
+  background-color: var(--bg-primary) !important;
+}
+
+/* Common white panels */
+.theme-dark .bg-white {
+  background-color: var(--bg-secondary) !important;
+}
+
+/* Sidebar (categories tree) */
+.theme-dark aside.bg-white {
+  background-color: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Category tree mobile overlay */
+.theme-dark div.bg-white.w-72 {
+  background-color: var(--bg-secondary) !important;
+}
+
+/* Category tree labels */
+.theme-dark .text-gray-400 {
+  color: var(--text-muted) !important;
+}
+
+/* Text colors */
+.theme-dark .text-gray-900,
+.theme-dark .text-gray-800 {
+  color: var(--text-primary) !important;
+}
+.theme-dark .text-gray-700 {
+  color: var(--text-secondary) !important;
+}
+.theme-dark .text-gray-600 {
+  color: var(--text-secondary) !important;
+}
+.theme-dark .text-gray-500 {
+  color: var(--text-muted) !important;
+}
+
+/* Borders */
+.theme-dark .border-gray-200,
+.theme-dark .border-gray-300 {
+  border-color: var(--border-color) !important;
+}
+
+/* Category tree node (non-active) */
+.theme-dark li button.text-gray-700 {
+  color: var(--text-secondary) !important;
+}
+.theme-dark li button.hover\:bg-gray-100:hover {
+  background-color: var(--bg-tertiary) !important;
+}
+
+/* Active category */
+.theme-dark li button.bg-indigo-50.text-indigo-700 {
+  background-color: #111827 !important;
+  color: #e0e7ff !important;
+}
+
+/* Header small buttons (lang, theme, etc.) */
+.theme-dark header button.bg-gray-100.text-gray-700,
+.theme-dark header .bg-gray-100.text-gray-700 {
+  background-color: var(--bg-tertiary) !important;
+  color: var(--text-secondary) !important;
+}
+.theme-dark header button.bg-gray-100.text-gray-700:hover,
+.theme-dark header .bg-gray-100.text-gray-700:hover {
+  background-color: #475569 !important;
+}
+
+/* Small badges/chips like ShardUsageBar "Active" */
+.theme-dark button.bg-gray-100.text-gray-600,
+.theme-dark span.bg-gray-100.text-gray-600 {
+  background-color: var(--bg-tertiary) !important;
+  color: var(--text-muted) !important;
+}
+.theme-dark button.bg-gray-100.text-gray-600:hover {
+  background-color: #475569 !important;
+}
+
+/* SCU product selection cards (bg-indigo-50 labels) */
+.theme-dark label.bg-indigo-50 {
+  background-color: #111827 !important;
+  border-color: var(--border-color) !important;
+}
+.theme-dark label.bg-indigo-50 .text-gray-600 {
+  color: var(--text-muted) !important;
+}
+.theme-dark label.bg-indigo-50 .text-indigo-600 {
+  color: #a5b4fc !important;
+}
+
+/* SCU product list: dividers and hover */
+.theme-dark .divide-y > li:not(:first-child),
+.theme-dark .divide-y > label:not(:first-child) {
+  border-top-color: var(--border-color) !important;
+}
+.theme-dark label.hover\:bg-gray-50:hover {
+  background-color: #111827 !important;
+}
+
+/* Radio/checkbox inputs in dark theme */
+.theme-dark input.border-gray-300,
+.theme-dark input.border-gray-400 {
+  border-color: var(--border-color) !important;
+}
+
+/* Radio/checkbox borders in dark theme (inside product lists) */
+.theme-dark label input[type="radio"],
+.theme-dark label input[type="checkbox"] {
+  border-color: #475569 !important;
+  border-top-color: #475569 !important;
+  border-right-color: #475569 !important;
+  border-bottom-color: #475569 !important;
+  border-left-color: #475569 !important;
+}
+
+/* Product cards in catalog (bg-white rounded-lg shadow-sm) */
+.theme-dark div.bg-white.rounded-lg.shadow-sm {
+  background-color: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+.theme-dark div.bg-white.rounded-lg.shadow-sm .text-gray-800,
+.theme-dark div.bg-white.rounded-lg.shadow-sm .text-gray-700 {
+  color: var(--text-primary) !important;
+}
+.theme-dark div.bg-white.rounded-lg.shadow-sm .text-gray-500,
+.theme-dark div.bg-white.rounded-lg.shadow-sm .text-gray-400 {
+  color: var(--text-muted) !important;
+}
+.theme-dark div.bg-white.rounded-lg.shadow-sm .text-indigo-600 {
+  color: #a5b4fc !important;
+}
+.theme-dark div.bg-white.rounded-lg.shadow-sm .bg-gray-100 {
+  background-color: var(--bg-tertiary) !important;
+}
+
+/* Utility classes using theme variables */
+.bg-theme-primary { background-color: var(--bg-primary); }
+.bg-theme-secondary { background-color: var(--bg-secondary); }
+.bg-theme-tertiary { background-color: var(--bg-tertiary); }
+.text-theme-primary { color: var(--text-primary); }
+.text-theme-secondary { color: var(--text-secondary); }
+.text-theme-muted { color: var(--text-muted); }
+.border-theme { border-color: var(--border-color); }
+.text-accent { color: var(--accent); }
+.bg-accent { background-color: var(--accent); }
