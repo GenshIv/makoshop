@@ -75,6 +75,11 @@ type AdminUpdateUserRequest struct {
 	Profile *model.UserProfile `json:"profile,omitempty"`
 }
 
+type ChangePasswordRequest struct {
+	OldPassword string `json:"oldPassword"`
+	NewPassword string `json:"newPassword"`
+}
+
 // --- Handlers ---
 
 func (h *AuthHandlers) HandleRegister(w http.ResponseWriter, r *http.Request) {
@@ -782,8 +787,9 @@ func (h *AuthHandlers) HandleAdminCreateTestCompanies(w http.ResponseWriter, r *
 }
 
 // HandleChangePassword changes the current user's password.
-// POST /auth/change-password
-// Body: { "password": "newpassword" }
+// POST /admin/change-password
+// Body: { "oldPassword": "...", "newPassword": "..." }
+// Available to any authenticated user (changes their own password).
 func (h *AuthHandlers) HandleChangePassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
@@ -796,15 +802,18 @@ func (h *AuthHandlers) HandleChangePassword(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var req struct {
-		Password string `json:"password"`
-	}
+	var req ChangePasswordRequest
 	if !readJSON(w, r, &req) {
 		return
 	}
 
-	if req.Password == "" || len(req.Password) < 6 {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "password must be at least 6 characters")
+	if req.OldPassword == "" || req.NewPassword == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "oldPassword and newPassword are required")
+		return
+	}
+
+	if len(req.NewPassword) < 6 {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "new password must be at least 6 characters")
 		return
 	}
 
@@ -814,7 +823,14 @@ func (h *AuthHandlers) HandleChangePassword(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := h.userRepo.UpdatePassword(user, req.Password); err != nil {
+	// Verify old password
+	if !h.userRepo.VerifyPassword(user, req.OldPassword) {
+		writeError(w, http.StatusUnauthorized, "INVALID_PASSWORD", "current password is incorrect")
+		return
+	}
+
+	// Update password
+	if err := h.userRepo.UpdatePassword(user, req.NewPassword); err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}

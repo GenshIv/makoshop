@@ -119,6 +119,13 @@ const fetchProducts = async () => {
     const perPage = data.limit || pagination.per_page;
     pagination.total_pages = Math.ceil(pagination.total / perPage);
     categoryAttrs.value = data.category_attrs || [];
+
+    // Use tree_path from API for breadcrumbs if available
+    if (Array.isArray(data.tree_path) && data.tree_path.length > 0) {
+      categoryPath.value = data.tree_path.map((slug) => ({ slug, name: slug }));
+    } else {
+      categoryPath.value = [];
+    }
   } catch (e) {
     if (e.response?.status === 503) {
       maintenanceMode.value = true;
@@ -354,6 +361,14 @@ onMounted(async () => {
     const perPage = data.limit || pagination.per_page;
     pagination.total_pages = Math.ceil(pagination.total / perPage);
     categoryAttrs.value = data.category_attrs || [];
+
+    // Use tree_path from API for breadcrumbs if available
+    if (Array.isArray(data.tree_path) && data.tree_path.length > 0) {
+      categoryPath.value = data.tree_path.map((slug) => ({ slug, name: slug }));
+    } else {
+      categoryPath.value = [];
+    }
+
     loading.value = false;
     return;
   }

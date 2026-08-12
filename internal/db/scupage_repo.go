@@ -846,3 +846,52 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 
 	return result
 }
+
+// RecalculateProductCounts recalculates ProductCount for all SCU pages
+// based on actual products linked via SCU.
+// This fixes inconsistencies after bulk imports.
+func (r *SCUPageRepo) RecalculateProductCounts() error {
+	if r.Store == nil {
+		return nil
+	}
+
+	all, err := r.List()
+	if err != nil {
+		return fmt.Errorf("list scupages: %w", err)
+	}
+
+	updated := 0
+	for i, sp := range all {
+		if sp.SCU == "" {
+			continue
+		}
+
+		// Count products with this SCU via turbo index
+		key := "scu:" + sp.SCU
+		data, err := r.Store.db.TurboRawRead(key)
+		if err != nil || len(data) == 0 {
+			// Index may not exist yet; skip
+			continue
+		}
+
+		products := makodb.TurboUnsafeReadTokens(data)
+		newCount := len(products)
+		if newCount != sp.ProductCount {
+			sp.ProductCount = newCount
+			sp.UpdatedAt = time.Now()
+			data := MarshalSCUPage(sp)
+			if err := r.Store.DocPut(KeySCUPage(sp.ID), data); err != nil {
+				fmt.Printf("WARN: update product_count for scupage %d: %v\n", sp.ID, err)
+				continue
+			}
+			updated++
+		}
+
+		if (i+1)%10000 == 0 {
+			fmt.Printf("[SCUPAGE] RecalculateProductCounts: processed %d / %d (updated %d)\n", i+1, len(all), updated)
+		}
+	}
+
+	fmt.Printf("[SCUPAGE] RecalculateProductCounts: done. Updated %d SCU pages.\n", updated)
+	return nil
+}

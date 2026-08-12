@@ -448,7 +448,33 @@
     "catalogizer_export_categories": "Экспорт категорий",
     "catalogizer_import_categories": "Импорт категорий",
     "catalogizer_relink_scupages": "Перепривязка SCU Pages",
-    "catalogizer_catalogize_all_scupages": "Каталогизация всех SCU Pages"
+    "catalogizer_catalogize_all_scupages": "Каталогизация всех SCU Pages",
+    "maintenance_mode": "Режим техобслуживания",
+    "maintenance_on": "ВКЛ",
+    "maintenance_off": "ВЫКЛ",
+    "maintenance_enable": "Включить",
+    "maintenance_disable": "Выключить",
+    "maintenance_auto_disable": "Авто-выключение после операции",
+    "maintenance_hint": "Блокирует доступ пользователям и ботам, админ-доступ остаётся открытым.",
+    "system_title": "Система",
+    "rebuild_product_counts": "Пересчитать product counts",
+    "rebuild_sort_indexes": "Перестроить индексы сортировки",
+    "rebuild_scupage_indexes": "Перестроить индексы SCU страниц",
+    "rebuild_all_scupage_indexes": "Перестроить все индексы SCU страниц",
+    "rebuild_hint": "Эти операции могут занять время и использовать много CPU/IO. Рекомендуется сначала включить режим техобслуживания.",
+    "rebuild_confirm": "Запустить \"{name}\"? Это может занять некоторое время.",
+    "rebuild_completed": "\"{name}\" завершено.",
+    "rebuild_failed": "Ошибка: {error}",
+    "change_password_title": "Смена пароля",
+    "password_old": "Старый пароль",
+    "password_new": "Новый пароль",
+    "password_confirm": "Подтвердите новый пароль",
+    "password_change_btn": "Сменить пароль",
+    "password_all_fields_required": "Заполните все поля",
+    "password_not_match": "Пароли не совпадают",
+    "password_too_short": "Пароль должен быть не менее 6 символов",
+    "password_changed": "Пароль успешно изменён",
+    "password_change_failed": "Не удалось сменить пароль: {error}"
   },
   "privacy": {
     "title": "Политика конфиденциальности",
@@ -498,14 +524,5 @@
     "title": "Техническое обслуживание",
     "message": "Сайт временно недоступен. Пожалуйста, попробуйте через несколько минут.",
     "try_again": "Проверить снова"
-  },
-  "admin": {
-    "maintenance_mode": "Режим техобслуживания",
-    "maintenance_on": "ВКЛ",
-    "maintenance_off": "ВЫКЛ",
-    "maintenance_enable": "Включить",
-    "maintenance_disable": "Выключить",
-    "maintenance_auto_disable": "Авто-выключение после операции",
-    "maintenance_hint": "Блокирует доступ пользователям и ботам, админ-доступ остаётся открытым."
   }
 }

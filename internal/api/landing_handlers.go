@@ -539,6 +539,13 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 			"category_attrs": categoryAttrs,
 		}
 
+		// Add category tree path for breadcrumbs
+		if catID > 0 {
+			if treePath, err := h.categoryRepo.GetTreePath(catID); err == nil && len(treePath) > 0 {
+				respData["tree_path"] = treePath
+			}
+		}
+
 		if wantsHTML(r) {
 			writeHTMLResponse(w, r, i18n.T("ui.catalog_title"), respData)
 			return
@@ -1226,6 +1233,36 @@ func (h *Handlers) HandleAdminRebuildSCUPageSortIndexes(w http.ResponseWriter, r
 
 	elapsed := time.Since(startTime)
 	fmt.Printf("[REBUILD-SCUPAGE-SORT-INDEXES] Completed in %v\n", elapsed)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "completed",
+		"elapsed": elapsed.String(),
+	})
+}
+
+// HandleAdminRebuildProductCounts recalculates ProductCount for all SCU pages.
+// POST /admin/rebuild-product-counts
+func (h *Handlers) HandleAdminRebuildProductCounts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	if h.scuPageRepo == nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "scupage repo not initialized")
+		return
+	}
+
+	fmt.Println("[REBUILD-PRODUCT-COUNTS] Starting...")
+	startTime := time.Now()
+
+	if err := h.scuPageRepo.RecalculateProductCounts(); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	elapsed := time.Since(startTime)
+	fmt.Printf("[REBUILD-PRODUCT-COUNTS] Completed in %v\n", elapsed)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "completed",

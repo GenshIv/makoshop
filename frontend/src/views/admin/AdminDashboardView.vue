@@ -35,6 +35,86 @@ const setMaintenance = async (enable) => {
   }
 };
 
+// System rebuild buttons
+const systemLoading = ref(null); // which button is loading
+
+// Password change
+const passwordForm = ref({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+});
+const passwordLoading = ref(false);
+const passwordError = ref('');
+const passwordSuccess = ref('');
+
+const changePassword = async () => {
+  passwordError.value = '';
+  passwordSuccess.value = '';
+
+  const { oldPassword, newPassword, confirmPassword } = passwordForm.value;
+
+  if (!oldPassword || !newPassword || !confirmPassword) {
+    passwordError.value = t('admin.password_all_fields_required');
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    passwordError.value = t('admin.password_not_match');
+    return;
+  }
+  if (newPassword.length < 6) {
+    passwordError.value = t('admin.password_too_short');
+    return;
+  }
+
+  passwordLoading.value = true;
+  try {
+    await api.post('/admin/change-password', {
+      oldPassword,
+      newPassword,
+    });
+    passwordSuccess.value = t('admin.password_changed');
+    passwordForm.value = { oldPassword: '', newPassword: '', confirmPassword: '' };
+  } catch (e) {
+    console.error('change password error:', e);
+    const err = e.response?.data?.message || e.message;
+    passwordError.value = t('admin.password_change_failed', { error: err });
+  } finally {
+    passwordLoading.value = false;
+  }
+};
+
+const rebuildEndpoints = {
+  counts: '/admin/rebuild-product-counts',
+  sort: '/admin/rebuild-sort-indexes',
+  scupage: '/admin/rebuild-scupage-indexes',
+  all: '/admin/scupages/catalogize-all',
+};
+
+const runRebuild = async (key) => {
+  const label = {
+    counts: t('admin.rebuild_product_counts'),
+    sort: t('admin.rebuild_sort_indexes'),
+    scupage: t('admin.rebuild_scupage_indexes'),
+    all: t('admin.rebuild_all_scupage_indexes'),
+  }[key];
+
+  if (!confirm(t('admin.rebuild_confirm', { name: label }))) return;
+  systemLoading.value = key;
+  try {
+    const endpoint = rebuildEndpoints[key];
+    const body = key === 'all' ? { apply: true, force: true } : undefined;
+    await api.post(endpoint, body);
+    alert(t('admin.rebuild_completed', { name: label }));
+  } catch (e) {
+    console.error('rebuild error:', e);
+    const err = e.response?.data?.message || e.message;
+    alert(t('admin.rebuild_failed', { error: err }));
+  } finally {
+    systemLoading.value = null;
+  }
+};
+
 const fetchStats = async () => {
   loading.value = true;
   try {
@@ -101,6 +181,78 @@ onMounted(() => {
         <span class="text-xs text-gray-500">
           {{ t('admin.maintenance_hint') }}
         </span>
+      </div>
+
+      <!-- System rebuild buttons -->
+      <div class="mb-6">
+        <div class="text-sm font-medium text-gray-700 mb-2">{{ t('admin.system_title') }}</div>
+        <div class="flex flex-wrap gap-2">
+          <button
+            @click="runRebuild('counts')"
+            :disabled="systemLoading !== null"
+            class="px-3 py-1.5 text-xs rounded-md border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+          >
+            {{ systemLoading === 'counts' ? '...' : t('admin.rebuild_product_counts') }}
+          </button>
+          <button
+            @click="runRebuild('sort')"
+            :disabled="systemLoading !== null"
+            class="px-3 py-1.5 text-xs rounded-md border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+          >
+            {{ systemLoading === 'sort' ? '...' : t('admin.rebuild_sort_indexes') }}
+          </button>
+          <button
+            @click="runRebuild('scupage')"
+            :disabled="systemLoading !== null"
+            class="px-3 py-1.5 text-xs rounded-md border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+          >
+            {{ systemLoading === 'scupage' ? '...' : t('admin.rebuild_scupage_indexes') }}
+          </button>
+          <button
+            @click="runRebuild('all')"
+            :disabled="systemLoading !== null"
+            class="px-3 py-1.5 text-xs rounded-md border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+          >
+            {{ systemLoading === 'all' ? '...' : t('admin.rebuild_all_scupage_indexes') }}
+          </button>
+        </div>
+        <div class="text-[10px] text-gray-500 mt-1">
+          {{ t('admin.rebuild_hint') }}
+        </div>
+      </div>
+
+      <!-- Change password -->
+      <div class="mb-6">
+        <div class="text-sm font-medium text-gray-700 mb-2">{{ t('admin.change_password_title') }}</div>
+        <div class="flex flex-col sm:flex-row gap-2 items-start">
+          <input
+            v-model="passwordForm.oldPassword"
+            type="password"
+            :placeholder="t('admin.password_old')"
+            class="px-2 py-1.5 text-xs rounded-md border border-gray-300 flex-1"
+          />
+          <input
+            v-model="passwordForm.newPassword"
+            type="password"
+            :placeholder="t('admin.password_new')"
+            class="px-2 py-1.5 text-xs rounded-md border border-gray-300 flex-1"
+          />
+          <input
+            v-model="passwordForm.confirmPassword"
+            type="password"
+            :placeholder="t('admin.password_confirm')"
+            class="px-2 py-1.5 text-xs rounded-md border border-gray-300 flex-1"
+          />
+          <button
+            @click="changePassword"
+            :disabled="passwordLoading"
+            class="px-3 py-1.5 text-xs rounded-md border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-50 whitespace-nowrap"
+          >
+            {{ passwordLoading ? '...' : t('admin.password_change_btn') }}
+          </button>
+        </div>
+        <div v-if="passwordError" class="text-xs text-red-600 mt-1">{{ passwordError }}</div>
+        <div v-if="passwordSuccess" class="text-xs text-green-600 mt-1">{{ passwordSuccess }}</div>
       </div>
 
       <!-- Stats -->

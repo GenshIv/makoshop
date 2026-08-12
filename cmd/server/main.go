@@ -449,6 +449,15 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}), model.RoleAdmin))
 
+	// POST /admin/rebuild-product-counts — recalculate ProductCount for all SCU pages
+	mux.Handle("/admin/rebuild-product-counts", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			h.HandleAdminRebuildProductCounts(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}), model.RoleAdmin))
+
 	// POST /admin/rebuild-category-slugs — rebuild slugs for all categories
 	mux.Handle("/admin/rebuild-category-slugs", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -475,6 +484,15 @@ func main() {
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}), model.RoleAdmin))
+
+	// POST /admin/change-password — change current user's password (any authenticated user)
+	mux.Handle("/admin/change-password", jwtMiddleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			authHandlers.HandleChangePassword(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})))
 
 	// GET /admin/products/import/{id}
 	mux.Handle("/admin/products/import/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
