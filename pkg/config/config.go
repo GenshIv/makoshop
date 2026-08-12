@@ -44,8 +44,8 @@ func DefaultConfig() Config {
 		},
 		Database: DatabaseConfig{
 			Path:               "makoshop_db",
-			NumShards:          16,
-			MaxTotalSize:       100 * 1024 * 1024 * 1024, // 50 GB
+			NumShards:          2,
+			MaxTotalSize:       40 * 1024 * 1024 * 1024, // 50 GB
 			NumBucketsPerShard: 5_000_000,
 		},
 		Auth: AuthConfig{

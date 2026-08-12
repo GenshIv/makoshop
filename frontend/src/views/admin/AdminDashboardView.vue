@@ -7,6 +7,33 @@ const { t } = useI18n();
 
 const stats = ref({ users: 0, companies: 0, products: 0, orders: 0, revenue: 0 });
 const loading = ref(true);
+const maintenance = ref({ enabled: false, auto_disable: false });
+const maintenanceLoading = ref(false);
+
+const fetchMaintenance = async () => {
+  try {
+    const res = await api.get('/admin/maintenance');
+    maintenance.value = res.data;
+  } catch (e) {
+    console.error('fetch maintenance:', e);
+  }
+};
+
+const autoDisable = ref(false);
+
+const setMaintenance = async (enable) => {
+  maintenanceLoading.value = true;
+  try {
+    await api.post('/admin/maintenance', { enable, auto_disable: enable ? autoDisable.value : false });
+    maintenance.value.enabled = enable;
+    maintenance.value.auto_disable = enable ? autoDisable.value : false;
+  } catch (e) {
+    console.error('set maintenance:', e);
+    alert('Failed to update maintenance mode');
+  } finally {
+    maintenanceLoading.value = false;
+  }
+};
 
 const fetchStats = async () => {
   loading.value = true;
@@ -31,7 +58,10 @@ const formatPrice = (price) => {
   return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
 };
 
-onMounted(fetchStats);
+onMounted(() => {
+  fetchStats();
+  fetchMaintenance();
+});
 </script>
 
 <template>
@@ -44,6 +74,35 @@ onMounted(fetchStats);
     </div>
 
     <div v-else>
+      <!-- Maintenance mode control -->
+      <div class="mb-6 flex items-center gap-3">
+        <span class="text-sm font-medium text-gray-700">{{ t('admin.maintenance_mode') }}:</span>
+        <span
+          :class="maintenance.enabled ? 'text-red-600' : 'text-green-600'"
+          class="text-sm font-semibold"
+        >
+          {{ maintenance.enabled ? t('admin.maintenance_on') : t('admin.maintenance_off') }}
+        </span>
+        <button
+          @click="setMaintenance(!maintenance.enabled)"
+          :disabled="maintenanceLoading"
+          class="px-3 py-1 text-xs rounded-md border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+        >
+          {{ maintenanceLoading ? '...' : (maintenance.enabled ? t('admin.maintenance_disable') : t('admin.maintenance_enable')) }}
+        </button>
+        <label class="inline-flex items-center gap-1 text-xs text-gray-600 cursor-pointer">
+          <input
+            v-model="autoDisable"
+            type="checkbox"
+            class="form-checkbox h-3 w-3"
+          />
+          {{ t('admin.maintenance_auto_disable') }}
+        </label>
+        <span class="text-xs text-gray-500">
+          {{ t('admin.maintenance_hint') }}
+        </span>
+      </div>
+
       <!-- Stats -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <div class="bg-white rounded-lg shadow-sm p-4">

@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -22,6 +23,87 @@ import (
 
 //go:embed i18n/*.json
 var i18nFS embed.FS
+
+// Maintenance mode: blocks non-admin traffic.
+var (
+	maintenanceEnabled     bool
+	maintenanceAutoDisable bool
+)
+
+// maintenanceMiddleware blocks requests during maintenance except admin endpoints.
+// If auto_disable is set, it disables maintenance after the current request completes.
+func maintenanceMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Remember if we need to auto-disable after this request
+		shouldAutoDisable := maintenanceEnabled && maintenanceAutoDisable
+
+		if !maintenanceEnabled {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Allow health checks
+		if r.URL.Path == "/health" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Allow admin endpoints (paths starting with /admin)
+		if strings.HasPrefix(r.URL.Path, "/admin") {
+			next.ServeHTTP(w, r)
+			// Auto-disable after admin request if needed
+			if shouldAutoDisable {
+				maintenanceEnabled = false
+				maintenanceAutoDisable = false
+				fmt.Println("[MAINTENANCE] auto-disabled after request")
+			}
+			return
+		}
+
+		// For HTML clients: show maintenance page
+		if strings.Contains(r.Header.Get("Accept"), "text/html") {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Техническое обслуживание</title>
+<style>
+body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f5f5f5;color:#333}
+.box{max-width:480px;text-align:center;padding:32px;background:#fff;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.08)}
+h1{font-size:24px;margin-bottom:12px}
+p{font-size:16px;color:#555}
+</style>
+</head>
+<body>
+<div class="box">
+<h1>Техническое обслуживание</h1>
+<p>Сайт временно недоступен. Пожалуйста, попробуйте через несколько минут.</p>
+</div>
+</body>
+</html>`))
+			// Auto-disable after this response if needed
+			if shouldAutoDisable {
+				maintenanceEnabled = false
+				maintenanceAutoDisable = false
+				fmt.Println("[MAINTENANCE] auto-disabled after request")
+			}
+			return
+		}
+
+		// For API/bots: 503
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"error":"maintenance_mode","message":"Service temporarily unavailable. Try again later."}`))
+		// Auto-disable after this response if needed
+		if shouldAutoDisable {
+			maintenanceEnabled = false
+			maintenanceAutoDisable = false
+			fmt.Println("[MAINTENANCE] auto-disabled after request")
+		}
+	})
+}
 
 // bootstrapSuperAdmin creates a superadmin if no admins exist.
 func bootstrapSuperAdmin(userRepo *db.UserRepo) {
@@ -74,6 +156,13 @@ func generateRandomPassword(length int) string {
 	return string(b)
 }
 
+// writeJSON writes a JSON response.
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
 func main() {
 	cfg := config.DefaultConfig()
 
@@ -112,6 +201,52 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
+
+	// Maintenance mode endpoint (admin only)
+	mux.Handle("/admin/maintenance", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		type resp struct {
+			Enabled        bool `json:"enabled"`
+			AutoDisable    bool `json:"auto_disable"`
+			PreviousEnable bool `json:"previous_enabled,omitempty"`
+		}
+		type req struct {
+			Enable      bool `json:"enable"`
+			AutoDisable bool `json:"auto_disable"`
+		}
+
+		if r.Method == http.MethodGet {
+			writeJSON(w, http.StatusOK, resp{
+				Enabled:     maintenanceEnabled,
+				AutoDisable: maintenanceAutoDisable,
+			})
+			return
+		}
+
+		if r.Method == http.MethodPost {
+			var body req
+			_ = json.NewDecoder(r.Body).Decode(&body)
+
+			prev := maintenanceEnabled
+			maintenanceEnabled = body.Enable
+			if body.Enable {
+				maintenanceAutoDisable = body.AutoDisable
+			} else {
+				maintenanceAutoDisable = false
+			}
+
+			fmt.Printf("[MAINTENANCE] mode changed: enabled=%v auto_disable=%v (prev=%v)\n",
+				maintenanceEnabled, maintenanceAutoDisable, prev)
+
+			writeJSON(w, http.StatusOK, resp{
+				Enabled:        maintenanceEnabled,
+				AutoDisable:    maintenanceAutoDisable,
+				PreviousEnable: prev,
+			})
+			return
+		}
+
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}), model.RoleAdmin))
 
 	// Pprof endpoints (for profiling/debugging)
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
@@ -1054,6 +1189,10 @@ func main() {
 
 	// Metrics writer (low-overhead, async, batch to ./_tmp/metrics)
 	var handler http.Handler = mux
+
+	// Maintenance mode middleware (outermost)
+	handler = maintenanceMiddleware(handler)
+
 	metricsWriter, err := metrics.NewWriter("./_tmp/metrics", 1000, 2*time.Second, 50*1024*1024)
 	if err != nil {
 		log.Printf("WARN: metrics writer init failed: %v", err)

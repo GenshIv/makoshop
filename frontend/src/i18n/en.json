@@ -493,5 +493,19 @@
     "legend_50_75": "50-75%",
     "legend_75_90": "75-90%",
     "legend_over_90": ">90%"
+  },
+  "maintenance": {
+    "title": "Maintenance in progress",
+    "message": "The site is temporarily unavailable. Please try again in a few minutes.",
+    "try_again": "Try again"
+  },
+  "admin": {
+    "maintenance_mode": "Maintenance mode",
+    "maintenance_on": "ON",
+    "maintenance_off": "OFF",
+    "maintenance_enable": "Enable",
+    "maintenance_disable": "Disable",
+    "maintenance_auto_disable": "Auto-disable after operation",
+    "maintenance_hint": "Blocks users and bots, admin access remains open."
   }
 }

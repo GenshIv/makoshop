@@ -403,6 +403,18 @@
     "catalogizer_export_categories": "Eksportuj kategorie",
     "catalogizer_import_categories": "Importuj kategorie",
     "catalogizer_relink_scupages": "Przypisz SCU Pages",
-    "catalogizer_catalogize_all_scupages": "Katalogizuj wszystkie SCU Pages"
+    "catalogizer_catalogize_all_scupages": "Katalogizuj wszystkie SCU Pages",
+    "maintenance_mode": "Tryb konserwacji",
+    "maintenance_on": "WŁ",
+    "maintenance_off": "WYŁ",
+    "maintenance_enable": "Włącz",
+    "maintenance_disable": "Wyłącz",
+    "maintenance_auto_disable": "Auto-wyłączanie po operacji",
+    "maintenance_hint": "Blokuje dostęp użytkowników i botów, dostęp administratora pozostaje otwarty."
+  },
+  "maintenance": {
+    "title": "Trwa konserwacja",
+    "message": "Strona jest tymczasowo niedostępna. Spróbuj ponownie za kilka minut.",
+    "try_again": "Spróbuj ponownie"
   }
 }

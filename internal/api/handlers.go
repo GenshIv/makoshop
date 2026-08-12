@@ -4032,12 +4032,14 @@ func (h *Handlers) HandleAdminSCUPageCatalogizeAll(w http.ResponseWriter, r *htt
 
 	type req struct {
 		Apply bool `json:"apply"`
+		Force bool `json:"force"`
 	}
 
 	var body req
 	_ = json.NewDecoder(r.Body).Decode(&body)
 
-	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Starting (apply=%v)...\n", body.Apply)
+	rebuildAllIndexes := body.Apply || body.Force
+	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Starting (apply=%v force=%v rebuildAllIndexes=%v)...\n", body.Apply, body.Force, rebuildAllIndexes)
 
 	// Get all SCU pages
 	all, err := h.scuPageRepo.List()
@@ -4053,16 +4055,20 @@ func (h *Handlers) HandleAdminSCUPageCatalogizeAll(w http.ResponseWriter, r *htt
 
 	catalogized := 0
 	var results []map[string]interface{}
-	var toReindex []*model.SCUPage // collect for batch reindex
 
 	for i := range all {
 		sp := &all[i]
 
 		// Build tokens for this SCU page using all available text
+		//todo need remove and add to insert|update only
 		fullText := tokenizer.BuildSCUTokensFullText(sp.Title, sp.Description, sp.Content, sp.Attributes)
 		if err := catz.BuildSCUTokens(sp.ID, fullText); err != nil {
 			fmt.Printf("WARN: build tokens for scupage %d: %v\n", sp.ID, err)
 			continue
+		}
+
+		if i%20000 == 0 {
+			fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Processed %d SCU pages from total %d. Catalogized %d...\n", i, len(all), catalogized)
 		}
 
 		// Catalogize using TurboTopNByIntersection
@@ -4080,10 +4086,6 @@ func (h *Handlers) HandleAdminSCUPageCatalogizeAll(w http.ResponseWriter, r *htt
 					fmt.Printf("WARN: update scupage %d: %v\n", sp.ID, err)
 					continue
 				}
-				// Collect for batch reindex (don't reindex one-by-one)
-				if updated, err := h.scuPageRepo.Get(sp.ID); err == nil {
-					toReindex = append(toReindex, updated)
-				}
 			}
 			catalogized++
 			results = append(results, map[string]interface{}{
@@ -4095,16 +4097,18 @@ func (h *Handlers) HandleAdminSCUPageCatalogizeAll(w http.ResponseWriter, r *htt
 		}
 	}
 
-	// Batch unindex + reindex all changed SCU pages (single pass, no repeated writes)
-	if body.Apply && len(toReindex) > 0 {
-		fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Batch reindexing %d SCU pages...\n", len(toReindex))
-		// Unindex first
-		for _, sp := range toReindex {
-			_ = h.scuPageSearch.UnindexSCUPage(sp)
+	// Full rebuild of all SCU page indexes if Apply or Force.
+	// RebuildAllIndexes:
+	//   1) clears all indexable keys (cat, brand, vendor, sort, numSort)
+	//   2) streams all SCUPage and rebuilds indexes in batches
+	//   3) rebuilds sort/numSort indexes
+	// This avoids per-document deletes (vacuum) and ensures no stale indexes.
+	if rebuildAllIndexes {
+		fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Starting full index rebuild...\n")
+		if err := h.scuPageSearch.RebuildAllIndexes(); err != nil {
+			fmt.Printf("WARN: rebuild all indexes: %v\n", err)
 		}
-		// Reindex in batch
-		_ = h.scuPageSearch.IndexSCUPageBatch(toReindex)
-		fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Batch reindex done.\n")
+		fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Full index rebuild done.\n")
 	}
 
 	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Done. Catalogized %d SCU pages.\n", catalogized)

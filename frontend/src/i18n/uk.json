@@ -403,6 +403,18 @@
     "catalogizer_export_categories": "Експорт категорій",
     "catalogizer_import_categories": "Імпорт категорій",
     "catalogizer_relink_scupages": "Переприв'язка SCU Pages",
-    "catalogizer_catalogize_all_scupages": "Каталогізація всіх SCU Pages"
+    "catalogizer_catalogize_all_scupages": "Каталогізація всіх SCU Pages",
+    "maintenance_mode": "Режим технічного обслуговування",
+    "maintenance_on": "УВІМК",
+    "maintenance_off": "ВИМК",
+    "maintenance_enable": "Увімкнути",
+    "maintenance_disable": "Вимкнути",
+    "maintenance_auto_disable": "Авто-вимкнення після операції",
+    "maintenance_hint": "Блокує доступ користувачам і ботам, доступ адміністратора залишається відкритим."
+  },
+  "maintenance": {
+    "title": "Технічне обслуговування",
+    "message": "Сайт тимчасово недоступний. Будь ласка, спробуйте через кілька хвилин.",
+    "try_again": "Спробувати знову"
   }
 }

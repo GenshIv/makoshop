@@ -18,6 +18,7 @@ const categoryPath = ref([]); // [{id, name}, ...]
 const pagination = reactive({ page: 1, per_page: 50, total: 0, total_pages: 0 });
 const loading = ref(false);
 const error = ref(null);
+const maintenanceMode = ref(false);
 
 // If API returns SCUPage data, render SCUPageView instead
 const scuPageData = ref(null);
@@ -119,6 +120,11 @@ const fetchProducts = async () => {
     pagination.total_pages = Math.ceil(pagination.total / perPage);
     categoryAttrs.value = data.category_attrs || [];
   } catch (e) {
+    if (e.response?.status === 503) {
+      maintenanceMode.value = true;
+      error.value = null;
+      return;
+    }
     error.value = e.response?.data?.message || t('catalog.load_error');
     console.error(e);
   } finally {
@@ -424,8 +430,24 @@ defineOptions({ name: 'CatalogView' });
 </script>
 
 <template>
+  <!-- Maintenance mode screen -->
+  <div v-if="maintenanceMode" class="min-h-screen flex items-center justify-center bg-gray-50">
+    <div class="max-w-md text-center p-6 bg-white rounded-xl shadow-sm">
+      <h1 class="text-2xl font-bold mb-3 text-gray-800">{{ t('maintenance.title') }}</h1>
+      <p class="text-gray-600 mb-4">
+        {{ t('maintenance.message') }}
+      </p>
+      <button
+        @click="fetchProducts"
+        class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+      >
+        {{ t('maintenance.try_again') }}
+      </button>
+    </div>
+  </div>
+
   <!-- Render SCUPageView if API returned an SCUPage -->
-  <SCUPageView v-if="scuPageData" :data="scuPageData" />
+  <SCUPageView v-else-if="scuPageData" :data="scuPageData" />
 
   <div v-else class="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <!-- Breadcrumbs -->
