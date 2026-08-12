@@ -86,7 +86,8 @@ const buildQueryParams = () => {
 const fetchProducts = async () => {
   loading.value = true;
   error.value = null;
-  scuPageData.value = null; // Reset SCUPage data
+  // Не сбрасываем scuPageData, если уже на SCU-странице и данные есть
+  const isOnSCUPage = scuPageData.value != null;
   try {
     // Если page задан в URL — используем его и синхронизируем pagination
     if (route.query.page) {
@@ -108,10 +109,15 @@ const fetchProducts = async () => {
     const response = await api.get(url, { params });
     const data = response.data;
 
-    // If response is an SCUPage (page is an object with scu/slug), render SCUPageView
+    // Если ответ — SCUPage, запоминаем и рендерим SCUPageView
     if (data.page && typeof data.page === 'object' && data.page.scu) {
       scuPageData.value = data;
       return;
+    }
+
+    // Если мы были на SCUPage, а теперь API вернул обычный каталог — сбрасываем SCUPage
+    if (isOnSCUPage) {
+      scuPageData.value = null;
     }
 
     products.value = data.items || [];

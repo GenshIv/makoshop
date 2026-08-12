@@ -89,18 +89,21 @@ type CompanySettings struct {
 }
 
 type Company struct {
-	ID          int64            `json:"id"`
-	Name        string           `json:"name"`
-	Slug        string           `json:"slug"`                  // URL-friendly name
-	Description string           `json:"description,omitempty"` // company description
-	LogoURL     string           `json:"logo_url,omitempty"`    // company logo
-	LegalInfo   CompanyLegalInfo `json:"legal_info,omitempty"`
-	Contacts    CompanyContacts  `json:"contacts,omitempty"`
-	Settings    CompanySettings  `json:"settings"`
-	Status      CompanyStatus    `json:"status"`
-	OwnerUserID int64            `json:"owner_user_id"`
-	CreatedAt   time.Time        `json:"created_at"`
-	UpdatedAt   time.Time        `json:"updated_at"`
+	ID                 int64            `json:"id"`
+	Name               string           `json:"name"`
+	Slug               string           `json:"slug"`                  // URL-friendly name
+	Description        string           `json:"description,omitempty"` // company description
+	LogoURL            string           `json:"logo_url,omitempty"`    // company logo
+	LegalInfo          CompanyLegalInfo `json:"legal_info,omitempty"`
+	Contacts           CompanyContacts  `json:"contacts,omitempty"`
+	Settings           CompanySettings  `json:"settings"`
+	Status             CompanyStatus    `json:"status"`
+	OwnerUserID        int64            `json:"owner_user_id"`
+	PaymentMethodIds   []int64          `json:"payment_method_ids,omitempty"`
+	DeliveryTimeIds    []int64          `json:"delivery_time_ids,omitempty"`
+	InstallmentPlanIds []int64          `json:"installment_plan_ids,omitempty"`
+	CreatedAt          time.Time        `json:"created_at"`
+	UpdatedAt          time.Time        `json:"updated_at"`
 }
 
 // Brand
@@ -419,4 +422,44 @@ type PromoLog struct {
 	Context    map[string]interface{} `json:"context,omitempty"`
 	Cost       float64                `json:"cost"`
 	CreatedAt  time.Time              `json:"created_at"`
+}
+
+// --- Company settings: payment methods, delivery times, installment plans ---
+
+type CompanyPaymentMethod struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug"`
+	IsActive  bool      `json:"is_active"`
+	SortOrder int       `json:"sort_order"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type DeliveryTime struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug"`
+	IsActive  bool      `json:"is_active"`
+	SortOrder int       `json:"sort_order"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type InstallmentPlan struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug"`
+	IsActive  bool      `json:"is_active"`
+	SortOrder int       `json:"sort_order"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// CompanySettingsV2 holds company-specific options (payment, delivery, installment).
+// Embedded into Company via separate fields to avoid breaking changes.
+type CompanySettingsV2 struct {
+	PaymentMethodIds   []int64 `json:"payment_method_ids,omitempty"`
+	DeliveryTimeIds    []int64 `json:"delivery_time_ids,omitempty"`
+	InstallmentPlanIds []int64 `json:"installment_plan_ids,omitempty"`
 }

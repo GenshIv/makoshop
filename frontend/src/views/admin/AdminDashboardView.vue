@@ -313,6 +313,18 @@ onMounted(() => {
           <div class="font-medium">Request Stats</div>
           <div class="text-sm text-gray-500 mt-1">Request metrics, latencies, top routes</div>
         </router-link>
+        <router-link to="/admin/payment-methods" class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">{{ t('admin.payment_methods_title') || 'Payment Methods' }}</div>
+          <div class="text-sm text-gray-500 mt-1">{{ t('admin.payment_methods_desc') || 'Manage payment methods' }}</div>
+        </router-link>
+        <router-link to="/admin/delivery-times" class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">{{ t('admin.delivery_times_title') || 'Delivery Times' }}</div>
+          <div class="text-sm text-gray-500 mt-1">{{ t('admin.delivery_times_desc') || 'Manage delivery time options' }}</div>
+        </router-link>
+        <router-link to="/admin/installment-plans" class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">{{ t('admin.installment_plans_title') || 'Installment Plans' }}</div>
+          <div class="text-sm text-gray-500 mt-1">{{ t('admin.installment_plans_desc') || 'Manage installment plans' }}</div>
+        </router-link>
       </div>
     </div>
   </div>

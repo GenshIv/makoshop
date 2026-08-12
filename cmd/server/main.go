@@ -188,8 +188,13 @@ func main() {
 	userRepo = db.NewUserRepo(store)
 	companyRepo := db.NewCompanyRepo(store)
 	cartRepo := db.NewCartRepo(store)
+	paymentMethodRepo := db.NewPaymentMethodRepo(store)
+	deliveryTimeRepo := db.NewDeliveryTimeRepo(store)
+	installmentPlanRepo := db.NewInstallmentPlanRepo(store)
 
 	h := api.NewHandlers(store)
+	// Attach company settings repos to handlers
+	h.SetCompanySettingsRepos(companyRepo, paymentMethodRepo, deliveryTimeRepo, installmentPlanRepo)
 	authHandlers := api.NewAuthHandlers(userRepo, companyRepo, cartRepo, jwtMiddleware, cfg.Auth.JWTSecret)
 	// Attach turboSearch to authHandlers for company products endpoint
 	authHandlers.SetTurboSearch(h.TurboSearch())
@@ -324,6 +329,7 @@ func main() {
 	}), model.RoleAdmin))
 
 	// GET/PATCH /admin/companies/{id}
+	// GET /admin/companies/{id}/settings — company with full settings
 	mux.Handle("/admin/companies/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
@@ -331,6 +337,16 @@ func main() {
 		if strings.HasSuffix(path, "/verify") {
 			if r.Method == http.MethodPatch {
 				authHandlers.HandleAdminCompanyVerify(w, r)
+				return
+			}
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// /admin/companies/{id}/settings
+		if strings.HasSuffix(path, "/settings") {
+			if r.Method == http.MethodGet {
+				h.HandleCompanyGetWithSettings(w, r)
 				return
 			}
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -501,6 +517,90 @@ func main() {
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}), model.RoleAdmin))
+
+	// --- Company settings: Payment Methods ---
+
+	// GET/POST /admin/payment-methods
+	mux.Handle("/admin/payment-methods", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandlePaymentMethodsList(w, r)
+		case http.MethodPost:
+			h.HandlePaymentMethodCreate(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}), model.RoleAdmin))
+
+	// GET/PATCH/DELETE /admin/payment-methods/{id}
+	mux.Handle("/admin/payment-methods/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandlePaymentMethodGet(w, r)
+		case http.MethodPatch:
+			h.HandlePaymentMethodUpdate(w, r)
+		case http.MethodDelete:
+			h.HandlePaymentMethodDelete(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}), model.RoleAdmin))
+
+	// --- Company settings: Delivery Times ---
+
+	// GET/POST /admin/delivery-times
+	mux.Handle("/admin/delivery-times", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleDeliveryTimesList(w, r)
+		case http.MethodPost:
+			h.HandleDeliveryTimeCreate(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}), model.RoleAdmin))
+
+	// GET/PATCH/DELETE /admin/delivery-times/{id}
+	mux.Handle("/admin/delivery-times/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleDeliveryTimeGet(w, r)
+		case http.MethodPatch:
+			h.HandleDeliveryTimeUpdate(w, r)
+		case http.MethodDelete:
+			h.HandleDeliveryTimeDelete(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}), model.RoleAdmin))
+
+	// --- Company settings: Installment Plans ---
+
+	// GET/POST /admin/installment-plans
+	mux.Handle("/admin/installment-plans", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleInstallmentPlansList(w, r)
+		case http.MethodPost:
+			h.HandleInstallmentPlanCreate(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}), model.RoleAdmin))
+
+	// GET/PATCH/DELETE /admin/installment-plans/{id}
+	mux.Handle("/admin/installment-plans/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleInstallmentPlanGet(w, r)
+		case http.MethodPatch:
+			h.HandleInstallmentPlanUpdate(w, r)
+		case http.MethodDelete:
+			h.HandleInstallmentPlanDelete(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
 	}), model.RoleAdmin))
 
 	// --- Promo endpoints ---

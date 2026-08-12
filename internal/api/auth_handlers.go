@@ -469,10 +469,13 @@ func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.R
 	}
 
 	var req struct {
-		Name      string                  `json:"name,omitempty"`
-		LegalInfo *model.CompanyLegalInfo `json:"legal_info,omitempty"`
-		Settings  *model.CompanySettings  `json:"settings,omitempty"`
-		Status    model.CompanyStatus     `json:"status,omitempty"`
+		Name               string                  `json:"name,omitempty"`
+		LegalInfo          *model.CompanyLegalInfo `json:"legal_info,omitempty"`
+		Settings           *model.CompanySettings  `json:"settings,omitempty"`
+		Status             model.CompanyStatus     `json:"status,omitempty"`
+		PaymentMethodIds   []int64                 `json:"payment_method_ids,omitempty"`
+		DeliveryTimeIds    []int64                 `json:"delivery_time_ids,omitempty"`
+		InstallmentPlanIds []int64                 `json:"installment_plan_ids,omitempty"`
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -490,6 +493,16 @@ func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.R
 		}
 		if req.Status != "" {
 			c.Status = req.Status
+		}
+		// Update company settings IDs (will be persisted as a batch in Update)
+		if req.PaymentMethodIds != nil {
+			c.PaymentMethodIds = req.PaymentMethodIds
+		}
+		if req.DeliveryTimeIds != nil {
+			c.DeliveryTimeIds = req.DeliveryTimeIds
+		}
+		if req.InstallmentPlanIds != nil {
+			c.InstallmentPlanIds = req.InstallmentPlanIds
 		}
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())

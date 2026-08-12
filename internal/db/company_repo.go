@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -104,6 +105,7 @@ func (r *CompanyRepo) GetCompanyIDByUserID(userID int64) (int64, error) {
 }
 
 // Update updates a company.
+// If PaymentMethodIds/DeliveryTimeIds/InstallmentPlanIds are changed, settings are saved as a batch.
 func (r *CompanyRepo) Update(id int64, updater func(*model.Company)) error {
 	c, err := r.Get(id)
 	if err != nil {
@@ -125,6 +127,16 @@ func (r *CompanyRepo) Update(id int64, updater func(*model.Company)) error {
 		if err := r.Store.TurboWrite(turboKeyCompanyName+c.Slug, []byte(strconv.FormatInt(id, 10))); err != nil {
 			return fmt.Errorf("update company_name index: %w", err)
 		}
+	}
+
+	// Save company settings (payment methods, delivery times, installment plans) as a batch
+	settings := &model.CompanySettingsV2{
+		PaymentMethodIds:   c.PaymentMethodIds,
+		DeliveryTimeIds:    c.DeliveryTimeIds,
+		InstallmentPlanIds: c.InstallmentPlanIds,
+	}
+	if err := r.SaveCompanySettings(id, settings); err != nil {
+		return fmt.Errorf("save company settings: %w", err)
 	}
 
 	return nil
@@ -163,6 +175,76 @@ func (r *CompanyRepo) Delete(id int64) error {
 	if err := r.Store.DocDelete(KeyCompany(id)); err != nil {
 		return fmt.Errorf("delete company: %w", err)
 	}
+	return nil
+}
+
+// --- Company settings: payment methods, delivery times, installment plans ---
+
+const (
+	keyCompanyPaymentMethods   = "company_pm:" // company_id -> JSON array of method_ids
+	keyCompanyDeliveryTimes    = "company_dt:" // company_id -> JSON array of time_ids
+	keyCompanyInstallmentPlans = "company_ip:" // company_id -> JSON array of plan_ids
+)
+
+// SaveCompanySettings saves all company settings (payment, delivery, installment) as a batch.
+// This replaces all existing settings for the company in one operation.
+func (r *CompanyRepo) SaveCompanySettings(companyID int64, settings *model.CompanySettingsV2) error {
+	if settings == nil {
+		settings = &model.CompanySettingsV2{}
+	}
+
+	// Save payment method IDs
+	pmData, _ := json.Marshal(settings.PaymentMethodIds)
+	if err := r.Store.DocPut(keyCompanyPaymentMethods+strconv.FormatInt(companyID, 10), pmData); err != nil {
+		return fmt.Errorf("save company payment methods: %w", err)
+	}
+
+	// Save delivery time IDs
+	dtData, _ := json.Marshal(settings.DeliveryTimeIds)
+	if err := r.Store.DocPut(keyCompanyDeliveryTimes+strconv.FormatInt(companyID, 10), dtData); err != nil {
+		return fmt.Errorf("save company delivery times: %w", err)
+	}
+
+	// Save installment plan IDs
+	ipData, _ := json.Marshal(settings.InstallmentPlanIds)
+	if err := r.Store.DocPut(keyCompanyInstallmentPlans+strconv.FormatInt(companyID, 10), ipData); err != nil {
+		return fmt.Errorf("save company installment plans: %w", err)
+	}
+
+	return nil
+}
+
+// GetCompanySettings returns all settings for a company.
+func (r *CompanyRepo) GetCompanySettings(companyID int64) (*model.CompanySettingsV2, error) {
+	settings := &model.CompanySettingsV2{}
+
+	// Load payment method IDs
+	pmData, err := r.Store.DocGet(keyCompanyPaymentMethods + strconv.FormatInt(companyID, 10))
+	if err == nil && len(pmData) > 0 {
+		_ = json.Unmarshal(pmData, &settings.PaymentMethodIds)
+	}
+
+	// Load delivery time IDs
+	dtData, err := r.Store.DocGet(keyCompanyDeliveryTimes + strconv.FormatInt(companyID, 10))
+	if err == nil && len(dtData) > 0 {
+		_ = json.Unmarshal(dtData, &settings.DeliveryTimeIds)
+	}
+
+	// Load installment plan IDs
+	ipData, err := r.Store.DocGet(keyCompanyInstallmentPlans + strconv.FormatInt(companyID, 10))
+	if err == nil && len(ipData) > 0 {
+		_ = json.Unmarshal(ipData, &settings.InstallmentPlanIds)
+	}
+
+	return settings, nil
+}
+
+// DeleteCompanySettings removes all settings for a company.
+func (r *CompanyRepo) DeleteCompanySettings(companyID int64) error {
+	idStr := strconv.FormatInt(companyID, 10)
+	_ = r.Store.DocDelete(keyCompanyPaymentMethods + idStr)
+	_ = r.Store.DocDelete(keyCompanyDeliveryTimes + idStr)
+	_ = r.Store.DocDelete(keyCompanyInstallmentPlans + idStr)
 	return nil
 }
 

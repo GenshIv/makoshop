@@ -30,6 +30,9 @@ import AdminPromoView from '../views/admin/AdminPromoView.vue';
 import AdminSCUPageView from '../views/admin/AdminSCUPageView.vue';
 import AdminCatalogizerView from '../views/admin/AdminCatalogizerView.vue';
 import AdminStatsView from '../views/admin/AdminStatsView.vue';
+import AdminPaymentMethodsView from '../views/admin/AdminPaymentMethodsView.vue';
+import AdminDeliveryTimesView from '../views/admin/AdminDeliveryTimesView.vue';
+import AdminInstallmentPlansView from '../views/admin/AdminInstallmentPlansView.vue';
 
 const routes = [
   // Public
@@ -69,6 +72,9 @@ const routes = [
   { path: '/admin/stats', name: 'admin-stats', component: AdminStatsView, meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/analytics', name: 'admin-analytics', component: AdminAnalyticsView, meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/promo', name: 'admin-promo', component: AdminPromoView, meta: { requiresAuth: true, requiresRole: 'admin' } },
+  { path: '/admin/payment-methods', name: 'admin-payment-methods', component: AdminPaymentMethodsView, meta: { requiresAuth: true, requiresRole: 'admin' } },
+  { path: '/admin/delivery-times', name: 'admin-delivery-times', component: AdminDeliveryTimesView, meta: { requiresAuth: true, requiresRole: 'admin' } },
+  { path: '/admin/installment-plans', name: 'admin-installment-plans', component: AdminInstallmentPlansView, meta: { requiresAuth: true, requiresRole: 'admin' } },
 ];
 
 const router = createRouter({

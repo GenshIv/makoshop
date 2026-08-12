@@ -40,9 +40,56 @@ const error = ref(null);
 const selectedProduct = ref(null);
 const showProducts = ref(false);
 
+// Company settings: payment methods, delivery times, installment plans
+const companySettingsMap = ref({}); // company_id -> { payment_methods: [], delivery_times: [], installment_plans: [] }
+
+const fetchCompanySettings = async () => {
+  try {
+    // Get all lists
+    const [pmRes, dtRes, ipRes] = await Promise.all([
+      api.get('/admin/payment-methods'),
+      api.get('/admin/delivery-times'),
+      api.get('/admin/installment-plans'),
+    ]);
+    const allPM = (pmRes.data || []).reduce((m, pm) => { m[pm.id] = pm; return m; }, {});
+    const allDT = (dtRes.data || []).reduce((m, dt) => { m[dt.id] = dt; return m; }, {});
+    const allIP = (ipRes.data || []).reduce((m, ip) => { m[ip.id] = ip; return m; }, {});
+
+    // Get unique company IDs from products
+    const companyIds = [...new Set(products.value.map(p => p.company_id).filter(Boolean))];
+    const map = {};
+    for (const cid of companyIds) {
+      try {
+        const res = await api.get(`/admin/companies/${cid}/settings`);
+        const c = res.data.company || {};
+        map[cid] = {
+          payment_methods: (c.payment_method_ids || [])
+            .map(id => allPM[id])
+            .filter(Boolean),
+          delivery_times: (c.delivery_time_ids || [])
+            .map(id => allDT[id])
+            .filter(Boolean),
+          installment_plans: (c.installment_plan_ids || [])
+            .map(id => allIP[id])
+            .filter(Boolean),
+        };
+      } catch {
+        map[cid] = { payment_methods: [], delivery_times: [], installment_plans: [] };
+      }
+    }
+    companySettingsMap.value = map;
+  } catch (e) {
+    console.warn('fetch company settings failed:', e);
+    companySettingsMap.value = {};
+  }
+};
+
 const filterForm = reactive({
   sortBy: 'price_asc',
-  companyFilter: '',
+  companyFilters: [], // array of company names
+  paymentMethodFilters: [], // array of payment method names
+  deliveryTimeFilters: [], // array of delivery time names
+  installmentPlanFilters: [], // array of installment plan names
 });
 
 const fetchSCUPage = async () => {
@@ -90,6 +137,9 @@ const initFromData = () => {
       is_virtual: true,
     };
   }
+
+  // Load company settings for badges
+  fetchCompanySettings();
 };
 
 const addToCart = async () => {
@@ -146,8 +196,47 @@ const getCompanyName = (product) => {
 // Group products by modification (pure name without company). Each mod has multiple supplier offers.
 const modifications = computed(() => {
   if (products.value.length === 0) return [];
+
+  // Apply filters: AND between blocks, OR inside each block
+  let filtered = products.value;
+
+  // Company filter (OR inside)
+  if (filterForm.companyFilters.length > 0) {
+    filtered = filtered.filter(p => filterForm.companyFilters.includes(getCompanyName(p)));
+  }
+
+  // Payment method filter (OR inside)
+  if (filterForm.paymentMethodFilters.length > 0) {
+    filtered = filtered.filter(p => {
+      const settings = p.company_id ? companySettingsMap.value[p.company_id] : null;
+      if (!settings) return false;
+      const available = settings.payment_methods.map(pm => pm.name);
+      return filterForm.paymentMethodFilters.some(f => available.includes(f));
+    });
+  }
+
+  // Delivery time filter (OR inside)
+  if (filterForm.deliveryTimeFilters.length > 0) {
+    filtered = filtered.filter(p => {
+      const settings = p.company_id ? companySettingsMap.value[p.company_id] : null;
+      if (!settings) return false;
+      const available = settings.delivery_times.map(dt => dt.name);
+      return filterForm.deliveryTimeFilters.some(f => available.includes(f));
+    });
+  }
+
+  // Installment plan filter (OR inside)
+  if (filterForm.installmentPlanFilters.length > 0) {
+    filtered = filtered.filter(p => {
+      const settings = p.company_id ? companySettingsMap.value[p.company_id] : null;
+      if (!settings) return false;
+      const available = settings.installment_plans.map(ip => ip.name);
+      return filterForm.installmentPlanFilters.some(f => available.includes(f));
+    });
+  }
+
   const groups = new Map();
-  for (const p of products.value) {
+  for (const p of filtered) {
     const pureName = stripCompanyFromName(p.name);
     const key = pureName || p.sku || 'Без названия';
     if (!groups.has(key)) {
@@ -162,16 +251,66 @@ const modifications = computed(() => {
   return Array.from(groups.values());
 });
 
-// Get all unique suppliers across all modifications
+// Get all unique suppliers across ALL products (used for filter UI, not affected by filters)
 const allSuppliers = computed(() => {
   const seen = new Set();
   const result = [];
-  for (const mod of modifications.value) {
-    for (const s of mod.suppliers) {
-      const key = getCompanyName(s);
-      if (!seen.has(key)) {
-        seen.add(key);
-        result.push(key);
+  for (const p of products.value) {
+    const key = getCompanyName(p);
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(key);
+    }
+  }
+  return result;
+});
+
+// Collect all unique payment methods, delivery times, installment plans from companies on this page
+const allPaymentMethods = computed(() => {
+  const seen = new Set();
+  const result = [];
+  for (const p of products.value) {
+    if (!p.company_id) continue;
+    const settings = companySettingsMap.value[p.company_id];
+    if (!settings) continue;
+    for (const pm of settings.payment_methods) {
+      if (!seen.has(pm.name)) {
+        seen.add(pm.name);
+        result.push(pm.name);
+      }
+    }
+  }
+  return result;
+});
+
+const allDeliveryTimes = computed(() => {
+  const seen = new Set();
+  const result = [];
+  for (const p of products.value) {
+    if (!p.company_id) continue;
+    const settings = companySettingsMap.value[p.company_id];
+    if (!settings) continue;
+    for (const dt of settings.delivery_times) {
+      if (!seen.has(dt.name)) {
+        seen.add(dt.name);
+        result.push(dt.name);
+      }
+    }
+  }
+  return result;
+});
+
+const allInstallmentPlans = computed(() => {
+  const seen = new Set();
+  const result = [];
+  for (const p of products.value) {
+    if (!p.company_id) continue;
+    const settings = companySettingsMap.value[p.company_id];
+    if (!settings) continue;
+    for (const ip of settings.installment_plans) {
+      if (!seen.has(ip.name)) {
+        seen.add(ip.name);
+        result.push(ip.name);
       }
     }
   }
@@ -193,6 +332,47 @@ const minPrice = computed(() => {
   if (products.value.length === 0) return page.value?.min_price || 0;
   return Math.min(...products.value.map(p => p.price));
 });
+
+// Основное имя товара (без суффикса компании)
+const mainProductName = computed(() => {
+  if (modifications.value.length > 0) {
+    return modifications.value[0].name;
+  }
+  return page.value?.title || '';
+});
+
+// Количество уникальных компаний
+const uniqueCompanyCount = computed(() => {
+  return allSuppliers.value.length;
+});
+
+// Есть ли хотя бы один товар в наличии
+const hasAnyInStock = computed(() => {
+  return products.value.some(p => isInStock(p));
+});
+
+// Атрибуты для отображения (из selectedProduct, если есть, иначе из page)
+const displayAttributes = computed(() => {
+  if (selectedProduct.value?.attributes && Object.keys(selectedProduct.value.attributes).length) {
+    return selectedProduct.value.attributes;
+  }
+  return page.value?.attributes || {};
+});
+
+// Общее количество офферов (после фильтров)
+const filteredOfferCount = computed(() => {
+  return modifications.value.reduce((sum, mod) => sum + mod.suppliers.length, 0);
+});
+
+// Склонение слов (1 магазин, 2 магазина, 5 магазинов)
+const pluralize = (n, one, few, many) => {
+  const abs = Math.abs(n) % 100;
+  const last = abs % 10;
+  if (abs > 10 && abs < 20) return many;
+  if (last > 1 && last < 5) return few;
+  if (last === 1) return one;
+  return many;
+};
 
 // Select product and set active tab + supplier index
 const selectProduct = (product) => {
@@ -241,17 +421,6 @@ watch(
 
 <template>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <!-- Breadcrumbs -->
-    <Breadcrumbs :categories="treePath.map(s => ({ slug: s, name: s }))" />
-
-    <!-- Back link -->
-    <button
-      @click="goBack"
-      class="text-sm text-indigo-600 hover:underline mb-4 inline-block cursor-pointer"
-    >
-      ← Вернуться в каталог
-    </button>
-
     <!-- Error -->
     <div v-if="error" class="p-4 bg-red-100 text-red-700 rounded-lg">
       {{ error }}
@@ -263,111 +432,80 @@ watch(
     </div>
 
     <!-- SCU Page -->
-    <div v-else-if="page" class="space-y-8">
-      <!-- Title & Price -->
+    <div v-else-if="page" class="space-y-6">
+      <!-- Верхняя часть: хлебные крошки + заголовок -->
       <div>
-        <h1 class="text-2xl font-bold">{{ page.title }}</h1>
-        <div v-if="page.brand" class="text-sm text-gray-500 mt-1">{{ page.brand }}</div>
-        <div class="mt-3 flex items-baseline gap-3 flex-wrap">
-          <span class="text-3xl font-bold text-indigo-600">
-            от {{ formatPrice(minPrice) }}
-          </span>
-          <span v-if="products.length > 1" class="text-sm text-gray-500">
-            {{ products.length }} вариантов
-          </span>
+        <Breadcrumbs :categories="treePath.map(s => ({ slug: s, name: s }))" />
+
+        <div class="mt-3 flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <h1 class="text-2xl font-bold text-gray-900 break-words">{{ mainProductName }}</h1>
+            <div class="mt-1 flex items-center gap-2 text-sm text-gray-500 flex-wrap">
+              <span v-if="page.brand">{{ page.brand }}</span>
+              <span v-if="uniqueCompanyCount > 1">
+                · {{ uniqueCompanyCount }} {{ pluralize(uniqueCompanyCount, 'магазин', 'магазина', 'магазинов') }}
+              </span>
+              <span v-if="modifications.length > 1">
+                · {{ modifications.length }} {{ pluralize(modifications.length, 'модификация', 'модификации', 'модификаций') }}
+              </span>
+            </div>
+            <!-- Теги -->
+            <div v-if="hasAnyInStock" class="mt-2">
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                В наличии
+              </span>
+            </div>
+          </div>
+          <button
+            @click="goBack"
+            class="text-sm text-indigo-600 hover:underline whitespace-nowrap cursor-pointer shrink-0"
+          >
+            ← В каталог
+          </button>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Images (left) -->
-        <div class="lg:col-span-1">
-          <div class="bg-gray-100 rounded-lg overflow-hidden aspect-square">
-            <img
-              v-if="currentImages.length"
-              :src="currentImages[currentImageIndex]"
-              :alt="page.title"
-              class="w-full h-full object-cover"
-            />
-            <div v-else class="w-full h-full flex items-center justify-center text-gray-400">
-              Нет фото
+      <!-- Верх: фото слева, описание/характеристики/цена справа -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Левая колонка (~5 cols): фото -->
+        <div class="lg:col-span-5">
+          <div class="sticky top-4 space-y-3">
+            <div class="bg-gray-100 rounded-2xl overflow-hidden aspect-square">
+              <img
+                v-if="currentImages.length"
+                :src="currentImages[currentImageIndex]"
+                :alt="page.title"
+                class="w-full h-full object-cover"
+              />
+              <div v-else class="w-full h-full flex items-center justify-center text-gray-400">
+                Нет фото
+              </div>
             </div>
-          </div>
-          <!-- Thumbnails -->
-          <div v-if="currentImages.length > 1" class="flex gap-2 mt-2 flex-wrap">
-            <img
-              v-for="(img, idx) in currentImages"
-              :key="idx"
-              :src="img"
-              @click="currentImageIndex = idx"
-              :class="[
-                'w-14 h-14 object-cover rounded border-2 cursor-pointer transition',
-                currentImageIndex === idx
-                  ? 'border-indigo-600'
-                  : 'border-transparent hover:border-indigo-400'
-              ]"
-            />
+            <!-- Миниатюры -->
+            <div v-if="currentImages.length > 1" class="flex gap-2 flex-wrap">
+              <img
+                v-for="(img, idx) in currentImages"
+                :key="idx"
+                :src="img"
+                @click="currentImageIndex = idx"
+                :class="[
+                  'w-14 h-14 object-cover rounded-xl border-2 cursor-pointer transition',
+                  currentImageIndex === idx
+                    ? 'border-indigo-600'
+                    : 'border-transparent hover:border-indigo-400'
+                ]"
+              />
+            </div>
           </div>
         </div>
 
-        <!-- Right column: prices by modification + description tabs -->
-        <div class="lg:col-span-2 space-y-6">
+        <!-- Правая колонка (~7 cols): описание, характеристики, цена -->
+        <div class="lg:col-span-7 space-y-4">
 
-          <!-- Prices grouped by modification -->
-          <div v-if="modifications.length > 0" class="space-y-4">
-            <div
-              v-for="(mod, modIdx) in modifications"
-              :key="modIdx"
-              class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
-            >
-              <!-- Modification header -->
-              <div class="px-4 py-2 bg-gray-50 border-b border-gray-200">
-                <h3 class="font-medium text-gray-800 text-sm">{{ mod.name }}</h3>
-              </div>
-              <!-- Supplier offers with radio buttons -->
-              <div class="divide-y divide-gray-100">
-                <label
-                  v-for="product in mod.suppliers"
-                  :key="product.id"
-                  :class="[
-                    'flex items-center gap-3 p-3 cursor-pointer transition',
-                    selectedProduct?.id === product.id
-                      ? 'bg-indigo-50'
-                      : 'hover:bg-gray-50'
-                  ]"
-                >
-                  <!-- Radio button -->
-                  <input
-                    type="radio"
-                    name="scu-product"
-                    :value="product.id"
-                    :checked="selectedProduct?.id === product.id"
-                    @change="selectProduct(product)"
-                    class="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 flex-shrink-0 cursor-pointer"
-                  />
-
-                  <!-- Supplier & stock -->
-                  <div class="flex-1 min-w-0">
-                    <div class="text-xs font-medium text-gray-600">
-                      {{ getCompanyName(product) }}
-                    </div>
-                    <span :class="isInStock(product) ? 'text-green-600' : 'text-red-600'" class="text-xs">
-                      {{ isInStock(product) ? t('catalog.in_stock') : t('catalog.out_of_stock') }}
-                    </span>
-                  </div>
-
-                  <!-- Price -->
-                  <div class="font-semibold text-indigo-600 whitespace-nowrap">
-                    {{ formatPrice(product.price) }}
-                  </div>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <!-- Description tabs by modification -->
-          <div v-if="modifications.length > 0" class="bg-white rounded-lg shadow-sm border border-gray-200">
-            <!-- Tabs -->
-            <div class="border-b border-gray-200">
+          <!-- Описание -->
+          <div v-if="modifications.length > 0" class="bg-white rounded-2xl shadow-sm border border-gray-100">
+            <div class="border-b border-gray-100">
               <div class="flex gap-1 px-4 pt-2 overflow-x-auto">
                 <button
                   v-for="(mod, idx) in modifications"
@@ -384,11 +522,8 @@ watch(
                 </button>
               </div>
             </div>
-
-            <!-- Tab content: supplier carousel -->
             <div class="p-4">
               <template v-if="modifications[activeTab]">
-                <!-- Supplier selector -->
                 <div class="flex items-center justify-between mb-3">
                   <span class="inline-block px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded">
                     {{ getCompanyName(modifications[activeTab].suppliers[descSupplierIndex]) }}
@@ -407,8 +542,6 @@ watch(
                     >→</button>
                   </div>
                 </div>
-
-                <!-- Description -->
                 <div class="text-sm text-gray-700">
                   <p class="whitespace-pre-line">
                     {{ modifications[activeTab].suppliers[descSupplierIndex]?.description || t('product.no_description') }}
@@ -418,19 +551,38 @@ watch(
             </div>
           </div>
 
-          <!-- Selected product add to cart -->
-          <div v-if="selectedProduct && !selectedProduct.is_virtual" class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div class="flex items-center justify-between gap-4">
+          <!-- Характеристики -->
+          <div v-if="displayAttributes && Object.keys(displayAttributes).length" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+            <h3 class="font-semibold text-gray-800 mb-3">Характеристики</h3>
+            <dl class="space-y-2 text-sm">
+              <div
+                v-for="(value, key) in displayAttributes"
+                :key="key"
+                class="flex items-start gap-2 border-b border-gray-50 pb-2 last:border-0 last:pb-0"
+              >
+                <dt class="text-gray-500 text-xs min-w-[100px] shrink-0 capitalize">{{ key }}</dt>
+                <dd class="text-gray-800">{{ value }}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <!-- Блок "Лучшая цена" -->
+          <div
+            v-if="selectedProduct && !selectedProduct.is_virtual"
+            class="bg-gradient-to-br from-indigo-900 to-indigo-800 rounded-2xl shadow-sm p-5 text-white"
+          >
+            <div class="flex items-end justify-between gap-4">
               <div>
-                <div class="text-2xl font-bold text-indigo-600">{{ formatPrice(selectedProduct.price) }}</div>
-                <span :class="isInStock(selectedProduct) ? 'text-green-600' : 'text-red-600'" class="text-sm">
-                  {{ isInStock(selectedProduct) ? t('catalog.in_stock') : t('catalog.out_of_stock') }}
-                </span>
+                <div class="text-sm text-indigo-200">Цена</div>
+                <div class="text-3xl font-bold mt-0.5">{{ formatPrice(currentPrice) }}</div>
+                <div class="text-xs text-indigo-200 mt-1">
+                  {{ isInStock(selectedProduct) ? 'В наличии у выбранного продавца' : 'Нет в наличии' }}
+                </div>
               </div>
               <button
                 @click="addToCart"
                 :disabled="!isInStock(selectedProduct)"
-                class="px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                class="px-6 py-3 bg-white text-indigo-900 rounded-xl font-semibold text-sm hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition shrink-0"
               >
                 {{ t('catalog.add_to_cart') }}
               </button>
@@ -438,19 +590,104 @@ watch(
           </div>
 
           <!-- Virtual product notice -->
-          <div v-if="selectedProduct?.is_virtual" class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          <div v-if="selectedProduct?.is_virtual" class="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-sm text-amber-800">
             {{ t('catalog.virtual_product_notice') }}
           </div>
+        </div>
+      </div>
 
-          <!-- Attributes -->
-          <div v-if="page.attributes && Object.keys(page.attributes).length" class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <h3 class="font-medium text-gray-700 mb-3">Характеристики</h3>
-            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-              <div v-for="(value, key) in page.attributes" :key="key" class="flex flex-col sm:flex-row sm:items-center">
-                <dt class="text-gray-500 text-xs sm:text-sm capitalize">{{ key }}</dt>
-                <dd class="sm:ml-2 text-sm">{{ value }}</dd>
+      <!-- Низ: предложения широко + фильтры узко справа -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Где купить (офферы) — широко (~10 cols) -->
+        <div v-if="modifications.length > 0" class="lg:col-span-10 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="px-4 py-3 border-b border-gray-100">
+            <h3 class="font-semibold text-gray-800">
+              Где купить ({{ filteredOfferCount }} {{ pluralize(filteredOfferCount, 'вариант', 'варианта', 'вариантов') }})
+            </h3>
+          </div>
+          <div class="divide-y divide-gray-50 max-h-[400px] overflow-y-auto">
+            <template v-for="(mod, modIdx) in modifications" :key="modIdx">
+              <!-- Модификация header -->
+              <div v-if="modifications.length > 1" class="px-4 py-2 bg-gray-50 text-xs font-medium text-gray-600">
+                {{ mod.name }}
               </div>
-            </dl>
+              <!-- Офферы -->
+              <label
+                v-for="product in mod.suppliers"
+                :key="product.id"
+                :class="[
+                  'flex items-center gap-3 px-4 py-3 cursor-pointer transition',
+                  selectedProduct?.id === product.id
+                    ? 'bg-indigo-50 border-l-4 border-indigo-600 pl-3'
+                    : 'hover:bg-gray-50 border-l-4 border-transparent'
+                ]"
+              >
+                <input
+                  type="radio"
+                  name="scu-product"
+                  :value="product.id"
+                  :checked="selectedProduct?.id === product.id"
+                  @change="selectProduct(product)"
+                  class="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 flex-shrink-0 cursor-pointer"
+                />
+                <div class="flex-1 min-w-0">
+                  <div class="text-xs font-medium text-gray-800">
+                    {{ getCompanyName(product) }}
+                  </div>
+                  <span :class="isInStock(product) ? 'text-green-600' : 'text-red-600'" class="text-xs">
+                    {{ isInStock(product) ? t('catalog.in_stock') : t('catalog.out_of_stock') }}
+                  </span>
+                </div>
+                <div class="font-semibold text-indigo-600 whitespace-nowrap text-sm">
+                  {{ formatPrice(product.price) }}
+                </div>
+              </label>
+            </template>
+          </div>
+        </div>
+
+        <!-- Фильтры — узко (~2 cols) -->
+        <div v-if="allSuppliers.length >= 1" class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-3 space-y-3 text-xs">
+          <!-- Компании -->
+          <div>
+            <div class="font-semibold text-gray-700 mb-1">{{ t('scupage_filter_by_company') || 'Компании' }}</div>
+            <div class="flex flex-col gap-1">
+              <label v-for="company in allSuppliers" :key="company" class="inline-flex items-center gap-1.5 cursor-pointer text-gray-700">
+                <input type="checkbox" :value="company" v-model="filterForm.companyFilters" class="rounded text-indigo-600 focus:ring-indigo-500" />
+                {{ company }}
+              </label>
+            </div>
+          </div>
+
+          <div v-if="allPaymentMethods.length > 0" class="border-t border-gray-100 pt-2">
+            <div class="font-semibold text-gray-700 mb-1">{{ t('scupage_filter_by_payment') || 'Оплата' }}</div>
+            <div class="flex flex-col gap-1">
+              <label v-for="pm in allPaymentMethods" :key="pm" class="inline-flex items-center gap-1.5 cursor-pointer text-gray-700">
+                <input type="checkbox" :value="pm" v-model="filterForm.paymentMethodFilters" class="rounded text-indigo-600 focus:ring-indigo-500" />
+                {{ pm }}
+              </label>
+            </div>
+          </div>
+
+          <div v-if="allDeliveryTimes.length > 0" class="border-t border-gray-100 pt-2">
+            <div class="font-semibold text-gray-700 mb-1">{{ t('scupage_filter_by_delivery') || 'Доставка' }}</div>
+            <div class="flex flex-col gap-1">
+              <label v-for="dt in allDeliveryTimes" :key="dt" class="inline-flex items-center gap-1.5 cursor-pointer text-gray-700">
+                <input type="checkbox" :value="dt" v-model="filterForm.deliveryTimeFilters" class="rounded text-indigo-600 focus:ring-indigo-500" />
+                {{ dt }}
+              </label>
+            </div>
+          </div>
+
+          <div v-if="allInstallmentPlans.length > 0" class="border-t border-gray-100 pt-2">
+            <div class="font-semibold text-gray-700 mb-1">{{ t('scupage_filter_by_installment') || 'Рассрочка' }}</div>
+            <div class="flex flex-col gap-1">
+              <label v-for="ip in allInstallmentPlans" :key="ip" class="inline-flex items-center gap-1.5 cursor-pointer text-gray-700">
+                <input type="checkbox" :value="ip" v-model="filterForm.installmentPlanFilters" class="rounded text-indigo-600 focus:ring-indigo-500" />
+                {{ ip }}
+              </label>
+            </div>
           </div>
         </div>
       </div>

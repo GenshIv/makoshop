@@ -474,7 +474,19 @@
     "password_not_match": "Passwords do not match",
     "password_too_short": "Password must be at least 6 characters",
     "password_changed": "Password changed successfully",
-    "password_change_failed": "Failed to change password: {error}"
+    "password_change_failed": "Failed to change password: {error}",
+    "payment_methods_title": "Payment Methods",
+    "payment_methods_desc": "Manage payment methods",
+    "delivery_times_title": "Delivery Times",
+    "delivery_times_desc": "Manage delivery time options",
+    "installment_plans_title": "Installment Plans",
+    "installment_plans_desc": "Manage installment plans",
+    "company_settings_title": "Company Settings",
+    "payment_methods": "Payment Methods",
+    "delivery_times": "Delivery Times",
+    "installment_plans": "Installment Plans",
+    "settings": "Settings",
+    "settings_saved": "Settings saved"
   },
   "privacy": {
     "title": "Privacy Policy",
@@ -533,5 +545,10 @@
     "maintenance_disable": "Disable",
     "maintenance_auto_disable": "Auto-disable after operation",
     "maintenance_hint": "Blocks users and bots, admin access remains open."
-  }
+  },
+  "scupage_filter_by_company": "Filter by company",
+  "scupage_all_companies": "All",
+  "scupage_filter_by_payment": "Payment method",
+  "scupage_filter_by_delivery": "Delivery",
+  "scupage_filter_by_installment": "Installment"
 }

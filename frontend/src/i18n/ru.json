@@ -474,7 +474,19 @@
     "password_not_match": "Пароли не совпадают",
     "password_too_short": "Пароль должен быть не менее 6 символов",
     "password_changed": "Пароль успешно изменён",
-    "password_change_failed": "Не удалось сменить пароль: {error}"
+    "password_change_failed": "Не удалось сменить пароль: {error}",
+    "payment_methods_title": "Способы оплаты",
+    "payment_methods_desc": "Управление способами оплаты",
+    "delivery_times_title": "Время доставки",
+    "delivery_times_desc": "Управление вариантами времени доставки",
+    "installment_plans_title": "Рассрочка",
+    "installment_plans_desc": "Управление планами рассрочки",
+    "company_settings_title": "Настройки компании",
+    "payment_methods": "Способы оплаты",
+    "delivery_times": "Время доставки",
+    "installment_plans": "Рассрочка",
+    "settings": "Настройки",
+    "settings_saved": "Настройки сохранены"
   },
   "privacy": {
     "title": "Политика конфиденциальности",
@@ -524,5 +536,10 @@
     "title": "Техническое обслуживание",
     "message": "Сайт временно недоступен. Пожалуйста, попробуйте через несколько минут.",
     "try_again": "Проверить снова"
-  }
+  },
+  "scupage_filter_by_company": "Фильтр по компании",
+  "scupage_all_companies": "Все",
+  "scupage_filter_by_payment": "Способ оплаты",
+  "scupage_filter_by_delivery": "Доставка",
+  "scupage_filter_by_installment": "Рассрочка"
 }

@@ -429,11 +429,28 @@
     "password_not_match": "Паролі не збігаються",
     "password_too_short": "Пароль має містити щонайменше 6 символів",
     "password_changed": "Пароль успішно змінено",
-    "password_change_failed": "Не вдалося змінити пароль: {error}"
+    "password_change_failed": "Не вдалося змінити пароль: {error}",
+    "payment_methods_title": "Способи оплати",
+    "payment_methods_desc": "Управління способами оплати",
+    "delivery_times_title": "Час доставки",
+    "delivery_times_desc": "Управління варіантами часу доставки",
+    "installment_plans_title": "Розстрочка",
+    "installment_plans_desc": "Управління планами розстрочки",
+    "company_settings_title": "Налаштування компанії",
+    "payment_methods": "Способи оплати",
+    "delivery_times": "Час доставки",
+    "installment_plans": "Розстрочка",
+    "settings": "Налаштування",
+    "settings_saved": "Налаштування збережено"
   },
   "maintenance": {
     "title": "Технічне обслуговування",
     "message": "Сайт тимчасово недоступний. Будь ласка, спробуйте через кілька хвилин.",
     "try_again": "Спробувати знову"
-  }
+  },
+  "scupage_filter_by_company": "Фільтр за компанією",
+  "scupage_all_companies": "Всі",
+  "scupage_filter_by_payment": "Спосіб оплати",
+  "scupage_filter_by_delivery": "Доставка",
+  "scupage_filter_by_installment": "Розстрочка"
 }
