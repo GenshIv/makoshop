@@ -416,7 +416,7 @@ const goToPage = (page) => {
   if (page < 1 || page > pagination.total_pages) return;
   pagination.page = page;
   router.push({ path: route.path, query: { ...route.query, page: page.toString() } });
-  fetchProducts();
+  // fetchProducts() будет вызван watch(route.query)
 };
 
 // Navigate to SCU page (landing page for product group)
