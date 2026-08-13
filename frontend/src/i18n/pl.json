@@ -82,6 +82,9 @@
     "registering": "Rejestracja..."
   },
   "catalog": {
+    "all_products": "Wszystkie produkty",
+    "catalog_title": "Katalog produktów",
+    "reset_filters": "Resetuj filtry",
     "back_to_catalog": "← Wróć do katalogu",
     "in_stock": "Dostępny",
     "out_of_stock": "Niedostępny",

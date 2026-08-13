@@ -82,6 +82,9 @@
     "registering": "Реєстрація..."
   },
   "catalog": {
+    "all_products": "Усі товари",
+    "catalog_title": "Каталог товарів",
+    "reset_filters": "Скинути фільтри",
     "back_to_catalog": "← Повернутися до каталогу",
     "in_stock": "В наявності",
     "out_of_stock": "Немає в наявності",

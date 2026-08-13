@@ -619,9 +619,12 @@ func (h *Handlers) importCategories(file string, createCats bool) (map[string]in
 
 		if createCats {
 			// Создаём новую
+			nameRu := row.Name
+			nameEn := row.Name // пока дублируем, slug считаем из nameEn
 			c := &model.Category{
-				Name:     row.Name,
-				Slug:     toSlugTranslit(row.Name),
+				NameRu:   nameRu,
+				NameEn:   nameEn,
+				Slug:     toSlugTranslit(nameEn),
 				ParentID: dbParentID,
 				IsActive: true,
 			}
@@ -649,7 +652,11 @@ func findCategoryByNameAndParent(repo *db.CategoryRepo, name string, parentID *i
 		return 0
 	}
 	for _, c := range all {
-		if c.Name == name {
+		catName := c.NameEn
+		if catName == "" {
+			catName = c.NameRu
+		}
+		if catName == name {
 			if parentID == nil && c.ParentID == nil {
 				return c.ID
 			}
@@ -1275,8 +1282,12 @@ func streamImportCSVFile(
 					continue
 				}
 
+				nameRu := catParts[i]
+				nameEn := catParts[i]
 				cat := &model.Category{
-					Name:     catParts[i],
+					NameRu:   nameRu,
+					NameEn:   nameEn,
+					Slug:     toSlugTranslit(nameEn),
 					ParentID: parentID,
 					IsActive: true,
 				}

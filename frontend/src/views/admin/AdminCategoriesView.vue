@@ -3,7 +3,7 @@ import { ref, reactive, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import api from '../../api';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const categories = ref([]);
 const tree = ref([]);
@@ -12,7 +12,11 @@ const showForm = ref(false);
 const editingId = ref(null);
 
 const form = reactive({
-  name: '',
+  name_ru: '',
+  name_ua: '',
+  name_pl: '',
+  name_en: '',
+  slug: '',
   parent_id: null,
   description: '',
   is_active: true,
@@ -44,12 +48,19 @@ const fetchTree = async () => {
 // Flatten tree for dropdown (exclude self and descendants when editing)
 const parentOptions = ref([]);
 
+// Get localized category name based on current locale
+const catDisplayName = (cat) => {
+  if (!cat) return String(cat?.id || '');
+  const langField = `name_${locale.value}`;
+  return cat[langField] || cat.name_en || cat.name_ru || cat.name_ua || cat.name_pl || String(cat.id);
+};
+
 const updateParentOptions = () => {
   const excludeId = editingId.value;
   const flatten = (nodes, result = []) => {
     for (const node of nodes) {
       if (node.id !== excludeId) {
-        result.push({ id: node.id, name: node.name, level: node._level || 0 });
+        result.push({ id: node.id, name: catDisplayName(node), level: node._level || 0 });
         if (node.children?.length) {
           flatten(node.children, result);
         }
@@ -70,14 +81,29 @@ const updateParentOptions = () => {
 };
 
 const resetForm = () => {
-  Object.assign(form, { name: '', parent_id: null, description: '', is_active: true, sort_order: 0, anchor_keywords: '' });
+  Object.assign(form, {
+    name_ru: '',
+    name_ua: '',
+    name_pl: '',
+    name_en: '',
+    slug: '',
+    parent_id: null,
+    description: '',
+    is_active: true,
+    sort_order: 0,
+    anchor_keywords: '',
+  });
   editingId.value = null;
   showForm.value = false;
 };
 
 const editCategory = (cat) => {
   editingId.value = cat.id;
-  form.name = cat.name;
+  form.name_ru = cat.name_ru || '';
+  form.name_ua = cat.name_ua || '';
+  form.name_pl = cat.name_pl || '';
+  form.name_en = cat.name_en || '';
+  form.slug = cat.slug || '';
   form.parent_id = cat.parent_id || null;
   form.description = cat.description || '';
   form.is_active = cat.is_active;
@@ -88,7 +114,9 @@ const editCategory = (cat) => {
 };
 
 const saveCategory = async () => {
-  if (!form.name) return alert(t('admin.category_name_placeholder').replace('*','').trim());
+  if (!form.name_en && !form.name_ru) {
+    return alert(t('admin.category_name_placeholder').replace('*','').trim());
+  }
   try {
     // Parse anchor_keywords: split by comma, trim, filter empty
     const keywords = form.anchor_keywords
@@ -97,7 +125,11 @@ const saveCategory = async () => {
       .filter(k => k.length > 0);
 
     const payload = {
-      name: form.name,
+      name_ru: form.name_ru,
+      name_ua: form.name_ua,
+      name_pl: form.name_pl,
+      name_en: form.name_en,
+      slug: form.slug || null,
       parent_id: form.parent_id,
       description: form.description,
       is_active: form.is_active,
@@ -119,7 +151,8 @@ const saveCategory = async () => {
 };
 
 const deleteCategory = async (cat) => {
-  if (!confirm(t('admin.delete_confirm', { name: cat.name }))) return;
+  const displayName = catDisplayName(cat);
+  if (!confirm(t('admin.delete_confirm', { name: displayName }))) return;
   try {
     await api.delete(`/admin/categories/${cat.id}`);
     await fetchCategories();
@@ -189,7 +222,11 @@ watch(showForm, (val) => {
         {{ editingId ? t('admin.edit_category') : t('admin.new_category') }}
       </h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <input v-model="form.name" type="text" :placeholder="t('admin.category_name_placeholder')" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+        <input v-model="form.name_ru" type="text" :placeholder="t('admin.category_name_placeholder') + ' (RU)'" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+        <input v-model="form.name_ua" type="text" placeholder="Name UA" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+        <input v-model="form.name_pl" type="text" placeholder="Name PL" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+        <input v-model="form.name_en" type="text" placeholder="Name EN (used for slug)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+        <input v-model="form.slug" type="text" placeholder="Slug (auto from EN if empty)" class="sm:col-span-2 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
         <select v-model="form.parent_id" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
           <option :value="null">{{ t('admin.root_category') }}</option>
           <option v-for="opt in parentOptions.filter(o => o.id !== null)" :key="opt.id" :value="opt.id">
@@ -248,7 +285,7 @@ watch(showForm, (val) => {
         <tbody>
           <tr v-for="cat in categories" :key="cat.id" class="border-t hover:bg-gray-50">
             <td class="px-4 py-3">{{ cat.id }}</td>
-            <td class="px-4 py-3 font-medium">{{ cat.name }}</td>
+            <td class="px-4 py-3 font-medium">{{ catDisplayName(cat) }}</td>
             <td class="px-4 py-3 text-gray-500">
               {{ cat.parent_id ? `#${cat.parent_id}` : '—' }}
             </td>

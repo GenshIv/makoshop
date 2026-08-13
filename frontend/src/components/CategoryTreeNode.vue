@@ -1,4 +1,8 @@
 <script setup>
+import { useI18n } from 'vue-i18n';
+
+const { locale } = useI18n();
+
 const props = defineProps({
   category: { type: Object, required: true },
   expanded: { type: Set, required: true },
@@ -6,6 +10,12 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['toggle', 'go']);
+
+const catName = (cat) => {
+  if (!cat) return '—';
+  const langField = `name_${locale.value}`;
+  return cat[langField] || cat.name_en || cat.name_ru || cat.name_ua || cat.name_pl || cat.name || '—';
+};
 
 const children = props.category.children || [];
 const hasChildren = children.length > 0;
@@ -56,7 +66,7 @@ defineOptions({ name: 'CategoryTreeNode' });
           'bg-indigo-50 text-indigo-700 font-medium theme-dark:bg-slate-800 theme-dark:text-white': isActive()
         }"
       >
-        <span class="truncate">{{ category.name }}</span>
+        <span class="truncate">{{ catName(category) }}</span>
       </button>
     </div>
 

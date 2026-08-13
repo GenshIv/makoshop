@@ -120,7 +120,10 @@ type Brand struct {
 type Category struct {
 	ID             int64     `json:"id"`
 	ParentID       *int64    `json:"parent_id,omitempty"`
-	Name           string    `json:"name"`
+	NameRu         string    `json:"name_ru"`
+	NameUa         string    `json:"name_ua"`
+	NamePl         string    `json:"name_pl"`
+	NameEn         string    `json:"name_en"`
 	Slug           string    `json:"slug"`
 	Desc           string    `json:"description,omitempty"`
 	IsActive       bool      `json:"is_active"`

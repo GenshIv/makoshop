@@ -19,6 +19,26 @@ import (
 	"github.com/GenshIv/makoshop/internal/tokenizer"
 )
 
+// slugFromNameEn generates a URL-safe slug from English category name.
+func slugFromNameEn(name string) string {
+	s := strings.ToLower(name)
+	// Replace non-alnum / spaces with hyphens
+	s = strings.ReplaceAll(s, " ", "-")
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			b.WriteRune(r)
+		}
+	}
+	s = b.String()
+	// Collapse multiple hyphens
+	for strings.Contains(s, "--") {
+		s = strings.ReplaceAll(s, "--", "-")
+	}
+	// Trim leading/trailing hyphens
+	return strings.Trim(s, "-")
+}
+
 type Handlers struct {
 	store             *db.Store
 	categoryRepo      *db.CategoryRepo
@@ -321,10 +341,14 @@ func (h *Handlers) HandleCategoryGet(w http.ResponseWriter, r *http.Request) {
 type CreateCategoryRequest struct {
 	ParentID       *int64   `json:"parent_id,omitempty"`
 	ParentIDSet    bool     `json:"-"` // tracks if parent_id was explicitly sent
-	Name           string   `json:"name"`
+	NameRu         string   `json:"name_ru"`
+	NameUa         string   `json:"name_ua"`
+	NamePl         string   `json:"name_pl"`
+	NameEn         string   `json:"name_en"`
 	Slug           string   `json:"slug"`
 	Description    string   `json:"description,omitempty"`
 	IsActive       bool     `json:"is_active"`
+	IsActivePtr    *bool    `json:"-"` // pointer to detect if is_active was explicitly sent in PATCH
 	SortOrder      int      `json:"sort_order"`
 	AnchorKeywords []string `json:"anchor_keywords,omitempty"` // keywords for auto-catalogization
 }
@@ -340,10 +364,23 @@ func (h *Handlers) HandleCategoryCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	nameEn := req.NameEn
+	if nameEn == "" && req.NameRu != "" {
+		nameEn = req.NameRu // fallback for slug if name_en not set
+	}
+
+	slug := req.Slug
+	if slug == "" {
+		slug = slugFromNameEn(nameEn)
+	}
+
 	cat := &model.Category{
 		ParentID:  req.ParentID,
-		Name:      req.Name,
-		Slug:      req.Slug,
+		NameRu:    req.NameRu,
+		NameUa:    req.NameUa,
+		NamePl:    req.NamePl,
+		NameEn:    nameEn,
+		Slug:      slug,
 		Desc:      req.Description,
 		IsActive:  req.IsActive,
 		SortOrder: req.SortOrder,
@@ -368,28 +405,105 @@ func (h *Handlers) HandleCategoryUpdate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var req CreateCategoryRequest
-	if !readJSON(w, r, &req) {
+	// Read raw JSON to detect which fields are present
+	var raw map[string]interface{}
+	if !readJSON(w, r, &raw) {
 		return
+	}
+
+	// Parse into struct
+	req := CreateCategoryRequest{}
+	if v, ok := raw["parent_id"]; ok && v != nil {
+		if f, ok := v.(float64); ok {
+			p := int64(f)
+			req.ParentID = &p
+		}
+	}
+	if v, ok := raw["name_ru"]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			req.NameRu = s
+		}
+	}
+	if v, ok := raw["name_ua"]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			req.NameUa = s
+		}
+	}
+	if v, ok := raw["name_pl"]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			req.NamePl = s
+		}
+	}
+	if v, ok := raw["name_en"]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			req.NameEn = s
+		}
+	}
+	if v, ok := raw["slug"]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			req.Slug = s
+		}
+	}
+	if v, ok := raw["description"]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			req.Description = s
+		}
+	}
+	if v, ok := raw["is_active"]; ok && v != nil {
+		if b, ok := v.(bool); ok {
+			req.IsActive = b
+			req.IsActivePtr = &b
+		}
+	}
+	if v, ok := raw["sort_order"]; ok && v != nil {
+		if f, ok := v.(float64); ok {
+			req.SortOrder = int(f)
+		}
+	}
+	if v, ok := raw["anchor_keywords"]; ok && v != nil {
+		if arr, ok := v.([]interface{}); ok {
+			for _, item := range arr {
+				if s, ok := item.(string); ok {
+					req.AnchorKeywords = append(req.AnchorKeywords, s)
+				}
+			}
+		}
 	}
 
 	if err := h.categoryRepo.Update(id, func(c *model.Category) {
 		if req.ParentID != nil {
 			c.ParentID = req.ParentID
 		}
-		if req.Name != "" {
-			c.Name = req.Name
+		if req.NameRu != "" {
+			c.NameRu = req.NameRu
 		}
+		if req.NameUa != "" {
+			c.NameUa = req.NameUa
+		}
+		if req.NamePl != "" {
+			c.NamePl = req.NamePl
+		}
+		if req.NameEn != "" {
+			c.NameEn = req.NameEn
+		}
+
+		// If slug explicitly provided, use it; otherwise regenerate from name_en
 		if req.Slug != "" {
 			c.Slug = req.Slug
+		} else if c.NameEn != "" && c.Slug == "" {
+			c.Slug = slugFromNameEn(c.NameEn)
 		}
+
 		if req.Description != "" {
 			c.Desc = req.Description
 		}
 		if req.SortOrder != 0 {
 			c.SortOrder = req.SortOrder
 		}
-		c.IsActive = req.IsActive
+		// Only update IsActive if explicitly provided in PATCH
+		if req.IsActivePtr != nil {
+			c.IsActive = *req.IsActivePtr
+		}
 		if req.AnchorKeywords != nil {
 			c.AnchorKeywords = req.AnchorKeywords
 		}
@@ -1011,6 +1125,7 @@ func (h *Handlers) HandleCartGet(w http.ResponseWriter, r *http.Request) {
 
 // HandleCartMe returns the current user's cart.
 // GET /cart/me (requires auth)
+// If user has no cart, creates one automatically.
 func (h *Handlers) HandleCartMe(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
@@ -1025,8 +1140,12 @@ func (h *Handlers) HandleCartMe(w http.ResponseWriter, r *http.Request) {
 
 	cart, err := h.cartRepo.GetUserCart(ctxUser.ID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "cart not found")
-		return
+		// No cart yet — create one
+		cart, err = h.cartRepo.CreateForUser(ctxUser.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create cart")
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusOK, cart)
@@ -3491,17 +3610,21 @@ func (h *Handlers) HandleAdminCatalogizerCoverage(w http.ResponseWriter, r *http
 			empty++
 		} else {
 			withKeywords++
+			catName := cat.NameEn
+			if catName == "" {
+				catName = cat.NameRu
+			}
 			if kwCount < 5 {
 				fewTokens = append(fewTokens, map[string]interface{}{
 					"id":          cat.ID,
-					"name":        cat.Name,
+					"name":        catName,
 					"token_count": kwCount,
 				})
 			}
 			if kwCount > 30 {
 				manyTokens = append(manyTokens, map[string]interface{}{
 					"id":          cat.ID,
-					"name":        cat.Name,
+					"name":        catName,
 					"token_count": kwCount,
 				})
 			}
@@ -3705,7 +3828,10 @@ func (h *Handlers) HandleAdminCategoriesExport(w http.ResponseWriter, r *http.Re
 	type ExportCategory struct {
 		ID             int64    `json:"id,omitempty"`
 		ParentID       *int64   `json:"parent_id,omitempty"`
-		Name           string   `json:"name"`
+		NameRu         string   `json:"name_ru"`
+		NameUa         string   `json:"name_ua"`
+		NamePl         string   `json:"name_pl"`
+		NameEn         string   `json:"name_en"`
 		Slug           string   `json:"slug"`
 		Description    string   `json:"description,omitempty"`
 		IsActive       bool     `json:"is_active"`
@@ -3722,7 +3848,10 @@ func (h *Handlers) HandleAdminCategoriesExport(w http.ResponseWriter, r *http.Re
 		export = append(export, ExportCategory{
 			ID:             cat.ID,
 			ParentID:       cat.ParentID,
-			Name:           cat.Name,
+			NameRu:         cat.NameRu,
+			NameUa:         cat.NameUa,
+			NamePl:         cat.NamePl,
+			NameEn:         cat.NameEn,
 			Slug:           cat.Slug,
 			Description:    cat.Desc,
 			IsActive:       cat.IsActive,
@@ -3752,7 +3881,10 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 	type ImportCategory struct {
 		ID             int64    `json:"id,omitempty"`
 		ParentID       *int64   `json:"parent_id,omitempty"`
-		Name           string   `json:"name"`
+		NameRu         string   `json:"name_ru"`
+		NameUa         string   `json:"name_ua"`
+		NamePl         string   `json:"name_pl"`
+		NameEn         string   `json:"name_en"`
 		Slug           string   `json:"slug"`
 		Description    string   `json:"description,omitempty"`
 		IsActive       bool     `json:"is_active"`
@@ -3780,10 +3912,14 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 	// Map: name+parent -> newID (for finding existing)
 	nameParentToID := make(map[string]int64)
 
-	// Build existing categories map
+	// Build existing categories map (use name_en as primary key; fallback to name_ru)
 	existing, _ := h.categoryRepo.ListAll()
 	for _, cat := range existing {
-		key := cat.Name + "|"
+		name := cat.NameEn
+		if name == "" {
+			name = cat.NameRu
+		}
+		key := name + "|"
 		if cat.ParentID != nil {
 			key += fmt.Sprintf("%d", *cat.ParentID)
 		}
@@ -3795,7 +3931,11 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 
 	// First pass: create/update categories
 	for _, ic := range req.Categories {
-		if ic.Name == "" {
+		nameEn := ic.NameEn
+		if nameEn == "" && ic.NameRu != "" {
+			nameEn = ic.NameRu
+		}
+		if nameEn == "" {
 			continue
 		}
 
@@ -3808,8 +3948,8 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 			}
 		}
 
-		// Find existing category by name+parent
-		key := ic.Name + "|"
+		// Find existing category by name_en+parent
+		key := nameEn + "|"
 		if dbParentID != nil {
 			key += fmt.Sprintf("%d", *dbParentID)
 		}
@@ -3817,8 +3957,22 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 		if existingID, ok := nameParentToID[key]; ok {
 			// Update existing
 			h.categoryRepo.Update(existingID, func(c *model.Category) {
+				if ic.NameRu != "" {
+					c.NameRu = ic.NameRu
+				}
+				if ic.NameUa != "" {
+					c.NameUa = ic.NameUa
+				}
+				if ic.NamePl != "" {
+					c.NamePl = ic.NamePl
+				}
+				if ic.NameEn != "" {
+					c.NameEn = ic.NameEn
+				}
 				if ic.Slug != "" {
 					c.Slug = ic.Slug
+				} else if c.Slug == "" {
+					c.Slug = slugFromNameEn(c.NameEn)
 				}
 				if ic.Description != "" {
 					c.Desc = ic.Description
@@ -3839,9 +3993,16 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 			}
 		} else {
 			// Create new
+			slug := ic.Slug
+			if slug == "" {
+				slug = slugFromNameEn(nameEn)
+			}
 			cat := &model.Category{
-				Name:           ic.Name,
-				Slug:           ic.Slug,
+				NameRu:         ic.NameRu,
+				NameUa:         ic.NameUa,
+				NamePl:         ic.NamePl,
+				NameEn:         nameEn,
+				Slug:           slug,
 				ParentID:       dbParentID,
 				Desc:           ic.Description,
 				IsActive:       ic.IsActive,
@@ -3849,7 +4010,7 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 				AnchorKeywords: ic.AnchorKeywords,
 			}
 			if err := h.categoryRepo.Create(cat); err != nil {
-				fmt.Printf("WARN: create category %s: %v\n", ic.Name, err)
+				fmt.Printf("WARN: create category %s: %v\n", nameEn, err)
 				continue
 			}
 			created++
@@ -3867,7 +4028,11 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 		newID := oldIDToNewID[ic.ID]
 		if newID == 0 {
 			// Try to find by name+parent
-			key := ic.Name + "|"
+			nameKey := ic.NameEn
+			if nameKey == "" {
+				nameKey = ic.NameRu
+			}
+			key := nameKey + "|"
 			if ic.ParentID != nil {
 				if newParentID, ok := oldIDToNewID[*ic.ParentID]; ok {
 					key += fmt.Sprintf("%d", newParentID)

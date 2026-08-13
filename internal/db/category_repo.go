@@ -537,6 +537,10 @@ type CategoryTreeNode struct {
 	ID        int64               `json:"id"`
 	ParentID  *int64              `json:"parent_id,omitempty"`
 	Name      string              `json:"name"`
+	NameRu    string              `json:"name_ru"`
+	NameUa    string              `json:"name_ua"`
+	NamePl    string              `json:"name_pl"`
+	NameEn    string              `json:"name_en"`
 	Slug      string              `json:"slug"`
 	Desc      string              `json:"description,omitempty"`
 	IsActive  bool                `json:"is_active"`
@@ -585,10 +589,18 @@ func (r *CategoryRepo) isDescendantCached(cat *model.Category, parentID int64) b
 func (r *CategoryRepo) buildTree(categories []model.Category, rootParentID *int64) ([]CategoryTreeNode, error) {
 	byID := make(map[int64]*CategoryTreeNode, len(categories))
 	for _, c := range categories {
+		name := c.NameEn
+		if name == "" {
+			name = c.NameRu
+		}
 		byID[c.ID] = &CategoryTreeNode{
 			ID:        c.ID,
 			ParentID:  c.ParentID,
-			Name:      c.Name,
+			Name:      name,
+			NameRu:    c.NameRu,
+			NameUa:    c.NameUa,
+			NamePl:    c.NamePl,
+			NameEn:    c.NameEn,
 			Slug:      c.Slug,
 			Desc:      c.Desc,
 			IsActive:  c.IsActive,
@@ -695,11 +707,16 @@ func (r *CategoryRepo) BuildPathMap() (map[string]int64, error) {
 			return
 		}
 
+		name := cat.NameEn
+		if name == "" {
+			name = cat.NameRu
+		}
+
 		path := prefix
 		if path == "" {
-			path = cat.Name
+			path = name
 		} else {
-			path = prefix + " -> " + cat.Name
+			path = prefix + " -> " + name
 		}
 
 		pathMap[path] = cat.ID

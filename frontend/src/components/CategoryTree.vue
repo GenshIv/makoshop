@@ -1,8 +1,13 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import api from '../api';
 import CategoryTreeNode from './CategoryTreeNode.vue';
+
+const { t } = useI18n();
+
+const allProductsLabel = computed(() => t('catalog.all_products', 'All products'));
 
 const route = useRoute();
 const router = useRouter();
@@ -122,11 +127,11 @@ defineOptions({ name: 'CategoryTree' });
 
 <template>
   <nav class="space-y-0.5 text-sm">
-    <div v-if="loading" class="text-gray-400 py-2">Загрузка...</div>
+    <div v-if="loading" class="text-gray-400 py-2">{{ t('common.loading', 'Загрузка...') }}</div>
     <template v-else>
       <!-- Root "All" category -->
       <CategoryTreeNode
-        :category="{ id: '', name: 'Все товары' }"
+        :category="{ id: '', name_ru: allProductsLabel, name_ua: allProductsLabel, name_pl: allProductsLabel, name_en: allProductsLabel }"
         :expanded="expanded"
         :active-id="activeCategoryId"
         @toggle="() => {}"

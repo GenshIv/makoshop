@@ -57,14 +57,14 @@ const fetchCategoryPath = async (categoryId) => {
       categoryPath.value = [];
       return;
     }
-    const path = [{ id: cat.id, name: cat.name }];
+    const path = [{ id: cat.id, name_ru: cat.name_ru, name_ua: cat.name_ua, name_pl: cat.name_pl, name_en: cat.name_en }];
     // Walk up the tree
     let currentId = cat.parent_id;
     while (currentId) {
       const parentResponse = await api.get(`/admin/categories/${currentId}`);
       const parent = parentResponse.data;
       if (!parent) break;
-      path.unshift({ id: parent.id, name: parent.name });
+      path.unshift({ id: parent.id, name_ru: parent.name_ru, name_ua: parent.name_ua, name_pl: parent.name_pl, name_en: parent.name_en });
       currentId = parent.parent_id;
     }
     categoryPath.value = path;

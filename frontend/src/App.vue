@@ -18,7 +18,7 @@ const { t, locale } = useI18n();
 const langLabels = {
   ru: 'RU',
   en: 'EN',
-  uk: 'UK',
+  ua: 'UA',
   pl: 'PL',
 };
 
@@ -38,6 +38,13 @@ const mobileMenuOpen = ref(false);
 const categoriesSidebarOpen = ref(false);
 
 const isAuthenticated = computed(() => auth.isAuthenticated);
+const userRole = computed(() => {
+  const role = auth.user?.role;
+  if (!role) return '';
+  if (role === 'admin') return 'Admin';
+  if (role === 'seller') return 'Seller';
+  return '';
+});
 
 // SEO page titles (computed to react to locale changes)
 const pageTitles = computed(() => ({

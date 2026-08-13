@@ -158,7 +158,7 @@ const fetchCategoryAttrs = async (categoryId) => {
   }
 };
 
-// Build category path: [{id, name}, ...] from root to current
+// Build category path: [{id, name_ru/ua/pl/en, slug}, ...] from root to current
 const fetchCategoryPath = async (categoryId) => {
   if (!categoryId) {
     categoryPath.value = [];
@@ -171,14 +171,14 @@ const fetchCategoryPath = async (categoryId) => {
       categoryPath.value = [];
       return;
     }
-    const path = [{ id: cat.id, name: cat.name, slug: cat.slug }];
+    const path = [{ id: cat.id, name_ru: cat.name_ru, name_ua: cat.name_ua, name_pl: cat.name_pl, name_en: cat.name_en, slug: cat.slug }];
     // Walk up the tree
     let currentId = cat.parent_id;
     while (currentId) {
       const parentResponse = await api.get(`/admin/categories/${currentId}`);
       const parent = parentResponse.data;
       if (!parent) break;
-      path.unshift({ id: parent.id, name: parent.name, slug: parent.slug });
+      path.unshift({ id: parent.id, name_ru: parent.name_ru, name_ua: parent.name_ua, name_pl: parent.name_pl, name_en: parent.name_en, slug: parent.slug });
       currentId = parent.parent_id;
     }
     categoryPath.value = path;

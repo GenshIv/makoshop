@@ -1,5 +1,8 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { locale } = useI18n();
 
 const props = defineProps({
   // Array of { slug, name } for category path
@@ -14,6 +17,13 @@ const props = defineProps({
   },
 });
 
+// Get localized category name based on current locale
+const catDisplayName = (cat) => {
+  if (!cat) return '';
+  const langField = `name_${locale.value}`;
+  return cat[langField] || cat.name_en || cat.name_ru || cat.name_ua || cat.name_pl || cat.name || '';
+};
+
 const crumbs = computed(() => {
   const items = [];
   
@@ -23,9 +33,9 @@ const crumbs = computed(() => {
   // Add category path using slugs
   let path = '/shop';
   for (const cat of props.categories) {
-    path += '/' + (cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9а-яё]+/g, '-'));
+    path += '/' + (cat.slug || cat.name_en?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || '');
     items.push({
-      name: cat.name,
+      name: catDisplayName(cat),
       to: { path },
     });
   }

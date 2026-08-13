@@ -1,11 +1,11 @@
 import { createI18n } from 'vue-i18n';
 import ru from './ru.json';
 import en from './en.json';
-import uk from './uk.json';
+import ua from './ua.json';
 import pl from './pl.json';
 
-const SUPPORTED_LOCALES = ['pl', 'uk', 'en', 'ru'];
-const DEFAULT_LOCALE_ORDER = ['pl', 'uk', 'en', 'ru'];
+const SUPPORTED_LOCALES = ['pl', 'ua', 'en', 'ru'];
+const DEFAULT_LOCALE_ORDER = ['pl', 'ua', 'en', 'ru'];
 
 // Detect language from URL param (?lang=en) or browser or default order
 function getInitialLocale() {
@@ -29,7 +29,7 @@ export const i18n = createI18n({
   messages: {
     ru,
     en,
-    uk,
+    ua,
     pl,
   },
 });

@@ -61,6 +61,11 @@ func (r *CartRepo) Create(userID *int64, sessionID string) (*model.Cart, error) 
 	return cart, nil
 }
 
+// CreateForUser creates a new cart for an authenticated user.
+func (r *CartRepo) CreateForUser(userID int64) (*model.Cart, error) {
+	return r.Create(&userID, "")
+}
+
 // GetBySessionID returns the cart associated with a session ID (guest cart).
 func (r *CartRepo) GetBySessionID(sessionID string) (*model.Cart, error) {
 	key := fmt.Sprintf("cart:session:%s", sessionID)

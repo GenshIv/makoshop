@@ -1339,9 +1339,12 @@ func (h *Handlers) HandleAdminRebuildCategorySlugs(w http.ResponseWriter, r *htt
 
 	updated := 0
 	for _, c := range cats {
-		if c.Slug == "" || c.Slug == c.Name {
-			newSlug := toSlugLocal(c.Name)
-			c.Slug = newSlug
+		nameEn := c.NameEn
+		if nameEn == "" {
+			nameEn = c.NameRu
+		}
+		if c.Slug == "" || c.Slug == nameEn {
+			newSlug := toSlugLocal(nameEn)
 			if err := h.categoryRepo.Update(c.ID, func(cat *model.Category) {
 				cat.Slug = newSlug
 			}); err != nil {

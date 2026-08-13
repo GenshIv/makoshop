@@ -4,7 +4,13 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../../api';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
+
+const catDisplayName = (cat) => {
+  if (!cat) return String(cat?.id || '');
+  const langField = `name_${locale.value}`;
+  return cat[langField] || cat.name_en || cat.name_ru || cat.name_ua || cat.name_pl || String(cat.id);
+};
 const router = useRouter();
 
 const loading = ref(false);
@@ -204,7 +210,7 @@ const addTokenToCategory = async (catId, token) => {
   }
   const updated = [...current, t].slice(0, 50);
   if (await updateAnchorKeywords(catId, updated)) {
-    addLog(`Added token "${t}" to category "${cat.name}"`);
+    addLog(`Added token "${t}" to category "${catDisplayName(cat)}"`);
   }
 };
 
@@ -214,7 +220,7 @@ const removeTokenFromCategory = async (catId, token) => {
   const current = cat.anchor_keywords || [];
   const updated = current.filter(kw => kw !== token);
   if (await updateAnchorKeywords(catId, updated)) {
-    addLog(`Removed token "${token}" from category "${cat.name}"`);
+    addLog(`Removed token "${token}" from category "${catDisplayName(cat)}"`);
   }
 };
 
@@ -512,7 +518,7 @@ onMounted(() => {
               :key="cat.id"
               :value="cat.id"
             >
-              {{ cat.name }} ({{ cat.id }})
+              {{ catDisplayName(cat) }} ({{ cat.id }})
             </option>
           </select>
         </div>
