@@ -1247,6 +1247,21 @@ func main() {
 		h.HandleAdminStats(w, r)
 	}), model.RoleAdmin))
 
+	// GET /admin/debug/turbo-key?key=... — read raw turbo key (TEMP)
+	mux.Handle("/admin/debug/turbo-key", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := r.URL.Query().Get("key")
+		if key == "" {
+			http.Error(w, "missing key", http.StatusBadRequest)
+			return
+		}
+		data, err := h.Store().DB().TurboRawRead(key)
+		if err != nil {
+			fmt.Fprintf(w, "error: %v\n", err)
+			return
+		}
+		fmt.Fprintf(w, "key=%s len=%d data=%s\n", key, len(data), string(data))
+	}), model.RoleAdmin))
+
 	// --- Catalogizer ---
 
 	// POST /admin/catalogizer/train — train token index from normalized files

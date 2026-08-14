@@ -119,8 +119,12 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 			if _, err := t.store.db.TurboPutIndex(turboKeyAttr(code, valStr), docID); err != nil {
 				return fmt.Errorf("turbo attr index: %w", err)
 			}
-			// Обновляем справочник значений атрибута
+			// Обновляем справочник значений атрибута (глобальный)
 			t.ensureAttrValueInRef(code, valStr)
+			// Обновляем категориальный индекс значений атрибута
+			if p.CategoryID != 0 {
+				t.ensureAttrValueInCatRef(code, p.CategoryID, valStr)
+			}
 		}
 	}
 
@@ -268,6 +272,21 @@ func (t *TurboProductSearch) ensureAttrValueInRef(code, value string) {
 	t.store.TurboWrite(labelKey, label)
 }
 
+// ensureAttrValueInCatRef adds a value hash to turbo_attr_values_cat:{code}:{catID}.
+func (t *TurboProductSearch) ensureAttrValueInCatRef(code string, catID int64, value string) {
+	if code == "" || value == "" || catID == 0 {
+		return
+	}
+	h := Fnv64(value)
+	key := "turbo_attr_values_cat:" + code + ":" + strconv.FormatInt(catID, 10)
+	if _, err := t.store.db.TurboPutIndex(key, h); err != nil {
+		fmt.Printf("WARN: turbo attr_values_cat index %s: %v\n", key, err)
+	}
+	// Also write label for this value
+	labelKey := turboKeyAttrLabel(code, value)
+	t.store.TurboWrite(labelKey, []byte(value))
+}
+
 // UnindexProduct — для удаления/обновления.
 func (t *TurboProductSearch) UnindexProduct(p *model.Product) error {
 	if !t.enabled {
@@ -331,8 +350,9 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 
 	indexes := make(map[string][]uint64)
 	// Справочники: собираем уникальные значения для batch-записи
-	brandRef := make(map[uint64]string)           // brandID -> name
-	attrRef := make(map[string]map[uint64]string) // code -> {hash -> value}
+	brandRef := make(map[uint64]string)                        // brandID -> name
+	attrRef := make(map[string]map[uint64]string)              // code -> {hash -> value}
+	attrCatRef := make(map[string]map[int64]map[uint64]string) // code -> {catID -> {hash -> value}}
 
 	for _, p := range products {
 		docID := uint64(p.ID)
@@ -361,12 +381,22 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 		for code, val := range p.Attributes {
 			if valStr, ok := val.(string); ok && valStr != "" {
 				indexes[turboKeyAttr(code, valStr)] = append(indexes[turboKeyAttr(code, valStr)], docID)
-				// Справочник значений атрибута
+				// Справочник значений атрибута (глобальный)
 				if attrRef[code] == nil {
 					attrRef[code] = make(map[uint64]string)
 				}
 				h := Fnv64(valStr)
 				attrRef[code][h] = valStr
+				// Справочник значений атрибута по категории
+				if p.CategoryID != 0 {
+					if attrCatRef[code] == nil {
+						attrCatRef[code] = make(map[int64]map[uint64]string)
+					}
+					if attrCatRef[code][p.CategoryID] == nil {
+						attrCatRef[code][p.CategoryID] = make(map[uint64]string)
+					}
+					attrCatRef[code][p.CategoryID][h] = valStr
+				}
 			}
 		}
 		for _, tok := range tokenizeProduct(p) {
@@ -457,6 +487,23 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 		for _, val := range values {
 			labelKey := turboKeyAttrLabel(code, val)
 			t.store.TurboWrite(labelKey, []byte(val))
+		}
+	}
+
+	// Записываем категориальные индексы значений атрибутов: turbo_attr_values_cat:{code}:{catID}
+	for code, catMap := range attrCatRef {
+		for catID, values := range catMap {
+			key := "turbo_attr_values_cat:" + code + ":" + strconv.FormatInt(catID, 10)
+			// Собираем уникальные hashes для этой категории
+			hashes := make([]uint64, 0, len(values))
+			for h := range values {
+				hashes = append(hashes, h)
+			}
+			if len(hashes) > 0 {
+				if _, err := t.store.db.TurboPutBatchIndex(key, hashes); err != nil {
+					fmt.Printf("WARN: turbo batch attr_values_cat %s: %v\n", key, err)
+				}
+			}
 		}
 	}
 	t.mu.Unlock()

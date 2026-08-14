@@ -683,6 +683,33 @@ func (r *CategoryRepo) GetTreePath(catID int64) ([]string, error) {
 	return path, nil
 }
 
+// GetTreePathFull returns the full path from root to the given category as []*Category.
+// Includes all translations (name_ru, name_ua, name_pl, name_en).
+func (r *CategoryRepo) GetTreePathFull(catID int64) ([]*model.Category, error) {
+	ancestors, err := r.GetAncestors(catID)
+	if err != nil {
+		return nil, err
+	}
+
+	var path []*model.Category
+	for _, aid := range ancestors {
+		cat, err := r.Get(aid)
+		if err != nil {
+			return nil, err
+		}
+		path = append(path, cat)
+	}
+
+	// Add own category
+	cat, err := r.Get(catID)
+	if err != nil {
+		return nil, err
+	}
+	path = append(path, cat)
+
+	return path, nil
+}
+
 // ---------- Migration helpers ----------
 
 // BuildPathMap builds a map of category paths ("Cat1 -> Cat2 -> Cat3") to category IDs.

@@ -203,44 +203,16 @@ func (r *AttrDefRepo) GetCodesForCategoryTree(catID int64, categoryRepo *Categor
 
 // GetAttrValuesForCategory returns all values for an attribute code in a specific category.
 func (r *AttrDefRepo) GetAttrValuesForCategory(code string, catID int64) ([]string, error) {
-	if catID != 0 {
-		key := turboKeyAttrValuesCat + code + ":" + fmt.Sprintf("%d", catID)
-		data, err := r.store.DB().TurboRawRead(key)
-		if err != nil || len(data) == 0 {
-			return nil, nil
-		}
-
-		hashes := makodb.TurboUnsafeReadTokens(data)
-		return r.hashesToStrings(code, hashes)
-	}
-
-	// catID == 0: merge all categories
-	var allHashes []uint64
-	seen := make(map[uint64]struct{})
-
-	catsKey := turboKeyAttrDefCats + code
-	catsData, err := r.store.DB().TurboRawRead(catsKey)
-	if err != nil || len(catsData) == 0 {
+	if catID == 0 {
 		return nil, nil
 	}
-
-	catIDs := makodb.TurboUnsafeReadTokens(catsData)
-	for _, cid := range catIDs {
-		key := turboKeyAttrValuesCat + code + ":" + fmt.Sprintf("%d", cid)
-		data, err := r.store.DB().TurboRawRead(key)
-		if err != nil || len(data) == 0 {
-			continue
-		}
-		hashes := makodb.TurboUnsafeReadTokens(data)
-		for _, h := range hashes {
-			if _, ok := seen[h]; !ok {
-				seen[h] = struct{}{}
-				allHashes = append(allHashes, h)
-			}
-		}
+	key := turboKeyAttrValuesCat + code + ":" + fmt.Sprintf("%d", catID)
+	data, err := r.store.DB().TurboRawRead(key)
+	if err != nil || len(data) == 0 {
+		return nil, nil
 	}
-
-	return r.hashesToStrings(code, allHashes)
+	hashes := makodb.TurboUnsafeReadTokens(data)
+	return r.hashesToStrings(code, hashes)
 }
 
 func (r *AttrDefRepo) hashesToStrings(code string, hashes []uint64) ([]string, error) {

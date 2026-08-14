@@ -123,6 +123,11 @@ func NewHandlers(store *db.Store) *Handlers {
 	}
 }
 
+// Store returns the underlying store.
+func (h *Handlers) Store() *db.Store {
+	return h.store
+}
+
 // TurboSearch returns the attached TurboProductSearch.
 func (h *Handlers) TurboSearch() *db.TurboProductSearch {
 	return h.turboSearch

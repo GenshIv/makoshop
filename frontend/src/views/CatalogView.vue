@@ -10,7 +10,7 @@ const SCUPageView = defineAsyncComponent(() => import('../views/SCUPageView.vue'
 
 const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const products = ref([]);
 const categoryAttrs = ref([]);

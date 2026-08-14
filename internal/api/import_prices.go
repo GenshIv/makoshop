@@ -1841,6 +1841,10 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 	var totalImported int64
 	var totalSkipped int64
 
+	// Collect all products across all companies for batch indexing
+	var allProducts []*model.Product
+	var allProductsMu sync.Mutex
+
 	for _, companyName := range companyDirs {
 		fmt.Printf("[IMPORT-MULTI] Processing company: %s\n", companyName)
 
@@ -1887,6 +1891,7 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 			file     string
 			imported int64
 			skipped  int64
+			products []*model.Product
 			error    error
 		}
 
@@ -1919,6 +1924,7 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 					file:     file,
 					imported: res.imported,
 					skipped:  res.skipped,
+					products: res.products,
 					error:    err,
 				}
 			}(csvFile)
@@ -1935,6 +1941,12 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 			companySkipped += res.skipped
 			if res.error != nil && fileError == "" {
 				fileError = res.error.Error()
+			}
+			// Collect products
+			if len(res.products) > 0 {
+				allProductsMu.Lock()
+				allProducts = append(allProducts, res.products...)
+				allProductsMu.Unlock()
 			}
 			fmt.Printf("[IMPORT-MULTI]   %s: imported=%d skipped=%d\n",
 				filepath.Base(res.file), res.imported, res.skipped)
@@ -1954,6 +1966,42 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[IMPORT-MULTI]   %s total: imported=%d skipped=%d\n",
 			companyName, companyImported, companySkipped)
 	}
+
+	// ============================================
+	// Phase 2: Batch index all products (creates scu:{scu} indexes)
+	// ============================================
+	fmt.Printf("[IMPORT-MULTI] Phase 2: Indexing %d products...\n", len(allProducts))
+	phase2Start := time.Now()
+	if h.productRepo.TurboSearch() != nil && len(allProducts) > 0 {
+		if err := h.productRepo.TurboSearch().IndexProductBatch(allProducts); err != nil {
+			fmt.Printf("[IMPORT-MULTI] WARN: index products: %v\n", err)
+		}
+	}
+	fmt.Printf("[IMPORT-MULTI] Phase 2: Products indexed in %v\n", time.Since(phase2Start))
+
+	// ============================================
+	// Phase 3: Batch upsert SCU pages + index
+	// ============================================
+	fmt.Println("[IMPORT-MULTI] Phase 3: SCU pages...")
+	phase3Start := time.Now()
+	if err := h.scuPageRepo.LoadCatalogizerCache(); err != nil {
+		fmt.Printf("[IMPORT-MULTI] WARN: load catalogizer cache: %v\n", err)
+	}
+	h.scuPageRepo.BatchUpsertFromProducts(allProducts)
+	if h.scuPageSearch != nil {
+		allSCUs, _ := h.scuPageRepo.ListAll()
+		scuPtrs := make([]*model.SCUPage, len(allSCUs))
+		for i := range allSCUs {
+			scuPtrs[i] = &allSCUs[i]
+		}
+		if err := h.scuPageSearch.IndexSCUPageBatch(scuPtrs); err != nil {
+			fmt.Printf("[IMPORT-MULTI] WARN: index SCU pages: %v\n", err)
+		}
+		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+			fmt.Printf("[IMPORT-MULTI] WARN: build SCU page sort indexes: %v\n", err)
+		}
+	}
+	fmt.Printf("[IMPORT-MULTI] Phase 3: SCU pages done in %v\n", time.Since(phase3Start))
 
 	elapsed := time.Since(startTime)
 	fmt.Printf("[IMPORT-MULTI] Complete: total_imported=%d total_skipped=%d time=%v\n",

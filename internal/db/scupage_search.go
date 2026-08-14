@@ -85,6 +85,35 @@ func (s *SCUPageSearch) IndexSCUPage(sp *model.SCUPage) error {
 	for code, val := range sp.Attributes {
 		if valStr, ok := val.(string); ok && valStr != "" {
 			indexes[scupageKeyAttr(code, valStr)] = append(indexes[scupageKeyAttr(code, valStr)], docID)
+			// Attr values per category for filter UI: own category only (no ancestors)
+			if sp.CategoryID != 0 {
+				h := Fnv64(valStr)
+				labelKey := "attr_label:" + code + ":" + strconv.FormatUint(h, 16)
+				_ = s.db.TurboRawWrite(labelKey, []byte(valStr))
+				key := "attr_values_cat:" + code + ":" + strconv.FormatInt(sp.CategoryID, 10)
+				if _, err := s.db.TurboPutIndex(key, h); err != nil {
+					fmt.Printf("WARN: scupage attr_values_cat index %s: %v\n", key, err)
+				}
+				// Update attrdef_cat_codes:{catID}
+				catCodesKey := "attrdef_cat_codes:" + strconv.FormatInt(sp.CategoryID, 10)
+				data, _ := s.db.TurboRawRead(catCodesKey)
+				var codes []string
+				if data != nil && len(data) > 0 {
+					json.Unmarshal(data, &codes)
+				}
+				found := false
+				for _, c := range codes {
+					if c == code {
+						found = true
+						break
+					}
+				}
+				if !found {
+					codes = append(codes, code)
+					buf, _ := json.Marshal(codes)
+					_ = s.db.TurboRawWrite(catCodesKey, buf)
+				}
+			}
 		}
 	}
 
@@ -115,6 +144,10 @@ func (s *SCUPageSearch) IndexSCUPageBatch(pages []*model.SCUPage) error {
 
 	// Collect all indexes in memory
 	indexes := make(map[string][]uint64)
+	// Attr values per category for filter UI: code -> {catID -> {hash -> value}}
+	attrCatRef := make(map[string]map[int64]map[uint64]string)
+	// Track which attribute codes are used per category (for turbo_attrdef_cat_codes)
+	catCodes := make(map[int64]map[string]struct{})
 
 	for _, sp := range pages {
 		docID := uint64(sp.ID)
@@ -139,6 +172,22 @@ func (s *SCUPageSearch) IndexSCUPageBatch(pages []*model.SCUPage) error {
 		for code, val := range sp.Attributes {
 			if valStr, ok := val.(string); ok && valStr != "" {
 				indexes[scupageKeyAttr(code, valStr)] = append(indexes[scupageKeyAttr(code, valStr)], docID)
+				// Attr values per category for filter UI: own category only (no ancestors)
+				if sp.CategoryID != 0 {
+					if attrCatRef[code] == nil {
+						attrCatRef[code] = make(map[int64]map[uint64]string)
+					}
+					if attrCatRef[code][sp.CategoryID] == nil {
+						attrCatRef[code][sp.CategoryID] = make(map[uint64]string)
+					}
+					h := Fnv64(valStr)
+					attrCatRef[code][sp.CategoryID][h] = valStr
+					// Track code for this category
+					if catCodes[sp.CategoryID] == nil {
+						catCodes[sp.CategoryID] = make(map[string]struct{})
+					}
+					catCodes[sp.CategoryID][code] = struct{}{}
+				}
 			}
 		}
 
@@ -156,6 +205,51 @@ func (s *SCUPageSearch) IndexSCUPageBatch(pages []*model.SCUPage) error {
 		if _, err := s.db.TurboPutBatchIndex(key, docIDs); err != nil {
 			fmt.Printf("WARN: scupage batch index %s: %v\n", key, err)
 		}
+	}
+
+	// Write attr values per category indexes for filter UI
+	for code, catMap := range attrCatRef {
+		for catID, values := range catMap {
+			key := "attr_values_cat:" + code + ":" + strconv.FormatInt(catID, 10)
+			hashes := make([]uint64, 0, len(values))
+			for h := range values {
+				hashes = append(hashes, h)
+			}
+			if len(hashes) > 0 {
+				if _, err := s.db.TurboPutBatchIndex(key, hashes); err != nil {
+					fmt.Printf("WARN: scupage attr_values_cat %s: %v\n", key, err)
+				}
+			}
+			// Write labels
+			for h, val := range values {
+				labelKey := "attr_label:" + code + ":" + strconv.FormatUint(h, 16)
+				_ = s.db.TurboRawWrite(labelKey, []byte(val))
+			}
+		}
+	}
+
+	// Update attrdef_cat_codes:{catID} with codes used by SCU pages
+	for catID, codes := range catCodes {
+		key := "attrdef_cat_codes:" + strconv.FormatInt(catID, 10)
+		// Read existing codes
+		data, _ := s.db.TurboRawRead(key)
+		var existing []string
+		if data != nil && len(data) > 0 {
+			json.Unmarshal(data, &existing)
+		}
+		existingSet := make(map[string]struct{}, len(existing))
+		for _, c := range existing {
+			existingSet[c] = struct{}{}
+		}
+		// Add new codes
+		for c := range codes {
+			if _, ok := existingSet[c]; !ok {
+				existing = append(existing, c)
+				existingSet[c] = struct{}{}
+			}
+		}
+		buf, _ := json.Marshal(existing)
+		_ = s.db.TurboRawWrite(key, buf)
 	}
 
 	return nil

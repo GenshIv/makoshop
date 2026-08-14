@@ -34,6 +34,7 @@ const goBack = () => {
 const page = ref(null);
 const products = ref([]);
 const treePath = ref([]);
+const treePathFull = ref([]);
 const loading = ref(true);
 const error = ref(null);
 
@@ -102,6 +103,7 @@ const fetchSCUPage = async () => {
     page.value = data.page;
     products.value = data.products || [];
     treePath.value = data.tree_path || [];
+    treePathFull.value = data.tree_path_full || [];
 
     initFromData();
   } catch (e) {
@@ -407,6 +409,7 @@ onMounted(() => {
     page.value = props.data.page;
     products.value = props.data.products || [];
     treePath.value = props.data.tree_path || [];
+    treePathFull.value = props.data.tree_path_full || [];
     loading.value = false;
     initFromData();
     return;
@@ -423,6 +426,7 @@ watch(
       page.value = newData.page;
       products.value = newData.products || [];
       treePath.value = newData.tree_path || [];
+      treePathFull.value = newData.tree_path_full || [];
       loading.value = false;
       initFromData();
     }
@@ -447,7 +451,7 @@ watch(
     <div v-else-if="page" class="space-y-6">
       <!-- Верхняя часть: хлебные крошки + заголовок -->
       <div>
-        <Breadcrumbs :categories="treePath.map(s => ({ slug: s, name: s }))" />
+        <Breadcrumbs :categories="treePathFull" />
 
         <div class="mt-3 flex items-start justify-between gap-4">
           <div class="min-w-0">
