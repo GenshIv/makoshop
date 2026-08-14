@@ -44,19 +44,21 @@ type User struct {
 // Code is unique (from normalized data, e.g. "diagonal-ekrana").
 type AttrDef struct {
 	ID           int64     `json:"id"`
-	Code         string    `json:"code"`                   // unique attribute code
-	Name         string    `json:"name,omitempty"`         // human-readable name (e.g. "Диагональ экрана")
-	Categories   []int64   `json:"categories"`             // category IDs where this attribute is used
-	Type         AttrType  `json:"type"`                   // string, int, float, bool, enum, range
-	IsActive     bool      `json:"is_active"`              // if false, excluded from filters/sort indexes
-	IsFilterable bool      `json:"is_filterable"`          // shown in filter sidebar
-	IsSortable   bool      `json:"is_sortable"`            // can sort by this attribute
-	SortOrder    int       `json:"sort_order"`             // display order in admin/filter
-	RangeParams  []string  `json:"range_params,omitempty"` // for range type: ["weight"], ["width","height","depth"], ["diagonal"]
-	Unit         string    `json:"unit,omitempty"`         // display unit: "кг", "см", "дюймов", etc.
+	Code         string    `json:"code"`
+	NameRu       string    `json:"name_ru,omitempty"`
+	NameUa       string    `json:"name_ua,omitempty"`
+	NamePl       string    `json:"name_pl,omitempty"`
+	NameEn       string    `json:"name_en,omitempty"`
+	Categories   []int64   `json:"categories"`
+	Type         AttrType  `json:"type"`
+	IsActive     bool      `json:"is_active"`
+	IsFilterable bool      `json:"is_filterable"`
+	IsSortable   bool      `json:"is_sortable"`
+	SortOrder    int       `json:"sort_order"`
+	RangeParams  []string  `json:"range_params,omitempty"`
+	Unit         string    `json:"unit,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 }
-
 // Company
 
 type CompanyStatus string
@@ -151,7 +153,10 @@ const (
 type AttributeDefinition struct {
 	ID           int64     `json:"id"`
 	CategoryID   int64     `json:"category_id"`
-	Name         string    `json:"name"`
+	NameRu       string    `json:"name_ru"`
+	NameUa       string    `json:"name_ua,omitempty"`
+	NamePl       string    `json:"name_pl,omitempty"`
+	NameEn       string    `json:"name_en,omitempty"`
 	Code         string    `json:"code"`
 	Type         AttrType  `json:"type"`
 	Options      []string  `json:"options,omitempty"`

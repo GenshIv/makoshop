@@ -14,7 +14,7 @@ const emit = defineEmits(['toggle', 'go']);
 const catName = (cat) => {
   if (!cat) return '—';
   const langField = `name_${locale.value}`;
-  return cat[langField] || cat.name_en || cat.name_ru || cat.name_ua || cat.name_pl || cat.name || '—';
+  return cat[langField] || cat.name_en || cat.name_ru || cat.name_ua || cat.name_pl || '—';
 };
 
 const children = props.category.children || [];

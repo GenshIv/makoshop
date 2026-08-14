@@ -21,6 +21,12 @@ export default defineConfig({
         changeOrigin: true,
         followRedirects: false,
       },
+      // Proxy /categories/* to backend for public category data
+      '/categories': {
+        target: 'http://localhost:9090',
+        changeOrigin: true,
+        followRedirects: false,
+      },
       // Proxy robots.txt and sitemap to backend
       '/robots.txt': {
         target: 'http://localhost:9090',

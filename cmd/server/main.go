@@ -695,6 +695,23 @@ func main() {
 		h.HandleCategoriesTree(w, r)
 	})
 
+	// GET /categories/{id} — public category by id
+	mux.HandleFunc("/categories/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		path := r.URL.Path
+
+		// GET /categories/tree_path/{id} — full path from root with full category data
+		if strings.Contains(path, "/tree_path/") {
+			h.HandleCategoryTreePath(w, r)
+			return
+		}
+
+		h.HandleCategoryGet(w, r)
+	})
+
 	mux.HandleFunc("/admin/categories", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

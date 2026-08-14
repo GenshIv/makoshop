@@ -338,6 +338,74 @@ func (h *Handlers) HandleCategoryGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, cat)
 }
 
+// HandleCategoryTreePath returns the full path from root to category in one request.
+// GET /categories/tree_path/{id}
+// Returns: [{id, slug, name_ru, name_ua, name_pl, name_en}, ...]
+func (h *Handlers) HandleCategoryTreePath(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	id, ok := parseID(w, r, "category_id")
+	if !ok {
+		return
+	}
+
+	// Verify category exists
+	_, err := h.categoryRepo.Get(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "category not found")
+		return
+	}
+
+	ancestors, err := h.categoryRepo.GetAncestors(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	type catPathItem struct {
+		ID     int64  `json:"id"`
+		Slug   string `json:"slug"`
+		NameRu string `json:"name_ru"`
+		NameUa string `json:"name_ua"`
+		NamePl string `json:"name_pl"`
+		NameEn string `json:"name_en"`
+	}
+
+	var path []catPathItem
+	for _, aid := range ancestors {
+		cat, err := h.categoryRepo.Get(aid)
+		if err != nil {
+			continue
+		}
+		path = append(path, catPathItem{
+			ID:     cat.ID,
+			Slug:   cat.Slug,
+			NameRu: cat.NameRu,
+			NameUa: cat.NameUa,
+			NamePl: cat.NamePl,
+			NameEn: cat.NameEn,
+		})
+	}
+
+	// Add current category
+	cat, _ := h.categoryRepo.Get(id)
+	if cat != nil {
+		path = append(path, catPathItem{
+			ID:     cat.ID,
+			Slug:   cat.Slug,
+			NameRu: cat.NameRu,
+			NameUa: cat.NameUa,
+			NamePl: cat.NamePl,
+			NameEn: cat.NameEn,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, path)
+}
+
 type CreateCategoryRequest struct {
 	ParentID       *int64   `json:"parent_id,omitempty"`
 	ParentIDSet    bool     `json:"-"` // tracks if parent_id was explicitly sent
@@ -585,17 +653,33 @@ func (h *Handlers) handleGetCategoryAttributes(w http.ResponseWriter, r *http.Re
 	}
 
 	type attrInfo struct {
-		Code   string   `json:"code"`
-		Values []string `json:"values"`
+		Code    string   `json:"code"`
+		NameRu  string   `json:"name_ru,omitempty"`
+		NameUa  string   `json:"name_ua,omitempty"`
+		NamePl  string   `json:"name_pl,omitempty"`
+		NameEn  string   `json:"name_en,omitempty"`
+		Type    string   `json:"type,omitempty"`
+		Options []string `json:"options,omitempty"`
+		Values  []string `json:"values,omitempty"`
 	}
 
 	var attrs []attrInfo
 	for _, code := range codes {
+		def, _ := h.attrDefRepo.GetByCode(code)
 		values, _ := h.attrDefRepo.GetAttrValuesForCategory(code, catID)
-		if len(values) == 0 {
-			continue
+
+		info := attrInfo{
+			Code:   code,
+			Values: values,
 		}
-		attrs = append(attrs, attrInfo{Code: code, Values: values})
+		if def != nil {
+			info.NameRu = def.NameRu
+			info.NameUa = def.NameUa
+			info.NamePl = def.NamePl
+			info.NameEn = def.NameEn
+			info.Type = string(def.Type)
+		}
+		attrs = append(attrs, info)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -3228,8 +3312,21 @@ func (h *Handlers) HandleAdminAttrDefUpdate(w http.ResponseWriter, r *http.Reque
 	}
 
 	if err := h.attrDefRepo.Update(code, func(ad *model.AttrDef) {
+		if v, ok := updates["name_ru"].(string); ok {
+			ad.NameRu = v
+		}
+		if v, ok := updates["name_ua"].(string); ok {
+			ad.NameUa = v
+		}
+		if v, ok := updates["name_pl"].(string); ok {
+			ad.NamePl = v
+		}
+		if v, ok := updates["name_en"].(string); ok {
+			ad.NameEn = v
+		}
+		// Legacy: "name" -> NameRu
 		if v, ok := updates["name"].(string); ok {
-			ad.Name = v
+			ad.NameRu = v
 		}
 		if v, ok := updates["type"].(string); ok && v != "" {
 			ad.Type = model.AttrType(v)

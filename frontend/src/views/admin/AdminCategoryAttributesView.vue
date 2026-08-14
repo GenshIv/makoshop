@@ -54,6 +54,21 @@ const editForm = ref({});
 
 const searchFilters = ref({});
 
+const { locale } = useI18n();
+
+// Localized attribute display name
+const attrDisplayName = (attr) => {
+  if (!attr) return '';
+  const langField = `name_${locale.value}`;
+  return attr[langField] || attr.name_en || attr.name_ru || attr.name_ua || attr.name_pl || attr.name || humanizeAttrName(attr.code);
+};
+
+const humanizeAttrName = (code) => {
+  if (!code) return '';
+  let s = code.replace(/_/g, ' ').replace(/-/g, ' ');
+  return s.replace(/\b\w/g, c => c.toUpperCase());
+};
+
 const fetchCategory = async () => {
   try {
     const response = await api.get(`/categories/${categoryId.value}`);
@@ -100,7 +115,6 @@ const removeAttribute = async (code) => {
   }
 };
 
-// Edit attribute definition
 const openEdit = async (attr) => {
   try {
     const response = await api.get(`/admin/attrdefs/${attr.code}`);
@@ -111,7 +125,10 @@ const openEdit = async (attr) => {
     editingAttr.value = attr.code;
     editForm.value = {
       code: attr.code,
-      name: humanizeAttrName(attr.code),
+      name_ru: humanizeAttrName(attr.code),
+      name_ua: '',
+      name_pl: '',
+      name_en: '',
       type: 'string',
       is_active: true,
       is_filterable: true,
@@ -126,7 +143,10 @@ const openEdit = async (attr) => {
 const saveEdit = async () => {
   try {
     const payload = {
-      name: editForm.value.name || '',
+      name_ru: editForm.value.name_ru || '',
+      name_ua: editForm.value.name_ua || '',
+      name_pl: editForm.value.name_pl || '',
+      name_en: editForm.value.name_en || '',
       type: editForm.value.type || 'string',
       is_active: !!editForm.value.is_active,
       is_filterable: !!editForm.value.is_filterable,
@@ -138,6 +158,7 @@ const saveEdit = async () => {
     await api.patch(`/admin/attrdefs/${editingAttr.value}`, payload);
     editingAttr.value = null;
     editForm.value = {};
+    await fetchAttributes();
   } catch (e) {
     alert(e.response?.data?.message || t('admin.save_error'));
   }
@@ -182,12 +203,6 @@ const visibleTags = (attr) => filteredOptions(attr).slice(0, MAX_TAGS);
 const hiddenTags = (attr) => filteredOptions(attr).slice(MAX_TAGS);
 const hasMoreTags = (attr) => hiddenTags(attr).length > 0;
 const hasOptions = (attr) => getOptions(attr).length > 0;
-
-const humanizeAttrName = (code) => {
-  if (!code) return '';
-  let s = code.replace(/_/g, ' ').replace(/-/g, ' ');
-  return s.replace(/\b\w/g, c => c.toUpperCase());
-};
 
 const typeLabels = {
   string: () => t('admin.attr_types.string'),
@@ -306,8 +321,20 @@ onMounted(() => {
         </div>
         <div class="px-5 py-4 space-y-3">
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">{{ t('admin.attr_display_name') }}</label>
-            <input v-model="editForm.name" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <label class="block text-xs font-medium text-gray-600 mb-1">{{ t('admin.attr_name_ru') || 'Name (RU)' }}</label>
+            <input v-model="editForm.name_ru" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">{{ t('admin.attr_name_ua') || 'Name (UA)' }}</label>
+            <input v-model="editForm.name_ua" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">{{ t('admin.attr_name_pl') || 'Name (PL)' }}</label>
+            <input v-model="editForm.name_pl" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">{{ t('admin.attr_name_en') || 'Name (EN)' }}</label>
+            <input v-model="editForm.name_en" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-600 mb-1">{{ t('admin.attr_type') }}</label>
@@ -409,7 +436,7 @@ onMounted(() => {
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
               <span class="font-medium text-gray-800">
-                {{ attr.name || humanizeAttrName(attr.code) }}
+                {{ attrDisplayName(attr) }}
               </span>
               <span class="text-xs text-gray-400 font-mono">{{ attr.code }}</span>
               <span v-if="attr.type" class="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">

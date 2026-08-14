@@ -539,8 +539,9 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 			"category_attrs": categoryAttrs,
 		}
 
-		// Add category tree path for breadcrumbs
+		// Add category info for breadcrumbs
 		if catID > 0 {
+			respData["category_id"] = catID
 			if treePath, err := h.categoryRepo.GetTreePath(catID); err == nil && len(treePath) > 0 {
 				respData["tree_path"] = treePath
 			}

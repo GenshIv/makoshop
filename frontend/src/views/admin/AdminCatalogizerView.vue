@@ -371,7 +371,7 @@ onMounted(() => {
           >
             <div class="flex justify-between items-center mb-2">
               <div>
-                <span class="font-medium">{{ getCategoryById(m.NewCategoryID)?.name || 'Cat #' + m.NewCategoryID }}</span>
+                <span class="font-medium">{{ catDisplayName(getCategoryById(m.NewCategoryID)) || 'Cat #' + m.NewCategoryID }}</span>
                 <span class="ml-2 text-xs text-gray-500">slug: {{ m.NewCategorySlug }}</span>
               </div>
               <div class="flex items-center gap-2">

@@ -6,7 +6,7 @@ import api from '../api';
 import { useCartStore } from '../stores/cart';
 import Breadcrumbs from '../components/Breadcrumbs.vue';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const props = defineProps({
   // If provided, use this data directly instead of fetching from API
@@ -171,6 +171,18 @@ const isInStock = (product) => {
 
 const formatPrice = (price) => {
   return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
+};
+
+// Get localized attribute label
+const attrLabel = (code) => {
+  if (!code) return '';
+  // Try i18n attr_names[code]
+  const key = `attr_names.${code}`;
+  const translated = t(key);
+  if (translated !== key) return translated;
+  // Fallback: humanize code
+  let s = code.replace(/_/g, ' ').replace(/-/g, ' ');
+  return s.replace(/\b\w/g, c => c.toUpperCase());
 };
 
 const currentImageIndex = ref(0);
@@ -553,14 +565,14 @@ watch(
 
           <!-- Характеристики -->
           <div v-if="displayAttributes && Object.keys(displayAttributes).length" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-            <h3 class="font-semibold text-gray-800 mb-3">Характеристики</h3>
+            <h3 class="font-semibold text-gray-800 mb-3">{{ t('catalog.characteristics') }}</h3>
             <dl class="space-y-2 text-sm">
               <div
                 v-for="(value, key) in displayAttributes"
                 :key="key"
                 class="flex items-start gap-2 border-b border-gray-50 pb-2 last:border-0 last:pb-0"
               >
-                <dt class="text-gray-500 text-xs min-w-[100px] shrink-0 capitalize">{{ key }}</dt>
+                <dt class="text-gray-500 text-xs min-w-[100px] shrink-0">{{ attrLabel(key) }}</dt>
                 <dd class="text-gray-800">{{ value }}</dd>
               </div>
             </dl>

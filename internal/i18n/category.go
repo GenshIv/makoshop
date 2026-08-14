@@ -55,3 +55,53 @@ func ResolveCategoryName(cat *model.Category, lang string) string {
 func ResolveCategoryNameCurrent(cat *model.Category) string {
 	return ResolveCategoryName(cat, Current())
 }
+
+// ResolveAttrName returns the localized attribute definition name.
+// lang: "ru", "ua" (alias: "uk"), "pl", "en". Fallback: en -> ru -> ua -> pl.
+func ResolveAttrName(attr *model.AttributeDefinition, lang string) string {
+	if attr == nil {
+		return ""
+	}
+
+	l := strings.ToLower(lang)
+
+	switch l {
+	case "ru":
+		if attr.NameRu != "" {
+			return attr.NameRu
+		}
+	case "ua", "uk":
+		if attr.NameUa != "" {
+			return attr.NameUa
+		}
+	case "pl":
+		if attr.NamePl != "" {
+			return attr.NamePl
+		}
+	case "en":
+		if attr.NameEn != "" {
+			return attr.NameEn
+		}
+	}
+
+	// Fallback chain: en -> ru -> ua -> pl
+	if attr.NameEn != "" {
+		return attr.NameEn
+	}
+	if attr.NameRu != "" {
+		return attr.NameRu
+	}
+	if attr.NameUa != "" {
+		return attr.NameUa
+	}
+	if attr.NamePl != "" {
+		return attr.NamePl
+	}
+
+	return ""
+}
+
+// ResolveAttrNameCurrent returns the attribute name resolved via i18n for the current language.
+func ResolveAttrNameCurrent(attr *model.AttributeDefinition) string {
+	return ResolveAttrName(attr, Current())
+}

@@ -126,9 +126,9 @@ const fetchProducts = async () => {
     pagination.total_pages = Math.ceil(pagination.total / perPage);
     categoryAttrs.value = data.category_attrs || [];
 
-    // Use tree_path from API for breadcrumbs if available
-    if (Array.isArray(data.tree_path) && data.tree_path.length > 0) {
-      categoryPath.value = data.tree_path.map((slug) => ({ slug, name: slug }));
+    // Build category path via API for proper localized names
+    if (data.category_id) {
+      fetchCategoryPath(data.category_id);
     } else {
       categoryPath.value = [];
     }
@@ -159,29 +159,16 @@ const fetchCategoryAttrs = async (categoryId) => {
 };
 
 // Build category path: [{id, name_ru/ua/pl/en, slug}, ...] from root to current
+// Uses optimized API endpoint: /categories/tree_path/{id}
 const fetchCategoryPath = async (categoryId) => {
   if (!categoryId) {
     categoryPath.value = [];
     return;
   }
   try {
-    const response = await api.get(`/admin/categories/${categoryId}`);
-    const cat = response.data;
-    if (!cat) {
-      categoryPath.value = [];
-      return;
-    }
-    const path = [{ id: cat.id, name_ru: cat.name_ru, name_ua: cat.name_ua, name_pl: cat.name_pl, name_en: cat.name_en, slug: cat.slug }];
-    // Walk up the tree
-    let currentId = cat.parent_id;
-    while (currentId) {
-      const parentResponse = await api.get(`/admin/categories/${currentId}`);
-      const parent = parentResponse.data;
-      if (!parent) break;
-      path.unshift({ id: parent.id, name_ru: parent.name_ru, name_ua: parent.name_ua, name_pl: parent.name_pl, name_en: parent.name_en, slug: parent.slug });
-      currentId = parent.parent_id;
-    }
-    categoryPath.value = path;
+    const response = await api.get(`/categories/tree_path/${categoryId}`);
+    const path = response.data || [];
+    categoryPath.value = Array.isArray(path) ? path : [];
   } catch (e) {
     console.error('Failed to fetch category path:', e);
     categoryPath.value = [];
@@ -196,6 +183,14 @@ const toggleAttrFilter = (code, value, checked) => {
     attrFilters[code] = attrFilters[code].filter(v => v !== value);
     if (attrFilters[code].length === 0) delete attrFilters[code];
   }
+};
+
+// Get localized attribute name based on current locale
+const attrDisplayName = (attr) => {
+  if (!attr) return '';
+  // attr has name_ru/name_ua/name_pl/name_en from API
+  const langField = `name_${locale.value}`;
+  return attr[langField] || attr.name_en || attr.name_ru || attr.name_ua || attr.name_pl || humanizeAttrName(attr.code);
 };
 
 const humanizeAttrName = (code) => {
@@ -368,9 +363,9 @@ onMounted(async () => {
     pagination.total_pages = Math.ceil(pagination.total / perPage);
     categoryAttrs.value = data.category_attrs || [];
 
-    // Use tree_path from API for breadcrumbs if available
-    if (Array.isArray(data.tree_path) && data.tree_path.length > 0) {
-      categoryPath.value = data.tree_path.map((slug) => ({ slug, name: slug }));
+    // Build category path via API for proper localized names
+    if (data.category_id) {
+      fetchCategoryPath(data.category_id);
     } else {
       categoryPath.value = [];
     }
@@ -486,29 +481,29 @@ defineOptions({ name: 'CatalogView' });
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-4">
           <!-- Search -->
           <div>
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Поиск</label>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{{ t('catalog.search_label') }}</label>
             <input
               v-model="filters.q"
               type="text"
-              placeholder="Название товара..."
+              :placeholder="t('catalog.search_placeholder')"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
           <!-- Price range -->
           <div>
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Цена</label>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{{ t('catalog.price_label') }}</label>
             <div class="flex gap-2">
               <input
                 v-model="filters.price_min"
                 type="number"
-                placeholder="От"
+                :placeholder="t('catalog.price_from')"
                 class="w-1/2 px-2 py-1.5 border border-gray-300 rounded-lg text-sm"
               />
               <input
                 v-model="filters.price_max"
                 type="number"
-                placeholder="До"
+                :placeholder="t('catalog.price_to')"
                 class="w-1/2 px-2 py-1.5 border border-gray-300 rounded-lg text-sm"
               />
             </div>
@@ -516,7 +511,7 @@ defineOptions({ name: 'CatalogView' });
 
           <!-- Brands -->
           <div v-if="visibleBrands.length > 0" class="border-t pt-3">
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Бренд</label>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{{ t('catalog.brand_label') }}</label>
             <div class="space-y-1">
               <label
                 v-for="brand in visibleBrands"
@@ -539,7 +534,7 @@ defineOptions({ name: 'CatalogView' });
           <div v-for="attr in visibleAttrs" :key="attr.code" class="border-t pt-3">
             <div class="flex items-center justify-between mb-1">
               <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                {{ humanizeAttrName(attr.name || attr.code) }}
+                {{ attrDisplayName(attr) }}
               </label>
             </div>
 
@@ -573,7 +568,7 @@ defineOptions({ name: 'CatalogView' });
               @click="toggleAttrExpanded(attr.code)"
               class="mt-1 text-xs text-indigo-600 hover:underline"
             >
-              {{ attrExpanded[attr.code] ? 'Скрыть' : 'Показать ещё (' + hiddenUnselectedTags(attr).length + ')' }}
+              {{ attrExpanded[attr.code] ? t('catalog.hide') : t('catalog.show_more', { count: hiddenUnselectedTags(attr).length }) }}
             </button>
 
             <!-- Expanded area with search + scrollable tags -->
@@ -585,7 +580,7 @@ defineOptions({ name: 'CatalogView' });
               <input
                 v-model="attrSearch[attr.code]"
                 type="text"
-                placeholder="Поиск..."
+                :placeholder="t('catalog.search_attr_placeholder')"
                 class="w-full mb-1.5 px-2 py-0.5 border border-gray-300 rounded text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
               <!-- Tags -->
@@ -616,17 +611,17 @@ defineOptions({ name: 'CatalogView' });
       <div class="flex-1">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">
           <div class="text-sm text-gray-600">
-            Найдено: <span class="font-medium text-gray-800">{{ pagination.total }}</span> товаров
+            {{ t('catalog.found', { count: pagination.total }) }}
           </div>
           <select
             v-model="filters.sort"
             class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           >
-            <option value="relevance">По релевантности</option>
-            <option value="price_asc">Цена: по возрастанию</option>
-            <option value="price_desc">Цена: по убыванию</option>
-            <option value="name_asc">Название: А-Я</option>
-            <option value="created_desc">Новинки</option>
+            <option value="relevance">{{ t('catalog.sort_relevance') }}</option>
+            <option value="price_asc">{{ t('catalog.sort_price_asc') }}</option>
+            <option value="price_desc">{{ t('catalog.sort_price_desc') }}</option>
+            <option value="name_asc">{{ t('catalog.sort_name_asc') }}</option>
+            <option value="created_desc">{{ t('catalog.sort_newest') }}</option>
           </select>
         </div>
 
@@ -635,7 +630,7 @@ defineOptions({ name: 'CatalogView' });
         </div>
 
         <div v-else-if="products.length === 0" class="text-center py-12 text-gray-500">
-          <p class="mb-2">Товары не найдены</p>
+          <p class="mb-2">{{ t('catalog.no_products') }}</p>
           <button @click="resetFilters" class="text-indigo-600 hover:underline text-sm">
             {{ t('catalog.reset_filters') }}
           </button>
@@ -649,7 +644,7 @@ defineOptions({ name: 'CatalogView' });
             @click="goToSCUPage(product)"
           >
             <span v-if="product.promoted" class="absolute top-1.5 left-1.5 z-10 bg-yellow-400 text-yellow-900 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
-              Реклама
+              {{ t('catalog.ad') }}
             </span>
             <span v-if="product.product_count && product.product_count > 1" class="absolute top-1.5 right-1.5 z-10 bg-indigo-600 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
               {{ product.product_count }} {{ pluralize(product.product_count, 'вариант', 'варианта', 'вариантов') }}
@@ -662,7 +657,7 @@ defineOptions({ name: 'CatalogView' });
                 :alt="product.name"
                 class="w-full h-full object-cover"
               />
-              <span v-else class="text-gray-400 text-xs">Нет фото</span>
+              <span v-else class="text-gray-400 text-xs">{{ t('catalog.no_photo') }}</span>
             </div>
 
             <div class="p-2 space-y-0.5">
@@ -694,17 +689,17 @@ defineOptions({ name: 'CatalogView' });
             :disabled="pagination.page <= 1"
             class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm disabled:opacity-40 hover:bg-gray-50 transition"
           >
-            ← Назад
+            {{ t('catalog.back') }}
           </button>
           <span class="px-3 py-1.5 text-sm text-gray-600">
-            Страница {{ pagination.page }} из {{ pagination.total_pages }}
+            {{ t('catalog.page_of', { page: pagination.page, total: pagination.total_pages }) }}
           </span>
           <button
             @click="goToPage(pagination.page + 1)"
             :disabled="pagination.page >= pagination.total_pages"
             class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm disabled:opacity-40 hover:bg-gray-50 transition"
           >
-            Далее →
+            {{ t('common.next') }} →
           </button>
         </div>
       </div>

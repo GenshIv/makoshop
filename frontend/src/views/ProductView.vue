@@ -9,7 +9,7 @@ import Breadcrumbs from '../components/Breadcrumbs.vue';
 const route = useRoute();
 const router = useRouter();
 const cart = useCartStore();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const product = ref(null);
 const reviews = ref([]);
@@ -45,29 +45,16 @@ const fetchProduct = async () => {
 };
 
 // Build category path: [{id, name}, ...] from root to current
+// Uses optimized API endpoint: /categories/tree_path/{id}
 const fetchCategoryPath = async (categoryId) => {
   if (!categoryId) {
     categoryPath.value = [];
     return;
   }
   try {
-    const response = await api.get(`/admin/categories/${categoryId}`);
-    const cat = response.data;
-    if (!cat) {
-      categoryPath.value = [];
-      return;
-    }
-    const path = [{ id: cat.id, name_ru: cat.name_ru, name_ua: cat.name_ua, name_pl: cat.name_pl, name_en: cat.name_en }];
-    // Walk up the tree
-    let currentId = cat.parent_id;
-    while (currentId) {
-      const parentResponse = await api.get(`/admin/categories/${currentId}`);
-      const parent = parentResponse.data;
-      if (!parent) break;
-      path.unshift({ id: parent.id, name_ru: parent.name_ru, name_ua: parent.name_ua, name_pl: parent.name_pl, name_en: parent.name_en });
-      currentId = parent.parent_id;
-    }
-    categoryPath.value = path;
+    const response = await api.get(`/categories/tree_path/${categoryId}`);
+    const path = response.data || [];
+    categoryPath.value = Array.isArray(path) ? path : [];
   } catch (e) {
     console.error('Failed to fetch category path:', e);
     categoryPath.value = [];
@@ -139,6 +126,18 @@ const submitReview = async () => {
 
 const formatPrice = (price) => {
   return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
+};
+
+// Get localized attribute label
+const attrLabel = (code) => {
+  if (!code) return '';
+  // Try i18n attr_names[code]
+  const key = `attr_names.${code}`;
+  const translated = t(key);
+  if (translated !== key) return translated;
+  // Fallback: humanize code
+  let s = code.replace(/_/g, ' ').replace(/-/g, ' ');
+  return s.replace(/\b\w/g, c => c.toUpperCase());
 };
 
 onMounted(() => {
@@ -236,7 +235,7 @@ onMounted(() => {
           <h3 class="font-medium text-gray-700">{{ t('catalog.characteristics') }}</h3>
           <dl class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
             <div v-for="(value, key) in product.attrs" :key="key" class="flex flex-col sm:flex-row sm:items-center">
-              <dt class="text-gray-500 text-xs sm:text-sm capitalize">{{ key }}</dt>
+              <dt class="text-gray-500 text-xs sm:text-sm">{{ attrLabel(key) }}</dt>
               <dd class="sm:ml-2 text-sm">{{ value }}</dd>
             </div>
           </dl>

@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 
-const { locale } = useI18n();
+const { locale, t } = useI18n();
 
 const props = defineProps({
   // Array of { slug, name } for category path
@@ -21,14 +21,14 @@ const props = defineProps({
 const catDisplayName = (cat) => {
   if (!cat) return '';
   const langField = `name_${locale.value}`;
-  return cat[langField] || cat.name_en || cat.name_ru || cat.name_ua || cat.name_pl || cat.name || '';
+  return cat[langField] || cat.name_en || cat.name_ru || cat.name_ua || cat.name_pl || '';
 };
 
 const crumbs = computed(() => {
   const items = [];
   
   // Always start with catalog
-  items.push({ name: 'Каталог', to: { path: '/' } });
+  items.push({ name: t('catalog.all_products'), to: { path: '/' } });
   
   // Add category path using slugs
   let path = '/shop';

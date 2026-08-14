@@ -60,7 +60,7 @@ func (r *AttrDefRepo) GetByCode(code string) (*model.AttrDef, error) {
 	ad = &model.AttrDef{
 		ID:           int64(docID),
 		Code:         code,
-		Name:         "",
+		NameRu:       "",
 		Categories:   cats,
 		Type:         "string",
 		IsActive:     true,
@@ -81,10 +81,32 @@ func (r *AttrDefRepo) Get(id int64) (*model.AttrDef, error) {
 	if err != nil {
 		return nil, err
 	}
-	var ad model.AttrDef
-	if err := json.Unmarshal(data, &ad); err != nil {
+
+	// Unmarshal into map first to detect legacy "name" field
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
+
+	// Migrate legacy "name" -> "name_ru"
+	if name, ok := raw["name"].(string); ok && name != "" {
+		if _, hasRu := raw["name_ru"]; !hasRu || raw["name_ru"] == "" {
+			raw["name_ru"] = name
+		}
+		delete(raw, "name")
+	}
+
+	updatedData, _ := json.Marshal(raw)
+	var ad model.AttrDef
+	if err := json.Unmarshal(updatedData, &ad); err != nil {
+		return nil, err
+	}
+
+	// Persist migrated doc if changed
+	if string(updatedData) != string(data) {
+		_ = r.store.DocPut(fmt.Sprintf("attrdef:%d", id), updatedData)
+	}
+
 	return &ad, nil
 }
 
@@ -712,7 +734,7 @@ func (r *AttrDefRepo) GetOrCreate(code string) (*model.AttrDef, error) {
 	// Create default
 	ad = &model.AttrDef{
 		Code:         code,
-		Name:         toHumanAttrName(code),
+		NameRu:       toHumanAttrName(code),
 		Type:         model.AttrTypeString,
 		IsActive:     true,
 		IsFilterable: true,
@@ -750,7 +772,7 @@ func (r *AttrDefRepo) AddCodeToCategory(code string, catID int64) error {
 		// Create default
 		ad = &model.AttrDef{
 			Code:         code,
-			Name:         toHumanAttrName(code),
+			NameRu:       toHumanAttrName(code),
 			Type:         model.AttrTypeString,
 			IsActive:     true,
 			IsFilterable: true,
