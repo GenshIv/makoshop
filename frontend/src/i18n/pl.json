@@ -366,53 +366,7 @@
     "attr_no_values": "Brak wartości",
     "attr_inactive": "nieaktywny",
     "attr_filter": "filtr",
-    "attr_sort": "sortowanie"
-  },
-  "privacy": {
-    "title": "Polityka prywatności",
-    "last_updated": "Ostatnia aktualizacja: {date}",
-    "intro": "Szanujemy Twoją prywatność i zobowiązujemy się do ochrony Twoich danych osobowych.",
-    "data_collected": "Zbierane dane",
-    "data_collected_desc": "Możemy zbierać imię, email, telefon, adres dostawy oraz dane o zamówieniach.",
-    "data_usage": "Używanie danych",
-    "data_usage_desc": "Twoje dane są używane do realizacji zamówień, komunikacji z Tobą i poprawy naszych usług.",
-    "cookies": "Cookies",
-    "cookies_desc": "Używamy cookies do poprawy funkcjonalności strony i analityki.",
-    "rights": "Twoje prawa",
-    "rights_desc": "Możesz żądać dostępu, korekty lub usunięcia swoich danych.",
-    "contact": "Kontakt",
-    "contact_desc": "W sprawach prywatności skontaktuj się z nami:"
-  },
-  "cookie": {
-    "banner_title": "Używamy cookies",
-    "banner_text": "Ta strona używa cookies do poprawy funkcjonalności i analityki. Kontynuując korzystanie ze strony, wyrażasz na to zgodę.",
-    "accept_all": "Zaakceptuj wszystkie",
-    "essential_only": "Tylko niezbędne",
-    "settings": "Ustawienia",
-    "settings_title": "Ustawienia cookies",
-    "essential": "Niezbędne",
-    "essential_desc": "Wymagane do działania strony. Nie można wyłączyć.",
-    "analytics": "Analityka",
-    "analytics_desc": "Pomagają zrozumieć, jak użytkownicy korzystają ze strony.",
-    "marketing": "Marketing",
-    "marketing_desc": "Używane do wyświetlania relevantnych reklam.",
-    "save": "Zapisz ustawienia",
-    "close": "Zamknij"
-  },
-  "db_monitor": {
-    "shards_usage": "Shard Usage",
-    "mode_active": "Mode: ActiveUsage (precise active records)",
-    "mode_fast": "Mode: ShardUsages (fast, FreeOffset-based, includes deleted records)",
-    "active_scan": "Precise active record count (slow)",
-    "compact_button": "Compact shards",
-    "compact_running": "Compacting...",
-    "compact_success": "Compact completed successfully",
-    "legend_under_50": "<50%",
-    "legend_50_75": "50-75%",
-    "legend_75_90": "75-90%",
-    "legend_over_90": ">90%"
-  },
-  "admin": {
+    "attr_sort": "sortowanie",
     "catalogizer_title": "Auto-Katalogizator",
     "catalogizer_desc_short": "Automatyczne przypisywanie produktów do kategorii",
     "catalogizer_settings": "Ustawienia",
@@ -473,7 +427,89 @@
     "delivery_times": "Czas dostawy",
     "installment_plans": "Raty",
     "settings": "Ustawienia",
-    "settings_saved": "Ustawienia zapisane"
+    "settings_saved": "Ustawienia zapisane",
+    "scupage_title": "SCU Pages",
+    "scupage_manage_desc": "Zarządzanie stronami SEO produktów",
+    "scupage_search_placeholder": "Szukaj po SCU, tytule...",
+    "scupage_id": "ID",
+    "scupage_scu": "SCU",
+    "scupage_slug": "Slug",
+    "scupage_products": "Produktów",
+    "scupage_active": "Aktywna",
+    "scupage_actions": "Akcje",
+    "scupage_no_results": "Nie znaleziono SCU Pages",
+    "scupage_showing": "Razem",
+    "scupage_edit_title": "Edycja SCU Page",
+    "scupage_description": "Opis",
+    "scupage_category_id": "ID kategorii",
+    "scupage_content": "Treść (HTML)",
+    "scupage_delete_confirm_title": "Usunąć SCU Page?",
+    "scupage_delete_confirm_msg": "Czy na pewno chcesz usunąć tę SCU Page?",
+    "scupage_save_error": "Błąd zapisu",
+    "scupage_delete_error": "Błąd usuwania"
+  },
+  "privacy": {
+    "title": "Polityka prywatności",
+    "last_updated": "Ostatnia aktualizacja: {date}",
+    "intro": "Szanujemy Twoją prywatność i zobowiązujemy się do ochrony Twoich danych osobowych.",
+    "data_collected": "Zbierane dane",
+    "data_collected_desc": "Możemy zbierać imię, email, telefon, adres dostawy oraz dane o zamówieniach.",
+    "data_usage": "Używanie danych",
+    "data_usage_desc": "Twoje dane są używane do realizacji zamówień, komunikacji z Tobą i poprawy naszych usług.",
+    "cookies": "Cookies",
+    "cookies_desc": "Używamy cookies do poprawy funkcjonalności strony i analityki.",
+    "rights": "Twoje prawa",
+    "rights_desc": "Możesz żądać dostępu, korekty lub usunięcia swoich danych.",
+    "contact": "Kontakt",
+    "contact_desc": "W sprawach prywatności skontaktuj się z nami:"
+  },
+  "cookie": {
+    "banner_title": "Używamy cookies",
+    "banner_text": "Ta strona używa cookies do poprawy funkcjonalności i analityki. Kontynuując korzystanie ze strony, wyrażasz na to zgodę.",
+    "accept_all": "Zaakceptuj wszystkie",
+    "essential_only": "Tylko niezbędne",
+    "settings": "Ustawienia",
+    "settings_title": "Ustawienia cookies",
+    "essential": "Niezbędne",
+    "essential_desc": "Wymagane do działania strony. Nie można wyłączyć.",
+    "analytics": "Analityka",
+    "analytics_desc": "Pomagają zrozumieć, jak użytkownicy korzystają ze strony.",
+    "marketing": "Marketing",
+    "marketing_desc": "Używane do wyświetlania relevantnych reklam.",
+    "save": "Zapisz ustawienia",
+    "close": "Zamknij",
+    "scupage_title": "SCU Pages",
+    "scupage_manage_desc": "Zarządzanie stronami SEO produktów",
+    "scupage_search_placeholder": "Szukaj po SCU, tytule...",
+    "scupage_id": "ID",
+    "scupage_scu": "SCU",
+    "scupage_slug": "Slug",
+    "scupage_products": "Produktów",
+    "scupage_active": "Aktywna",
+    "scupage_actions": "Akcje",
+    "scupage_no_results": "Nie znaleziono SCU Pages",
+    "scupage_showing": "Razem",
+    "scupage_edit_title": "Edycja SCU Page",
+    "scupage_description": "Opis",
+    "scupage_category_id": "ID kategorii",
+    "scupage_content": "Treść (HTML)",
+    "scupage_delete_confirm_title": "Usunąć SCU Page?",
+    "scupage_delete_confirm_msg": "Czy na pewno chcesz usunąć tę SCU Page?",
+    "scupage_save_error": "Błąd zapisu",
+    "scupage_delete_error": "Błąd usuwania"
+  },
+  "db_monitor": {
+    "shards_usage": "Shard Usage",
+    "mode_active": "Mode: ActiveUsage (precise active records)",
+    "mode_fast": "Mode: ShardUsages (fast, FreeOffset-based, includes deleted records)",
+    "active_scan": "Precise active record count (slow)",
+    "compact_button": "Compact shards",
+    "compact_running": "Compacting...",
+    "compact_success": "Compact completed successfully",
+    "legend_under_50": "<50%",
+    "legend_50_75": "50-75%",
+    "legend_75_90": "75-90%",
+    "legend_over_90": ">90%"
   },
   "maintenance": {
     "title": "Trwa konserwacja",
@@ -514,5 +550,107 @@
     "speed": "Prędkość",
     "model": "Model",
     "year": "Rok"
+  },
+  "attr_enum": {
+    "tire_type": {
+      "Summer": "Letnie",
+      "Winter": "Zimowe",
+      "AllSeason": "Całoroczne"
+    },
+    "jack_type": {
+      "Screw": "Śrubowy",
+      "Hydraulic": "Hydrauliczny",
+      "Lever": "Dźwignia",
+      "Ratchet": "Torsyjny",
+      "Electric": "Elektryczny",
+      "Air": "Pneumatyczny"
+    },
+    "wheel_type": {
+      "Single": "Jednorolowe",
+      "Twist": "Twist",
+      "Quad": "Czwororolowe"
+    },
+    "wheel_size": {
+      "10": "10 cali",
+      "12": "12 cali",
+      "14": "14 cali",
+      "16": "16 cali",
+      "18": "18 cali",
+      "20": "20 cali",
+      "24": "24 cale",
+      "26": "26 cali",
+      "27.5": "27.5 cali",
+      "28": "28 cali"
+    },
+    "bike_type": {
+      "Mountain": "Górski",
+      "Road": "Szosowy",
+      "City": "Miejski",
+      "BMX": "BMX",
+      "Folding": "Składany",
+      "Electric": "Elektryczny"
+    },
+    "material": {
+      "Steel": "Stal",
+      "Aluminum": "Aluminium",
+      "Plastic": "Plastik",
+      "Wood": "Drewno",
+      "Fabric": "Tkanina",
+      "Polyester": "Poliester",
+      "Nylon": "Nylon",
+      "Metal": "Metal",
+      "Rubber": "Guma",
+      "Glass": "Szkło"
+    },
+    "shape": {
+      "Round": "Okrągły",
+      "Rectangular": "Prostokątny",
+      "Oval": "Owalny",
+      "Square": "Kwadratowy"
+    },
+    "type": {
+      "Manual": "Ręczny",
+      "Electric": "Elektryczny",
+      "Automatic": "Automatyczny"
+    },
+    "energy_class": {
+      "A": "A",
+      "A+": "A+",
+      "A++": "A++",
+      "A+++": "A+++",
+      "B": "B",
+      "C": "C",
+      "D": "D",
+      "E": "E",
+      "F": "F",
+      "G": "G"
+    },
+    "resolution": {
+      "HD": "HD",
+      "Full HD": "Full HD",
+      "4K": "4K",
+      "8K": "8K"
+    },
+    "panel_type": {
+      "IPS": "IPS",
+      "VA": "VA",
+      "TN": "TN",
+      "OLED": "OLED",
+      "LED": "LED"
+    },
+    "rc_type": {
+      "Drone": "Dron",
+      "Car": "Samochód",
+      "Helicopter": "Śmigłowiec",
+      "Boat": "Łódź",
+      "Plane": "Samolot",
+      "Tank": "Czołg"
+    },
+    "power_type": {
+      "Electric": "Elektryczny",
+      "Gasoline": "Benzynowy",
+      "Battery": "Akumulatorowy",
+      "Hybrid": "Hybrydowy"
+    }
   }
 }

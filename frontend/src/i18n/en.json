@@ -491,7 +491,14 @@
     "delivery_times": "Delivery Times",
     "installment_plans": "Installment Plans",
     "settings": "Settings",
-    "settings_saved": "Settings saved"
+    "settings_saved": "Settings saved",
+    "maintenance_mode": "Maintenance mode",
+    "maintenance_on": "ON",
+    "maintenance_off": "OFF",
+    "maintenance_enable": "Enable",
+    "maintenance_disable": "Disable",
+    "maintenance_auto_disable": "Auto-disable after operation",
+    "maintenance_hint": "Blocks users and bots, admin access remains open."
   },
   "privacy": {
     "title": "Privacy Policy",
@@ -542,15 +549,6 @@
     "message": "The site is temporarily unavailable. Please try again in a few minutes.",
     "try_again": "Try again"
   },
-  "admin": {
-    "maintenance_mode": "Maintenance mode",
-    "maintenance_on": "ON",
-    "maintenance_off": "OFF",
-    "maintenance_enable": "Enable",
-    "maintenance_disable": "Disable",
-    "maintenance_auto_disable": "Auto-disable after operation",
-    "maintenance_hint": "Blocks users and bots, admin access remains open."
-  },
   "scupage_filter_by_company": "Filter by company",
   "scupage_all_companies": "All",
   "scupage_filter_by_payment": "Payment method",
@@ -585,5 +583,107 @@
     "speed": "Speed",
     "model": "Model",
     "year": "Year"
+  },
+  "attr_enum": {
+    "tire_type": {
+      "Summer": "Summer",
+      "Winter": "Winter",
+      "AllSeason": "All-Season"
+    },
+    "jack_type": {
+      "Screw": "Screw",
+      "Hydraulic": "Hydraulic",
+      "Lever": "Lever",
+      "Ratchet": "Ratchet",
+      "Electric": "Electric",
+      "Air": "Air"
+    },
+    "wheel_type": {
+      "Single": "Single",
+      "Twist": "Twist",
+      "Quad": "Quad"
+    },
+    "wheel_size": {
+      "10": "10 inch",
+      "12": "12 inch",
+      "14": "14 inch",
+      "16": "16 inch",
+      "18": "18 inch",
+      "20": "20 inch",
+      "24": "24 inch",
+      "26": "26 inch",
+      "27.5": "27.5 inch",
+      "28": "28 inch"
+    },
+    "bike_type": {
+      "Mountain": "Mountain",
+      "Road": "Road",
+      "City": "City",
+      "BMX": "BMX",
+      "Folding": "Folding",
+      "Electric": "Electric"
+    },
+    "material": {
+      "Steel": "Steel",
+      "Aluminum": "Aluminum",
+      "Plastic": "Plastic",
+      "Wood": "Wood",
+      "Fabric": "Fabric",
+      "Polyester": "Polyester",
+      "Nylon": "Nylon",
+      "Metal": "Metal",
+      "Rubber": "Rubber",
+      "Glass": "Glass"
+    },
+    "shape": {
+      "Round": "Round",
+      "Rectangular": "Rectangular",
+      "Oval": "Oval",
+      "Square": "Square"
+    },
+    "type": {
+      "Manual": "Manual",
+      "Electric": "Electric",
+      "Automatic": "Automatic"
+    },
+    "energy_class": {
+      "A": "A",
+      "A+": "A+",
+      "A++": "A++",
+      "A+++": "A+++",
+      "B": "B",
+      "C": "C",
+      "D": "D",
+      "E": "E",
+      "F": "F",
+      "G": "G"
+    },
+    "resolution": {
+      "HD": "HD",
+      "Full HD": "Full HD",
+      "4K": "4K",
+      "8K": "8K"
+    },
+    "panel_type": {
+      "IPS": "IPS",
+      "VA": "VA",
+      "TN": "TN",
+      "OLED": "OLED",
+      "LED": "LED"
+    },
+    "rc_type": {
+      "Drone": "Drone",
+      "Car": "Car",
+      "Helicopter": "Helicopter",
+      "Boat": "Boat",
+      "Plane": "Plane",
+      "Tank": "Tank"
+    },
+    "power_type": {
+      "Electric": "Electric",
+      "Gasoline": "Gasoline",
+      "Battery": "Battery",
+      "Hybrid": "Hybrid"
+    }
   }
 }

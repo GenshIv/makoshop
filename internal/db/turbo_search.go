@@ -70,6 +70,8 @@ const (
 	turboSortPriceAsc      = "sort:price_asc"
 	turboSortPriceDesc     = "sort:price_desc"
 	turboSortCreatedAtDesc = "sort:created_at_desc"
+	turboKeyPrice          = "price:"   // price:<productID> -> float64 bytes
+	turboKeyCreatedAt      = "created:" // created:<productID> -> int64 bytes
 )
 
 // ---------- indexing ----------
@@ -388,6 +390,41 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 		}
 	}
 
+	// Записываем price и created батчами
+	type priceEntry struct {
+		docID uint64
+		price uint64
+	}
+	type createdEntry struct {
+		docID uint64
+		ts    uint64
+	}
+	var priceEntries []priceEntry
+	var createdEntries []createdEntry
+	for _, p := range products {
+		docID := uint64(p.ID)
+		priceEntries = append(priceEntries, priceEntry{docID: docID, price: uint64(p.Price * 100)})
+		createdEntries = append(createdEntries, createdEntry{docID: docID, ts: uint64(p.CreatedAt.UnixNano())})
+	}
+	if len(priceEntries) > 0 {
+		priceVals := make([]uint64, len(priceEntries))
+		for i, e := range priceEntries {
+			priceVals[i] = e.price
+		}
+		if _, err := t.store.db.TurboPutBatchIndex(turboKeyPrice, priceVals); err != nil {
+			fmt.Printf("WARN: turbo batch price index: %v\n", err)
+		}
+	}
+	if len(createdEntries) > 0 {
+		createdVals := make([]uint64, len(createdEntries))
+		for i, e := range createdEntries {
+			createdVals[i] = e.ts
+		}
+		if _, err := t.store.db.TurboPutBatchIndex(turboKeyCreatedAt, createdVals); err != nil {
+			fmt.Printf("WARN: turbo batch created index: %v\n", err)
+		}
+	}
+
 	// Записываем справочник брендов
 	t.mu.Lock()
 	for bid, name := range brandRef {
@@ -429,7 +466,7 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 
 // ---------- sort indexes (по доке, полная перестройка) ----------
 
-// BuildSortIndexes перестраивает все sort-индексы из текущих продуктов.
+// BuildSortIndexes перестраивает все sort-индексы из turbo-индексов price и created.
 // Вызывается один раз после импорта или по расписанию.
 func (t *TurboProductSearch) BuildSortIndexes() error {
 	if !t.enabled {
@@ -439,29 +476,50 @@ func (t *TurboProductSearch) BuildSortIndexes() error {
 	start := time.Now()
 	fmt.Println("[TURBO] Building sort indexes...")
 
-	all, err := t.repo.GetAllProducts()
-	if err != nil {
-		return fmt.Errorf("get all products: %w", err)
+	// Read product IDs from product_list
+	data, err := t.store.db.TurboRawRead(TurboKeyProductList)
+	if err != nil || len(data) == 0 {
+		fmt.Println("[TURBO] No products in product_list")
+		return nil
 	}
+	docIDs := makodb.TurboUnsafeReadTokens(data)
+	if len(docIDs) == 0 {
+		fmt.Println("[TURBO] No products in product_list")
+		return nil
+	}
+
+	// Read price and created indexes
+	priceData, _ := t.store.db.TurboRawRead(turboKeyPrice)
+	createdData, _ := t.store.db.TurboRawRead(turboKeyCreatedAt)
+	priceVals := makodb.TurboUnsafeReadTokens(priceData)
+	createdVals := makodb.TurboUnsafeReadTokens(createdData)
 
 	type priced struct {
 		docID uint64
-		price float64
+		price uint64
 	}
 	type timed struct {
 		docID uint64
-		ts    int64
+		ts    uint64
 	}
 
-	pricesAsc := make([]priced, 0, len(all))
-	pricesDesc := make([]priced, 0, len(all))
-	createdDesc := make([]timed, 0, len(all))
+	pricesAsc := make([]priced, 0, len(docIDs))
+	pricesDesc := make([]priced, 0, len(docIDs))
+	createdDesc := make([]timed, 0, len(docIDs))
 
-	for _, p := range all {
-		docID := uint64(p.ID)
-		pricesAsc = append(pricesAsc, priced{docID: docID, price: p.Price})
-		pricesDesc = append(pricesDesc, priced{docID: docID, price: p.Price})
-		createdDesc = append(createdDesc, timed{docID: docID, ts: p.CreatedAt.UnixNano()})
+	// Build sort items from turbo indexes (docIDs and values are aligned by position)
+	for i, docID := range docIDs {
+		price := uint64(0)
+		if i < len(priceVals) {
+			price = priceVals[i]
+		}
+		ts := uint64(0)
+		if i < len(createdVals) {
+			ts = createdVals[i]
+		}
+		pricesAsc = append(pricesAsc, priced{docID: docID, price: price})
+		pricesDesc = append(pricesDesc, priced{docID: docID, price: price})
+		createdDesc = append(createdDesc, timed{docID: docID, ts: ts})
 	}
 
 	sortPricesAsc := func() []uint64 {
@@ -523,7 +581,7 @@ func (t *TurboProductSearch) BuildSortIndexes() error {
 		return err
 	}
 
-	fmt.Printf("[TURBO] Sort indexes built: %d products, %v\n", len(all), time.Since(start))
+	fmt.Printf("[TURBO] Sort indexes built: %d products, %v\n", len(docIDs), time.Since(start))
 	return nil
 }
 
@@ -684,7 +742,7 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 		Page:       params.Page - 1, // 0-based
 		PageSize:   params.Limit,
 		Desc:       false, // true = обратный порядок
-		DocPrefix:  "turbo_idx:product:",
+		DocPrefix:  "product:",
 	})
 
 	if err != nil {
@@ -897,19 +955,19 @@ type BrandInfo struct {
 	Name string `json:"name"`
 }
 
-// GetAllProducts returns all products using turbo sort index.
+// GetAllProducts returns all products using product_list index.
 func (t *TurboProductSearch) GetAllProducts() ([]model.Product, error) {
 	if !t.enabled {
 		return nil, nil
 	}
 
-	// Read from price sort index (contains all products)
-	sortData, err := t.store.db.TurboRawRead(turboSortPriceAsc)
-	if err != nil || len(sortData) == 0 {
+	// Read product IDs from product_list
+	data, err := t.store.db.TurboRawRead(TurboKeyProductList)
+	if err != nil || len(data) == 0 {
 		return nil, nil
 	}
 
-	docIDs := makodb.TurboUnsafeReadTokens(sortData)
+	docIDs := makodb.TurboUnsafeReadTokens(data)
 	if len(docIDs) == 0 {
 		return nil, nil
 	}

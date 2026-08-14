@@ -481,7 +481,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		Page:       params.Page - 1,
 		PageSize:   params.Limit,
 		Desc:       false,
-		DocPrefix:  "turbo_idx:scupage:",
+		DocPrefix:  "scupage:",
 	})
 
 	if err != nil {

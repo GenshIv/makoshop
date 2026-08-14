@@ -219,6 +219,20 @@ const humanizeAttrName = (code) => {
   return s;
 };
 
+// Get localized label for enum attribute values
+// Tries: attr_enum.{code}.{value} in i18n, then humanize value
+const enumValueLabel = (attr, value) => {
+  if (!attr || !value) return String(value);
+  if (attr.type !== 'enum' && attr.type !== 'multi_enum') return String(value);
+  // Try i18n key: attr_enum.{code}.{value}
+  const key = `attr_enum.${attr.code}.${value}`;
+  const translated = t(key);
+  if (translated !== key) return translated;
+  // Fallback: humanize the value string
+  let s = String(value).replace(/_/g, ' ').replace(/-/g, ' ');
+  return s.replace(/\b\w/g, c => c.toUpperCase());
+};
+
 const isAttrSelected = (code, value) => {
   return (attrFilters[code] || []).includes(value);
 };
@@ -546,7 +560,7 @@ defineOptions({ name: 'CatalogView' });
                 @click="toggleAttrFilter(attr.code, tag, false)"
                 class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-indigo-600 text-white border-indigo-600"
               >
-                {{ tag }}
+                {{ enumValueLabel(attr, tag) }}
               </button>
             </div>
 
@@ -558,7 +572,7 @@ defineOptions({ name: 'CatalogView' });
                 @click="toggleAttrFilter(attr.code, tag, true)"
                 class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
               >
-                {{ tag }}
+                {{ enumValueLabel(attr, tag) }}
               </button>
             </div>
 
@@ -591,7 +605,7 @@ defineOptions({ name: 'CatalogView' });
                   @click="toggleAttrFilter(attr.code, tag, true)"
                   class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
                 >
-                  {{ tag }}
+                  {{ enumValueLabel(attr, tag) }}
                 </button>
               </div>
             </div>

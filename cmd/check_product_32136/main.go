@@ -17,9 +17,9 @@ func main() {
 	// Check product 32136 with different prefixes
 	for _, key := range []string{
 		"product:32136",
-		"turbo_idx:product:32136",
-		"turbo_doc:product:32136",
-		"turbo_udx:product:32136",
+		"product:32136",
+		"product:32136",
+		"product:32136",
 	} {
 		data, err := dbConn.Get(key)
 		if err != nil {

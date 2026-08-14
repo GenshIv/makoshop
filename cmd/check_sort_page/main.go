@@ -39,7 +39,7 @@ func main() {
 		Page:       0,          // 0-based
 		PageSize:   5,
 		Desc:       false, // true = обратный порядок
-		DocPrefix:  "turbo_idx:product:",
+		DocPrefix:  "product:",
 	})
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)

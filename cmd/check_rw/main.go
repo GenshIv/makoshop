@@ -63,7 +63,7 @@ func main() {
 	}
 
 	// Check turbo_idx:product:160867
-	turboKey := "turbo_idx:product:160867"
+	turboKey := "product:160867"
 	turboData, err := db.TurboRawRead(turboKey)
 	if err != nil {
 		fmt.Printf("TurboRawRead(%s): %v\n", turboKey, err)

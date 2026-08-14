@@ -133,6 +133,7 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 		imported   int64
 		skipped    int64
 		categories int
+		products   []*model.Product
 		err        error
 	}
 
@@ -165,6 +166,7 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 				imported:   res.imported,
 				skipped:    res.skipped,
 				categories: res.categories,
+				products:   res.products,
 				err:        err,
 			}
 		}(csvFile)
@@ -178,6 +180,7 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 	var finalImported int64
 	var finalSkipped int64
 	var finalCategories int
+	var allProducts []*model.Product
 
 	for res := range resultsCh {
 		if res.err != nil {
@@ -187,12 +190,62 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 		finalImported += res.imported
 		finalSkipped += res.skipped
 		finalCategories += res.categories
+		allProducts = append(allProducts, res.products...)
 	}
 
 	if finalImported == 0 && finalSkipped == 0 {
 		writeJSON(w, http.StatusOK, ImportPricesResult{Status: "no_products"})
 		return
 	}
+
+	// ============================================
+	// Phase 2: Batch index products
+	// ============================================
+	fmt.Printf("[IMPORT-CSV] Phase 2: Indexing %d products...\n", len(allProducts))
+	phase2Start := time.Now()
+	if h.productRepo.TurboSearch() != nil && len(allProducts) > 0 {
+		if err := h.productRepo.TurboSearch().IndexProductBatch(allProducts); err != nil {
+			fmt.Printf("[IMPORT-CSV] WARN: index products: %v\n", err)
+		}
+	}
+	fmt.Printf("[IMPORT-CSV] Phase 2: Products indexed in %v\n", time.Since(phase2Start))
+
+	// ============================================
+	// Phase 3: Batch upsert SCU pages + index
+	// ============================================
+	fmt.Println("[IMPORT-CSV] Phase 3: SCU pages...")
+	phase3Start := time.Now()
+	if err := h.scuPageRepo.LoadCatalogizerCache(); err != nil {
+		fmt.Printf("[IMPORT-CSV] WARN: load catalogizer cache: %v\n", err)
+	}
+	h.scuPageRepo.BatchUpsertFromProducts(allProducts)
+	if h.scuPageSearch != nil {
+		allSCUs, _ := h.scuPageRepo.ListAll()
+		scuPtrs := make([]*model.SCUPage, len(allSCUs))
+		for i := range allSCUs {
+			scuPtrs[i] = &allSCUs[i]
+		}
+		if err := h.scuPageSearch.IndexSCUPageBatch(scuPtrs); err != nil {
+			fmt.Printf("[IMPORT-CSV] WARN: index SCU pages: %v\n", err)
+		}
+		// Build sort indexes for SCU pages (required for catalog/SCU pages to show products)
+		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+			fmt.Printf("[IMPORT-CSV] WARN: build SCU page sort indexes: %v\n", err)
+		}
+	}
+	fmt.Printf("[IMPORT-CSV] Phase 3: SCU pages done in %v\n", time.Since(phase3Start))
+
+	// ============================================
+	// Phase 4: Rebuild sort indexes (batch)
+	// ============================================
+	fmt.Println("[IMPORT-CSV] Phase 4: Rebuilding sort indexes...")
+	phase4Start := time.Now()
+	if h.productRepo.TurboSearch() != nil {
+		if err := h.productRepo.TurboSearch().BuildSortIndexes(); err != nil {
+			fmt.Printf("[IMPORT-CSV] WARN: rebuild sort indexes: %v\n", err)
+		}
+	}
+	fmt.Printf("[IMPORT-CSV] Phase 4: Sort indexes rebuilt in %v\n", time.Since(phase4Start))
 
 	writeJSON(w, http.StatusOK, ImportPricesResult{
 		Status:           "completed",
@@ -372,18 +425,12 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 		if err := h.scuPageSearch.IndexSCUPageBatch(scuPtrs); err != nil {
 			fmt.Printf("[IMPORT-NORMALIZED] WARN: index SCU pages: %v\n", err)
 		}
+		// Build sort indexes for SCU pages (required for catalog/SCU pages to show products)
+		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+			fmt.Printf("[IMPORT-NORMALIZED] WARN: build SCU page sort indexes: %v\n", err)
+		}
 	}
 	fmt.Printf("[IMPORT-NORMALIZED] Phase 3: Indexes built in %v\n", time.Since(phase3Start))
-
-	// ============================================
-	// Phase 4: Train catalogizer
-	// ============================================
-	fmt.Println("[IMPORT-NORMALIZED] Phase 4: Training catalogizer...")
-	phase4Start := time.Now()
-	if err := h.catalogizer.RebuildAllCategoryTokens(); err != nil {
-		fmt.Printf("[IMPORT-NORMALIZED] WARN: train catalogizer: %v\n", err)
-	}
-	fmt.Printf("[IMPORT-NORMALIZED] Phase 4: Catalogizer trained in %v\n", time.Since(phase4Start))
 
 	elapsed := time.Since(startTime)
 	fmt.Printf("[IMPORT-NORMALIZED] Completed: created=%d skipped=%d time=%v (%.0f products/sec)\n",
@@ -1171,6 +1218,7 @@ type streamFileResult struct {
 	imported   int64
 	skipped    int64
 	categories int
+	products   []*model.Product
 }
 
 // streamImportCSVFile imports a single CSV file in a streaming fashion.
@@ -1219,6 +1267,22 @@ func streamImportCSVFile(
 	var imported int64
 	var skipped int64
 
+	// Collect products for batch create (no immediate indexing)
+	const batchSize = 1000
+	var batch []*model.Product
+	var allProducts []*model.Product
+
+	flushBatch := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		created, count := prodRepo.CreateBatchWithIdxBuild(batch)
+		allProducts = append(allProducts, created...)
+		imported += int64(count)
+		batch = batch[:0]
+		return nil
+	}
+
 	get := func(row []string, col string) string {
 		idx, ok := colIndex[col]
 		if !ok || idx >= len(row) {
@@ -1238,75 +1302,96 @@ func streamImportCSVFile(
 			break
 		}
 
-		var catParts []string
-		for _, col := range []string{"Категория", "Подкатегория 2", "Подкатегория 3", "Подкатегория 4"} {
-			val := get(row, col)
-			if val != "" {
-				catParts = append(catParts, val)
-			}
-		}
-		if len(catParts) == 0 {
-			atomic.AddInt64(&skipped, 1)
-			continue
-		}
-
+		// Determine category ID:
+		// New format: category_id column (direct ID)
+		// Old format: Категория + Подкатегория N (path-based)
 		var catID int64
-		if noCats {
-			// Use pre-built pathToID, no category creation
-			fullPath := strings.Join(catParts, " -> ")
-			var ok bool
-			catID, ok = pathToID[fullPath]
-			if !ok {
+		catIDStr := get(row, "category_id")
+		if catIDStr != "" {
+			// New format: direct category ID
+			id, err := strconv.ParseInt(catIDStr, 10, 64)
+			if err != nil || id <= 0 {
 				atomic.AddInt64(&skipped, 1)
 				continue
 			}
-		} else {
-			// Ensure category path exists (create if needed)
-			for i := 0; i < len(catParts); i++ {
-				path := strings.Join(catParts[:i+1], " -> ")
-				if _, ok := localPathToID[path]; ok {
-					continue
-				}
-				parentID := (*int64)(nil)
-				if i > 0 {
-					parentPath := strings.Join(catParts[:i], " -> ")
-					if pid, ok := localPathToID[parentPath]; ok {
-						parentID = &pid
-					}
-				}
-
-				// Check for existing category by name+parent
-				existingID := findCategoryByNameAndParent(catRepo, catParts[i], parentID)
-				if existingID != 0 {
-					localPathToID[path] = existingID
-					continue
-				}
-
-				nameRu := catParts[i]
-				nameEn := catParts[i]
-				cat := &model.Category{
-					NameRu:   nameRu,
-					NameEn:   nameEn,
-					Slug:     toSlugTranslit(nameEn),
-					ParentID: parentID,
-					IsActive: true,
-				}
-				if err := catRepo.Create(cat); err != nil {
-					// If creation fails, skip this product
-					atomic.AddInt64(&skipped, 1)
-					catParts = nil // invalidate category
-					break
-				}
-				localPathToID[path] = cat.ID
-			}
-			if len(catParts) == 0 {
+			// Verify category exists
+			if _, err := catRepo.Get(id); err != nil {
+				atomic.AddInt64(&skipped, 1)
 				continue
 			}
-			catID = localPathToID[strings.Join(catParts, " -> ")]
+			catID = id
+		} else {
+			// Old format: path-based categories
+			var catParts []string
+			for _, col := range []string{"Категория", "Подкатегория 2", "Подкатегория 3", "Подкатегория 4"} {
+				val := get(row, col)
+				if val != "" {
+					catParts = append(catParts, val)
+				}
+			}
+			if len(catParts) == 0 {
+				atomic.AddInt64(&skipped, 1)
+				continue
+			}
+
+			if noCats {
+				fullPath := strings.Join(catParts, " -> ")
+				var ok bool
+				catID, ok = pathToID[fullPath]
+				if !ok {
+					atomic.AddInt64(&skipped, 1)
+					continue
+				}
+			} else {
+				for i := 0; i < len(catParts); i++ {
+					path := strings.Join(catParts[:i+1], " -> ")
+					if _, ok := localPathToID[path]; ok {
+						continue
+					}
+					parentID := (*int64)(nil)
+					if i > 0 {
+						parentPath := strings.Join(catParts[:i], " -> ")
+						if pid, ok := localPathToID[parentPath]; ok {
+							parentID = &pid
+						}
+					}
+					existingID := findCategoryByNameAndParent(catRepo, catParts[i], parentID)
+					if existingID != 0 {
+						localPathToID[path] = existingID
+						continue
+					}
+					nameRu := catParts[i]
+					nameEn := catParts[i]
+					cat := &model.Category{
+						NameRu:   nameRu,
+						NameEn:   nameEn,
+						Slug:     toSlugTranslit(nameEn),
+						ParentID: parentID,
+						IsActive: true,
+					}
+					if err := catRepo.Create(cat); err != nil {
+						atomic.AddInt64(&skipped, 1)
+						catParts = nil
+						break
+					}
+					localPathToID[path] = cat.ID
+				}
+				if len(catParts) == 0 {
+					continue
+				}
+				catID = localPathToID[strings.Join(catParts, " -> ")]
+			}
 		}
 
-		sku := get(row, "Артикул")
-		modSku := get(row, "Артикул модификации")
+		// SKU: new format "sku" or old "Артикул"
+		sku := get(row, "sku")
+		if sku == "" {
+			sku = get(row, "Артикул")
+		}
+		modSku := get(row, "sku_mod")
+		if modSku == "" {
+			modSku = get(row, "Артикул модификации")
+		}
 		if sku == "" {
 			atomic.AddInt64(&skipped, 1)
 			continue
@@ -1349,7 +1434,11 @@ func streamImportCSVFile(
 		// Форматируем опцию для названия
 		optionDisplay := formatOption(option)
 
-		name := get(row, "Имя товара")
+		// Name: new format "name" or old "Имя товара"
+		name := get(row, "name")
+		if name == "" {
+			name = get(row, "Имя товара")
+		}
 		if name == "" {
 			atomic.AddInt64(&skipped, 1)
 			continue
@@ -1360,15 +1449,28 @@ func streamImportCSVFile(
 			name = name + " " + optionDisplay
 		}
 
-		price := parsePriceCSV(get(row, "Цена"))
+		// Price: new format "price" or old "Цена"
+		priceStr := get(row, "price")
+		if priceStr == "" {
+			priceStr = get(row, "Цена")
+		}
+		price := parsePriceCSV(priceStr)
 		if price <= 0 {
 			atomic.AddInt64(&skipped, 1)
 			continue
 		}
 
-		brand := get(row, "Производитель")
+		// Brand: new format "brand" or old "Производитель"
+		brand := get(row, "brand")
+		if brand == "" {
+			brand = get(row, "Производитель")
+		}
 
-		description := get(row, "Краткое описание")
+		// Description: new format "description" or old "Краткое описание"/"Описание"
+		description := get(row, "description")
+		if description == "" {
+			description = get(row, "Краткое описание")
+		}
 		if description == "" {
 			description = get(row, "Описание")
 		}
@@ -1376,26 +1478,51 @@ func streamImportCSVFile(
 			description = description[:2000]
 		}
 
-		images := parseImagesCSV(get(row, "Ссылки на фото (через пробел)"))
+		// Images: new format "images" or old "Ссылки на фото (через пробел)"
+		imagesStr := get(row, "images")
+		if imagesStr == "" {
+			imagesStr = get(row, "Ссылки на фото (через пробел)")
+		}
+		images := parseImagesCSV(imagesStr)
 		if len(images) == 0 {
 			images = []string{ImagePlaceholder}
 		}
 
-		stockQty := parseStockQtyCSV(get(row, "Количество"))
+		// Stock: new format "stock_qty" or old "Количество"
+		stockStr := get(row, "stock_qty")
+		if stockStr == "" {
+			stockStr = get(row, "Количество")
+		}
+		stockQty := parseStockQtyCSV(stockStr)
 
 		var attrMap map[string]interface{}
 		if !noAttrs {
-			htmlAttrs := get(row, "Характеристики (HTML/Table)")
-			parsedAttrs := attrs.ParseTable(htmlAttrs)
 			attrMap = make(map[string]interface{})
-			for code, values := range parsedAttrs {
-				if len(values) > 0 {
-					attrMap[code] = values[0]
+
+			// New format: read attr_* columns
+			for _, col := range header {
+				if strings.HasPrefix(col, "attr_") {
+					code := strings.TrimPrefix(col, "attr_")
+					val := get(row, col)
+					if val != "" {
+						attrMap[code] = parseAttrValue(code, val)
+					}
+				}
+			}
+
+			// Old format: parse HTML table (fallback)
+			if len(attrMap) == 0 {
+				htmlAttrs := get(row, "Характеристики (HTML/Table)")
+				parsedAttrs := attrs.ParseTable(htmlAttrs)
+				for code, values := range parsedAttrs {
+					if len(values) > 0 {
+						attrMap[code] = values[0]
+					}
 				}
 			}
 		}
 
-		// Create product immediately
+		// Add to batch
 		product := &model.Product{
 			SKU:         uniqueSku,
 			SCU:         scu,
@@ -1414,23 +1541,23 @@ func streamImportCSVFile(
 				Title: fmt.Sprintf("%s — MakoShop", name),
 			},
 		}
+		batch = append(batch, product)
 
-		if err := prodRepo.Create(product); err != nil {
-			atomic.AddInt64(&skipped, 1)
-			continue
+		// Flush batch when full
+		if len(batch) >= batchSize {
+			if err := flushBatch(); err != nil {
+				return streamFileResult{}, err
+			}
 		}
 
-		atomic.AddInt64(&imported, 1)
-
 		if imported%5000 == 0 {
-			fmt.Printf("File %s: imported=%d\n", csvFile, imported)
+			fmt.Printf("File %s: buffered=%d\n", csvFile, imported)
 		}
 	}
 
-	// After streaming: create attribute definitions for categories used in this file (only if attrs parsed)
-	if !noAttrs {
-		// AttrDefRepo больше не нужен — атрибуты индексируются через turbo index
-		// при создании продукта. Справочник значений создаётся автоматически.
+	// Flush remaining batch
+	if err := flushBatch(); err != nil {
+		return streamFileResult{}, err
 	}
 
 	var catsCount int
@@ -1443,7 +1570,42 @@ func streamImportCSVFile(
 		imported:   imported,
 		skipped:    skipped,
 		categories: catsCount,
+		products:   allProducts,
 	}, nil
+}
+
+// parseAttrValue parses attribute value string to appropriate Go type.
+// Returns int for pure integers, float64 for decimals, bool for true/false, string otherwise.
+func parseAttrValue(code, val string) interface{} {
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return val
+	}
+
+	// Try bool
+	if strings.EqualFold(val, "true") || strings.EqualFold(val, "yes") || val == "1" {
+		if strings.HasSuffix(code, "_bool") || strings.Contains(code, "has_") || code == "is_active" || code == "has_net" {
+			return true
+		}
+	}
+	if strings.EqualFold(val, "false") || strings.EqualFold(val, "no") || val == "0" {
+		if strings.HasSuffix(code, "_bool") || strings.Contains(code, "has_") || code == "is_active" || code == "has_net" {
+			return false
+		}
+	}
+
+	// Try int
+	if i, err := strconv.ParseInt(val, 10, 64); err == nil {
+		return int(i)
+	}
+
+	// Try float
+	if f, err := strconv.ParseFloat(val, 64); err == nil {
+		return f
+	}
+
+	// Default: string
+	return val
 }
 
 func parsePriceCSV(s string) float64 {
@@ -1498,10 +1660,6 @@ func parseImagesCSV(s string) []string {
 	parts := strings.Fields(s)
 	var result []string
 	for _, p := range parts {
-		// Only keep mzimg.com images
-		if !strings.Contains(p, "mzimg.com") {
-			continue
-		}
 		if strings.HasPrefix(p, "http") {
 			result = append(result, p)
 			if len(result) >= 10 {

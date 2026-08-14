@@ -366,53 +366,7 @@
     "attr_no_values": "Значень немає",
     "attr_inactive": "неактивний",
     "attr_filter": "фільтр",
-    "attr_sort": "сортування"
-  },
-  "privacy": {
-    "title": "Політика конфіденційності",
-    "last_updated": "Останнє оновлення: {date}",
-    "intro": "Ми цінуємо вашу конфіденційність та зобов'язуємося захищати ваші персональні дані.",
-    "data_collected": "Збираємі дані",
-    "data_collected_desc": "Ми можемо збирати ім'я, email, телефон, адресу доставки та дані про замовлення.",
-    "data_usage": "Використання даних",
-    "data_usage_desc": "Ваші дані використовуються для обробки замовлень, зв'язку з вами та покращення сервісу.",
-    "cookies": "Cookies",
-    "cookies_desc": "Ми використовуємо cookies для покращення роботи сайту та аналітики.",
-    "rights": "Ваші права",
-    "rights_desc": "Ви можете запросити доступ, виправлення або видалення ваших даних.",
-    "contact": "Контакти",
-    "contact_desc": "З питаннями конфіденційності зв'яжіться з нами:"
-  },
-  "cookie": {
-    "banner_title": "Ми використовуємо cookies",
-    "banner_text": "Цей сайт використовує cookies для покращення роботи та аналітики. Продовжуючи використовувати сайт, ви погоджуєтесь з цим.",
-    "accept_all": "Прийняти все",
-    "essential_only": "Тільки необхідні",
-    "settings": "Налаштування",
-    "settings_title": "Налаштування cookies",
-    "essential": "Необхідні",
-    "essential_desc": "Необхідні для роботи сайту. Не можна вимкнути.",
-    "analytics": "Аналітика",
-    "analytics_desc": "Допомогають зрозуміти, як користувачі взаємодіють з сайтом.",
-    "marketing": "Маркетинг",
-    "marketing_desc": "Використовуються для показу релевантної реклами.",
-    "save": "Зберегти налаштування",
-    "close": "Закрити"
-  },
-  "db_monitor": {
-    "shards_usage": "Shard Usage",
-    "mode_active": "Режим: ActiveUsage (точні дані по активних записях)",
-    "mode_fast": "Режим: ShardUsages (швидкий, по FreeOffset, включаючи мертві записи)",
-    "active_scan": "Точний підрахунок активних записів (повільно)",
-    "compact_button": "Compact shards",
-    "compact_running": "Компакт...",
-    "compact_success": "Compact completed successfully",
-    "legend_under_50": "<50%",
-    "legend_50_75": "50-75%",
-    "legend_75_90": "75-90%",
-    "legend_over_90": ">90%"
-  },
-  "admin": {
+    "attr_sort": "сортування",
     "catalogizer_title": "Авто-каталогізатор",
     "catalogizer_desc_short": "Авто-прив'язка товарів до категорій",
     "catalogizer_settings": "Налаштування",
@@ -473,7 +427,70 @@
     "delivery_times": "Час доставки",
     "installment_plans": "Розстрочка",
     "settings": "Налаштування",
-    "settings_saved": "Налаштування збережено"
+    "settings_saved": "Налаштування збережено",
+    "scupage_title": "SCU Pages",
+    "scupage_manage_desc": "Управління SEO-сторінками товарів",
+    "scupage_search_placeholder": "Пошук за SCU, назвою...",
+    "scupage_id": "ID",
+    "scupage_scu": "SCU",
+    "scupage_slug": "Slug",
+    "scupage_products": "Товарів",
+    "scupage_active": "Активна",
+    "scupage_actions": "Дії",
+    "scupage_no_results": "SCU Pages не знайдено",
+    "scupage_showing": "Всього",
+    "scupage_edit_title": "Редагування SCU Page",
+    "scupage_description": "Опис",
+    "scupage_category_id": "ID категорії",
+    "scupage_content": "Контент (HTML)",
+    "scupage_delete_confirm_title": "Видалити SCU Page?",
+    "scupage_delete_confirm_msg": "Ви впевнені, що хочете видалити цю SCU Page?",
+    "scupage_save_error": "Помилка збереження",
+    "scupage_delete_error": "Помилка видалення"
+  },
+  "privacy": {
+    "title": "Політика конфіденційності",
+    "last_updated": "Останнє оновлення: {date}",
+    "intro": "Ми цінуємо вашу конфіденційність та зобов'язуємося захищати ваші персональні дані.",
+    "data_collected": "Збираємі дані",
+    "data_collected_desc": "Ми можемо збирати ім'я, email, телефон, адресу доставки та дані про замовлення.",
+    "data_usage": "Використання даних",
+    "data_usage_desc": "Ваші дані використовуються для обробки замовлень, зв'язку з вами та покращення сервісу.",
+    "cookies": "Cookies",
+    "cookies_desc": "Ми використовуємо cookies для покращення роботи сайту та аналітики.",
+    "rights": "Ваші права",
+    "rights_desc": "Ви можете запросити доступ, виправлення або видалення ваших даних.",
+    "contact": "Контакти",
+    "contact_desc": "З питаннями конфіденційності зв'яжіться з нами:"
+  },
+  "cookie": {
+    "banner_title": "Ми використовуємо cookies",
+    "banner_text": "Цей сайт використовує cookies для покращення роботи та аналітики. Продовжуючи використовувати сайт, ви погоджуєтесь з цим.",
+    "accept_all": "Прийняти все",
+    "essential_only": "Тільки необхідні",
+    "settings": "Налаштування",
+    "settings_title": "Налаштування cookies",
+    "essential": "Необхідні",
+    "essential_desc": "Необхідні для роботи сайту. Не можна вимкнути.",
+    "analytics": "Аналітика",
+    "analytics_desc": "Допомогають зрозуміти, як користувачі взаємодіють з сайтом.",
+    "marketing": "Маркетинг",
+    "marketing_desc": "Використовуються для показу релевантної реклами.",
+    "save": "Зберегти налаштування",
+    "close": "Закрити"
+  },
+  "db_monitor": {
+    "shards_usage": "Shard Usage",
+    "mode_active": "Режим: ActiveUsage (точні дані по активних записях)",
+    "mode_fast": "Режим: ShardUsages (швидкий, по FreeOffset, включаючи мертві записи)",
+    "active_scan": "Точний підрахунок активних записів (повільно)",
+    "compact_button": "Compact shards",
+    "compact_running": "Компакт...",
+    "compact_success": "Compact completed successfully",
+    "legend_under_50": "<50%",
+    "legend_50_75": "50-75%",
+    "legend_75_90": "75-90%",
+    "legend_over_90": ">90%"
   },
   "maintenance": {
     "title": "Технічне обслуговування",
@@ -514,5 +531,107 @@
     "speed": "Швидкість",
     "model": "Модель",
     "year": "Рік"
+  },
+  "attr_enum": {
+    "tire_type": {
+      "Summer": "Літні",
+      "Winter": "Зимові",
+      "AllSeason": "Всесезонні"
+    },
+    "jack_type": {
+      "Screw": "Гвинтовий",
+      "Hydraulic": "Гідравлічний",
+      "Lever": "Ричаговий",
+      "Ratchet": "Торсійний",
+      "Electric": "Електричний",
+      "Air": "Пневматичний"
+    },
+    "wheel_type": {
+      "Single": "Монопатинки",
+      "Twist": "Твист",
+      "Quad": "Квадро"
+    },
+    "wheel_size": {
+      "10": "10 дюймів",
+      "12": "12 дюймів",
+      "14": "14 дюймів",
+      "16": "16 дюймів",
+      "18": "18 дюймів",
+      "20": "20 дюймів",
+      "24": "24 дюйма",
+      "26": "26 дюймів",
+      "27.5": "27.5 дюймів",
+      "28": "28 дюймів"
+    },
+    "bike_type": {
+      "Mountain": "Гірський",
+      "Road": "Шосейний",
+      "City": "Міський",
+      "BMX": "BMX",
+      "Folding": "Складний",
+      "Electric": "Електричний"
+    },
+    "material": {
+      "Steel": "Сталь",
+      "Aluminum": "Алюміній",
+      "Plastic": "Пластик",
+      "Wood": "Дерево",
+      "Fabric": "Тканина",
+      "Polyester": "Поліестер",
+      "Nylon": "Нейлон",
+      "Metal": "Метал",
+      "Rubber": "Гума",
+      "Glass": "Скло"
+    },
+    "shape": {
+      "Round": "Круглий",
+      "Rectangular": "Прямокутний",
+      "Oval": "Овальний",
+      "Square": "Квадратний"
+    },
+    "type": {
+      "Manual": "Ручний",
+      "Electric": "Електричний",
+      "Automatic": "Автоматичний"
+    },
+    "energy_class": {
+      "A": "A",
+      "A+": "A+",
+      "A++": "A++",
+      "A+++": "A+++",
+      "B": "B",
+      "C": "C",
+      "D": "D",
+      "E": "E",
+      "F": "F",
+      "G": "G"
+    },
+    "resolution": {
+      "HD": "HD",
+      "Full HD": "Full HD",
+      "4K": "4K",
+      "8K": "8K"
+    },
+    "panel_type": {
+      "IPS": "IPS",
+      "VA": "VA",
+      "TN": "TN",
+      "OLED": "OLED",
+      "LED": "LED"
+    },
+    "rc_type": {
+      "Drone": "Дрон",
+      "Car": "Автомобіль",
+      "Helicopter": "Гелікоптер",
+      "Boat": "Човен",
+      "Plane": "Літак",
+      "Tank": "Танк"
+    },
+    "power_type": {
+      "Electric": "Електричний",
+      "Gasoline": "Бензиновий",
+      "Battery": "Акумуляторний",
+      "Hybrid": "Гібридний"
+    }
   }
 }
