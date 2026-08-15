@@ -1,11 +1,13 @@
 package db
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/GenshIv/makodb/v2"
@@ -20,6 +22,12 @@ type SCUPageSearch struct {
 	productRepo  *ProductRepo
 	categoryRepo *CategoryRepo
 	enabled      bool
+
+	// Cache for category descendants to avoid repeated expensive lookups.
+	// Key: catID, Value: []int64 of descendant IDs (not including catID itself).
+	descMu       sync.Mutex
+	descCache    map[int64][]int64
+	descCacheTTL time.Duration
 }
 
 func NewSCUPageSearch(db *makodb.ShardedDB, repo *SCUPageRepo, productRepo *ProductRepo, categoryRepo *CategoryRepo, enabled bool) *SCUPageSearch {
@@ -29,6 +37,8 @@ func NewSCUPageSearch(db *makodb.ShardedDB, repo *SCUPageRepo, productRepo *Prod
 		productRepo:  productRepo,
 		categoryRepo: categoryRepo,
 		enabled:      enabled,
+		descCache:    make(map[int64][]int64),
+		descCacheTTL: 5 * time.Minute,
 	}
 }
 
@@ -420,6 +430,7 @@ type SCUPageListResult struct {
 }
 
 // ListWithTurbo returns paginated SCU pages with filters and sorting.
+// Optimized: uses raw turbo operations to minimize allocations.
 func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListResult, error) {
 	if !s.enabled {
 		return nil, fmt.Errorf("scupage search is disabled")
@@ -436,7 +447,8 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 	}
 
 	// 1) Build category filter (category + all descendants via union)
-	var candidates []uint64
+	// Returns raw bitmap for efficient intersection.
+	var candidatesRaw []byte
 
 	if params.CategoryID != 0 {
 		catIDs, err := s.getCategoryWithDescendants(params.CategoryID)
@@ -450,18 +462,17 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		for i, cid := range catIDs {
 			catTokens[i] = scupageKeyCategory(cid)
 		}
-		catResult, err := s.db.TurboBulkUnionSorted(catTokens)
+		catRaw, err := s.db.TurboBulkUnionSortedRaw(catTokens)
 		if err != nil {
 			return nil, fmt.Errorf("turbo union categories: %w", err)
 		}
-		candidates = catResult
-		if len(candidates) == 0 {
+		if catRaw == nil || len(catRaw) == 0 {
 			return &SCUPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
+		candidatesRaw = catRaw
 	}
 
-	// return &SCUPageListResult{}, nil
-	// 2) AND-индексы (vendor, text search)
+	// 2) AND-индексы (vendor, text search) — use raw intersect
 	var andTokens []string
 
 	if params.CompanyID != 0 {
@@ -476,24 +487,24 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 	}
 
 	if len(andTokens) > 0 {
-		andResult, err := s.db.TurboBulkIntersect(andTokens)
+		andRaw, err := s.db.TurboBulkIntersectRaw(andTokens)
 		if err != nil {
 			return nil, fmt.Errorf("turbo intersect: %w", err)
 		}
-		if len(andResult) == 0 {
+		if andRaw == nil || len(andRaw) == 0 {
 			return &SCUPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
-		if candidates == nil {
-			candidates = andResult
+		if candidatesRaw == nil {
+			candidatesRaw = andRaw
 		} else {
-			candidates = intersectSorted(candidates, andResult)
+			candidatesRaw = makodb.TurboBinaryIntersectRaw([][]byte{candidatesRaw, andRaw})
 		}
-		if len(candidates) == 0 {
+		if candidatesRaw == nil || len(candidatesRaw) == 0 {
 			return &SCUPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
 	}
 
-	// 3) OR-атрибуты
+	// 3) OR-атрибуты — union then intersect with candidates
 	for code, values := range params.AttrFilters {
 		if len(values) == 0 {
 			continue
@@ -502,50 +513,40 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		for _, v := range values {
 			attrTokens = append(attrTokens, scupageKeyAttr(code, v))
 		}
-		attrIDs, err := s.db.TurboBulkUnionSorted(attrTokens)
+		attrBitmap, err := s.db.TurboBulkUnionSortedRaw(attrTokens)
 		if err != nil {
 			return &SCUPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
-		if len(attrIDs) == 0 {
+		if attrBitmap == nil || len(attrBitmap) == 0 {
 			return &SCUPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
-		// TurboBulkUnionSorted returns sorted result, no need to sort again.
-		if candidates == nil {
-			candidates = attrIDs
+		if candidatesRaw == nil {
+			candidatesRaw = attrBitmap
 		} else {
-			candidates = intersectSorted(candidates, attrIDs)
+			candidatesRaw = makodb.TurboBinaryIntersectRaw([][]byte{candidatesRaw, attrBitmap})
 		}
-		if len(candidates) == 0 {
+		if candidatesRaw == nil || len(candidatesRaw) == 0 {
 			return &SCUPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
 	}
 
 	// 3b) Price range filter via numSort index (stored as price * 100)
-	if len(candidates) > 0 && (params.PriceMin > 0 || params.PriceMax > 0) {
+	if candidatesRaw != nil && len(candidatesRaw) > 0 && (params.PriceMin > 0 || params.PriceMax > 0) {
 		minVal := uint64(params.PriceMin * 100)
 		maxVal := uint64(params.PriceMax * 100)
 		if params.PriceMax == 0 {
 			maxVal = ^uint64(0) // no upper bound
 		}
-		priceResult, err := s.db.TurboGetNumSortRangeIntersectCandidates(
+		priceRaw, err := s.db.TurboGetNumSortRangeIntersectRaw(
 			scupageNumSortPrice,
 			minVal,
 			maxVal,
-			candidates,
-			0,
-			len(candidates), // get all matching docIDs
+			candidatesRaw,
 		)
-		if err != nil {
-			// Fallback: continue without price filter
+		if err == nil && priceRaw != nil && len(priceRaw) > 0 {
+			candidatesRaw = priceRaw
 		} else {
-			filtered := make([]uint64, len(priceResult.Pairs))
-			for i, p := range priceResult.Pairs {
-				filtered[i] = p.DocID
-			}
-			if len(filtered) == 0 {
-				return &SCUPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
-			}
-			candidates = filtered
+			// Fallback: continue without price filter
 		}
 	}
 
@@ -562,20 +563,31 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		sortKey = scupageSortPriceAsc
 	}
 
-	// Use candidates if we have them, otherwise use full sort index
-	var sortCandidates []uint64
-	if len(candidates) > 0 {
-		sortCandidates = candidates
-	}
+	// Use raw candidates directly — no []uint64 conversion needed.
+	var res makodb.TurboSortPageWithDocsResult
+	var err error
 
-	res, err := s.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
-		Name:       sortKey,
-		Candidates: sortCandidates,
-		Page:       params.Page - 1,
-		PageSize:   params.Limit,
-		Desc:       false,
-		DocPrefix:  "scupage:",
-	})
+	if candidatesRaw == nil || len(candidatesRaw) == 0 {
+		// No filters: use full sort index.
+		res, err = s.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
+			Name:       sortKey,
+			Candidates: nil,
+			Page:       params.Page - 1,
+			PageSize:   params.Limit,
+			Desc:       false,
+			DocPrefix:  "scupage:",
+		})
+	} else {
+		// Use raw candidates — avoids []uint64 allocation.
+		res, err = s.db.TurboSortIndexPageRawWithDocsFromDB(
+			sortKey,
+			candidatesRaw,
+			params.Page-1,
+			params.Limit,
+			false,
+			"scupage:",
+		)
+	}
 
 	if err != nil {
 		return nil, fmt.Errorf("turbo sort page with docs: %w", err)
@@ -628,6 +640,20 @@ func (s *SCUPageSearch) getCategoryAncestors(catID int64) ([]int64, error) {
 		current = *cat.ParentID
 	}
 	return ancestors, nil
+}
+
+// turboSerializeTokens converts a sorted []uint64 to a raw turbo bitmap.
+// Format: [count: uint64][tokens: uint64 x count]
+func turboSerializeTokens(tokens []uint64) []byte {
+	if len(tokens) == 0 {
+		return nil
+	}
+	buf := make([]byte, 8+uint64(len(tokens))*8)
+	binary.LittleEndian.PutUint64(buf, uint64(len(tokens)))
+	for i, t := range tokens {
+		binary.LittleEndian.PutUint64(buf[8+uint64(i)*8:], t)
+	}
+	return buf
 }
 
 func tokenizeSCUPage(sp *model.SCUPage) []string {
