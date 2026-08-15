@@ -715,7 +715,7 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 			// Update existing in memory
 			updatedPages[p.SCU] = s
 		} else {
-			// Create new (category will be set after creation via TurboTopNByIntersection)
+			// Create new with category from product
 			if _, ok := newPages[p.SCU]; !ok {
 				newPages[p.SCU] = &model.SCUPage{
 					SCU:          p.SCU,
@@ -724,7 +724,7 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 					Description:  p.Description,
 					Content:      p.Description,
 					Images:       limitStrings(deduplicateStrings(p.Images), maxSCUPageImages),
-					CategoryID:   0, // will be set after creation
+					CategoryID:   p.CategoryID, // from product
 					Brand:        p.Brand,
 					BrandID:      p.BrandID,
 					IsActive:     true,
@@ -798,6 +798,7 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 		created[scu] = s.ID // reuse ID for mapping
 	}
 
+	fmt.Printf("[SCUPAGE]: start catologizator")
 	// Catalogize new SCU pages using TurboTopNByIntersection
 	if r.CatalogizeNew && r.Catalogizer != nil {
 		// Get catalogizer via type assertion

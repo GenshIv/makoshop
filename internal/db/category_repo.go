@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/GenshIv/makodb/v2"
@@ -478,7 +479,7 @@ func (r *CategoryRepo) getDirectChildrenFromIndex(catID int64) []int64 {
 }
 
 // GetDescendants returns all descendants of a category (cached, O(1)).
-func (r *CategoryRepo) GetDescendants(catID int64) ([]int64, error) {
+func (r *CategoryRepo) GetDescendants1(catID int64) ([]int64, error) {
 	key := turboKeyCategoryChildrenOf + fmt.Sprintf("%d", catID)
 	data, err := r.store.DB().TurboRawRead(key)
 	if err != nil || len(data) == 0 {
@@ -489,6 +490,26 @@ func (r *CategoryRepo) GetDescendants(catID int64) ([]int64, error) {
 	ids := make([]int64, len(hashes))
 	for i, h := range hashes {
 		ids[i] = int64(h)
+	}
+	return ids, nil
+}
+
+func (r *CategoryRepo) GetDescendants(catID int64) ([]int64, error) {
+	buf := make([]byte, 0, 32)
+	buf = append(buf, turboKeyCategoryChildrenOf...)
+	buf = strconv.AppendInt(buf, catID, 10)
+
+	data, err := r.store.DB().TurboRawRead(string(buf))
+	if err != nil || len(data) == 0 {
+		// computeDescendants тоже должен возвращать []uint64
+		return r.computeDescendants(catID), nil
+	}
+
+	// Turbo хранит uint64, конвертируем в int64
+	tokens := makodb.TurboUnsafeReadTokens(data)
+	ids := make([]int64, len(tokens))
+	for i, t := range tokens {
+		ids[i] = int64(t)
 	}
 	return ids, nil
 }

@@ -89,7 +89,7 @@ func NewHandlers(store *db.Store) *Handlers {
 
 	scuPageRepo := db.NewSCUPageRepo(store)
 	scuPageRepo.SetCategoryRepo(categoryRepo)
-	scuPageRepo.EnableCatalogizeNew(true) // auto-catalogize new SCU pages
+	scuPageRepo.EnableCatalogizeNew(false) // disabled: categories come from price files
 	turboSearch.SetSCUPageRepo(scuPageRepo)
 
 	// SCUPage search (catalog works on SCU pages)

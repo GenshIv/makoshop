@@ -450,7 +450,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		for i, cid := range catIDs {
 			catTokens[i] = scupageKeyCategory(cid)
 		}
-		catResult, err := s.db.TurboBulkUnion(catTokens)
+		catResult, err := s.db.TurboBulkUnionSorted(catTokens)
 		if err != nil {
 			return nil, fmt.Errorf("turbo union categories: %w", err)
 		}
@@ -460,6 +460,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		}
 	}
 
+	// return &SCUPageListResult{}, nil
 	// 2) AND-индексы (vendor, text search)
 	var andTokens []string
 
@@ -501,16 +502,14 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		for _, v := range values {
 			attrTokens = append(attrTokens, scupageKeyAttr(code, v))
 		}
-		attrIDs, err := s.db.TurboBulkUnion(attrTokens)
+		attrIDs, err := s.db.TurboBulkUnionSorted(attrTokens)
 		if err != nil {
 			return &SCUPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
 		if len(attrIDs) == 0 {
 			return &SCUPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
-		sort.Slice(attrIDs, func(i, j int) bool {
-			return attrIDs[i] < attrIDs[j]
-		})
+		// TurboBulkUnionSorted returns sorted result, no need to sort again.
 		if candidates == nil {
 			candidates = attrIDs
 		} else {
