@@ -275,7 +275,18 @@
     "not_found": "Product not found",
     "add_comment_prompt": "Enter a comment",
     "review_error": "Failed to submit review",
-    "no_description": "No description available"
+    "no_description": "No description available",
+    "supplier": "Supplier #{id}"
+  },
+  "scupage": {
+    "where_to_buy_base": "Where to buy",
+    "variant_one": "option",
+    "variant_few": "options",
+    "variant_many": "options",
+    "price": "Price",
+    "in_stock": "In stock at selected seller",
+    "out_of_stock": "Out of stock",
+    "currency": "EUR"
   },
   "errors": {
     "unknown": "An error occurred",

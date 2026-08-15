@@ -64,6 +64,7 @@ const fetchCompanySettings = async () => {
         const res = await api.get(`/admin/companies/${cid}/settings`);
         const c = res.data.company || {};
         map[cid] = {
+          name: c.name || '',
           payment_methods: (c.payment_method_ids || [])
             .map(id => allPM[id])
             .filter(Boolean),
@@ -75,7 +76,7 @@ const fetchCompanySettings = async () => {
             .filter(Boolean),
         };
       } catch {
-        map[cid] = { payment_methods: [], delivery_times: [], installment_plans: [] };
+        map[cid] = { name: '', payment_methods: [], delivery_times: [], installment_plans: [] };
       }
     }
     companySettingsMap.value = map;
@@ -172,7 +173,10 @@ const isInStock = (product) => {
 };
 
 const formatPrice = (price) => {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
+  const currency = t('scupage.currency', 'EUR');
+  const localeMap = { ru: 'ru-RU', en: 'en-US', ua: 'uk-UA', pl: 'pl-PL' };
+  const loc = localeMap[locale.value] || 'en-US';
+  return new Intl.NumberFormat(loc, { style: 'currency', currency }).format(price);
 };
 
 // Get localized attribute label
@@ -199,12 +203,26 @@ const stripCompanyFromName = (name) => {
   return name.replace(/\s*—\s*[^—]+$/, '').trim() || name;
 };
 
-// Extract company name from product name suffix.
-// Example: "Rastar BMW I8 1:24 Серебристый — Magazilla" → "Magazilla"
+// Extract company name from product name suffix or company settings.
+// Priority:
+// 1) product.company_name (if provided by API)
+// 2) company.name from companySettingsMap
+// 3) suffix from product.name like " — Magazilla"
+// 4) fallback "Поставщик #id"
 const getCompanyName = (product) => {
   if (product.company_name) return product.company_name;
+
+  try {
+    const settings = product.company_id ? companySettingsMap.value[product.company_id] : null;
+    if (settings && settings.name) return settings.name;
+  } catch {
+    // ignore
+  }
+
   const match = product.name?.match(/\s*—\s*([^—]+)$/);
-  return match?.[1]?.trim() || 'Поставщик #' + product.company_id;
+  if (match?.[1]) return match[1].trim();
+
+  return t('product.supplier', { id: product.company_id });
 };
 
 // Group products by modification (pure name without company). Each mod has multiple supplier offers.
@@ -222,30 +240,42 @@ const modifications = computed(() => {
   // Payment method filter (OR inside)
   if (filterForm.paymentMethodFilters.length > 0) {
     filtered = filtered.filter(p => {
-      const settings = p.company_id ? companySettingsMap.value[p.company_id] : null;
-      if (!settings) return false;
-      const available = settings.payment_methods.map(pm => pm.name);
-      return filterForm.paymentMethodFilters.some(f => available.includes(f));
+      try {
+        const settings = p.company_id ? companySettingsMap.value[p.company_id] : null;
+        if (!settings || !Array.isArray(settings.payment_methods)) return false;
+        const available = settings.payment_methods.map(pm => pm.name);
+        return filterForm.paymentMethodFilters.some(f => available.includes(f));
+      } catch {
+        return false;
+      }
     });
   }
 
   // Delivery time filter (OR inside)
   if (filterForm.deliveryTimeFilters.length > 0) {
     filtered = filtered.filter(p => {
-      const settings = p.company_id ? companySettingsMap.value[p.company_id] : null;
-      if (!settings) return false;
-      const available = settings.delivery_times.map(dt => dt.name);
-      return filterForm.deliveryTimeFilters.some(f => available.includes(f));
+      try {
+        const settings = p.company_id ? companySettingsMap.value[p.company_id] : null;
+        if (!settings || !Array.isArray(settings.delivery_times)) return false;
+        const available = settings.delivery_times.map(dt => dt.name);
+        return filterForm.deliveryTimeFilters.some(f => available.includes(f));
+      } catch {
+        return false;
+      }
     });
   }
 
   // Installment plan filter (OR inside)
   if (filterForm.installmentPlanFilters.length > 0) {
     filtered = filtered.filter(p => {
-      const settings = p.company_id ? companySettingsMap.value[p.company_id] : null;
-      if (!settings) return false;
-      const available = settings.installment_plans.map(ip => ip.name);
-      return filterForm.installmentPlanFilters.some(f => available.includes(f));
+      try {
+        const settings = p.company_id ? companySettingsMap.value[p.company_id] : null;
+        if (!settings || !Array.isArray(settings.installment_plans)) return false;
+        const available = settings.installment_plans.map(ip => ip.name);
+        return filterForm.installmentPlanFilters.some(f => available.includes(f));
+      } catch {
+        return false;
+      }
     });
   }
 
@@ -376,6 +406,22 @@ const displayAttributes = computed(() => {
 // Общее количество офферов (после фильтров)
 const filteredOfferCount = computed(() => {
   return modifications.value.reduce((sum, mod) => sum + mod.suppliers.length, 0);
+});
+
+// Форма слова для "Где купить (N вариантов)"
+const offersPlural = computed(() => {
+  const n = filteredOfferCount.value;
+  if (locale.value === 'ru') {
+    return pluralize(n, 'вариант', 'варианта', 'вариантов');
+  }
+  if (locale.value === 'ua') {
+    return pluralize(n, 'варіант', 'варіанти', 'варіантів');
+  }
+  if (locale.value === 'pl') {
+    return pluralize(n, 'opcja', 'opcje', 'opcji');
+  }
+  // EN default
+  return n === 1 ? 'option' : 'options';
 });
 
 // Склонение слов (1 магазин, 2 магазина, 5 магазинов)
@@ -589,10 +635,10 @@ watch(
           >
             <div class="flex items-end justify-between gap-4">
               <div>
-                <div class="text-sm text-indigo-200">Цена</div>
+                <div class="text-sm text-indigo-200">{{ t('scupage.price') }}</div>
                 <div class="text-3xl font-bold mt-0.5">{{ formatPrice(currentPrice) }}</div>
                 <div class="text-xs text-indigo-200 mt-1">
-                  {{ isInStock(selectedProduct) ? 'В наличии у выбранного продавца' : 'Нет в наличии' }}
+                  {{ isInStock(selectedProduct) ? t('scupage.in_stock') : t('scupage.out_of_stock') }}
                 </div>
               </div>
               <button
@@ -619,7 +665,7 @@ watch(
         <div v-if="modifications.length > 0" class="lg:col-span-10 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div class="px-4 py-3 border-b border-gray-100">
             <h3 class="font-semibold text-gray-800">
-              Где купить ({{ filteredOfferCount }} {{ pluralize(filteredOfferCount, 'вариант', 'варианта', 'вариантов') }})
+              {{ t('scupage.where_to_buy_base') }} ({{ filteredOfferCount }} {{ offersPlural }})
             </h3>
           </div>
           <div class="divide-y divide-gray-50 max-h-[400px] overflow-y-auto">

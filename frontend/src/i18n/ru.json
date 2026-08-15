@@ -275,7 +275,18 @@
     "not_found": "Товар не найден",
     "add_comment_prompt": "Введите комментарий",
     "review_error": "Ошибка отправки отзыва",
-    "no_description": "Описание отсутствует"
+    "no_description": "Описание отсутствует",
+    "supplier": "Поставщик #{id}"
+  },
+  "scupage": {
+    "where_to_buy_base": "Где купить",
+    "variant_one": "вариант",
+    "variant_few": "варианта",
+    "variant_many": "вариантов",
+    "price": "Цена",
+    "in_stock": "В наличии у выбранного продавца",
+    "out_of_stock": "Нет в наличии",
+    "currency": "EUR"
   },
   "errors": {
     "unknown": "Произошла ошибка",

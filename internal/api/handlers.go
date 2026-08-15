@@ -2133,6 +2133,7 @@ func (h *Handlers) HandleAnalyticsOrders(w http.ResponseWriter, r *http.Request)
 // GET /admin/analytics/overview
 // Access: admin only.
 func (h *Handlers) HandleAnalyticsOverview(w http.ResponseWriter, r *http.Request) {
+	return
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return

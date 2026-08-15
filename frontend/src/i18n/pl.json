@@ -235,7 +235,18 @@
     "not_found": "Nie znaleziono produktu",
     "add_comment_prompt": "Wpisz komentarz",
     "review_error": "Błąd wysyłania opinii",
-    "no_description": "Brak opisu"
+    "no_description": "Brak opisu",
+    "supplier": "Dostawca #{id}"
+  },
+  "scupage": {
+    "where_to_buy_base": "Gdzie kupić",
+    "variant_one": "opcja",
+    "variant_few": "opcje",
+    "variant_many": "opcji",
+    "price": "Cena",
+    "in_stock": "Dostępne u wybranego sprzedawcy",
+    "out_of_stock": "Brak na stanie",
+    "currency": "EUR"
   },
   "errors": {
     "unknown": "Wystąpił błąd",

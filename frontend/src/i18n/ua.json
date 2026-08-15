@@ -238,7 +238,18 @@
     "not_found": "Товар не знайдено",
     "add_comment_prompt": "Введіть коментар",
     "review_error": "Помилка надсилання відгуку",
-    "no_description": "Опис відсутній"
+    "no_description": "Опис відсутній",
+    "supplier": "Постачальник #{id}"
+  },
+  "scupage": {
+    "where_to_buy_base": "Де купити",
+    "variant_one": "варіант",
+    "variant_few": "варіанти",
+    "variant_many": "варіантів",
+    "price": "Ціна",
+    "in_stock": "В наявності у обраного продавця",
+    "out_of_stock": "Немає в наявності",
+    "currency": "EUR"
   },
   "errors": {
     "unknown": "Сталася помилка",
