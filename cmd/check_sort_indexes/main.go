@@ -44,13 +44,13 @@ func main() {
 	for _, name := range []string{"price_asc", "price_desc", "created_at_desc", "sort:price_asc"} {
 		fmt.Printf("\n--- %s ---\n", name)
 
-		mainData, err := db.TurboGetSortIndex(name)
+		mainData, err := db.Get(name)
 		if err != nil {
-			fmt.Printf("  TurboGetSortIndex: %v\n", err)
+			fmt.Printf("  Get: %v\n", err)
 		} else if mainData == nil {
-			fmt.Printf("  TurboGetSortIndex: not found\n")
+			fmt.Printf("  Get: not found\n")
 		} else {
-			fmt.Printf("  TurboGetSortIndex: %d items\n", makodb.TurboSortIndexCount(mainData))
+			fmt.Printf("  Get: %d bytes, items=%d\n", len(mainData), makodb.TurboSortIndexCount(mainData))
 		}
 	}
 }

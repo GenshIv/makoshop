@@ -124,7 +124,10 @@
     "no_photo": "No photo",
     "back": "← Back",
     "page_of": "Page {page} of {total}",
-    "virtual_product_notice": "Prices and availability are updating. Load price lists to add to cart."
+    "virtual_product_notice": "Prices and availability are updating. Load price lists to add to cart.",
+    "from_price_sellers": "{count} sellers",
+    "search_time": "Search: {ms}ms",
+    "filters": "Filters"
   },
   "cart": {
     "title": "Cart",

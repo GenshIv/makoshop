@@ -165,7 +165,7 @@ func Middleware(mw *Writer) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 
-			sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+			sw := &statusWriter{ResponseWriter: w, status: http.StatusOK, start: start}
 			next.ServeHTTP(sw, r)
 
 			durationNs := time.Since(start).Nanoseconds()
@@ -190,11 +190,30 @@ func Middleware(mw *Writer) func(http.Handler) http.Handler {
 type statusWriter struct {
 	http.ResponseWriter
 	status int
+	start  time.Time
+	wrote  bool
 }
 
 func (sw *statusWriter) WriteHeader(code int) {
+	if sw.wrote {
+		return
+	}
+	sw.wrote = true
 	sw.status = code
+
+	// Заголовок для фронтенда: время выполнения запроса в миллисекундах.
+	// Пишем ДО WriteHeader, чтобы заголовок ушёл в ответ.
+	durationNs := time.Since(sw.start).Nanoseconds()
+	sw.ResponseWriter.Header().Set("X-Response-Time-Ms", fmt.Sprintf("%.3f", float64(durationNs)/1e6))
+
 	sw.ResponseWriter.WriteHeader(code)
+}
+
+func (sw *statusWriter) Write(p []byte) (int, error) {
+	if !sw.wrote {
+		sw.WriteHeader(http.StatusOK)
+	}
+	return sw.ResponseWriter.Write(p)
 }
 
 func clientIP(r *http.Request) string {

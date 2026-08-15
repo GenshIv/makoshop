@@ -126,7 +126,7 @@ defineOptions({ name: 'CategoryTree' });
 </script>
 
 <template>
-  <nav class="space-y-0.5 text-sm">
+  <nav class="space-y-0.5 text-sm category-tree-nav">
     <div v-if="loading" class="text-gray-400 py-2">{{ t('common.loading', 'Загрузка...') }}</div>
     <template v-else>
       <!-- Root "All" category -->
@@ -162,3 +162,11 @@ defineOptions({ name: 'CategoryTree' });
     </template>
   </nav>
 </template>
+
+<style scoped>
+/* Smooth expand/collapse for children */
+.category-tree-nav ul {
+  transition: max-height 0.15s ease-out;
+  overflow: hidden;
+}
+</style>

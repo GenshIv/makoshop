@@ -124,7 +124,10 @@
     "no_photo": "Нет фото",
     "back": "← Назад",
     "page_of": "Страница {page} из {total}",
-    "virtual_product_notice": "Цены и наличие обновляются. Загрузите прайсы для добавления в корзину."
+    "virtual_product_notice": "Цены и наличие обновляются. Загрузите прайсы для добавления в корзину.",
+    "from_price_sellers": "{count} продавца",
+    "search_time": "Поиск: {ms}ms",
+    "filters": "Фильтры"
   },
   "cart": {
     "title": "Корзина",

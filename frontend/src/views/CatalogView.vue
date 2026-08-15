@@ -19,6 +19,8 @@ const pagination = reactive({ page: 1, per_page: 50, total: 0, total_pages: 0 })
 const loading = ref(false);
 const error = ref(null);
 const maintenanceMode = ref(false);
+const lastSearchMs = ref(null); // time in ms of last catalog request
+const showMobileFilters = ref(false); // mobile filters panel
 
 // If API returns SCUPage data, render SCUPageView instead
 const scuPageData = ref(null);
@@ -86,6 +88,7 @@ const buildQueryParams = () => {
 const fetchProducts = async () => {
   loading.value = true;
   error.value = null;
+  lastSearchMs.value = null;
   // Не сбрасываем scuPageData, если уже на SCU-странице и данные есть
   const isOnSCUPage = scuPageData.value != null;
   try {
@@ -107,6 +110,29 @@ const fetchProducts = async () => {
     }
 
     const response = await api.get(url, { params });
+
+    // Read server-side timing from header: X-Response-Time-Ms
+    // Axios normalizes header names to lowercase, but we'll search defensively
+    const headers = response.headers || {};
+    const headerKeys = Object.keys(headers);
+    const timingKey = headerKeys.find(k => 
+      k.toLowerCase().includes('response-time') || k.toLowerCase().includes('response_time')
+    );
+    const raw = timingKey ? headers[timingKey] : null;
+
+    if (raw != null) {
+      const val = String(raw).replace('ms', '').trim();
+      const parsed = parseFloat(val);
+      if (!isNaN(parsed)) {
+        const ms = Math.max(1, Math.round(parsed));
+        lastSearchMs.value = ms;
+        // Make available globally for header badge
+        if (typeof window !== 'undefined') {
+          window.__LAST_SEARCH_MS__ = ms;
+        }
+      }
+    }
+
     const data = response.data;
 
     // Если ответ — SCUPage, запоминаем и рендерим SCUPageView
@@ -483,7 +509,29 @@ defineOptions({ name: 'CatalogView' });
     <!-- Breadcrumbs -->
     <Breadcrumbs :categories="categoryPath" />
 
-    <h1 class="text-2xl font-bold mb-4">{{ pageTitle }}</h1>
+    <div class="flex items-center justify-between mb-3">
+      <h1 class="text-2xl font-bold">{{ pageTitle }}</h1>
+      <div class="flex items-center gap-2">
+        <!-- Mobile filters button -->
+        <button
+          @click="showMobileFilters = true"
+          class="md:hidden inline-flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+          {{ t('catalog.filters') }}
+        </button>
+
+        <span
+          v-if="lastSearchMs != null"
+          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200"
+        >
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500"></span>
+          {{ t('catalog.search_time', { ms: lastSearchMs }) }}
+        </span>
+      </div>
+    </div>
 
     <div v-if="error" class="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
       {{ error }}
@@ -648,20 +696,25 @@ defineOptions({ name: 'CatalogView' });
           </button>
         </div>
 
-        <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
           <div
             v-for="product in products"
             :key="product.id"
-            class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md hover:border-indigo-200 transition cursor-pointer relative"
+            class="bg-white rounded-xl border border-gray-200 overflow-hidden cursor-pointer relative
+                   transition-all duration-200 ease-out
+                   hover:shadow-lg hover:-translate-y-0.5 hover:border-indigo-300"
             @click="goToSCUPage(product)"
           >
-            <span v-if="product.promoted" class="absolute top-1.5 left-1.5 z-10 bg-yellow-400 text-yellow-900 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+            <!-- Бейдж: реклама -->
+            <span v-if="product.promoted" class="absolute top-2 left-2 z-10 bg-yellow-400 text-yellow-900 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
               {{ t('catalog.ad') }}
             </span>
-            <span v-if="product.product_count && product.product_count > 1" class="absolute top-1.5 right-1.5 z-10 bg-indigo-600 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+            <!-- Бейдж: несколько вариантов -->
+            <span v-if="product.product_count && product.product_count > 1" class="absolute top-2 right-2 z-10 bg-indigo-600 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
               {{ product.product_count }} {{ pluralize(product.product_count, 'вариант', 'варианта', 'вариантов') }}
             </span>
 
+            <!-- Изображение -->
             <div class="aspect-[4/3] bg-gray-100 flex items-center justify-center">
               <img
                 v-if="product.images?.length"
@@ -672,22 +725,33 @@ defineOptions({ name: 'CatalogView' });
               <span v-else class="text-gray-400 text-xs">{{ t('catalog.no_photo') }}</span>
             </div>
 
-            <div class="p-2 space-y-0.5">
+            <!-- Информация -->
+            <div class="p-2.5 sm:p-3 space-y-1">
               <!-- Название товара -->
-              <h3 class="font-semibold text-sm line-clamp-2 text-gray-900">{{ product.title || product.name }}</h3>
+              <h3 class="font-semibold text-[13px] sm:text-sm leading-tight line-clamp-2 text-gray-900">{{ product.title || product.name }}</h3>
 
               <!-- Бренд/производитель -->
-              <div v-if="product.brand" class="text-[11px] text-gray-500">{{ product.brand }}</div>
+              <div v-if="product.brand" class="text-[11px] sm:text-xs text-gray-500">{{ product.brand }}</div>
 
               <!-- Параметры (если есть) -->
               <div v-if="product.attributes && Object.keys(product.attributes).length" class="text-[10px] text-gray-500 truncate">
                 {{ getAttributesString(product.attributes) }}
               </div>
 
-              <!-- Цена и рейтинг -->
-              <div class="flex items-center justify-between pt-0.5">
-                <span class="font-bold text-sm text-indigo-600">{{ formatPrice(product.price || product.min_price) }}</span>
-                <span v-if="product.avg_rating" class="text-xs text-yellow-500">
+              <!-- Цена + продавцы + рейтинг -->
+              <div class="flex items-end justify-between pt-1 gap-2">
+                <div class="flex flex-col">
+                  <span class="font-bold text-sm sm:text-base text-indigo-700">
+                    {{ formatPrice(product.price || product.min_price) }}
+                  </span>
+                  <span
+                    v-if="product.sellers_count && product.sellers_count > 1"
+                    class="text-[10px] text-gray-500"
+                  >
+                    {{ t('catalog.from_price_sellers', { count: product.sellers_count }) }}
+                  </span>
+                </div>
+                <span v-if="product.avg_rating" class="text-xs text-yellow-500 flex-shrink-0">
                   ★ {{ product.avg_rating.toFixed(1) }}
                 </span>
               </div>
@@ -712,6 +776,103 @@ defineOptions({ name: 'CatalogView' });
             class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm disabled:opacity-40 hover:bg-gray-50 transition"
           >
             {{ t('common.next') }} →
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile filters overlay -->
+    <div
+      v-if="showMobileFilters"
+      class="md:hidden fixed inset-0 z-40 bg-black/30 flex justify-end"
+      @click="showMobileFilters = false"
+    >
+      <div
+        class="w-[85vw] max-w-sm bg-white h-full shadow-xl overflow-y-auto"
+        @click.stop
+      >
+        <div class="sticky top-0 bg-white border-b px-4 py-3 flex items-center justify-between z-10">
+          <span class="font-semibold">{{ t('catalog.filters') }}</span>
+          <button @click="showMobileFilters = false" class="p-1 rounded hover:bg-gray-100">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="p-4 space-y-4">
+          <!-- Search -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{{ t('catalog.search_label') }}</label>
+            <input
+              v-model="filters.q"
+              type="text"
+              :placeholder="t('catalog.search_placeholder')"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <!-- Price range -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{{ t('catalog.price_label') }}</label>
+            <div class="flex gap-2">
+              <input
+                v-model="filters.price_min"
+                type="number"
+                :placeholder="t('catalog.price_from')"
+                class="w-1/2 px-2 py-1.5 border border-gray-300 rounded-lg text-sm"
+              />
+              <input
+                v-model="filters.price_max"
+                type="number"
+                :placeholder="t('catalog.price_to')"
+                class="w-1/2 px-2 py-1.5 border border-gray-300 rounded-lg text-sm"
+              />
+            </div>
+          </div>
+
+          <!-- Attribute filters -->
+          <div v-for="attr in visibleAttrs" :key="attr.code" class="border-t pt-3">
+            <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">
+              {{ attrDisplayName(attr) }}
+            </label>
+
+            <!-- Selected tags -->
+            <div v-if="selectedAttrTags(attr).length > 0" class="flex flex-wrap gap-1 mb-1">
+              <button
+                v-for="tag in selectedAttrTags(attr)"
+                :key="tag"
+                @click="toggleAttrFilter(attr.code, tag, false)"
+                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-indigo-600 text-white border-indigo-600"
+              >
+                {{ enumValueLabel(attr, tag) }}
+              </button>
+            </div>
+
+            <!-- All tags (scrollable) -->
+            <div class="max-h-40 overflow-y-auto border border-gray-200 rounded p-1.5 bg-gray-50">
+              <div class="flex flex-wrap gap-1">
+                <button
+                  v-for="tag in getAttrOptions(attr)"
+                  :key="tag"
+                  @click="toggleAttrFilter(attr.code, tag, !isAttrSelected(attr.code, tag))"
+                  class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer"
+                  :class="isAttrSelected(attr.code, tag)
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'"
+                >
+                  {{ enumValueLabel(attr, tag) }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reset -->
+          <button
+            @click="resetFilters; showMobileFilters = false"
+            class="w-full px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+          >
+            {{ t('catalog.reset_filters') }}
           </button>
         </div>
       </div>
