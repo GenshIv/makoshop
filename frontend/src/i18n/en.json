@@ -37,7 +37,10 @@
     "users": "Users",
     "categories_admin": "Categories",
     "promo_admin": "Promo",
-    "soon": "Coming soon"
+    "soon": "Coming soon",
+    "yes": "Yes",
+    "edit": "Edit",
+    "delete": "Delete"
   },
   "pages": {
     "catalog_title": "Product Catalog — MakoShop",
@@ -286,6 +289,14 @@
     "price": "Price",
     "in_stock": "In stock at selected seller",
     "out_of_stock": "Out of stock",
+    "to_catalog": "← To catalog",
+    "store_one": "store",
+    "store_few": "stores",
+    "store_many": "stores",
+    "available": "In stock",
+    "mod_one": "modification",
+    "mod_few": "modifications",
+    "mod_many": "modifications",
     "currency": "EUR"
   },
   "errors": {

@@ -37,7 +37,10 @@
     "users": "Użytkownicy",
     "categories_admin": "Kategorie",
     "promo_admin": "Promocje",
-    "soon": "Wkrótce"
+    "soon": "Wkrótce",
+    "yes": "Tak",
+    "edit": "Edytuj",
+    "delete": "Usuń"
   },
   "pages": {
     "catalog_title": "Katalog produktów — MakoShop",
@@ -246,6 +249,14 @@
     "price": "Cena",
     "in_stock": "Dostępne u wybranego sprzedawcy",
     "out_of_stock": "Brak na stanie",
+    "to_catalog": "← Do katalogu",
+    "store_one": "sklep",
+    "store_few": "sklepy",
+    "store_many": "sklepów",
+    "available": "Dostępne",
+    "mod_one": "modyfikacja",
+    "mod_few": "modyfikacje",
+    "mod_many": "modyfikacji",
     "currency": "EUR"
   },
   "errors": {

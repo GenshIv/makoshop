@@ -210,6 +210,7 @@ const stripCompanyFromName = (name) => {
 // 3) suffix from product.name like " — Magazilla"
 // 4) fallback "Поставщик #id"
 const getCompanyName = (product) => {
+  if (!product) return '';
   if (product.company_name) return product.company_name;
 
   try {
@@ -505,16 +506,16 @@ watch(
             <div class="mt-1 flex items-center gap-2 text-sm text-gray-500 flex-wrap">
               <span v-if="page.brand">{{ page.brand }}</span>
               <span v-if="uniqueCompanyCount > 1">
-                · {{ uniqueCompanyCount }} {{ pluralize(uniqueCompanyCount, 'магазин', 'магазина', 'магазинов') }}
+                · {{ uniqueCompanyCount }} {{ pluralize(uniqueCompanyCount, t('scupage.store_one'), t('scupage.store_few'), t('scupage.store_many')) }}
               </span>
               <span v-if="modifications.length > 1">
-                · {{ modifications.length }} {{ pluralize(modifications.length, 'модификация', 'модификации', 'модификаций') }}
+                · {{ modifications.length }} {{ pluralize(modifications.length, t('scupage.mod_one'), t('scupage.mod_few'), t('scupage.mod_many')) }}
               </span>
             </div>
             <!-- Теги -->
             <div v-if="hasAnyInStock" class="mt-2">
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                В наличии
+                {{ t('scupage.available') }}
               </span>
             </div>
           </div>
@@ -522,7 +523,7 @@ watch(
             @click="goBack"
             class="text-sm text-indigo-600 hover:underline whitespace-nowrap cursor-pointer shrink-0"
           >
-            ← В каталог
+            {{ t('scupage.to_catalog') }}
           </button>
         </div>
       </div>

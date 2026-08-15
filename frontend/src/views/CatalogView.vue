@@ -347,7 +347,10 @@ const resetFilters = () => {
 };
 
 const formatPrice = (price) => {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
+  const currency = t('scupage.currency', 'EUR');
+  const localeMap = { ru: 'ru-RU', en: 'en-US', ua: 'uk-UA', pl: 'pl-PL' };
+  const loc = localeMap[locale.value] || 'en-US';
+  return new Intl.NumberFormat(loc, { style: 'currency', currency }).format(price);
 };
 
 // Возвращает строку параметров в одну строку через ";"

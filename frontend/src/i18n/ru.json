@@ -37,7 +37,10 @@
     "users": "Пользователи",
     "categories_admin": "Категории",
     "promo_admin": "Промо",
-    "soon": "Скоро"
+    "soon": "Скоро",
+    "yes": "Да",
+    "edit": "Редактировать",
+    "delete": "Удалить"
   },
   "pages": {
     "catalog_title": "Каталог товаров — MakoShop",
@@ -286,6 +289,14 @@
     "price": "Цена",
     "in_stock": "В наличии у выбранного продавца",
     "out_of_stock": "Нет в наличии",
+    "to_catalog": "← В каталог",
+    "store_one": "магазин",
+    "store_few": "магазина",
+    "store_many": "магазинов",
+    "available": "В наличии",
+    "mod_one": "модификация",
+    "mod_few": "модификации",
+    "mod_many": "модификаций",
     "currency": "EUR"
   },
   "errors": {
