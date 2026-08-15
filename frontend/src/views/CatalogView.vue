@@ -634,8 +634,6 @@ defineOptions({ name: 'CatalogView' });
             <option value="relevance">{{ t('catalog.sort_relevance') }}</option>
             <option value="price_asc">{{ t('catalog.sort_price_asc') }}</option>
             <option value="price_desc">{{ t('catalog.sort_price_desc') }}</option>
-            <option value="name_asc">{{ t('catalog.sort_name_asc') }}</option>
-            <option value="created_desc">{{ t('catalog.sort_newest') }}</option>
           </select>
         </div>
 

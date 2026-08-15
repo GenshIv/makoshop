@@ -4454,8 +4454,6 @@ func (h *Handlers) HandleAdminSCUPageRebuildTokens(w http.ResponseWriter, r *htt
 	})
 }
 
-// HandleAdminSCUPageRebuildToken rebuilds token index for a single SCU page.
-// POST /admin/scupages/rebuild-tokens/{id}
 func (h *Handlers) HandleAdminSCUPageRebuildToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
