@@ -4,7 +4,11 @@ import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
 import { useCartStore } from '../stores/cart';
+import { useToast } from '../composables/useToast';
+import { useSeo } from '../composables/useSeo';
 import Breadcrumbs from '../components/Breadcrumbs.vue';
+
+const { toast } = useToast();
 
 const { t, locale } = useI18n();
 
@@ -37,6 +41,12 @@ const treePath = ref([]);
 const treePathFull = ref([]);
 const loading = ref(true);
 const error = ref(null);
+
+useSeo({
+  title: computed(() => (page.value?.title ? `${page.value.title} — MakoShop` : t('pages.default_title'))),
+  description: computed(() => page.value?.description || t('pages.default_description')),
+  image: computed(() => page.value?.images?.[0] || null),
+});
 
 const selectedProduct = ref(null);
 const showProducts = ref(false);
@@ -108,7 +118,7 @@ const fetchSCUPage = async () => {
 
     initFromData();
   } catch (e) {
-    error.value = e.response?.data?.error?.message || 'Страница не найдена';
+    error.value = e.response?.data?.error?.message || t('scupage.not_found');
     console.error(e);
   } finally {
     loading.value = false;
@@ -116,10 +126,7 @@ const fetchSCUPage = async () => {
 };
 
 const initFromData = () => {
-  // Update page title
-  if (page.value) {
-    document.title = `${page.value.title} — MakoShop`;
-  }
+  // Page title / meta are handled reactively by useSeo()
 
   // Select cheapest product by default (first supplier of first modification).
   // If no products available, create a "virtual" product from page data.
@@ -132,7 +139,7 @@ const initFromData = () => {
       sku: page.value.sku || '',
       name: page.value.title || '',
       price: page.value.min_price,
-      currency: page.value.currency || 'RUB',
+      currency: page.value.currency || 'EUR',
       company_name: '',
       stock_qty: page.value.product_count || 0,
       status: page.value.product_count > 0 ? 'active' : 'inactive',
@@ -149,23 +156,10 @@ const addToCart = async () => {
   if (!selectedProduct.value) return;
   try {
     await cart.addItem(selectedProduct.value.id, 1);
-    addToast('Товар добавлен в корзину', 'success');
+    toast.success(t('cart.added_to_cart'));
   } catch (e) {
-    addToast(e.response?.data?.message || 'Ошибка добавления в корзину', 'error');
+    toast.error(e.response?.data?.message || t('cart.add_to_cart_error'));
   }
-};
-
-const addToast = (message, type = 'success') => {
-  const toast = document.createElement('div');
-  toast.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg shadow-lg text-sm z-50 transition-opacity ${
-    type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-  }`;
-  toast.textContent = message;
-  document.body.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 300);
-  }, 2000);
 };
 
 const isInStock = (product) => {
@@ -196,10 +190,10 @@ const activeTab = ref(0); // index in modifications list
 const descSupplierIndex = ref(0); // index in suppliers for active tab
 
 // Strip company suffix from product name to get "pure" modification name.
-// Example: "Rastar BMW I8 1:24 Серебристый — Magazilla" → "Rastar BMW I8 1:24 Серебристый"
+// Example: "Rastar BMW I8 1:24 Silver — Magazilla" → "Rastar BMW I8 1:24 Silver"
 const stripCompanyFromName = (name) => {
   if (!name) return '';
-  // Remove " — CompanyName" suffix (Magazilla, DNS, Ситилинк, etc.)
+  // Remove " — CompanyName" suffix (Magazilla, DNS, Citilink, etc.)
   return name.replace(/\s*—\s*[^—]+$/, '').trim() || name;
 };
 
@@ -208,7 +202,7 @@ const stripCompanyFromName = (name) => {
 // 1) product.company_name (if provided by API)
 // 2) company.name from companySettingsMap
 // 3) suffix from product.name like " — Magazilla"
-// 4) fallback "Поставщик #id"
+// 4) fallback "Supplier #id"
 const getCompanyName = (product) => {
   if (!product) return '';
   if (product.company_name) return product.company_name;
@@ -283,7 +277,7 @@ const modifications = computed(() => {
   const groups = new Map();
   for (const p of filtered) {
     const pureName = stripCompanyFromName(p.name);
-    const key = pureName || p.sku || 'Без названия';
+    const key = pureName || p.sku || t('scupage.no_name');
     if (!groups.has(key)) {
       groups.set(key, { name: key, suppliers: [] });
     }
@@ -378,7 +372,7 @@ const minPrice = computed(() => {
   return Math.min(...products.value.map(p => p.price));
 });
 
-// Основное имя товара (без суффикса компании)
+// Base product name (without company suffix)
 const mainProductName = computed(() => {
   if (modifications.value.length > 0) {
     return modifications.value[0].name;
@@ -386,12 +380,12 @@ const mainProductName = computed(() => {
   return page.value?.title || '';
 });
 
-// Количество уникальных компаний
+// Number of unique companies
 const uniqueCompanyCount = computed(() => {
   return allSuppliers.value.length;
 });
 
-// Есть ли хотя бы один товар в наличии
+// Whether at least one product is in stock
 const hasAnyInStock = computed(() => {
   return products.value.some(p => isInStock(p));
 });
@@ -411,7 +405,7 @@ const normalizeAttrs = (attrs) => {
   return attrs;
 };
 
-// Атрибуты для отображения (из selectedProduct, если есть, иначе из page)
+// Attributes to display (from selectedProduct if present, otherwise from page)
 const displayAttributes = computed(() => {
   if (selectedProduct.value?.attributes) {
     const m = normalizeAttrs(selectedProduct.value.attributes);
@@ -423,35 +417,25 @@ const displayAttributes = computed(() => {
   return {};
 });
 
-// Общее количество офферов (после фильтров)
+// Total number of offers (after filters)
 const filteredOfferCount = computed(() => {
   return modifications.value.reduce((sum, mod) => sum + mod.suppliers.length, 0);
 });
 
-// Форма слова для "Где купить (N вариантов)"
+// Pluralized word form for "Where to buy (N options)"
 const offersPlural = computed(() => {
   const n = filteredOfferCount.value;
-  if (locale.value === 'ru') {
-    return pluralize(n, 'вариант', 'варианта', 'вариантов');
-  }
-  if (locale.value === 'ua') {
-    return pluralize(n, 'варіант', 'варіанти', 'варіантів');
-  }
-  if (locale.value === 'pl') {
-    return pluralize(n, 'opcja', 'opcje', 'opcji');
-  }
-  // EN default
-  return n === 1 ? 'option' : 'options';
+  return pluralize(n, 'scupage.variant_one', 'scupage.variant_few', 'scupage.variant_many');
 });
 
-// Склонение слов (1 магазин, 2 магазина, 5 магазинов)
-const pluralize = (n, one, few, many) => {
+// Pluralization helper using locale-specific i18n keys
+const pluralize = (n, oneKey, fewKey, manyKey) => {
   const abs = Math.abs(n) % 100;
   const last = abs % 10;
-  if (abs > 10 && abs < 20) return many;
-  if (last > 1 && last < 5) return few;
-  if (last === 1) return one;
-  return many;
+  if (abs > 10 && abs < 20) return t(manyKey);
+  if (last > 1 && last < 5) return t(fewKey);
+  if (last === 1) return t(oneKey);
+  return t(manyKey);
 };
 
 // Select product and set active tab + supplier index
@@ -515,14 +499,14 @@ watch(
 
     <!-- SCU Page -->
     <div v-else-if="page" class="space-y-6">
-      <!-- Верхняя часть: хлебные крошки + заголовок -->
+      <!-- Top section: breadcrumbs + title -->
       <div>
         <Breadcrumbs :categories="treePathFull" />
 
         <div class="mt-3 flex items-start justify-between gap-4">
           <div class="min-w-0">
-            <h1 class="text-2xl font-bold text-gray-900 break-words">{{ mainProductName }}</h1>
-            <div class="mt-1 flex items-center gap-2 text-sm text-gray-500 flex-wrap">
+            <h1 class="text-2xl font-bold text-ink break-words">{{ mainProductName }}</h1>
+            <div class="mt-1 flex items-center gap-2 text-sm text-ink-3 flex-wrap">
               <span v-if="page.brand">{{ page.brand }}</span>
               <span v-if="uniqueCompanyCount > 1">
                 · {{ uniqueCompanyCount }} {{ pluralize(uniqueCompanyCount, t('scupage.store_one'), t('scupage.store_few'), t('scupage.store_many')) }}
@@ -531,7 +515,7 @@ watch(
                 · {{ modifications.length }} {{ pluralize(modifications.length, t('scupage.mod_one'), t('scupage.mod_few'), t('scupage.mod_many')) }}
               </span>
             </div>
-            <!-- Теги -->
+            <!-- Tags -->
             <div v-if="hasAnyInStock" class="mt-2">
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                 {{ t('scupage.available') }}
@@ -547,29 +531,33 @@ watch(
         </div>
       </div>
 
-      <!-- Верх: фото слева, описание/характеристики/цена справа -->
+      <!-- Top: photo left, description/specs/price right -->
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-        <!-- Левая колонка (~5 cols): фото -->
+        <!-- Left column (~5 cols): photo -->
         <div class="lg:col-span-5">
           <div class="sticky top-4 space-y-3">
-            <div class="bg-gray-100 rounded-2xl overflow-hidden aspect-square">
+            <div class="bg-surface-2 rounded-2xl overflow-hidden aspect-square">
               <img
                 v-if="currentImages.length"
                 :src="currentImages[currentImageIndex]"
                 :alt="page.title"
+                loading="lazy"
+                decoding="async"
                 class="w-full h-full object-cover"
               />
-              <div v-else class="w-full h-full flex items-center justify-center text-gray-400">
-                Нет фото
+              <div v-else class="w-full h-full flex items-center justify-center text-ink-3">
+                {{ t('common.no_photo') }}
               </div>
             </div>
-            <!-- Миниатюры -->
+            <!-- Thumbnails -->
             <div v-if="currentImages.length > 1" class="flex gap-2 flex-wrap">
               <img
                 v-for="(img, idx) in currentImages"
                 :key="idx"
                 :src="img"
+                loading="lazy"
+                decoding="async"
                 @click="currentImageIndex = idx"
                 :class="[
                   'w-14 h-14 object-cover rounded-xl border-2 cursor-pointer transition',
@@ -582,12 +570,12 @@ watch(
           </div>
         </div>
 
-        <!-- Правая колонка (~7 cols): описание, характеристики, цена -->
+        <!-- Right column (~7 cols): description, specs, price -->
         <div class="lg:col-span-7 space-y-4">
 
-          <!-- Описание -->
-          <div v-if="modifications.length > 0" class="bg-white rounded-2xl shadow-sm border border-gray-100">
-            <div class="border-b border-gray-100">
+          <!-- Description -->
+          <div v-if="modifications.length > 0" class="bg-surface rounded-2xl shadow-sm border border-line">
+            <div class="border-b border-line">
               <div class="flex gap-1 px-4 pt-2 overflow-x-auto">
                 <button
                   v-for="(mod, idx) in modifications"
@@ -597,7 +585,7 @@ watch(
                     'px-3 py-1.5 text-xs rounded-t-lg whitespace-nowrap transition',
                     activeTab === idx
                       ? 'bg-indigo-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      : 'bg-surface-2 text-ink-2 hover:bg-surface-3'
                   ]"
                 >
                   {{ mod.name }}
@@ -613,18 +601,18 @@ watch(
                   <div class="flex gap-1">
                     <button
                       @click="descSupplierIndex = (descSupplierIndex - 1 + modifications[activeTab].suppliers.length) % modifications[activeTab].suppliers.length"
-                      class="px-2 py-1 text-xs border rounded hover:bg-gray-50"
+                      class="px-2 py-1 text-xs border border-line rounded hover:bg-surface-2"
                     >←</button>
                     <span class="px-2 py-1 text-xs">
                       {{ descSupplierIndex + 1 }} / {{ modifications[activeTab].suppliers.length }}
                     </span>
                     <button
                       @click="descSupplierIndex = (descSupplierIndex + 1) % modifications[activeTab].suppliers.length"
-                      class="px-2 py-1 text-xs border rounded hover:bg-gray-50"
+                      class="px-2 py-1 text-xs border border-line rounded hover:bg-surface-2"
                     >→</button>
                   </div>
                 </div>
-                <div class="text-sm text-gray-700">
+                <div class="text-sm text-ink-2">
                   <p class="whitespace-pre-line">
                     {{ modifications[activeTab].suppliers[descSupplierIndex]?.description || t('product.no_description') }}
                   </p>
@@ -633,22 +621,22 @@ watch(
             </div>
           </div>
 
-          <!-- Характеристики -->
-          <div v-if="displayAttributes && Object.keys(displayAttributes).length" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-            <h3 class="font-semibold text-gray-800 mb-3">{{ t('catalog.characteristics') }}</h3>
+          <!-- Specifications -->
+          <div v-if="displayAttributes && Object.keys(displayAttributes).length" class="bg-surface rounded-2xl shadow-sm border border-line p-4">
+            <h3 class="font-semibold text-ink mb-3">{{ t('catalog.characteristics') }}</h3>
             <dl class="space-y-2 text-sm">
               <div
                 v-for="(value, key) in displayAttributes"
                 :key="key"
-                class="flex items-start gap-2 border-b border-gray-50 pb-2 last:border-0 last:pb-0"
+                class="flex items-start gap-2 border-b border-line pb-2 last:border-0 last:pb-0"
               >
-                <dt class="text-gray-500 text-xs min-w-[100px] shrink-0">{{ attrLabel(key) }}</dt>
-                <dd class="text-gray-800">{{ value }}</dd>
+                <dt class="text-ink-3 text-xs min-w-[100px] shrink-0">{{ attrLabel(key) }}</dt>
+                <dd class="text-ink">{{ value }}</dd>
               </div>
             </dl>
           </div>
 
-          <!-- Блок "Лучшая цена" -->
+          <!-- "Best price" block -->
           <div
             v-if="selectedProduct && !selectedProduct.is_virtual"
             class="bg-gradient-to-br from-indigo-900 to-indigo-800 rounded-2xl shadow-sm p-5 text-white"
@@ -664,7 +652,7 @@ watch(
               <button
                 @click="addToCart"
                 :disabled="!isInStock(selectedProduct)"
-                class="px-6 py-3 bg-white text-indigo-900 rounded-xl font-semibold text-sm hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition shrink-0"
+                class="px-6 py-3 bg-surface text-indigo-900 dark:text-indigo-300 rounded-xl font-semibold text-sm hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition shrink-0"
               >
                 {{ t('catalog.add_to_cart') }}
               </button>
@@ -678,23 +666,25 @@ watch(
         </div>
       </div>
 
-      <!-- Низ: предложения широко + фильтры узко справа -->
+      <!-- Bottom: offers wide + filters narrow on the right -->
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-        <!-- Где купить (офферы) — широко (~10 cols) -->
-        <div v-if="modifications.length > 0" class="lg:col-span-10 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div class="px-4 py-3 border-b border-gray-100">
-            <h3 class="font-semibold text-gray-800">
+        <!-- Where to buy (offers) — wide (~10 cols) -->
+        <div v-if="modifications.length > 0" class="lg:col-span-10 bg-surface rounded-2xl shadow-sm border border-line overflow-hidden">
+          <div class="px-4 py-3 border-b border-line">
+            <h3 class="font-semibold text-ink">
               {{ t('scupage.where_to_buy_base') }} ({{ filteredOfferCount }} {{ offersPlural }})
             </h3>
           </div>
-          <div class="divide-y divide-gray-50 max-h-[400px] overflow-y-auto">
+          <fieldset class="m-0 p-0 border-0 min-w-0">
+            <legend class="sr-only">{{ t('scupage.where_to_buy_base') }}</legend>
+            <div class="divide-y divide-line max-h-[400px] overflow-y-auto">
             <template v-for="(mod, modIdx) in modifications" :key="modIdx">
-              <!-- Модификация header -->
-              <div v-if="modifications.length > 1" class="px-4 py-2 bg-gray-50 text-xs font-medium text-gray-600">
+              <!-- Modification header -->
+              <div v-if="modifications.length > 1" class="px-4 py-2 bg-surface-2 text-xs font-medium text-ink-2">
                 {{ mod.name }}
               </div>
-              <!-- Офферы -->
+              <!-- Offers -->
               <label
                 v-for="product in mod.suppliers"
                 :key="product.id"
@@ -702,7 +692,7 @@ watch(
                   'flex items-center gap-3 px-4 py-3 cursor-pointer transition',
                   selectedProduct?.id === product.id
                     ? 'bg-indigo-50 border-l-4 border-indigo-600 pl-3'
-                    : 'hover:bg-gray-50 border-l-4 border-transparent'
+                    : 'hover:bg-surface-2 border-l-4 border-transparent'
                 ]"
               >
                 <input
@@ -711,10 +701,10 @@ watch(
                   :value="product.id"
                   :checked="selectedProduct?.id === product.id"
                   @change="selectProduct(product)"
-                  class="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 flex-shrink-0 cursor-pointer"
+                  class="w-4 h-4 text-indigo-600 border-line focus:ring-indigo-500 flex-shrink-0 cursor-pointer"
                 />
                 <div class="flex-1 min-w-0">
-                  <div class="text-xs font-medium text-gray-800">
+                  <div class="text-xs font-medium text-ink">
                     {{ getCompanyName(product) }}
                   </div>
                   <span :class="isInStock(product) ? 'text-green-600' : 'text-red-600'" class="text-xs">
@@ -726,46 +716,47 @@ watch(
                 </div>
               </label>
             </template>
-          </div>
+            </div>
+          </fieldset>
         </div>
 
-        <!-- Фильтры — узко (~2 cols) -->
-        <div v-if="allSuppliers.length >= 1" class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-3 space-y-3 text-xs">
-          <!-- Компании -->
+        <!-- Filters — narrow (~2 cols) -->
+        <div v-if="allSuppliers.length >= 1" class="lg:col-span-2 bg-surface rounded-2xl shadow-sm border border-line p-3 space-y-3 text-xs">
+          <!-- Companies -->
           <div>
-            <div class="font-semibold text-gray-700 mb-1">{{ t('scupage_filter_by_company') || 'Компании' }}</div>
+            <div class="font-semibold text-ink-2 mb-1">{{ t('scupage.filter_by_company') }}</div>
             <div class="flex flex-col gap-1">
-              <label v-for="company in allSuppliers" :key="company" class="inline-flex items-center gap-1.5 cursor-pointer text-gray-700">
+              <label v-for="company in allSuppliers" :key="company" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
                 <input type="checkbox" :value="company" v-model="filterForm.companyFilters" class="rounded text-indigo-600 focus:ring-indigo-500" />
                 {{ company }}
               </label>
             </div>
           </div>
 
-          <div v-if="allPaymentMethods.length > 0" class="border-t border-gray-100 pt-2">
-            <div class="font-semibold text-gray-700 mb-1">{{ t('scupage_filter_by_payment') || 'Оплата' }}</div>
+          <div v-if="allPaymentMethods.length > 0" class="border-t border-line pt-2">
+            <div class="font-semibold text-ink-2 mb-1">{{ t('scupage.filter_by_payment') }}</div>
             <div class="flex flex-col gap-1">
-              <label v-for="pm in allPaymentMethods" :key="pm" class="inline-flex items-center gap-1.5 cursor-pointer text-gray-700">
+              <label v-for="pm in allPaymentMethods" :key="pm" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
                 <input type="checkbox" :value="pm" v-model="filterForm.paymentMethodFilters" class="rounded text-indigo-600 focus:ring-indigo-500" />
                 {{ pm }}
               </label>
             </div>
           </div>
 
-          <div v-if="allDeliveryTimes.length > 0" class="border-t border-gray-100 pt-2">
-            <div class="font-semibold text-gray-700 mb-1">{{ t('scupage_filter_by_delivery') || 'Доставка' }}</div>
+          <div v-if="allDeliveryTimes.length > 0" class="border-t border-line pt-2">
+            <div class="font-semibold text-ink-2 mb-1">{{ t('scupage.filter_by_delivery') }}</div>
             <div class="flex flex-col gap-1">
-              <label v-for="dt in allDeliveryTimes" :key="dt" class="inline-flex items-center gap-1.5 cursor-pointer text-gray-700">
+              <label v-for="dt in allDeliveryTimes" :key="dt" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
                 <input type="checkbox" :value="dt" v-model="filterForm.deliveryTimeFilters" class="rounded text-indigo-600 focus:ring-indigo-500" />
                 {{ dt }}
               </label>
             </div>
           </div>
 
-          <div v-if="allInstallmentPlans.length > 0" class="border-t border-gray-100 pt-2">
-            <div class="font-semibold text-gray-700 mb-1">{{ t('scupage_filter_by_installment') || 'Рассрочка' }}</div>
+          <div v-if="allInstallmentPlans.length > 0" class="border-t border-line pt-2">
+            <div class="font-semibold text-ink-2 mb-1">{{ t('scupage.filter_by_installment') }}</div>
             <div class="flex flex-col gap-1">
-              <label v-for="ip in allInstallmentPlans" :key="ip" class="inline-flex items-center gap-1.5 cursor-pointer text-gray-700">
+              <label v-for="ip in allInstallmentPlans" :key="ip" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
                 <input type="checkbox" :value="ip" v-model="filterForm.installmentPlanFilters" class="rounded text-indigo-600 focus:ring-indigo-500" />
                 {{ ip }}
               </label>

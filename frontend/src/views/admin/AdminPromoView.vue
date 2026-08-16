@@ -2,8 +2,12 @@
 import { ref, reactive, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import api from '../../api';
+import { useFormat } from '../../composables/useFormat';
+import { useToast } from '../../composables/useToast';
 
 const { t } = useI18n();
+const { formatPrice } = useFormat();
+const { toast } = useToast();
 
 const campaigns = ref([]);
 const plans = ref([]);
@@ -41,12 +45,8 @@ const createPlan = async () => {
     Object.assign(planForm, { name: '', price_per_click: 0, price_per_impression: 0 });
     await fetchPlans();
   } catch (e) {
-    alert(e.response?.data?.message || t('admin.error'));
+    toast.error(e.response?.data?.message || t('admin.error'));
   }
-};
-
-const formatPrice = (price) => {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
 };
 
 onMounted(() => {
@@ -65,7 +65,7 @@ onMounted(() => {
 
     <div v-else class="space-y-6">
       <!-- Plans -->
-      <div class="bg-white rounded-lg shadow-sm p-4">
+      <div class="bg-surface rounded-lg shadow-sm p-4">
         <div class="flex items-center justify-between mb-3">
           <h2 class="font-bold">{{ t('admin.promo_plans') }}</h2>
           <button @click="showPlanForm = true" class="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
@@ -74,27 +74,27 @@ onMounted(() => {
         </div>
 
         <!-- Plan form -->
-        <div v-if="showPlanForm" class="mb-3 p-3 bg-gray-50 rounded-lg">
+        <div v-if="showPlanForm" class="mb-3 p-3 bg-surface-2 rounded-lg">
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <input v-model="planForm.name" type="text" :placeholder="t('admin.plan_name_placeholder')" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-            <input v-model.number="planForm.price_per_click" type="number" :placeholder="t('admin.price_per_click_placeholder')" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-            <input v-model.number="planForm.price_per_impression" type="number" :placeholder="t('admin.price_per_impression_placeholder')" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input v-model="planForm.name" type="text" :placeholder="t('admin.plan_name_placeholder')" class="px-3 py-2 border border-line rounded-lg text-sm" />
+            <input v-model.number="planForm.price_per_click" type="number" :placeholder="t('admin.price_per_click_placeholder')" class="px-3 py-2 border border-line rounded-lg text-sm" />
+            <input v-model.number="planForm.price_per_impression" type="number" :placeholder="t('admin.price_per_impression_placeholder')" class="px-3 py-2 border border-line rounded-lg text-sm" />
           </div>
           <div class="flex gap-2 mt-2">
             <button @click="createPlan" class="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
               {{ t('admin.create') }}
             </button>
-            <button @click="showPlanForm = false" class="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50">
+            <button @click="showPlanForm = false" class="px-3 py-1.5 border rounded-lg text-sm hover:bg-surface-2">
               {{ t('admin.cancel') }}
             </button>
           </div>
         </div>
 
-        <div v-if="plans.length === 0" class="text-sm text-gray-500">{{ t('admin.no_plans') }}</div>
+        <div v-if="plans.length === 0" class="text-sm text-ink-3">{{ t('admin.no_plans') }}</div>
         <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div v-for="plan in plans" :key="plan.id" class="border rounded-lg p-3 text-sm">
             <div class="font-medium">{{ plan.name }}</div>
-            <div class="text-gray-500 mt-1">
+            <div class="text-ink-3 mt-1">
               CPC: {{ formatPrice(plan.price_per_click || 0) }} / CPM: {{ formatPrice(plan.price_per_impression || 0) }}
             </div>
           </div>
@@ -102,30 +102,30 @@ onMounted(() => {
       </div>
 
       <!-- Campaigns -->
-      <div class="bg-white rounded-lg shadow-sm p-4">
+      <div class="bg-surface rounded-lg shadow-sm p-4">
         <h2 class="font-bold mb-3">{{ t('admin.campaigns') }}</h2>
-        <div v-if="campaigns.length === 0" class="text-sm text-gray-500">{{ t('admin.no_campaigns') }}</div>
+        <div v-if="campaigns.length === 0" class="text-sm text-ink-3">{{ t('admin.no_campaigns') }}</div>
         <div v-else class="overflow-x-auto">
           <table class="w-full text-sm">
-            <thead class="bg-gray-50">
+            <thead class="bg-surface-2">
               <tr>
-                <th class="px-4 py-3 text-left">ID</th>
-                <th class="px-4 py-3 text-left">{{ t('admin.company') }}</th>
-                <th class="px-4 py-3 text-left">{{ t('admin.plan') }}</th>
-                <th class="px-4 py-3 text-left">{{ t('admin.budget') }}</th>
-                <th class="px-4 py-3 text-left">{{ t('admin.used') }}</th>
-                <th class="px-4 py-3 text-left">{{ t('admin.status') }}</th>
+                <th scope="col" class="px-4 py-3 text-left">ID</th>
+                <th scope="col" class="px-4 py-3 text-left">{{ t('admin.company') }}</th>
+                <th scope="col" class="px-4 py-3 text-left">{{ t('admin.plan') }}</th>
+                <th scope="col" class="px-4 py-3 text-left">{{ t('admin.budget') }}</th>
+                <th scope="col" class="px-4 py-3 text-left">{{ t('admin.used') }}</th>
+                <th scope="col" class="px-4 py-3 text-left">{{ t('admin.status') }}</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="c in campaigns" :key="c.id" class="border-t hover:bg-gray-50">
+              <tr v-for="c in campaigns" :key="c.id" class="border-t hover:bg-surface-2">
                 <td class="px-4 py-3">{{ c.id }}</td>
                 <td class="px-4 py-3">{{ c.company_id }}</td>
                 <td class="px-4 py-3">{{ c.plan_id }}</td>
                 <td class="px-4 py-3">{{ formatPrice(c.budget) }}</td>
-                <td class="px-4 py-3 text-gray-500">{{ formatPrice(c.budget_used || 0) }}</td>
+                <td class="px-4 py-3 text-ink-3">{{ formatPrice(c.budget_used || 0) }}</td>
                 <td class="px-4 py-3">
-                  <span :class="c.status === 'active' ? 'text-green-600' : 'text-gray-500'">
+                  <span :class="c.status === 'active' ? 'text-green-600' : 'text-ink-3'">
                     {{ c.status }}
                   </span>
                 </td>

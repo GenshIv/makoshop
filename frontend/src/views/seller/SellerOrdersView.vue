@@ -4,10 +4,12 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../../api';
 import { useAuthStore } from '../../stores/auth';
+import { useFormat } from '../../composables/useFormat';
 
 const router = useRouter();
 const auth = useAuthStore();
 const { t } = useI18n();
+const { formatPrice, formatDate } = useFormat();
 const orders = ref([]);
 const loading = ref(true);
 const error = ref(null);
@@ -31,17 +33,7 @@ const statusColors = {
   shipped: 'text-purple-600 bg-purple-50',
   delivered: 'text-green-700 bg-green-100',
   cancelled: 'text-red-600 bg-red-50',
-  refunded: 'text-gray-600 bg-gray-50',
-};
-
-const formatPrice = (price) => {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
-};
-
-const formatDate = (dateStr) => {
-  return new Date(dateStr).toLocaleDateString('ru-RU', {
-    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
+  refunded: 'text-ink-2 bg-surface-2',
 };
 
 const fetchOrders = async () => {
@@ -81,33 +73,35 @@ onMounted(fetchOrders);
     </div>
 
     <!-- Empty -->
-    <div v-else-if="orders.length === 0" class="text-center py-12 text-gray-500">
+    <div v-else-if="orders.length === 0" class="text-center py-12 text-ink-3">
       {{ t('seller.no_orders') }}
     </div>
 
     <!-- Orders table -->
-    <div v-else class="bg-white rounded-lg shadow-sm overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50">
+    <div v-else class="bg-surface rounded-lg shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+      <table class="w-full text-sm min-w-[640px]">
+        <caption class="sr-only">{{ t('tables.seller_orders') }}</caption>
+        <thead class="bg-surface-2">
           <tr>
-            <th class="px-4 py-3 text-left">ID</th>
-            <th class="px-4 py-3 text-left">{{ t('seller.date') }}</th>
-            <th class="px-4 py-3 text-left">{{ t('seller.buyer') }}</th>
-            <th class="px-4 py-3 text-left">{{ t('seller.items_count') }}</th>
-            <th class="px-4 py-3 text-left">{{ t('seller.amount') }}</th>
-            <th class="px-4 py-3 text-left">{{ t('seller.status') }}</th>
-            <th class="px-4 py-3 text-right">{{ t('seller.actions') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">ID</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('seller.date') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('seller.buyer') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('seller.items_count') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('seller.amount') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('seller.status') }}</th>
+            <th scope="col" class="px-4 py-3 text-right">{{ t('seller.actions') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="order in orders" :key="order.id" class="border-t hover:bg-gray-50">
+          <tr v-for="order in orders" :key="order.id" class="border-t hover:bg-surface-2">
             <td class="px-4 py-3 font-medium">#{{ order.id }}</td>
-            <td class="px-4 py-3 text-gray-500">{{ formatDate(order.created_at) }}</td>
+            <td class="px-4 py-3 text-ink-3">{{ formatDate(order.created_at, true) }}</td>
             <td class="px-4 py-3">{{ order.shipping_info?.name || '—' }}</td>
             <td class="px-4 py-3">{{ order.items?.length || 0 }}</td>
             <td class="px-4 py-3 font-medium">{{ formatPrice(order.total_amount || order.total) }}</td>
             <td class="px-4 py-3">
-              <span class="px-2.5 py-1 rounded-full text-xs font-medium" :class="statusColors[order.status] || 'text-gray-600 bg-gray-50'">
+              <span class="px-2.5 py-1 rounded-full text-xs font-medium" :class="statusColors[order.status] || 'text-ink-2 bg-surface-2'">
                 {{ statusLabels[order.status] || order.status }}
               </span>
             </td>
@@ -119,6 +113,7 @@ onMounted(fetchOrders);
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
   </div>
 </template>

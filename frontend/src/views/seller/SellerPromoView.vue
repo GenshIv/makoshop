@@ -1,9 +1,13 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import api from '../../api';
 import { useAuthStore } from '../../stores/auth';
+import { useFormat } from '../../composables/useFormat';
 
+const { t } = useI18n();
 const auth = useAuthStore();
+const { formatPrice } = useFormat();
 const campaigns = ref([]);
 const plans = ref([]);
 const loading = ref(true);
@@ -19,10 +23,6 @@ const form = reactive({
   end_at: '',
 });
 
-const formatPrice = (price) => {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
-};
-
 const fetchCampaigns = async () => {
   loading.value = true;
   try {
@@ -31,7 +31,7 @@ const fetchCampaigns = async () => {
     const companyId = auth.user?.profile?.company_id;
     campaigns.value = items.filter(c => c.company_id === companyId);
   } catch (e) {
-    error.value = 'Ошибка загрузки кампаний';
+    error.value = t('seller.campaigns_load_error');
     console.error(e);
   } finally {
     loading.value = false;
@@ -62,7 +62,7 @@ const createCampaign = async () => {
     showForm.value = false;
     await fetchCampaigns();
   } catch (e) {
-    error.value = e.response?.data?.message || 'Ошибка создания кампании';
+    error.value = e.response?.data?.message || t('seller.create_campaign_error');
   }
 };
 
@@ -92,75 +92,77 @@ onMounted(() => {
     </div>
 
     <!-- Form -->
-    <div v-if="showForm" class="mb-6 bg-white rounded-lg shadow-sm p-4">
-      <h3 class="font-medium mb-3">Новая кампания</h3>
+    <div v-if="showForm" class="mb-6 bg-surface rounded-lg shadow-sm p-4">
+      <h3 class="font-medium mb-3">{{ t('seller.new_campaign_form') }}</h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label class="block text-sm text-gray-700 mb-1">План</label>
-          <select v-model="form.plan_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-            <option value="">Выберите план</option>
+          <label class="block text-sm text-ink-2 mb-1">{{ t('seller.plan') }}</label>
+          <select v-model="form.plan_id" class="w-full px-3 py-2 border border-line rounded-lg text-sm">
+            <option value="">{{ t('seller.select_plan') }}</option>
             <option v-for="plan in plans" :key="plan.id" :value="plan.id">{{ plan.name }}</option>
           </select>
         </div>
         <div>
-          <label class="block text-sm text-gray-700 mb-1">Бюджет</label>
-          <input v-model.number="form.budget" type="number" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          <label class="block text-sm text-ink-2 mb-1">{{ t('seller.budget') }}</label>
+          <input v-model.number="form.budget" type="number" class="w-full px-3 py-2 border border-line rounded-lg text-sm" />
         </div>
         <div>
-          <label class="block text-sm text-gray-700 mb-1">Позиция</label>
-          <input v-model.number="form.target_position" type="number" min="1" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          <label class="block text-sm text-ink-2 mb-1">{{ t('seller.position') }}</label>
+          <input v-model.number="form.target_position" type="number" min="1" class="w-full px-3 py-2 border border-line rounded-lg text-sm" />
         </div>
         <div>
-          <label class="block text-sm text-gray-700 mb-1">Target filters (JSON)</label>
-          <input v-model="form.target_filters" type="text" placeholder='{"category_id":1}' class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          <label class="block text-sm text-ink-2 mb-1">Target filters (JSON)</label>
+          <input v-model="form.target_filters" type="text" placeholder='{"category_id":1}' class="w-full px-3 py-2 border border-line rounded-lg text-sm" />
         </div>
       </div>
       <div class="flex gap-2 mt-3">
         <button @click="createCampaign" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
-          Создать
+          {{ t('seller.create') }}
         </button>
-        <button @click="showForm = false" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">
-          Отмена
+        <button @click="showForm = false" class="px-4 py-2 border rounded-lg text-sm hover:bg-surface-2">
+          {{ t('seller.cancel') }}
         </button>
       </div>
     </div>
 
     <!-- Empty -->
-    <div v-else-if="campaigns.length === 0" class="text-center py-12 text-gray-500">
-      У вас пока нет рекламных кампаний
+    <div v-else-if="campaigns.length === 0" class="text-center py-12 text-ink-3">
+      {{ t('seller.no_campaigns') }}
     </div>
 
     <!-- Campaigns table -->
-    <div v-else class="bg-white rounded-lg shadow-sm overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50">
+    <div v-else class="bg-surface rounded-lg shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+      <table class="w-full text-sm min-w-[640px]">
+        <thead class="bg-surface-2">
           <tr>
-            <th class="px-4 py-3 text-left">ID</th>
-            <th class="px-4 py-3 text-left">План</th>
-            <th class="px-4 py-3 text-left">Бюджет</th>
-            <th class="px-4 py-3 text-left">Использовано</th>
-            <th class="px-4 py-3 text-left">Статус</th>
-            <th class="px-4 py-3 text-left">Период</th>
+            <th scope="col" class="px-4 py-3 text-left">ID</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('seller.plan') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('seller.budget') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('seller.used') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('seller.status') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('seller.period') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="c in campaigns" :key="c.id" class="border-t hover:bg-gray-50">
+          <tr v-for="c in campaigns" :key="c.id" class="border-t hover:bg-surface-2">
             <td class="px-4 py-3">{{ c.id }}</td>
             <td class="px-4 py-3">{{ c.plan_id }}</td>
             <td class="px-4 py-3">{{ formatPrice(c.budget) }}</td>
-            <td class="px-4 py-3 text-gray-500">{{ formatPrice(c.budget_used || 0) }}</td>
+            <td class="px-4 py-3 text-ink-3">{{ formatPrice(c.budget_used || 0) }}</td>
             <td class="px-4 py-3">
-              <span :class="c.status === 'active' ? 'text-green-600' : 'text-gray-500'">
+              <span :class="c.status === 'active' ? 'text-green-600' : 'text-ink-3'">
                 {{ c.status }}
               </span>
             </td>
-            <td class="px-4 py-3 text-xs text-gray-500">
-              {{ c.start_at ? new Date(c.start_at).toLocaleDateString('ru-RU') : '—' }} —
-              {{ c.end_at ? new Date(c.end_at).toLocaleDateString('ru-RU') : '∞' }}
+            <td class="px-4 py-3 text-xs text-ink-3">
+              {{ c.start_at ? new Date(c.start_at).toLocaleDateString() : '—' }} —
+              {{ c.end_at ? new Date(c.end_at).toLocaleDateString() : '∞' }}
             </td>
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
   </div>
 </template>

@@ -4,8 +4,8 @@ import en from './en.json';
 import ua from './ua.json';
 import pl from './pl.json';
 
-const SUPPORTED_LOCALES = ['pl', 'ua', 'en', 'ru'];
-const DEFAULT_LOCALE_ORDER = ['pl', 'ua', 'en', 'ru'];
+const SUPPORTED_LOCALES = ['en', 'pl', 'ua', 'ru'];
+const DEFAULT_LOCALE_ORDER = ['en', 'pl', 'ua', 'ru'];
 
 // Detect language from URL param (?lang=en) or browser or default order
 function getInitialLocale() {
@@ -37,10 +37,19 @@ export const i18n = createI18n({
 export function setLocale(locale) {
   if (!SUPPORTED_LOCALES.includes(locale)) return;
   i18n.global.locale.value = locale;
+  // Keep <html lang> in sync for a11y / screen readers
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = locale;
+  }
   // Update URL without reload
   const params = new URLSearchParams(window.location.search);
   params.set('lang', locale);
   window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+}
+
+// Also keep <html lang> in sync on initial load
+if (typeof document !== 'undefined') {
+  document.documentElement.lang = i18n.global.locale.value;
 }
 
 export { SUPPORTED_LOCALES };

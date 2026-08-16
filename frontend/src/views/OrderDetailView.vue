@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
+import { useFormat } from '../composables/useFormat';
 
 const route = useRoute();
 const router = useRouter();
@@ -10,6 +11,7 @@ const order = ref(null);
 const loading = ref(true);
 const error = ref(null);
 const { t } = useI18n();
+const { formatPrice, formatDate } = useFormat();
 
 const statusLabels = computed(() => ({
   pending: t('orders.statuses.pending'),
@@ -28,21 +30,7 @@ const statusColors = {
   shipped: 'text-purple-600 bg-purple-50',
   delivered: 'text-green-600 bg-green-50',
   cancelled: 'text-red-600 bg-red-50',
-  refunded: 'text-gray-600 bg-gray-50',
-};
-
-const formatPrice = (price) => {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
-};
-
-const formatDate = (dateStr) => {
-  return new Date(dateStr).toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  refunded: 'text-ink-2 bg-surface-2',
 };
 
 const fetchOrder = async () => {
@@ -79,16 +67,16 @@ onMounted(fetchOrder);
     </div>
 
     <!-- Order detail -->
-    <div v-else-if="order" class="bg-white rounded-lg shadow-sm overflow-hidden">
+    <div v-else-if="order" class="bg-surface rounded-lg shadow-sm overflow-hidden">
       <!-- Header -->
       <div class="p-4 border-b flex items-center justify-between">
         <div>
           <h1 class="text-xl font-bold">{{ t('order_detail.order', { id: order.id }) }}</h1>
-          <div class="text-sm text-gray-500">{{ formatDate(order.created_at) }}</div>
+          <div class="text-sm text-ink-3">{{ formatDate(order.created_at, true) }}</div>
         </div>
         <span
           class="px-3 py-1 rounded-full text-sm font-medium"
-          :class="statusColors[order.status] || 'text-gray-600 bg-gray-50'"
+          :class="statusColors[order.status] || 'text-ink-2 bg-surface-2'"
         >
           {{ statusLabels[order.status] || order.status }}
         </span>
@@ -98,14 +86,16 @@ onMounted(fetchOrder);
       <div class="p-4">
         <h2 class="font-medium mb-3">{{ t('order_detail.items') }}</h2>
         <div v-for="item in order.items" :key="item.product_id" class="flex items-center gap-4 py-3 border-b last:border-b-0">
-          <div class="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+          <div class="w-16 h-16 bg-surface-2 rounded-lg overflow-hidden flex-shrink-0">
             <img
               v-if="item.images?.length"
               :src="item.images[0]"
               :alt="item.name"
+              loading="lazy"
+              decoding="async"
               class="w-full h-full object-cover"
             />
-            <div v-else class="w-full h-full flex items-center justify-center text-gray-400 text-xs">{{ t('order_detail.no_photo') }}</div>
+            <div v-else class="w-full h-full flex items-center justify-center text-ink-3 text-xs">{{ t('order_detail.no_photo') }}</div>
           </div>
           <div class="flex-1">
             <router-link
@@ -114,7 +104,7 @@ onMounted(fetchOrder);
             >
               {{ item.name }}
             </router-link>
-            <div class="text-sm text-gray-500">
+            <div class="text-sm text-ink-3">
               {{ formatPrice(item.price) }} × {{ item.qty }}
             </div>
           </div>
@@ -125,7 +115,7 @@ onMounted(fetchOrder);
       <!-- Shipping info -->
       <div v-if="order.shipping_info" class="p-4 border-t">
         <h2 class="font-medium mb-2">{{ t('order_detail.shipping') }}</h2>
-        <div class="text-sm text-gray-700 space-y-1">
+        <div class="text-sm text-ink-2 space-y-1">
           <div>{{ order.shipping_info.name }}</div>
           <div>{{ order.shipping_info.phone }}</div>
           <div>{{ order.shipping_info.city }}, {{ order.shipping_info.address }}</div>
@@ -136,13 +126,13 @@ onMounted(fetchOrder);
       <!-- Payment info -->
       <div class="p-4 border-t">
         <h2 class="font-medium mb-2">{{ t('order_detail.payment') }}</h2>
-        <div class="text-sm text-gray-700">
+        <div class="text-sm text-ink-2">
           <div>{{ t('order_detail.status', { status: statusLabels[order.payment_status] || order.payment_status }) }}</div>
         </div>
       </div>
 
       <!-- Total -->
-      <div class="p-4 border-t bg-gray-50 flex items-center justify-between">
+      <div class="p-4 border-t bg-surface-2 flex items-center justify-between">
         <span class="font-medium">{{ t('order_detail.total') }}</span>
         <span class="text-xl font-bold">{{ formatPrice(order.total_amount || order.total) }}</span>
       </div>

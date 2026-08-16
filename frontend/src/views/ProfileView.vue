@@ -51,11 +51,11 @@ onMounted(loadProfile);
   <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <h1 class="text-2xl font-bold mb-6">{{ t('profile.title') }}</h1>
 
-    <div v-if="!auth.user" class="text-gray-500">
+    <div v-if="!auth.user" class="text-ink-3">
       {{ t('profile.load_error') }}
     </div>
 
-    <div v-else class="bg-white rounded-lg shadow-sm p-6">
+    <div v-else class="bg-surface rounded-lg shadow-sm p-6">
       <!-- Messages -->
       <div v-if="error" class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{{ error }}</div>
       <div v-if="success" class="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-sm">{{ success }}</div>
@@ -63,27 +63,27 @@ onMounted(loadProfile);
       <!-- Profile info -->
       <div class="space-y-4">
         <div>
-          <label class="block text-sm text-gray-500">Email</label>
+          <label class="block text-sm text-ink-3">Email</label>
           <div class="font-medium">{{ auth.user.email }}</div>
         </div>
         <div>
-          <label class="block text-sm text-gray-500">{{ t('common.role') }}</label>
+          <label class="block text-sm text-ink-3">{{ t('common.role') }}</label>
           <div class="font-medium capitalize">{{ auth.user.role }}</div>
         </div>
 
         <!-- Editable fields -->
         <div>
-          <label class="block text-sm text-gray-500">{{ t('common.name') }}</label>
+          <label class="block text-sm text-ink-3">{{ t('common.name') }}</label>
           <template v-if="editing">
-            <input v-model="form.name" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg mt-1" />
+            <input v-model="form.name" type="text" class="w-full px-3 py-2 border border-line rounded-lg mt-1" />
           </template>
           <div v-else class="font-medium">{{ auth.user.name || '—' }}</div>
         </div>
 
         <div>
-          <label class="block text-sm text-gray-500">{{ t('common.phone') }}</label>
+          <label class="block text-sm text-ink-3">{{ t('common.phone') }}</label>
           <template v-if="editing">
-            <input v-model="form.phone" type="tel" class="w-full px-3 py-2 border border-gray-300 rounded-lg mt-1" />
+            <input v-model="form.phone" type="tel" class="w-full px-3 py-2 border border-line rounded-lg mt-1" />
           </template>
           <div v-else class="font-medium">{{ auth.user.phone || '—' }}</div>
         </div>
@@ -91,13 +91,13 @@ onMounted(loadProfile);
         <!-- Actions -->
         <div class="flex gap-3 pt-4">
           <template v-if="!editing">
-            <button @click="editing = true" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+            <button @click="editing = true" class="px-4 py-2 border border-line rounded-lg hover:bg-surface-2">
               {{ t('profile.edit') }}
             </button>
             <router-link to="/orders" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
               {{ t('profile.my_orders') }}
             </router-link>
-            <router-link to="/reviews" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+            <router-link to="/reviews" class="px-4 py-2 border border-line rounded-lg hover:bg-surface-2">
               {{ t('profile.my_reviews') }}
             </router-link>
           </template>
@@ -109,7 +109,7 @@ onMounted(loadProfile);
             >
               {{ saving ? t('profile.saving') : t('profile.save') }}
             </button>
-            <button @click="editing = false; loadProfile()" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+            <button @click="editing = false; loadProfile()" class="px-4 py-2 border border-line rounded-lg hover:bg-surface-2">
               {{ t('profile.cancel') }}
             </button>
           </template>

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, watch, computed, defineAsyncComponent, nextTick } from 'vue';
+import { ref, reactive, onMounted, onBeforeUnmount, watch, computed, defineAsyncComponent, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
@@ -60,7 +60,7 @@ const updatePerPage = () => {
   const newPerPage = getPerPageForScreen();
   if (pagination.per_page !== newPerPage) {
     pagination.per_page = newPerPage;
-    // Не сбрасываем page, если он задан в URL
+    // Do not reset page if it is set in the URL
     if (!route.query.page) {
       pagination.page = 1;
     }
@@ -99,10 +99,10 @@ const fetchProducts = async () => {
   loading.value = true;
   error.value = null;
   lastSearchMs.value = null;
-  // Не сбрасываем scuPageData, если уже на SCU-странице и данные есть
+  // Do not reset scuPageData if already on an SCU page with data
   const isOnSCUPage = scuPageData.value != null;
   try {
-    // Если page задан в URL — используем его и синхронизируем pagination
+    // If page is set in the URL, use it and sync pagination
     if (route.query.page) {
       pagination.page = parseInt(route.query.page, 10);
     }
@@ -145,13 +145,13 @@ const fetchProducts = async () => {
 
     const data = response.data;
 
-    // Если ответ — SCUPage, запоминаем и рендерим SCUPageView
+    // If the response is an SCUPage, store it and render SCUPageView
     if (data.page && typeof data.page === 'object' && data.page.scu) {
       scuPageData.value = data;
       return;
     }
 
-    // Если мы были на SCUPage, а теперь API вернул обычный каталог — сбрасываем SCUPage
+    // If we were on an SCUPage but the API returned a regular catalog, reset SCUPage
     if (isOnSCUPage) {
       scuPageData.value = null;
     }
@@ -165,7 +165,7 @@ const fetchProducts = async () => {
     // Build category path via API for proper localized names
     if (data.category_id) {
       fetchCategoryPath(data.category_id);
-      // Сохраняем текущую категорию с описанием
+      // Store the current category with description
       currentCategory.value = data.category || null;
     } else {
       categoryPath.value = [];
@@ -327,15 +327,15 @@ const contextTitle = computed(() => {
   if (currentCategory.value) {
     return catName(currentCategory.value);
   }
-  return t('catalog.catalog_title'); // корневой каталог
+  return t('catalog.catalog_title'); // root catalog
 });
 
 const contextDescription = computed(() => {
   if (currentCategory.value) {
     return catDescription(currentCategory.value);
   }
-  // Описание корневого каталога (можно вынести в i18n)
-  return t('catalog.root_description', 'Добро пожаловать в каталог MakoShop. Здесь вы найдете тысячи товаров от проверенных продавцов.');
+  // Root catalog description (i18n)
+  return t('catalog.root_description');
 });
 
 
@@ -511,7 +511,7 @@ const normalizeAttrs = (attrs) => {
   return attrs;
 };
 
-// Возвращает строку параметров в одну строку через ";"
+// Returns the parameters string on one line separated by ";"
 const getAttributesString = (attrs) => {
   const m = normalizeAttrs(attrs);
   if (!m || Object.keys(m).length === 0) return '';
@@ -572,7 +572,7 @@ onMounted(async () => {
     // Build category path via API for proper localized names
     if (data.category_id) {
       fetchCategoryPath(data.category_id);
-      // Сохраняем текущую категорию с описанием
+      // Store the current category with description
       currentCategory.value = data.category || null;
     } else {
       categoryPath.value = [];
@@ -617,11 +617,24 @@ watch(
   { deep: true }
 );
 
+// Lock body scroll while the mobile filters overlay is open
+watch(
+  showMobileFilters,
+  (open) => {
+    if (typeof document === 'undefined') return;
+    document.body.style.overflow = open ? 'hidden' : '';
+  },
+  { immediate: true }
+);
+onBeforeUnmount(() => {
+  if (typeof document !== 'undefined') document.body.style.overflow = '';
+});
+
 const goToPage = (page) => {
   if (page < 1 || page > pagination.total_pages) return;
   pagination.page = page;
   router.push({ path: route.path, query: { ...route.query, page: page.toString() } });
-  // fetchProducts() будет вызван watch(route.query)
+  // fetchProducts() will be called by watch(route.query)
 };
 
 // Navigate to SCU page (landing page for product group)
@@ -642,14 +655,14 @@ const goToSCUPage = (product) => {
   router.push({ name: 'product', params: { id: product.id } });
 };
 
-// Russian pluralization: 1 вариант, 2-4 варианта, 5+ вариантов
-const pluralize = (n, one, few, many) => {
+// Pluralization helper using locale-specific i18n keys
+const pluralize = (n, oneKey, fewKey, manyKey) => {
   const abs = Math.abs(n) % 100;
   const lastDigit = abs % 10;
-  if (abs > 10 && abs < 20) return many;
-  if (lastDigit === 1) return one;
-  if (lastDigit >= 2 && lastDigit <= 4) return few;
-  return many;
+  if (abs > 10 && abs < 20) return t(manyKey);
+  if (lastDigit === 1) return t(oneKey);
+  if (lastDigit >= 2 && lastDigit <= 4) return t(fewKey);
+  return t(manyKey);
 };
 
 defineOptions({ name: 'CatalogView' });
@@ -657,10 +670,10 @@ defineOptions({ name: 'CatalogView' });
 
 <template>
   <!-- Maintenance mode screen -->
-  <div v-if="maintenanceMode" class="min-h-screen flex items-center justify-center bg-gray-50">
-    <div class="max-w-md text-center p-6 bg-white rounded-xl shadow-sm">
-      <h1 class="text-2xl font-bold mb-3 text-gray-800">{{ t('maintenance.title') }}</h1>
-      <p class="text-gray-600 mb-4">
+  <div v-if="maintenanceMode" class="min-h-screen flex items-center justify-center bg-surface-2">
+    <div class="max-w-md text-center p-6 bg-surface rounded-xl shadow-sm">
+      <h1 class="text-2xl font-bold mb-3 text-ink">{{ t('maintenance.title') }}</h1>
+      <p class="text-ink-2 mb-4">
         {{ t('maintenance.message') }}
       </p>
       <button
@@ -681,7 +694,7 @@ defineOptions({ name: 'CatalogView' });
     <div class="mb-4">
       <!-- Loading state -->
       <div v-if="rootCatsLoading" class="flex gap-2">
-        <div v-for="i in 12" :key="i" class="flex-1 aspect-square rounded-lg bg-gray-200 animate-pulse" />
+        <div v-for="i in 12" :key="i" class="flex-1 aspect-square rounded-lg bg-surface-3 animate-pulse" />
       </div>
 
       <!-- Categories row (single line) -->
@@ -694,30 +707,34 @@ defineOptions({ name: 'CatalogView' });
             // Active category (we are browsing it or its subtree)
             isRootCategoryActive(cat)
               ? 'border-indigo-500 ring-2 ring-indigo-200 shadow-md'
-              : 'border-gray-200 hover:border-indigo-300 hover:shadow-md'
+              : 'border-line hover:border-indigo-300 hover:shadow-md'
           ]"
           @click="navigateToCategory(cat)"
         >
             <!-- Category image -->
-            <div class="relative w-full pt-[100%] bg-gray-100 overflow-hidden">
+            <div class="relative w-full pt-[100%] bg-surface-2 overflow-hidden">
               <!-- Light theme image -->
               <img
                 v-if="isValidImage(cat.image_light_url)"
                 :src="cat.image_light_url"
                 :alt="catName(cat)"
-                class="absolute inset-1 w-full h-full object-cover theme-dark:hidden"
+                loading="lazy"
+                decoding="async"
+                class="absolute inset-1 w-full h-full object-cover dark:hidden"
               />
-              <!-- Dark theme image -->
+              <!-- Dark theme image (falls back to light if no dark variant) -->
               <img
-                v-if="isValidImage(cat.image_dark_url)"
-                :src="cat.image_dark_url"
+                v-if="isValidImage(cat.image_dark_url) || isValidImage(cat.image_light_url)"
+                :src="isValidImage(cat.image_dark_url) ? cat.image_dark_url : cat.image_light_url"
                 :alt="catName(cat)"
-                class="absolute inset-1 w-full h-full object-cover hidden theme-dark:block"
+                loading="lazy"
+                decoding="async"
+                class="absolute inset-1 w-full h-full object-cover hidden dark:block"
               />
               <!-- Fallback placeholder -->
               <div
                 v-if="!isValidImage(cat.image_light_url) && !isValidImage(cat.image_dark_url)"
-                class="absolute inset-1 flex items-center justify-center text-gray-400 theme-dark:text-slate-500"
+                class="absolute inset-1 flex items-center justify-center text-ink-3"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -746,16 +763,16 @@ defineOptions({ name: 'CatalogView' });
               :class="[
                 'flex-1 flex items-center px-2 py-1.5',
                 isRootCategoryActive(cat)
-                  ? 'bg-indigo-50 theme-dark:bg-indigo-900/30'
-                  : 'bg-white theme-dark:bg-slate-800'
+                  ? 'bg-indigo-50 dark:bg-indigo-900/30'
+                  : 'bg-surface'
               ]"
             >
               <div
                 :class="[
                   'text-xs font-medium text-left line-clamp-2',
                   isRootCategoryActive(cat)
-                    ? 'text-indigo-700 theme-dark:text-indigo-300 font-semibold'
-                    : 'text-gray-800 theme-dark:text-gray-200'
+                    ? 'text-indigo-700 dark:text-indigo-300 font-semibold'
+                    : 'text-ink'
                 ]"
               >
                 {{ catName(cat) }}
@@ -765,10 +782,10 @@ defineOptions({ name: 'CatalogView' });
       </div>
 
       <!-- Categories panel with description and subcategories -->
-      <div class="mt-2 bg-white theme-dark:bg-slate-800 rounded-xl border border-gray-200 theme-dark:border-slate-700 overflow-hidden">
+      <div class="mt-2 bg-surface rounded-xl border border-line overflow-hidden">
         <div class="p-4">
           <!-- Breadcrumbs-style path -->
-          <div class="flex items-center flex-wrap gap-1 text-xs text-gray-500 theme-dark:text-slate-400 mb-2">
+          <div class="flex items-center flex-wrap gap-1 text-xs text-ink-3 mb-2">
             <span
               class="cursor-pointer hover:text-indigo-600 hover:underline"
               @click="navigateToCategory({ id: '', slug: '' })"
@@ -776,10 +793,10 @@ defineOptions({ name: 'CatalogView' });
               {{ t('catalog.all_products') }}
             </span>
             <span v-for="(cat, idx) in categoryBrowsePath" :key="cat.id" class="flex items-center gap-1">
-              <span class="text-gray-300 theme-dark:text-slate-600">/</span>
+              <span class="text-ink-3">/</span>
               <span
                 class="cursor-pointer hover:text-indigo-600 hover:underline"
-                :class="idx === categoryBrowsePath.length - 1 ? 'font-semibold text-gray-800 theme-dark:text-gray-200' : ''"
+                :class="idx === categoryBrowsePath.length - 1 ? 'font-semibold text-ink' : ''"
                 @click="navigateToCategory(cat)"
               >
                 {{ catName(cat) }}
@@ -792,12 +809,12 @@ defineOptions({ name: 'CatalogView' });
             <div class="flex flex-col lg:flex-row gap-4">
               <!-- Category name and full description -->
               <div class="flex-1 min-w-0">
-                <h2 class="text-xl font-semibold text-gray-900 theme-dark:text-gray-100">
+                <h2 class="text-xl font-semibold text-ink">
                   {{ currentBrowseCategory ? catName(currentBrowseCategory) : t('catalog.all_products') }}
                 </h2>
                 <p
                   v-if="currentBrowseCategory && catDescription(currentBrowseCategory)"
-                  class="mt-1 text-sm text-gray-600 theme-dark:text-slate-300"
+                  class="mt-1 text-sm text-ink-2"
                 >
                   {{ catDescription(currentBrowseCategory) }}
                 </p>
@@ -805,19 +822,23 @@ defineOptions({ name: 'CatalogView' });
               <!-- Category image on the right -->
               <div
                 v-if="currentBrowseCategory && (isValidImage(currentBrowseCategory.image_light_url) || isValidImage(currentBrowseCategory.image_dark_url))"
-                class="flex-shrink-0 w-48 aspect-square relative rounded-xl overflow-hidden shadow-md border border-gray-200 theme-dark:border-slate-700"
+                class="flex-shrink-0 w-48 aspect-square relative rounded-xl overflow-hidden shadow-md border border-line"
               >
                 <img
                   v-if="isValidImage(currentBrowseCategory.image_light_url)"
                   :src="currentBrowseCategory.image_light_url"
                   :alt="catName(currentBrowseCategory)"
+                  loading="lazy"
+                  decoding="async"
                   class="absolute inset-0 w-full h-full object-cover"
                 />
                 <img
-                  v-if="isValidImage(currentBrowseCategory.image_dark_url)"
-                  :src="currentBrowseCategory.image_dark_url"
+                  v-if="isValidImage(currentBrowseCategory.image_dark_url) || isValidImage(currentBrowseCategory.image_light_url)"
+                  :src="isValidImage(currentBrowseCategory.image_dark_url) ? currentBrowseCategory.image_dark_url : currentBrowseCategory.image_light_url"
                   :alt="catName(currentBrowseCategory)"
-                  class="absolute inset-0 w-full h-full object-cover hidden theme-dark:block"
+                  loading="lazy"
+                  decoding="async"
+                  class="absolute inset-0 w-full h-full object-cover hidden dark:block"
                 />
               </div>
             </div>
@@ -836,12 +857,12 @@ defineOptions({ name: 'CatalogView' });
                 'inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-150 cursor-pointer',
                 // Active category (we are inside it)
                 currentCategory && currentCategory.id === sub.id
-                  ? 'border-indigo-500 bg-indigo-50 theme-dark:bg-indigo-900/30 text-indigo-700 theme-dark:text-indigo-300'
+                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
                   // Has children — slightly highlighted
                   : sub.children && sub.children.length > 0
-                    ? 'border-gray-300 theme-dark:border-slate-500 bg-gray-50 theme-dark:bg-slate-700 text-gray-800 theme-dark:text-gray-100 hover:border-indigo-300 hover:text-indigo-600 theme-dark:hover:text-indigo-400 hover:bg-indigo-50 theme-dark:hover:bg-slate-600'
+                    ? 'border-line bg-surface-2 text-ink hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-600'
                     // Leaf category
-                    : 'border-gray-200 theme-dark:border-slate-600 text-gray-700 theme-dark:text-gray-200 hover:border-indigo-300 hover:text-indigo-600 theme-dark:hover:text-indigo-400 hover:bg-indigo-50 theme-dark:hover:bg-slate-700'
+                    : 'border-line text-ink-2 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-700'
               ]"
             >
               {{ catName(sub) }}
@@ -859,9 +880,9 @@ defineOptions({ name: 'CatalogView' });
               </svg>
               <span
                 v-if="sub.products_count != null && sub.products_count > 0"
-                class="text-[10px] opacity-60"
+                class="text-[11px] opacity-60"
               >
-                · {{ Number(sub.products_count).toLocaleString('ru-RU') }}
+                · {{ Number(sub.products_count).toLocaleString() }}
               </span>
             </button>
           </div>
@@ -876,7 +897,7 @@ defineOptions({ name: 'CatalogView' });
         <!-- Mobile filters button -->
         <button
           @click="showMobileFilters = true"
-          class="md:hidden inline-flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50"
+          class="md:hidden inline-flex items-center gap-1 px-3 py-1.5 text-xs border border-line rounded-lg bg-surface text-ink-2 hover:bg-surface-2"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
@@ -886,7 +907,7 @@ defineOptions({ name: 'CatalogView' });
 
         <span
           v-if="lastSearchMs != null"
-          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200"
+          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-50 text-green-700 border border-green-200"
         >
           <span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500"></span>
           {{ t('catalog.search_time', { ms: lastSearchMs }) }}
@@ -901,7 +922,7 @@ defineOptions({ name: 'CatalogView' });
     <!-- Inline filters (when no attributes — shown above products) -->
     <div
       v-if="!hasAttrsOrBrands"
-      class="mb-4 flex flex-wrap items-center gap-3 bg-white rounded-lg shadow-sm border border-gray-200 p-3"
+      class="mb-4 flex flex-wrap items-center gap-3 bg-surface rounded-lg shadow-sm border border-line p-3"
     >
       <!-- Search -->
       <div class="flex-1 min-w-[200px]">
@@ -909,7 +930,7 @@ defineOptions({ name: 'CatalogView' });
           v-model="filters.q"
           type="text"
           :placeholder="t('catalog.search_placeholder')"
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          class="w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
       </div>
       <!-- Price range -->
@@ -918,14 +939,14 @@ defineOptions({ name: 'CatalogView' });
           v-model="filters.price_min"
           type="number"
           :placeholder="t('catalog.price_from')"
-          class="w-24 px-2 py-2 border border-gray-300 rounded-lg text-sm"
+          class="w-24 px-2 py-2 border border-line rounded-lg text-sm"
         />
-        <span class="text-gray-400">—</span>
+        <span class="text-ink-3">—</span>
         <input
           v-model="filters.price_max"
           type="number"
           :placeholder="t('catalog.price_to')"
-          class="w-24 px-2 py-2 border border-gray-300 rounded-lg text-sm"
+          class="w-24 px-2 py-2 border border-line rounded-lg text-sm"
         />
       </div>
     </div>
@@ -933,45 +954,45 @@ defineOptions({ name: 'CatalogView' });
     <div class="flex gap-6">
       <!-- Sidebar: Filters (only when attributes exist) -->
       <aside v-if="hasAttrsOrBrands" class="w-64 flex-shrink-0 hidden md:block">
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-4">
+        <div class="bg-surface rounded-lg shadow-sm border border-line p-4 space-y-4">
           <!-- Search -->
           <div>
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{{ t('catalog.search_label') }}</label>
+            <label class="block text-xs font-semibold text-ink-3 uppercase tracking-wide mb-1">{{ t('catalog.search_label') }}</label>
             <input
               v-model="filters.q"
               type="text"
               :placeholder="t('catalog.search_placeholder')"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              class="w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
           <!-- Price range -->
           <div>
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{{ t('catalog.price_label') }}</label>
+            <label class="block text-xs font-semibold text-ink-3 uppercase tracking-wide mb-1">{{ t('catalog.price_label') }}</label>
             <div class="flex gap-2">
               <input
                 v-model="filters.price_min"
                 type="number"
                 :placeholder="t('catalog.price_from')"
-                class="w-1/2 px-2 py-1.5 border border-gray-300 rounded-lg text-sm"
+                class="w-1/2 px-2 py-1.5 border border-line rounded-lg text-sm"
               />
               <input
                 v-model="filters.price_max"
                 type="number"
                 :placeholder="t('catalog.price_to')"
-                class="w-1/2 px-2 py-1.5 border border-gray-300 rounded-lg text-sm"
+                class="w-1/2 px-2 py-1.5 border border-line rounded-lg text-sm"
               />
             </div>
           </div>
 
           <!-- Brands -->
           <div v-if="visibleBrands.length > 0" class="border-t pt-3">
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{{ t('catalog.brand_label') }}</label>
+            <label class="block text-xs font-semibold text-ink-3 uppercase tracking-wide mb-1">{{ t('catalog.brand_label') }}</label>
             <div class="space-y-1">
               <label
                 v-for="brand in visibleBrands"
                 :key="brand"
-                class="flex items-center text-sm py-0.5 cursor-pointer hover:bg-gray-50 rounded px-1 -ml-1"
+                class="flex items-center text-sm py-0.5 cursor-pointer hover:bg-surface-2 rounded px-1 -ml-1"
               >
                 <span class="flex items-center gap-2">
                   <input
@@ -988,7 +1009,7 @@ defineOptions({ name: 'CatalogView' });
           <!-- Attribute filters -->
           <div v-for="attr in visibleAttrs" :key="attr.code" class="border-t pt-3">
             <div class="flex items-center justify-between mb-1">
-              <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <label class="text-xs font-semibold text-ink-3 uppercase tracking-wide">
                 {{ attrDisplayName(attr) }}
               </label>
             </div>
@@ -1011,7 +1032,7 @@ defineOptions({ name: 'CatalogView' });
                 v-for="tag in visibleUnselectedTags(attr)"
                 :key="tag"
                 @click="toggleAttrFilter(attr.code, tag, true)"
-                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-surface-2 text-ink-2 border-line hover:bg-surface-3"
               >
                 {{ enumValueLabel(attr, tag) }}
               </button>
@@ -1029,14 +1050,14 @@ defineOptions({ name: 'CatalogView' });
             <!-- Expanded area with search + scrollable tags -->
             <div
               v-if="hasMoreUnselectedTags(attr) && attrExpanded[attr.code]"
-              class="mt-1 border border-gray-200 rounded p-1.5 max-h-48 overflow-y-auto bg-gray-50"
+              class="mt-1 border border-line rounded p-1.5 max-h-48 overflow-y-auto bg-surface-2"
             >
               <!-- Search -->
               <input
                 v-model="attrSearch[attr.code]"
                 type="text"
                 :placeholder="t('catalog.search_attr_placeholder')"
-                class="w-full mb-1.5 px-2 py-0.5 border border-gray-300 rounded text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                class="w-full mb-1.5 px-2 py-0.5 border border-line rounded text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
               <!-- Tags -->
               <div class="flex flex-wrap gap-1">
@@ -1044,7 +1065,7 @@ defineOptions({ name: 'CatalogView' });
                   v-for="tag in hiddenUnselectedTags(attr)"
                   :key="tag"
                   @click="toggleAttrFilter(attr.code, tag, true)"
-                  class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                  class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-surface-2 text-ink-2 border-line hover:bg-surface-3"
                 >
                   {{ enumValueLabel(attr, tag) }}
                 </button>
@@ -1055,7 +1076,7 @@ defineOptions({ name: 'CatalogView' });
           <!-- Reset -->
           <button
             @click="resetFilters"
-            class="w-full px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+            class="w-full px-3 py-2 text-sm text-ink-2 border border-line rounded-lg hover:bg-surface-2 transition"
           >
             {{ t('catalog.reset_filters') }}
           </button>
@@ -1065,12 +1086,12 @@ defineOptions({ name: 'CatalogView' });
       <!-- Products grid -->
       <div class="flex-1">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">
-          <div class="text-sm text-gray-600">
+          <div class="text-sm text-ink-2">
             {{ t('catalog.found', { count: pagination.total }) }}
           </div>
           <select
             v-model="filters.sort"
-            class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            class="px-3 py-1.5 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-surface"
           >
             <option value="relevance">{{ t('catalog.sort_relevance') }}</option>
             <option value="price_asc">{{ t('catalog.sort_price_asc') }}</option>
@@ -1078,11 +1099,19 @@ defineOptions({ name: 'CatalogView' });
           </select>
         </div>
 
-        <div v-if="loading" class="flex justify-center py-12">
-          <div class="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div>
+        <!-- Skeleton while loading -->
+        <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4" aria-hidden="true">
+          <div v-for="i in 12" :key="i" class="bg-surface rounded-xl border border-line overflow-hidden">
+            <div class="aspect-[4/3] bg-surface-3 animate-pulse"></div>
+            <div class="p-3 space-y-2">
+              <div class="h-3 bg-surface-3 rounded animate-pulse"></div>
+              <div class="h-3 w-2/3 bg-surface-3 rounded animate-pulse"></div>
+              <div class="h-4 w-1/2 bg-surface-3 rounded animate-pulse"></div>
+            </div>
+          </div>
         </div>
 
-        <div v-else-if="products.length === 0" class="text-center py-12 text-gray-500">
+        <div v-else-if="products.length === 0" class="text-center py-12 text-ink-3">
           <p class="mb-2">{{ t('catalog.no_products') }}</p>
           <button @click="resetFilters" class="text-indigo-600 hover:underline text-sm">
             {{ t('catalog.reset_filters') }}
@@ -1093,45 +1122,47 @@ defineOptions({ name: 'CatalogView' });
           <div
             v-for="product in products"
             :key="product.id"
-            class="bg-white rounded-xl border border-gray-200 overflow-hidden cursor-pointer relative
+            class="bg-surface rounded-xl border border-line overflow-hidden cursor-pointer relative
                    transition-all duration-200 ease-out
                    hover:shadow-lg hover:-translate-y-0.5 hover:border-indigo-300"
             @click="goToSCUPage(product)"
           >
-            <!-- Бейдж: реклама -->
-            <span v-if="product.promoted" class="absolute top-2 left-2 z-10 bg-yellow-400 text-yellow-900 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+            <!-- Badge: ad -->
+            <span v-if="product.promoted" class="absolute top-2 left-2 z-10 bg-yellow-400 text-yellow-900 text-[11px] font-semibold px-1.5 py-0.5 rounded-full">
               {{ t('catalog.ad') }}
             </span>
-            <!-- Бейдж: несколько вариантов -->
-            <span v-if="product.product_count && product.product_count > 1" class="absolute top-2 right-2 z-10 bg-indigo-600 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
-              {{ product.product_count }} {{ pluralize(product.product_count, 'вариант', 'варианта', 'вариантов') }}
+            <!-- Badge: multiple variants -->
+            <span v-if="product.product_count && product.product_count > 1" class="absolute top-2 right-2 z-10 bg-indigo-600 text-white text-[11px] font-semibold px-1.5 py-0.5 rounded-full">
+              {{ product.product_count }} {{ pluralize(product.product_count, 'catalog.variant_one', 'catalog.variant_few', 'catalog.variant_many') }}
             </span>
 
-            <!-- Изображение -->
-            <div class="aspect-[4/3] bg-gray-100 flex items-center justify-center">
+            <!-- Image -->
+            <div class="aspect-[4/3] bg-surface-2 flex items-center justify-center">
               <img
                 v-if="product.images?.length"
                 :src="product.images[0]"
                 :alt="product.name"
+                loading="lazy"
+                decoding="async"
                 class="w-full h-full object-cover"
               />
-              <span v-else class="text-gray-400 text-xs">{{ t('catalog.no_photo') }}</span>
+              <span v-else class="text-ink-3 text-xs">{{ t('catalog.no_photo') }}</span>
             </div>
 
-            <!-- Информация -->
+            <!-- Info -->
             <div class="p-2.5 sm:p-3 space-y-1">
-              <!-- Название товара -->
-              <h3 class="font-semibold text-[13px] sm:text-sm leading-tight line-clamp-2 text-gray-900">{{ product.title || product.name }}</h3>
+              <!-- Product name -->
+              <h3 class="font-semibold text-[13px] sm:text-sm leading-tight line-clamp-2 text-ink">{{ product.title || product.name }}</h3>
 
-              <!-- Бренд/производитель -->
-              <div v-if="product.brand" class="text-[11px] sm:text-xs text-gray-500">{{ product.brand }}</div>
+              <!-- Brand/manufacturer -->
+              <div v-if="product.brand" class="text-[11px] sm:text-xs text-ink-3">{{ product.brand }}</div>
 
-              <!-- Параметры (если есть) -->
-              <div v-if="getAttributesString(product.attributes)" class="text-[10px] text-gray-500 truncate">
+              <!-- Attributes (if any) -->
+              <div v-if="getAttributesString(product.attributes)" class="text-[11px] text-ink-3 truncate">
                 {{ getAttributesString(product.attributes) }}
               </div>
 
-              <!-- Цена + продавцы + рейтинг -->
+              <!-- Price + sellers + rating -->
               <div class="flex items-end justify-between pt-1 gap-2">
                 <div class="flex flex-col">
                   <span class="font-bold text-sm sm:text-base text-indigo-700">
@@ -1139,7 +1170,7 @@ defineOptions({ name: 'CatalogView' });
                   </span>
                   <span
                     v-if="product.sellers_count && product.sellers_count > 1"
-                    class="text-[10px] text-gray-500"
+                    class="text-[11px] text-ink-3"
                   >
                     {{ t('catalog.from_price_sellers', { count: product.sellers_count }) }}
                   </span>
@@ -1156,17 +1187,17 @@ defineOptions({ name: 'CatalogView' });
           <button
             @click="goToPage(pagination.page - 1)"
             :disabled="pagination.page <= 1"
-            class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm disabled:opacity-40 hover:bg-gray-50 transition"
+            class="px-3 py-1.5 border border-line rounded-lg text-sm disabled:opacity-40 hover:bg-surface-2 transition"
           >
             {{ t('catalog.back') }}
           </button>
-          <span class="px-3 py-1.5 text-sm text-gray-600">
+          <span class="px-3 py-1.5 text-sm text-ink-2">
             {{ t('catalog.page_of', { page: pagination.page, total: pagination.total_pages }) }}
           </span>
           <button
             @click="goToPage(pagination.page + 1)"
             :disabled="pagination.page >= pagination.total_pages"
-            class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm disabled:opacity-40 hover:bg-gray-50 transition"
+            class="px-3 py-1.5 border border-line rounded-lg text-sm disabled:opacity-40 hover:bg-surface-2 transition"
           >
             {{ t('common.next') }} →
           </button>
@@ -1181,12 +1212,15 @@ defineOptions({ name: 'CatalogView' });
       @click="showMobileFilters = false"
     >
       <div
-        class="w-[85vw] max-w-sm bg-white h-full shadow-xl overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="t('catalog.filters')"
+        class="w-[85vw] max-w-sm bg-surface h-full shadow-xl overflow-y-auto"
         @click.stop
       >
-        <div class="sticky top-0 bg-white border-b px-4 py-3 flex items-center justify-between z-10">
+        <div class="sticky top-0 bg-surface border-b border-line px-4 py-3 flex items-center justify-between z-10">
           <span class="font-semibold">{{ t('catalog.filters') }}</span>
-          <button @click="showMobileFilters = false" class="p-1 rounded hover:bg-gray-100">
+          <button @click="showMobileFilters = false" class="p-1 rounded hover:bg-surface-2" :aria-label="t('common.close')">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -1196,37 +1230,37 @@ defineOptions({ name: 'CatalogView' });
         <div class="p-4 space-y-4">
           <!-- Search -->
           <div>
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{{ t('catalog.search_label') }}</label>
+            <label class="block text-xs font-semibold text-ink-3 uppercase tracking-wide mb-1">{{ t('catalog.search_label') }}</label>
             <input
               v-model="filters.q"
               type="text"
               :placeholder="t('catalog.search_placeholder')"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              class="w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
           <!-- Price range -->
           <div>
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{{ t('catalog.price_label') }}</label>
+            <label class="block text-xs font-semibold text-ink-3 uppercase tracking-wide mb-1">{{ t('catalog.price_label') }}</label>
             <div class="flex gap-2">
               <input
                 v-model="filters.price_min"
                 type="number"
                 :placeholder="t('catalog.price_from')"
-                class="w-1/2 px-2 py-1.5 border border-gray-300 rounded-lg text-sm"
+                class="w-1/2 px-2 py-1.5 border border-line rounded-lg text-sm"
               />
               <input
                 v-model="filters.price_max"
                 type="number"
                 :placeholder="t('catalog.price_to')"
-                class="w-1/2 px-2 py-1.5 border border-gray-300 rounded-lg text-sm"
+                class="w-1/2 px-2 py-1.5 border border-line rounded-lg text-sm"
               />
             </div>
           </div>
 
           <!-- Attribute filters -->
           <div v-for="attr in visibleAttrs" :key="attr.code" class="border-t pt-3">
-            <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">
+            <label class="text-xs font-semibold text-ink-3 uppercase tracking-wide mb-1 block">
               {{ attrDisplayName(attr) }}
             </label>
 
@@ -1243,7 +1277,7 @@ defineOptions({ name: 'CatalogView' });
             </div>
 
             <!-- All tags (scrollable) -->
-            <div class="max-h-40 overflow-y-auto border border-gray-200 rounded p-1.5 bg-gray-50">
+            <div class="max-h-40 overflow-y-auto border border-line rounded p-1.5 bg-surface-2">
               <div class="flex flex-wrap gap-1">
                 <button
                   v-for="tag in getAttrOptions(attr)"
@@ -1252,7 +1286,7 @@ defineOptions({ name: 'CatalogView' });
                   class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer"
                   :class="isAttrSelected(attr.code, tag)
                     ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'"
+                    : 'bg-surface-2 text-ink-2 border-line hover:bg-surface-3'"
                 >
                   {{ enumValueLabel(attr, tag) }}
                 </button>
@@ -1263,7 +1297,7 @@ defineOptions({ name: 'CatalogView' });
           <!-- Reset -->
           <button
             @click="resetFilters; showMobileFilters = false"
-            class="w-full px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+            class="w-full px-3 py-2 text-sm text-ink-2 border border-line rounded-lg hover:bg-surface-2 transition"
           >
             {{ t('catalog.reset_filters') }}
           </button>

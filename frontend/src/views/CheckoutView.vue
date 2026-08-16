@@ -5,11 +5,15 @@ import { useI18n } from 'vue-i18n';
 import api from '../api';
 import { useCartStore } from '../stores/cart';
 import { useAuthStore } from '../stores/auth';
+import { useFormat } from '../composables/useFormat';
+import { useToast } from '../composables/useToast';
 
 const router = useRouter();
 const cart = useCartStore();
 const auth = useAuthStore();
 const { t } = useI18n();
+const { formatPrice } = useFormat();
+const { toast } = useToast();
 
 const shipping = reactive({
   name: '',
@@ -26,13 +30,9 @@ const error = ref(null);
 const success = ref(false);
 const orderId = ref(null);
 
-const formatPrice = (price) => {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
-};
-
 const submitOrder = async () => {
   if (!shipping.name || !shipping.phone || !shipping.address || !shipping.city) {
-    alert(t('checkout.fill_required'));
+    toast.error(t('checkout.fill_required'));
     return;
   }
 
@@ -93,7 +93,7 @@ onMounted(async () => {
         <router-link :to="{ name: 'order-detail', params: { id: orderId } }" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
           {{ t('checkout.view_order') }}
         </router-link>
-        <router-link to="/" class="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
+        <router-link to="/" class="px-4 py-2 border border-line rounded-lg text-sm hover:bg-surface-2">
           {{ t('checkout.to_catalog') }}
         </router-link>
       </div>
@@ -107,49 +107,49 @@ onMounted(async () => {
     <!-- Form -->
     <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <!-- Shipping form -->
-      <div class="bg-white rounded-lg shadow-sm p-4">
+      <div class="bg-surface rounded-lg shadow-sm p-4">
         <h2 class="font-bold mb-4">{{ t('checkout.recipient_data') }}</h2>
         <div class="space-y-3">
           <div>
-            <label class="block text-sm text-gray-700 mb-1">{{ t('checkout.name') }}</label>
-            <input v-model="shipping.name" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" required />
+            <label class="block text-sm text-ink-2 mb-1">{{ t('checkout.name') }}</label>
+            <input v-model="shipping.name" type="text" class="w-full px-3 py-2 border border-line rounded-lg text-sm" required />
           </div>
           <div>
-            <label class="block text-sm text-gray-700 mb-1">{{ t('checkout.phone') }}</label>
-            <input v-model="shipping.phone" type="tel" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" required />
+            <label class="block text-sm text-ink-2 mb-1">{{ t('checkout.phone') }}</label>
+            <input v-model="shipping.phone" type="tel" class="w-full px-3 py-2 border border-line rounded-lg text-sm" required />
           </div>
           <div>
-            <label class="block text-sm text-gray-700 mb-1">{{ t('common.email') }}</label>
-            <input v-model="shipping.email" type="email" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <label class="block text-sm text-ink-2 mb-1">{{ t('common.email') }}</label>
+            <input v-model="shipping.email" type="email" class="w-full px-3 py-2 border border-line rounded-lg text-sm" />
           </div>
           <div>
-            <label class="block text-sm text-gray-700 mb-1">{{ t('checkout.city') }}</label>
-            <input v-model="shipping.city" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" required />
+            <label class="block text-sm text-ink-2 mb-1">{{ t('checkout.city') }}</label>
+            <input v-model="shipping.city" type="text" class="w-full px-3 py-2 border border-line rounded-lg text-sm" required />
           </div>
           <div>
-            <label class="block text-sm text-gray-700 mb-1">{{ t('checkout.address') }}</label>
-            <input v-model="shipping.address" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" required />
+            <label class="block text-sm text-ink-2 mb-1">{{ t('checkout.address') }}</label>
+            <input v-model="shipping.address" type="text" class="w-full px-3 py-2 border border-line rounded-lg text-sm" required />
           </div>
           <div>
-            <label class="block text-sm text-gray-700 mb-1">{{ t('checkout.zip') }}</label>
-            <input v-model="shipping.zip" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <label class="block text-sm text-ink-2 mb-1">{{ t('checkout.zip') }}</label>
+            <input v-model="shipping.zip" type="text" class="w-full px-3 py-2 border border-line rounded-lg text-sm" />
           </div>
           <div>
-            <label class="block text-sm text-gray-700 mb-1">{{ t('checkout.comment') }}</label>
-            <textarea v-model="shipping.comment" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></textarea>
+            <label class="block text-sm text-ink-2 mb-1">{{ t('checkout.comment') }}</label>
+            <textarea v-model="shipping.comment" rows="2" class="w-full px-3 py-2 border border-line rounded-lg text-sm"></textarea>
           </div>
         </div>
       </div>
 
       <!-- Order summary -->
-      <div class="bg-white rounded-lg shadow-sm p-4">
+      <div class="bg-surface rounded-lg shadow-sm p-4">
         <h2 class="font-bold mb-4">{{ t('checkout.your_order') }}</h2>
-        <div v-if="cart.loading" class="text-sm text-gray-500">{{ t('common.loading') }}</div>
+        <div v-if="cart.loading" class="text-sm text-ink-3">{{ t('common.loading') }}</div>
         <div v-else>
           <div v-for="item in cart.items" :key="item.product_id" class="flex justify-between text-sm py-2 border-b last:border-b-0">
             <div>
               <span class="font-medium">{{ item.product_name || item.name }}</span>
-              <span class="text-gray-500 ml-1">× {{ item.qty }}</span>
+              <span class="text-ink-3 ml-1">× {{ item.qty }}</span>
             </div>
             <span>{{ formatPrice(item.price * item.qty) }}</span>
           </div>

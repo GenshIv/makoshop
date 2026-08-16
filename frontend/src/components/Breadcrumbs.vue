@@ -50,21 +50,22 @@ const crumbs = computed(() => {
 </script>
 
 <template>
-  <nav v-if="crumbs.length > 1" class="flex items-center gap-1 text-sm text-gray-500 mb-4">
+  <nav v-if="crumbs.length > 1" class="flex items-center gap-1 text-sm text-ink-3 mb-4 overflow-hidden">
     <template v-for="(crumb, idx) in crumbs" :key="idx">
       <template v-if="idx > 0">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-ink-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
         </svg>
       </template>
       <router-link
         v-if="crumb.to"
         :to="crumb.to"
-        class="hover:text-indigo-600 transition"
+        class="hover:text-indigo-600 transition min-w-0 truncate max-w-[10rem] sm:max-w-[16rem]"
+        :title="crumb.name"
       >
         {{ crumb.name }}
       </router-link>
-      <span v-else class="text-gray-700">
+      <span v-else class="text-ink-2 min-w-0 truncate max-w-[10rem] sm:max-w-[16rem]" :title="crumb.name">
         {{ crumb.name }}
       </span>
     </template>

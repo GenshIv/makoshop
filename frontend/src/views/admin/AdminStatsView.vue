@@ -1,7 +1,16 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { useI18n } from 'vue-i18n';
 import api from '../../api';
-import ApexCharts from 'apexcharts';
+
+const { t } = useI18n();
+
+// Lazy-load apexcharts (~850 kB) only when charts are first rendered.
+let apexPromise = null;
+const loadApexCharts = () => {
+  if (!apexPromise) apexPromise = import('apexcharts');
+  return apexPromise;
+};
 
 const loading = ref(false);
 const error = ref('');
@@ -16,7 +25,7 @@ const fetchStats = async (force = false) => {
     const url = force ? '/admin/stats?refresh=1' : '/admin/stats';
     const res = await api.get(url);
     stats.value = res.data;
-    renderCharts();
+    await renderCharts();
   } catch (e) {
     error.value = e.response?.data?.message || e.message;
   } finally {
@@ -31,10 +40,11 @@ const destroyCharts = () => {
   charts.value = {};
 };
 
-const renderCharts = () => {
+const renderCharts = async () => {
   destroyCharts();
   if (!stats.value) return;
 
+  const { default: ApexCharts } = await loadApexCharts();
   const s = stats.value;
 
   // 1) RPS Over Time
@@ -145,14 +155,14 @@ const fmtNs = (ns) => {
 <template>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold text-purple-700">Request Stats</h1>
+      <h1 class="text-2xl font-bold text-purple-700">{{ t('admin.stats_title') }}</h1>
       <div class="flex gap-2">
         <button
           @click="fetchStats(true)"
           :disabled="loading"
           class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
         >
-          {{ loading ? 'Loading...' : 'Refresh' }}
+          {{ loading ? t('common.loading') : t('admin.refresh') }}
         </button>
       </div>
     </div>
@@ -161,60 +171,61 @@ const fmtNs = (ns) => {
 
     <!-- Summary -->
     <div v-if="stats" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-      <div class="bg-white rounded-lg shadow-sm p-4">
-        <div class="text-xs text-gray-500">Total requests</div>
+      <div class="bg-surface rounded-lg shadow-sm p-4">
+        <div class="text-xs text-ink-3">{{ t('admin.total_requests') }}</div>
         <div class="text-2xl font-bold">{{ stats.total_requests || 0 }}</div>
       </div>
-      <div class="bg-white rounded-lg shadow-sm p-4">
-        <div class="text-xs text-gray-500">Avg latency</div>
+      <div class="bg-surface rounded-lg shadow-sm p-4">
+        <div class="text-xs text-ink-3">{{ t('admin.avg_latency') }}</div>
         <div class="text-2xl font-bold">{{ fmtNs(stats.avg_ns) }}</div>
       </div>
-      <div class="bg-white rounded-lg shadow-sm p-4">
-        <div class="text-xs text-gray-500">P95 latency</div>
+      <div class="bg-surface rounded-lg shadow-sm p-4">
+        <div class="text-xs text-ink-3">{{ t('admin.p95_latency') }}</div>
         <div class="text-2xl font-bold text-orange-600">{{ fmtNs(stats.p95_ns) }}</div>
       </div>
-      <div class="bg-white rounded-lg shadow-sm p-4">
-        <div class="text-xs text-gray-500">P99 latency</div>
+      <div class="bg-surface rounded-lg shadow-sm p-4">
+        <div class="text-xs text-ink-3">{{ t('admin.p99_latency') }}</div>
         <div class="text-2xl font-bold text-red-600">{{ fmtNs(stats.p99_ns) }}</div>
       </div>
     </div>
 
     <!-- Time series -->
     <div v-if="stats" class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-sm p-4">
+      <div class="bg-surface rounded-lg shadow-sm p-4">
         <div id="chart-rps"></div>
       </div>
-      <div class="bg-white rounded-lg shadow-sm p-4">
+      <div class="bg-surface rounded-lg shadow-sm p-4">
         <div id="chart-latency"></div>
       </div>
     </div>
 
     <!-- Routes -->
     <div v-if="stats" class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-sm p-4">
+      <div class="bg-surface rounded-lg shadow-sm p-4">
         <div id="chart-top-routes"></div>
       </div>
-      <div class="bg-white rounded-lg shadow-sm p-4">
+      <div class="bg-surface rounded-lg shadow-sm p-4">
         <div id="chart-slow-routes"></div>
       </div>
     </div>
 
     <!-- Codes + tables -->
     <div v-if="stats" class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-sm p-4">
+      <div class="bg-surface rounded-lg shadow-sm p-4">
         <div id="chart-codes"></div>
       </div>
 
       <!-- Top URLs table -->
-      <div class="bg-white rounded-lg shadow-sm p-4 overflow-auto max-h-80">
-        <h3 class="font-semibold mb-2 text-sm">Top URLs</h3>
+      <div class="bg-surface rounded-lg shadow-sm p-4 overflow-auto max-h-80">
+        <h3 class="font-semibold mb-2 text-sm">{{ t('admin.top_urls') }}</h3>
         <table class="w-full text-xs">
-          <thead class="bg-gray-50">
+          <caption class="sr-only">{{ t('tables.admin_stats_top_urls') }}</caption>
+          <thead class="bg-surface-2">
             <tr>
-              <th class="px-2 py-1 text-left">URL</th>
-              <th class="px-2 py-1 text-right">Count</th>
-              <th class="px-2 py-1 text-right">Avg ms</th>
-              <th class="px-2 py-1 text-right">P95 ms</th>
+              <th scope="col" class="px-2 py-1 text-left">{{ t('admin.url') }}</th>
+              <th scope="col" class="px-2 py-1 text-right">{{ t('admin.count') }}</th>
+              <th scope="col" class="px-2 py-1 text-right">{{ t('admin.avg_ms') }}</th>
+              <th scope="col" class="px-2 py-1 text-right">{{ t('admin.p95_ms') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -229,15 +240,16 @@ const fmtNs = (ns) => {
       </div>
 
       <!-- Slow URLs table -->
-      <div class="bg-white rounded-lg shadow-sm p-4 overflow-auto max-h-80">
-        <h3 class="font-semibold mb-2 text-sm">Slowest URLs</h3>
+      <div class="bg-surface rounded-lg shadow-sm p-4 overflow-auto max-h-80">
+        <h3 class="font-semibold mb-2 text-sm">{{ t('admin.slowest_urls') }}</h3>
         <table class="w-full text-xs">
-          <thead class="bg-gray-50">
+          <caption class="sr-only">{{ t('tables.admin_stats_slow_urls') }}</caption>
+          <thead class="bg-surface-2">
             <tr>
-              <th class="px-2 py-1 text-left">URL</th>
-              <th class="px-2 py-1 text-right">Count</th>
-              <th class="px-2 py-1 text-right">Avg ms</th>
-              <th class="px-2 py-1 text-right">Max ms</th>
+              <th scope="col" class="px-2 py-1 text-left">{{ t('admin.url') }}</th>
+              <th scope="col" class="px-2 py-1 text-right">{{ t('admin.count') }}</th>
+              <th scope="col" class="px-2 py-1 text-right">{{ t('admin.avg_ms') }}</th>
+              <th scope="col" class="px-2 py-1 text-right">{{ t('admin.max_ms') }}</th>
             </tr>
           </thead>
           <tbody>

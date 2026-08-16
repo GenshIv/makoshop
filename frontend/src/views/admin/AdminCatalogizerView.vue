@@ -3,8 +3,11 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../../api';
+import { useToast } from '../../composables/useToast';
+import ConfirmDialog from '../../components/ConfirmDialog.vue';
 
 const { t, locale } = useI18n();
+const { toast } = useToast();
 
 const catDisplayName = (cat) => {
   if (!cat) return String(cat?.id || '');
@@ -62,7 +65,7 @@ const exportCategories = async () => {
     addLog('Categories exported.');
   } catch (e) {
     console.error('Export error:', e);
-    alert('Export failed');
+    toast.error(t('admin.catalogizer_export_failed'));
   }
 };
 
@@ -79,18 +82,24 @@ const importCategories = async () => {
       const data = JSON.parse(text);
       const res = await api.post('/admin/categories?import=1', data);
       addLog(`Import complete: created=${res.data.created}, updated=${res.data.updated}`);
-      alert('Categories imported successfully!');
+      toast.success(t('admin.catalogizer_import_success'));
     } catch (e) {
       console.error('Import error:', e);
-      alert('Import failed: ' + (e.response?.data?.message || e.message));
+      toast.error(t('admin.catalogizer_import_failed', { error: e.response?.data?.message || e.message }));
     }
   };
   input.click();
 };
 
 // SCU Page relink
+const relinkOpen = ref(false);
+
+const askRelink = () => {
+  relinkOpen.value = true;
+};
+
 const runRelink = async () => {
-  if (!confirm('Reassign all SCU pages to categories based on anchor keywords?')) return;
+  relinkOpen.value = false;
   running.value = true;
 
   try {
@@ -98,18 +107,24 @@ const runRelink = async () => {
       apply: true,
     });
     addLog(`Relink complete: processed=${res.data.processed}, relinked=${res.data.relinked}`);
-    alert(`SCU pages relinked: ${res.data.relinked}`);
+    toast.success(t('admin.catalogizer_relink_done', { count: res.data.relinked }));
   } catch (e) {
     console.error('Relink error:', e);
-    alert('Relink failed');
+    toast.error(t('admin.catalogizer_relink_failed'));
   } finally {
     running.value = false;
   }
 };
 
 // SCU Page catalogize all (TurboTopNByIntersection)
+const catalogizeAllOpen = ref(false);
+
+const askCatalogizeAll = () => {
+  catalogizeAllOpen.value = true;
+};
+
 const runCatalogizeAll = async () => {
-  if (!confirm('Catalogize ALL SCU pages using TurboTopNByIntersection?')) return;
+  catalogizeAllOpen.value = false;
   running.value = true;
 
   try {
@@ -117,10 +132,10 @@ const runCatalogizeAll = async () => {
       apply: true,
     });
     addLog(`Catalogize all complete: processed=${res.data.processed}, catalogized=${res.data.catalogized}`);
-    alert(`SCU pages catalogized: ${res.data.catalogized}`);
+    toast.success(t('admin.catalogizer_catalogize_all_done', { count: res.data.catalogized }));
   } catch (e) {
     console.error('Catalogize all error:', e);
-    alert('Catalogize all failed');
+    toast.error(t('admin.catalogizer_catalogize_all_failed'));
   } finally {
     running.value = false;
   }
@@ -193,7 +208,7 @@ const updateAnchorKeywords = async (catId, newKeywords) => {
     return true;
   } catch (e) {
     console.error('Failed to update anchor_keywords:', e);
-    alert('Failed to update: ' + (e.response?.data?.message || e.message));
+    toast.error(t('admin.catalogizer_update_failed', { error: e.response?.data?.message || e.message }));
     return false;
   }
 };
@@ -205,7 +220,7 @@ const addTokenToCategory = async (catId, token) => {
   if (!cat) return;
   const current = cat.anchor_keywords || [];
   if (current.includes(t)) {
-    alert('Token already exists');
+    toast.info(t('admin.catalogizer_token_exists'));
     return;
   }
   const updated = [...current, t].slice(0, 50);
@@ -276,7 +291,7 @@ onMounted(() => {
       </h1>
       <router-link
         to="/admin"
-        class="text-sm text-gray-500 hover:text-purple-600"
+        class="text-sm text-ink-3 hover:text-purple-600"
       >
         {{ t('admin.back_to_dashboard') || 'Back to Dashboard' }}
       </router-link>
@@ -293,9 +308,9 @@ onMounted(() => {
     </div>
 
     <!-- Category Management -->
-    <div class="mb-6 bg-white rounded-lg shadow-sm p-6">
+    <div class="mb-6 bg-surface rounded-lg shadow-sm p-6">
       <h2 class="font-semibold mb-3">{{ t('admin.catalogizer_category_management') || 'Category Management' }}</h2>
-      <p class="text-sm text-gray-500 mb-3">
+      <p class="text-sm text-ink-3 mb-3">
         {{ t('admin.catalogizer_category_mgmt_desc') || 'Export/import category tree with anchor keywords and attributes.' }}
       </p>
       <div class="flex flex-wrap gap-2">
@@ -312,14 +327,14 @@ onMounted(() => {
           {{ t('admin.catalogizer_import_categories') || 'Import Categories' }}
         </button>
         <button
-          @click="runRelink"
+          @click="askRelink"
           :disabled="running"
           class="px-4 py-2 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
         >
           {{ t('admin.catalogizer_relink_scupages') || 'Relink SCU Pages' }}
         </button>
         <button
-          @click="runCatalogizeAll"
+          @click="askCatalogizeAll"
           :disabled="running"
           class="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
         >
@@ -329,9 +344,9 @@ onMounted(() => {
     </div>
 
     <!-- Test & Tune -->
-    <div class="mb-6 bg-white rounded-lg shadow-sm p-6">
+    <div class="mb-6 bg-surface rounded-lg shadow-sm p-6">
       <h2 class="font-semibold mb-3">Test & Tune</h2>
-      <p class="text-sm text-gray-500 mb-3">
+      <p class="text-sm text-ink-3 mb-3">
         Enter a product name to see how it would be catalogized. You can add/remove tokens directly from the results to tune categories.
       </p>
 
@@ -340,8 +355,8 @@ onMounted(() => {
           v-model="testName"
           @keydown.enter="runTest"
           type="text"
-          placeholder="e.g. Ноутбук ASUS ROG Strix G15"
-          class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+          placeholder="e.g. ASUS ROG Strix G15"
+          class="flex-1 px-3 py-2 border border-line rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
         />
         <button
           @click="runTest"
@@ -355,11 +370,11 @@ onMounted(() => {
       <div v-if="testError" class="mb-3 text-sm text-red-600">{{ testError }}</div>
 
       <div v-if="testResults">
-        <div class="mb-2 text-sm text-gray-600">
+        <div class="mb-2 text-sm text-ink-2">
           Tokens: {{ testResults.tokens?.join(', ') || '—' }}
         </div>
 
-        <div v-if="!testResults.matches || testResults.matches.length === 0" class="text-sm text-gray-500">
+        <div v-if="!testResults.matches || testResults.matches.length === 0" class="text-sm text-ink-3">
           No matches found. Try adding anchor keywords to relevant categories.
         </div>
 
@@ -372,17 +387,17 @@ onMounted(() => {
             <div class="flex justify-between items-center mb-2">
               <div>
                 <span class="font-medium">{{ catDisplayName(getCategoryById(m.NewCategoryID)) || 'Cat #' + m.NewCategoryID }}</span>
-                <span class="ml-2 text-xs text-gray-500">slug: {{ m.NewCategorySlug }}</span>
+                <span class="ml-2 text-xs text-ink-3">slug: {{ m.NewCategorySlug }}</span>
               </div>
               <div class="flex items-center gap-2">
                 <span class="text-sm font-semibold text-purple-700">Score: {{ m.Score }}</span>
-                <span class="text-xs text-gray-500">matched: {{ (m.MatchedTokens||[]).join(', ') }}</span>
+                <span class="text-xs text-ink-3">matched: {{ (m.MatchedTokens||[]).join(', ') }}</span>
               </div>
             </div>
 
             <!-- Current anchor keywords -->
             <div class="mb-2">
-              <div class="text-xs text-gray-500 mb-1">Anchor keywords:</div>
+              <div class="text-xs text-ink-3 mb-1">Anchor keywords:</div>
               <div class="flex flex-wrap gap-1">
                 <span
                   v-for="kw in (getCategoryById(m.NewCategoryID)?.anchor_keywords||[])"
@@ -395,7 +410,7 @@ onMounted(() => {
                     class="text-purple-500 hover:text-red-600 font-bold leading-none"
                   >×</button>
                 </span>
-                <span v-if="!(getCategoryById(m.NewCategoryID)?.anchor_keywords||[]).length" class="text-xs text-gray-400">(none)</span>
+                <span v-if="!(getCategoryById(m.NewCategoryID)?.anchor_keywords||[]).length" class="text-xs text-ink-3">(none)</span>
               </div>
             </div>
 
@@ -404,7 +419,7 @@ onMounted(() => {
               <input
                 type="text"
                 placeholder="Add token (e.g. asus)"
-                class="flex-1 px-2 py-1 text-xs border border-gray-300 rounded"
+                class="flex-1 px-2 py-1 text-xs border border-line rounded"
                 :value="addTokenInputs[m.NewCategoryID] || ''"
                 @input="onAddTokenInput(m.NewCategoryID, $event)"
                 @keydown.enter="handleAddTokenEnter(m.NewCategoryID)"
@@ -420,45 +435,45 @@ onMounted(() => {
     </div>
 
     <!-- Coverage -->
-    <div class="mb-6 bg-white rounded-lg shadow-sm p-6">
+    <div class="mb-6 bg-surface rounded-lg shadow-sm p-6">
       <div class="flex justify-between items-center mb-3">
-        <h2 class="font-semibold">Coverage</h2>
+        <h2 class="font-semibold">{{ t('admin.coverage') }}</h2>
         <button
           @click="fetchCoverage"
           :disabled="coverageLoading"
           class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
         >
-          {{ coverageLoading ? 'Loading...' : 'Refresh' }}
+          {{ coverageLoading ? t('common.loading') : t('admin.refresh') }}
         </button>
       </div>
 
-      <div v-if="!coverageData" class="text-sm text-gray-500">
-        Click Refresh to load coverage statistics.
+      <div v-if="!coverageData" class="text-sm text-ink-3">
+        {{ t('admin.coverage_hint') }}
       </div>
 
       <div v-else>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          <div class="bg-gray-50 rounded p-3">
-            <div class="text-xs text-gray-500">Total categories</div>
+          <div class="bg-surface-2 rounded p-3">
+            <div class="text-xs text-ink-3">{{ t('admin.total_categories') }}</div>
             <div class="text-xl font-bold">{{ coverageData.total_categories || 0 }}</div>
           </div>
           <div class="bg-green-50 rounded p-3">
-            <div class="text-xs text-green-600">With anchor keywords</div>
+            <div class="text-xs text-green-600">{{ t('admin.with_keywords') }}</div>
             <div class="text-xl font-bold text-green-700">{{ coverageData.with_keywords || 0 }}</div>
           </div>
           <div class="bg-yellow-50 rounded p-3">
-            <div class="text-xs text-yellow-600">Empty (no keywords)</div>
+            <div class="text-xs text-yellow-600">{{ t('admin.empty_no_keywords') }}</div>
             <div class="text-xl font-bold text-yellow-700">{{ coverageData.empty || 0 }}</div>
           </div>
           <div class="bg-blue-50 rounded p-3">
-            <div class="text-xs text-blue-600">Active</div>
+            <div class="text-xs text-blue-600">{{ t('admin.active_categories') }}</div>
             <div class="text-xl font-bold text-blue-700">{{ coverageData.active || 0 }}</div>
           </div>
         </div>
 
         <!-- Categories with few tokens -->
         <div v-if="coverageData.few_tokens && coverageData.few_tokens.length" class="mb-3">
-          <div class="text-sm font-medium mb-1">Categories with < 5 tokens:</div>
+          <div class="text-sm font-medium mb-1">{{ t('admin.few_tokens') }}:</div>
           <div class="flex flex-wrap gap-1">
             <span
               v-for="c in coverageData.few_tokens"
@@ -472,7 +487,7 @@ onMounted(() => {
 
         <!-- Categories with many tokens -->
         <div v-if="coverageData.many_tokens && coverageData.many_tokens.length">
-          <div class="text-sm font-medium mb-1">Categories with > 30 tokens:</div>
+          <div class="text-sm font-medium mb-1">{{ t('admin.many_tokens') }}:</div>
           <div class="flex flex-wrap gap-1">
             <span
               v-for="c in coverageData.many_tokens"
@@ -487,12 +502,12 @@ onMounted(() => {
     </div>
 
     <!-- Form -->
-    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+    <div class="bg-surface rounded-lg shadow-sm p-6 mb-6">
       <h2 class="font-semibold mb-4">{{ t('admin.catalogizer_settings') || 'Settings' }}</h2>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">
+          <label class="block text-sm font-medium text-ink-2 mb-1">
             {{ t('admin.catalogizer_limit') || 'Max products to process' }}
           </label>
           <input
@@ -500,17 +515,17 @@ onMounted(() => {
             type="number"
             min="1"
             max="1000000"
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            class="w-full px-3 py-2 border border-line rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">
+          <label class="block text-sm font-medium text-ink-2 mb-1">
             {{ t('admin.catalogizer_category') || 'Category (optional)' }}
           </label>
           <select
             v-model="form.category_id"
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            class="w-full px-3 py-2 border border-line rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
           >
             <option value="">{{ t('admin.catalogizer_all_categories') || 'All categories' }}</option>
             <option
@@ -524,12 +539,12 @@ onMounted(() => {
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">
+          <label class="block text-sm font-medium text-ink-2 mb-1">
             {{ t('admin.catalogizer_company') || 'Company (optional)' }}
           </label>
           <select
             v-model="form.company_id"
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            class="w-full px-3 py-2 border border-line rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
           >
             <option value="">{{ t('admin.catalogizer_all_companies') || 'All companies' }}</option>
             <option
@@ -547,13 +562,13 @@ onMounted(() => {
             <input
               v-model="form.apply"
               type="checkbox"
-              class="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+              class="rounded border-line text-purple-600 focus:ring-purple-500"
             />
-            <span class="text-sm font-medium text-gray-700">
+            <span class="text-sm font-medium text-ink-2">
               {{ t('admin.catalogizer_apply') || 'Apply changes' }}
             </span>
           </label>
-          <p class="text-xs text-gray-500 mt-1">
+          <p class="text-xs text-ink-3 mt-1">
             {{ t('admin.catalogizer_apply_hint') || 'If unchecked, only shows recommendations without changing categories.' }}
           </p>
         </div>
@@ -575,12 +590,12 @@ onMounted(() => {
     </div>
 
     <!-- Results -->
-    <div v-if="results" class="bg-white rounded-lg shadow-sm p-6">
+    <div v-if="results" class="bg-surface rounded-lg shadow-sm p-6">
       <h2 class="font-semibold mb-4">{{ t('admin.catalogizer_results') || 'Results' }}</h2>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-        <div class="bg-gray-50 rounded-lg p-4">
-          <div class="text-sm text-gray-500">{{ t('admin.catalogizer_processed') || 'Processed' }}</div>
+        <div class="bg-surface-2 rounded-lg p-4">
+          <div class="text-sm text-ink-3">{{ t('admin.catalogizer_processed') || 'Processed' }}</div>
           <div class="text-2xl font-bold">{{ results.processed }}</div>
         </div>
         <div class="bg-green-50 rounded-lg p-4">
@@ -600,13 +615,13 @@ onMounted(() => {
         </h3>
         <div class="overflow-x-auto">
           <table class="w-full text-xs">
-            <thead class="bg-gray-50">
+            <thead class="bg-surface-2">
               <tr>
-                <th class="px-3 py-2 text-left">Product ID</th>
-                <th class="px-3 py-2 text-left">Old Category</th>
-                <th class="px-3 py-2 text-left">New Category</th>
-                <th class="px-3 py-2 text-left">Score</th>
-                <th class="px-3 py-2 text-left">Keywords</th>
+                <th scope="col" class="px-3 py-2 text-left">Product ID</th>
+                <th scope="col" class="px-3 py-2 text-left">Old Category</th>
+                <th scope="col" class="px-3 py-2 text-left">New Category</th>
+                <th scope="col" class="px-3 py-2 text-left">Score</th>
+                <th scope="col" class="px-3 py-2 text-left">Keywords</th>
               </tr>
             </thead>
             <tbody>
@@ -625,7 +640,7 @@ onMounted(() => {
                   <span
                     v-for="kw in r.matched_keywords || []"
                     :key="kw"
-                    class="inline-block px-1 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] mr-1"
+                    class="inline-block px-1 py-0.5 bg-purple-100 text-purple-700 rounded text-[11px] mr-1"
                   >
                     {{ kw }}
                   </span>
@@ -636,5 +651,25 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      :open="relinkOpen"
+      :title="t('admin.catalogizer_relink_scupages')"
+      :message="t('admin.catalogizer_relink_confirm')"
+      :confirm-text="t('admin.save')"
+      :cancel-text="t('admin.cancel')"
+      @confirm="runRelink"
+      @cancel="relinkOpen = false"
+    />
+
+    <ConfirmDialog
+      :open="catalogizeAllOpen"
+      :title="t('admin.catalogizer_catalogize_all_scupages')"
+      :message="t('admin.catalogizer_catalogize_all_confirm')"
+      :confirm-text="t('admin.save')"
+      :cancel-text="t('admin.cancel')"
+      @confirm="runCatalogizeAll"
+      @cancel="catalogizeAllOpen = false"
+    />
   </div>
 </template>

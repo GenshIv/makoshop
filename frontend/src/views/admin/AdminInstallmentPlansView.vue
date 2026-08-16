@@ -2,8 +2,11 @@
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import api from '../../api';
+import { useToast } from '../../composables/useToast';
+import ConfirmDialog from '../../components/ConfirmDialog.vue';
 
 const { t } = useI18n();
+const { toast } = useToast();
 
 const items = ref([]);
 const loading = ref(false);
@@ -55,7 +58,7 @@ const openEdit = (item) => {
 
 const save = async () => {
   if (!form.value.name) {
-    alert(t('admin.name_required'));
+    toast.error(t('admin.name_required'));
     return;
   }
   try {
@@ -67,17 +70,23 @@ const save = async () => {
     resetForm();
     await fetchItems();
   } catch (e) {
-    alert(e.response?.data?.message || 'Save error');
+    toast.error(e.response?.data?.message || 'Save error');
   }
 };
 
+const removeItem = ref(null);
+
+const askRemove = (item) => {
+  removeItem.value = item;
+};
+
 const remove = async (item) => {
-  if (!confirm(`Delete "${item.name}"?`)) return;
+  removeItem.value = null;
   try {
     await api.delete(`/admin/installment-plans/${item.id}`);
     await fetchItems();
   } catch (e) {
-    alert(e.response?.data?.message || 'Delete error');
+    toast.error(e.response?.data?.message || 'Delete error');
   }
 };
 
@@ -96,56 +105,76 @@ onMounted(fetchItems);
     <div v-if="error" class="mb-3 text-sm text-red-600">{{ error }}</div>
 
     <!-- Form -->
-    <div v-if="showForm" class="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+    <div v-if="showForm" class="mb-4 p-3 bg-surface-2 rounded-lg border border-line">
       <div class="text-sm font-medium mb-2">
         {{ editingId ? t('admin.edit') : t('admin.create') }}
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-        <input v-model="form.name" placeholder="Name" class="px-2 py-1.5 text-sm border rounded" />
-        <input v-model="form.slug" placeholder="Slug" class="px-2 py-1.5 text-sm border rounded" />
-        <div class="flex items-center gap-2">
-          <input v-model="form.is_active" type="checkbox" class="h-4 w-4" />
-          <label class="text-sm">{{ t('admin.active') }}</label>
+        <div>
+          <label class="sr-only" for="ip-name">{{ t('common.name') }}</label>
+          <input id="ip-name" v-model="form.name" :placeholder="t('common.name')" class="px-2 py-1.5 text-sm border rounded w-full" />
         </div>
-        <input v-model.number="form.sort_order" type="number" placeholder="Sort order" class="px-2 py-1.5 text-sm border rounded" />
+        <div>
+          <label class="sr-only" for="ip-slug">{{ t('common.slug') }}</label>
+          <input id="ip-slug" v-model="form.slug" :placeholder="t('common.slug')" class="px-2 py-1.5 text-sm border rounded w-full" />
+        </div>
+        <div class="flex items-center gap-2">
+          <input id="ip-active" v-model="form.is_active" type="checkbox" class="h-4 w-4" />
+          <label for="ip-active" class="text-sm">{{ t('admin.active') }}</label>
+        </div>
+        <div>
+          <label class="sr-only" for="ip-sort">{{ t('admin.sort_order') }}</label>
+          <input id="ip-sort" v-model.number="form.sort_order" type="number" :placeholder="t('admin.sort_order')" class="px-2 py-1.5 text-sm border rounded w-full" />
+        </div>
       </div>
       <div class="flex gap-2">
         <button @click="save" class="px-3 py-1.5 text-sm rounded-md bg-purple-600 text-white hover:bg-purple-700">
           {{ t('admin.save') }}
         </button>
-        <button @click="resetForm" class="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-50">
+        <button @click="resetForm" class="px-3 py-1.5 text-sm rounded-md border border-line bg-surface hover:bg-surface-2">
           {{ t('admin.cancel') }}
         </button>
       </div>
     </div>
 
     <!-- List -->
-    <div v-if="loading" class="text-sm text-gray-500">Loading...</div>
+    <div v-if="loading" class="text-sm text-ink-3">{{ t('common.loading') }}</div>
     <table v-else class="min-w-full text-sm">
       <thead class="border-b">
         <tr>
-          <th class="text-left py-2 px-2">Name</th>
-          <th class="text-left py-2 px-2">Slug</th>
-          <th class="text-left py-2 px-2">Active</th>
-          <th class="text-left py-2 px-2">Order</th>
-          <th class="text-left py-2 px-2">Actions</th>
+          <th scope="col" class="text-left py-2 px-2">{{ t('common.name') }}</th>
+          <th scope="col" class="text-left py-2 px-2">{{ t('common.slug') }}</th>
+          <th scope="col" class="text-left py-2 px-2">{{ t('admin.active') }}</th>
+          <th scope="col" class="text-left py-2 px-2">{{ t('admin.order') }}</th>
+          <th scope="col" class="text-left py-2 px-2">{{ t('admin.actions') }}</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="item in items" :key="item.id" class="border-b">
           <td class="py-2 px-2">{{ item.name }}</td>
-          <td class="py-2 px-2 text-gray-500">{{ item.slug }}</td>
-          <td class="py-2 px-2">{{ item.is_active ? 'Yes' : 'No' }}</td>
+          <td class="py-2 px-2 text-ink-3">{{ item.slug }}</td>
+          <td class="py-2 px-2">{{ item.is_active ? t('common.yes') : t('common.no') }}</td>
           <td class="py-2 px-2">{{ item.sort_order }}</td>
           <td class="py-2 px-2 flex gap-2">
-            <button @click="openEdit(item)" class="text-xs text-purple-700 hover:underline">Edit</button>
-            <button @click="remove(item)" class="text-xs text-red-600 hover:underline">Delete</button>
+            <button @click="openEdit(item)" class="text-xs text-purple-700 hover:underline">{{ t('admin.edit') }}</button>
+            <button @click="askRemove(item)" class="text-xs text-red-600 hover:underline">{{ t('admin.delete') }}</button>
           </td>
         </tr>
         <tr v-if="items.length === 0">
-          <td colspan="5" class="py-4 text-sm text-gray-500">No items yet.</td>
+          <td colspan="5" class="py-4 text-sm text-ink-3">{{ t('admin.no_items') }}</td>
         </tr>
       </tbody>
     </table>
+
+    <ConfirmDialog
+      :open="removeItem !== null"
+      :title="t('admin.installment_plans_title')"
+      :message="removeItem ? t('admin.delete_item_confirm', { name: removeItem.name }) : ''"
+      variant="danger"
+      :confirm-text="t('admin.delete')"
+      :cancel-text="t('admin.cancel')"
+      @confirm="remove(removeItem)"
+      @cancel="removeItem = null"
+    />
   </div>
 </template>

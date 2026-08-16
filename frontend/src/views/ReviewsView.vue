@@ -4,17 +4,15 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
 import { useAuthStore } from '../stores/auth';
+import { useFormat } from '../composables/useFormat';
 
 const router = useRouter();
 const auth = useAuthStore();
 const { t } = useI18n();
+const { formatDate } = useFormat();
 const reviews = ref([]);
 const loading = ref(true);
 const error = ref(null);
-
-const formatDate = (dateStr) => {
-  return new Date(dateStr).toLocaleDateString('ru-RU');
-};
 
 const fetchReviews = async () => {
   loading.value = true;
@@ -49,13 +47,13 @@ onMounted(fetchReviews);
     </div>
 
     <!-- Empty -->
-    <div v-else-if="reviews.length === 0" class="text-center py-12 text-gray-500">
+    <div v-else-if="reviews.length === 0" class="text-center py-12 text-ink-3">
       {{ t('reviews.no_reviews') }}
     </div>
 
     <!-- Reviews list -->
     <div v-else class="space-y-4">
-      <div v-for="review in reviews" :key="review.id" class="bg-white rounded-lg shadow-sm p-4">
+      <div v-for="review in reviews" :key="review.id" class="bg-surface rounded-lg shadow-sm p-4">
         <div class="flex items-center justify-between mb-2">
           <router-link
             :to="{ name: 'product', params: { id: review.product_id } }"
@@ -65,8 +63,8 @@ onMounted(fetchReviews);
           </router-link>
           <span class="text-yellow-500">{{ '★'.repeat(review.rating) }}</span>
         </div>
-        <p class="text-sm text-gray-700">{{ review.comment }}</p>
-        <div class="mt-2 text-xs text-gray-400">{{ formatDate(review.created_at) }}</div>
+        <p class="text-sm text-ink-2">{{ review.comment }}</p>
+        <div class="mt-2 text-xs text-ink-3">{{ formatDate(review.created_at) }}</div>
       </div>
     </div>
   </div>

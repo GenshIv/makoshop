@@ -4,17 +4,19 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../../api';
 import { useAuthStore } from '../../stores/auth';
+import { useFormat } from '../../composables/useFormat';
+import { useToast } from '../../composables/useToast';
+import ConfirmDialog from '../../components/ConfirmDialog.vue';
 
 const router = useRouter();
 const auth = useAuthStore();
 const { t } = useI18n();
+const { formatPrice } = useFormat();
+const { toast } = useToast();
 const products = ref([]);
+const deleteProductId = ref(null);
 const loading = ref(true);
 const error = ref(null);
-
-const formatPrice = (price) => {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
-};
 
 const fetchProducts = async () => {
   loading.value = true;
@@ -39,13 +41,18 @@ const fetchProducts = async () => {
   }
 };
 
+const askDeleteProduct = (id) => {
+  deleteProductId.value = id;
+};
+
 const deleteProduct = async (id) => {
-  if (!confirm(t('seller.delete_confirm'))) return;
+  deleteProductId.value = null;
   try {
     await api.delete(`/products/${id}`);
     products.value = products.value.filter(p => p.id !== id);
+    toast.success(t('seller.product_deleted') || t('seller.delete_error'));
   } catch (e) {
-    alert(e.response?.data?.message || t('seller.delete_error'));
+    toast.error(e.response?.data?.message || t('seller.delete_error'));
   }
 };
 
@@ -72,7 +79,7 @@ onMounted(fetchProducts);
     </div>
 
     <!-- Empty -->
-    <div v-else-if="products.length === 0" class="text-center py-12 text-gray-500">
+    <div v-else-if="products.length === 0" class="text-center py-12 text-ink-3">
       {{ t('seller.no_products') }}
       <router-link to="/seller/products/new" class="block mt-2 text-indigo-600 hover:underline">
         {{ t('seller.add_first_product') }}
@@ -80,26 +87,28 @@ onMounted(fetchProducts);
     </div>
 
     <!-- Products table -->
-    <div v-else class="bg-white rounded-lg shadow-sm overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50">
+    <div v-else class="bg-surface rounded-lg shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+      <table class="w-full text-sm min-w-[600px]">
+        <caption class="sr-only">{{ t('tables.seller_products') }}</caption>
+        <thead class="bg-surface-2">
           <tr>
-            <th class="px-4 py-3 text-left">ID</th>
-            <th class="px-4 py-3 text-left">{{ t('seller.name') }}</th>
-            <th class="px-4 py-3 text-left">SKU</th>
-            <th class="px-4 py-3 text-left">{{ t('seller.price') }}</th>
-            <th class="px-4 py-3 text-left">{{ t('seller.status') }}</th>
-            <th class="px-4 py-3 text-right">{{ t('seller.actions') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">ID</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('seller.name') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">SKU</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('seller.price') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('seller.status') }}</th>
+            <th scope="col" class="px-4 py-3 text-right">{{ t('seller.actions') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="product in products" :key="product.id" class="border-t hover:bg-gray-50">
+          <tr v-for="product in products" :key="product.id" class="border-t hover:bg-surface-2">
             <td class="px-4 py-3">{{ product.id }}</td>
             <td class="px-4 py-3">{{ product.name }}</td>
-            <td class="px-4 py-3 text-gray-500">{{ product.sku }}</td>
+            <td class="px-4 py-3 text-ink-3">{{ product.sku }}</td>
             <td class="px-4 py-3">{{ formatPrice(product.price) }}</td>
             <td class="px-4 py-3">
-              <span :class="product.status === 'active' ? 'text-green-600' : 'text-gray-500'">
+              <span :class="product.status === 'active' ? 'text-green-600' : 'text-ink-3'">
                 {{ product.status }}
               </span>
             </td>
@@ -107,13 +116,25 @@ onMounted(fetchProducts);
               <router-link :to="{ name: 'seller-product-edit', params: { id: product.id } }" class="text-indigo-600 hover:underline mr-3">
                 {{ t('seller.edit') }}
               </router-link>
-              <button @click="deleteProduct(product.id)" class="text-red-600 hover:underline">
+              <button @click="askDeleteProduct(product.id)" class="text-red-600 hover:underline">
                 {{ t('seller.delete') }}
               </button>
             </td>
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
+
+    <ConfirmDialog
+      :open="deleteProductId !== null"
+      :title="t('seller.title')"
+      :message="t('seller.delete_confirm')"
+      variant="danger"
+      :confirm-text="t('seller.delete')"
+      :cancel-text="t('common.cancel')"
+      @confirm="deleteProduct(deleteProductId)"
+      @cancel="deleteProductId = null"
+    />
   </div>
 </template>

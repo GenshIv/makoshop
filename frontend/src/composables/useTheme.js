@@ -1,4 +1,4 @@
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 
 const THEME_KEY = 'makoshop_theme';
 const THEMES = {
@@ -21,13 +21,30 @@ function applyTheme(activeTheme) {
   root.classList.add(`theme-${activeTheme}`);
 }
 
+function getSavedTheme() {
+  try {
+    return localStorage.getItem(THEME_KEY) || THEMES.AUTO;
+  } catch {
+    return THEMES.AUTO;
+  }
+}
+
 export function useTheme() {
-  const theme = ref(THEMES.LIGHT);
-  const activeTheme = ref(THEMES.LIGHT);
+  // Theme is applied to <html> before paint (see index.html), so initial
+  // value must match what's already on the DOM to avoid a flash.
+  const initial = getSavedTheme();
+  const theme = ref(initial);
+  const activeTheme = ref(
+    initial === THEMES.AUTO ? getSystemTheme() : initial
+  );
 
   const setTheme = (value) => {
     theme.value = value;
-    localStorage.setItem(THEME_KEY, value);
+    try {
+      localStorage.setItem(THEME_KEY, value);
+    } catch {
+      // ignore (private mode)
+    }
     updateActiveTheme();
   };
 
@@ -48,21 +65,27 @@ export function useTheme() {
     }
   };
 
+  let mediaQuery = null;
   onMounted(() => {
-    // Load saved theme or default to auto
-    const saved = localStorage.getItem(THEME_KEY);
-    theme.value = saved || THEMES.AUTO;
-
-    // Listen to system theme changes
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     try {
       mediaQuery.addEventListener('change', handleSystemThemeChange);
     } catch (e) {
       // Older browsers
       mediaQuery.addListener(handleSystemThemeChange);
     }
-
+    // Sync in case the user changed system theme while the app was open
     updateActiveTheme();
+  });
+
+  onBeforeUnmount(() => {
+    if (mediaQuery) {
+      try {
+        mediaQuery.removeEventListener('change', handleSystemThemeChange);
+      } catch (e) {
+        mediaQuery.removeListener(handleSystemThemeChange);
+      }
+    }
   });
 
   watch(theme, () => {

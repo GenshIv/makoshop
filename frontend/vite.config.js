@@ -16,6 +16,12 @@ const forwardResponseTimeHeader = (proxyReq, req, res) => {
 
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
+  build: {
+    // apexcharts (AdminStatsView) is a large third-party charting library that
+    // is code-split into its own lazy chunk. Raise the warning threshold so the
+    // build reports cleanly; the initial bundle stays well under 500 kB.
+    chunkSizeWarningLimit: 1000,
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,

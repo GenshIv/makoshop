@@ -95,8 +95,21 @@ export const useCartStore = defineStore('cart', {
         // Backend does not support DELETE; use PATCH with qty=0
         await api.patch(`/cart/${this.cartId}/items/${productId}`, { qty: 0 });
         await this.fetchCart();
+        return true;
       } catch (e) {
         console.error('Remove cart item error:', e);
+        return false;
+      }
+    },
+
+    // Restore a previously removed item (used by Undo toast)
+    async restoreItem(productId, qty = 1) {
+      if (!this.cartId) return;
+      try {
+        await api.patch(`/cart/${this.cartId}/items/${productId}`, { qty });
+        await this.fetchCart();
+      } catch (e) {
+        console.error('Restore cart item error:', e);
       }
     },
 

@@ -1,7 +1,7 @@
 <script setup>
 import { useI18n } from 'vue-i18n';
 
-const { locale } = useI18n();
+const { locale, t } = useI18n();
 
 const props = defineProps({
   category: { type: Object, required: true },
@@ -38,8 +38,8 @@ defineOptions({ name: 'CategoryTreeNode' });
       <button
         v-if="hasChildren"
         @click.stop="emit('toggle', category)"
-        class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded text-xs transition"
-        :aria-label="expanded.has(category.id) ? 'Свернуть' : 'Развернуть'"
+        class="w-5 h-5 flex items-center justify-center text-ink-3 hover:text-ink-2 hover:bg-surface-2 rounded text-xs transition"
+        :aria-label="expanded.has(category.id) ? t('common.collapse') : t('common.expand')"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -59,20 +59,20 @@ defineOptions({ name: 'CategoryTreeNode' });
       <button
         @click="emit('go', category)"
         class="flex-1 flex items-center justify-between px-2 py-1.5 rounded-md text-left text-sm transition cursor-pointer
-          hover:bg-indigo-50 theme-dark:hover:bg-slate-800
-          text-gray-700 theme-dark:text-gray-200
+          hover:bg-indigo-50 dark:hover:bg-slate-800
+          text-ink-2
           focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
         :class="{
           'bg-indigo-600 text-white font-semibold shadow-sm': isActive(),
-          'bg-indigo-50 text-indigo-700 font-medium theme-dark:bg-slate-800 theme-dark:text-white': isActive()
+          'bg-indigo-50 text-indigo-700 font-medium dark:bg-slate-800 dark:text-white': isActive()
         }"
       >
         <span class="truncate">{{ catName(category) }}</span>
         <span
           v-if="category.products_count != null && category.products_count > 0"
-          class="ml-1.5 text-[10px] opacity-80"
+          class="ml-1.5 text-[11px] opacity-80"
         >
-          ({{ Number(category.products_count).toLocaleString('ru-RU') }})
+          ({{ Number(category.products_count).toLocaleString() }})
         </span>
       </button>
     </div>
@@ -80,7 +80,7 @@ defineOptions({ name: 'CategoryTreeNode' });
     <!-- Children list -->
     <ul
       v-if="expanded.has(category.id) && children.length > 0"
-      class="ml-5 mt-0.5 space-y-0.5 border-l border-gray-200 pl-2"
+      class="ml-5 mt-0.5 space-y-0.5 border-l border-line pl-2"
     >
       <CategoryTreeNode
         v-for="child in children"

@@ -2,8 +2,12 @@
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import api from '../../api';
+import { useToast } from '../../composables/useToast';
+import { useFormat } from '../../composables/useFormat';
 
 const { t } = useI18n();
+const { toast } = useToast();
+const { formatDate } = useFormat();
 
 const users = ref([]);
 const loading = ref(true);
@@ -29,7 +33,7 @@ const updateUserStatus = async (id, status) => {
     const user = users.value.find(u => u.id === id);
     if (user) user.status = status;
   } catch (e) {
-    alert(e.response?.data?.message || t('admin.error'));
+    toast.error(e.response?.data?.message || t('admin.error'));
   }
 };
 
@@ -48,20 +52,22 @@ onMounted(fetchUsers);
       {{ error }}
     </div>
 
-    <div v-else class="bg-white rounded-lg shadow-sm overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50">
+    <div v-else class="bg-surface rounded-lg shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+      <table class="w-full text-sm min-w-[640px]">
+        <caption class="sr-only">{{ t('tables.admin_users') }}</caption>
+        <thead class="bg-surface-2">
           <tr>
-            <th class="px-4 py-3 text-left">ID</th>
-            <th class="px-4 py-3 text-left">{{ t('common.email') }}</th>
-            <th class="px-4 py-3 text-left">{{ t('admin.role') }}</th>
-            <th class="px-4 py-3 text-left">{{ t('admin.status') }}</th>
-            <th class="px-4 py-3 text-left">{{ t('admin.created') }}</th>
-            <th class="px-4 py-3 text-right">{{ t('admin.actions') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">ID</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('common.email') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('admin.role') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('admin.status') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('admin.created') }}</th>
+            <th scope="col" class="px-4 py-3 text-right">{{ t('admin.actions') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="user in users" :key="user.id" class="border-t hover:bg-gray-50">
+          <tr v-for="user in users" :key="user.id" class="border-t hover:bg-surface-2">
             <td class="px-4 py-3">{{ user.id }}</td>
             <td class="px-4 py-3">{{ user.email }}</td>
             <td class="px-4 py-3">
@@ -69,7 +75,7 @@ onMounted(fetchUsers);
                 :class="{
                   'bg-purple-100 text-purple-700': user.role === 'admin',
                   'bg-blue-100 text-blue-700': user.role === 'seller',
-                  'bg-gray-100 text-gray-700': user.role === 'buyer',
+                  'bg-surface-2 text-ink-2': user.role === 'buyer',
                 }">
                 {{ user.role }}
               </span>
@@ -78,15 +84,15 @@ onMounted(fetchUsers);
               <select
                 v-model="user.status"
                 @change="updateUserStatus(user.id, user.status)"
-                class="px-2 py-1 border border-gray-300 rounded text-xs"
+                class="px-2 py-1 border border-line rounded text-xs"
               >
-                <option value="active">Active</option>
-                <option value="pending">Pending</option>
-                <option value="blocked">Blocked</option>
+                <option value="active">{{ t('admin.user_status_active') }}</option>
+                <option value="pending">{{ t('admin.user_status_pending') }}</option>
+                <option value="blocked">{{ t('admin.user_status_blocked') }}</option>
               </select>
             </td>
-            <td class="px-4 py-3 text-gray-500 text-xs">
-              {{ user.created_at ? new Date(user.created_at).toLocaleDateString('ru-RU') : '—' }}
+            <td class="px-4 py-3 text-ink-3 text-xs">
+              {{ user.created_at ? formatDate(user.created_at) : '—' }}
             </td>
             <td class="px-4 py-3 text-right">
               <button class="text-indigo-600 hover:underline text-xs">{{ t('admin.details') }}</button>
@@ -94,6 +100,7 @@ onMounted(fetchUsers);
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
   </div>
 </template>

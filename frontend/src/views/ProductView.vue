@@ -4,7 +4,13 @@ import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
 import { useCartStore } from '../stores/cart';
+import { useToast } from '../composables/useToast';
+import { useFormat } from '../composables/useFormat';
+import { useSeo } from '../composables/useSeo';
 import Breadcrumbs from '../components/Breadcrumbs.vue';
+
+const { toast } = useToast();
+const { formatPrice, formatDate } = useFormat();
 
 const route = useRoute();
 const router = useRouter();
@@ -12,6 +18,12 @@ const cart = useCartStore();
 const { t, locale } = useI18n();
 
 const product = ref(null);
+
+useSeo({
+  title: computed(() => (product.value?.name ? `${product.value.name} — MakoShop` : t('pages.product_title'))),
+  description: computed(() => product.value?.description || t('pages.default_description')),
+  image: computed(() => product.value?.images?.[0] || null),
+});
 const reviews = ref([]);
 const reviewsPagination = reactive({ page: 1, per_page: 10, total: 0, total_pages: 0 });
 const loading = ref(true);
@@ -22,14 +34,19 @@ const categoryPath = ref([]); // [{id, name}, ...]
 const reviewForm = reactive({ rating: 5, comment: '' });
 const submittingReview = ref(false);
 
+// Visual 5-star rating based on the average (0..5)
+const starRating = computed(() => {
+  const avg = Number(product.value?.avg_rating) || 0;
+  const filled = Math.round(avg);
+  return Array.from({ length: 5 }, (_, i) => i < filled);
+});
+
 const fetchProduct = async () => {
   loading.value = true;
   try {
     const response = await api.get(`/products/${route.params.id}`);
     product.value = response.data;
     currentImageIndex.value = 0;
-    // Update page title
-    document.title = `${product.value.name} — MakoShop`;
     // Fetch category path if product has category_id
     if (product.value.category_id) {
       await fetchCategoryPath(product.value.category_id);
@@ -79,23 +96,10 @@ const fetchReviews = async () => {
 const addToCart = async () => {
   try {
     await cart.addItem(product.value.id, 1);
-    addToast(t('cart.added_to_cart'), 'success');
+    toast.success(t('cart.added_to_cart'));
   } catch (e) {
-    addToast(e.response?.data?.message || t('cart.add_to_cart_error'), 'error');
+    toast.error(e.response?.data?.message || t('cart.add_to_cart_error'));
   }
-};
-
-const addToast = (message, type = 'success') => {
-  const toast = document.createElement('div');
-  toast.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg shadow-lg text-sm z-50 transition-opacity ${
-    type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-  }`;
-  toast.textContent = message;
-  document.body.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 300);
-  }, 2000);
 };
 
 const isInStock = () => {
@@ -104,7 +108,7 @@ const isInStock = () => {
 
 const submitReview = async () => {
   if (!reviewForm.comment.trim()) {
-    alert(t('product.add_comment_prompt'));
+    toast.error(t('product.add_comment_prompt'));
     return;
   }
   submittingReview.value = true;
@@ -117,15 +121,12 @@ const submitReview = async () => {
     reviewForm.rating = 5;
     await fetchReviews();
     await fetchProduct();
+    toast.success(t('product.review_saved'));
   } catch (e) {
-    alert(e.response?.data?.message || t('product.review_error'));
+    toast.error(e.response?.data?.message || t('product.review_error'));
   } finally {
     submittingReview.value = false;
   }
-};
-
-const formatPrice = (price) => {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
 };
 
 // Get localized attribute label
@@ -170,14 +171,16 @@ onMounted(() => {
     <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-8">
       <!-- Images -->
       <div>
-        <div class="bg-gray-100 rounded-lg overflow-hidden aspect-square">
+        <div class="bg-surface-2 rounded-lg overflow-hidden aspect-square">
           <img
             v-if="product.images?.length"
             :src="product.images[currentImageIndex]"
             :alt="product.name"
+            loading="lazy"
+            decoding="async"
             class="w-full h-full object-cover"
           />
-          <div v-else class="w-full h-full flex items-center justify-center text-gray-400">
+          <div v-else class="w-full h-full flex items-center justify-center text-ink-3">
             {{ t('common.no_photo') }}
           </div>
         </div>
@@ -187,6 +190,8 @@ onMounted(() => {
             v-for="(img, idx) in product.images"
             :key="idx"
             :src="img"
+            loading="lazy"
+            decoding="async"
             @click="currentImageIndex = idx"
             :class="[
               'w-16 h-16 object-cover rounded border-2 cursor-pointer transition',
@@ -201,8 +206,8 @@ onMounted(() => {
       <!-- Info -->
       <div>
         <h1 class="text-2xl font-bold">{{ product.name }}</h1>
-        <div v-if="product.sku" class="text-sm text-gray-500 mt-1">SKU: {{ product.sku }}</div>
-        <div v-if="product.description" class="mt-4 text-gray-700 whitespace-pre-line text-sm">
+        <div v-if="product.sku" class="text-sm text-ink-3 mt-1">SKU: {{ product.sku }}</div>
+        <div v-if="product.description" class="mt-4 text-ink-2 whitespace-pre-line text-sm">
           {{ product.description }}
         </div>
 
@@ -216,9 +221,11 @@ onMounted(() => {
 
         <!-- Rating -->
         <div v-if="product.avg_rating !== undefined && product.avg_rating !== null" class="mt-2 flex items-center gap-2">
-          <span class="text-yellow-500">★</span>
+          <span class="flex" role="img" :aria-label="t('catalog.rating_value', { value: product.avg_rating.toFixed(1) })">
+            <span v-for="(isFilled, i) in starRating" :key="i" class="text-lg leading-none" :class="isFilled ? 'text-yellow-400' : 'text-ink-3'">★</span>
+          </span>
           <span class="font-medium">{{ product.avg_rating.toFixed(1) }}</span>
-          <span class="text-sm text-gray-500">{{ t('catalog.reviews_count', { count: product.review_count || 0 }) }}</span>
+          <span class="text-sm text-ink-3">{{ t('catalog.reviews_count', { count: product.review_count || 0 }) }}</span>
         </div>
 
         <!-- Add to cart -->
@@ -232,10 +239,10 @@ onMounted(() => {
 
         <!-- Attributes -->
         <div v-if="product.attrs && Object.keys(product.attrs).length" class="mt-6">
-          <h3 class="font-medium text-gray-700">{{ t('catalog.characteristics') }}</h3>
+          <h3 class="font-medium text-ink-2">{{ t('catalog.characteristics') }}</h3>
           <dl class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
             <div v-for="(value, key) in product.attrs" :key="key" class="flex flex-col sm:flex-row sm:items-center">
-              <dt class="text-gray-500 text-xs sm:text-sm">{{ attrLabel(key) }}</dt>
+              <dt class="text-ink-3 text-xs sm:text-sm">{{ attrLabel(key) }}</dt>
               <dd class="sm:ml-2 text-sm">{{ value }}</dd>
             </div>
           </dl>
@@ -248,7 +255,7 @@ onMounted(() => {
       <h2 class="text-xl font-bold mb-4">{{ t('catalog.reviews') }} ({{ reviewsPagination.total }})</h2>
 
       <!-- Write review -->
-      <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
+      <div class="bg-surface rounded-lg shadow-sm p-4 mb-6">
         <h3 class="font-medium mb-3">{{ t('catalog.write_review') }}</h3>
         <div class="flex items-center gap-2 mb-3">
           <span class="text-sm">{{ t('catalog.rating') }}:</span>
@@ -260,7 +267,7 @@ onMounted(() => {
           v-model="reviewForm.comment"
           rows="3"
           :placeholder="t('catalog.review_placeholder')"
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          class="w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         ></textarea>
         <button
           @click="submitReview"
@@ -272,11 +279,11 @@ onMounted(() => {
       </div>
 
       <!-- Reviews list -->
-      <div v-if="reviews.length === 0" class="text-gray-500 text-sm">
+      <div v-if="reviews.length === 0" class="text-ink-3 text-sm">
         {{ t('catalog.no_reviews_yet') }}
       </div>
       <div v-else class="space-y-4">
-        <div v-for="review in reviews" :key="review.id" class="bg-white rounded-lg shadow-sm p-4">
+        <div v-for="review in reviews" :key="review.id" class="bg-surface rounded-lg shadow-sm p-4">
           <div class="flex items-center justify-between flex-wrap gap-1">
             <div class="flex items-center gap-2">
               <span class="font-medium text-sm">{{ review.user_name || t('catalog.user') }}</span>
@@ -284,9 +291,9 @@ onMounted(() => {
                 {{ '★'.repeat(review.rating) }}
               </span>
             </div>
-            <span class="text-xs text-gray-400">{{ new Date(review.created_at).toLocaleDateString('ru-RU') }}</span>
+            <span class="text-xs text-ink-3">{{ formatDate(review.created_at) }}</span>
           </div>
-          <p class="mt-2 text-sm text-gray-700">{{ review.comment }}</p>
+          <p class="mt-2 text-sm text-ink-2">{{ review.comment }}</p>
         </div>
       </div>
 
@@ -295,7 +302,7 @@ onMounted(() => {
         <button
           @click="() => { reviewsPagination.page--; fetchReviews(); }"
           :disabled="reviewsPagination.page <= 1"
-          class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-40 hover:bg-gray-50"
+          class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-40 hover:bg-surface-2"
         >
           {{ t('common.back') }}
         </button>
@@ -305,7 +312,7 @@ onMounted(() => {
         <button
           @click="() => { reviewsPagination.page++; fetchReviews(); }"
           :disabled="reviewsPagination.page >= reviewsPagination.total_pages"
-          class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-40 hover:bg-gray-50"
+          class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-40 hover:bg-surface-2"
         >
           {{ t('common.next') }}
         </button>

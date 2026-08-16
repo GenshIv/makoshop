@@ -44,14 +44,14 @@ const handleGo = () => {
   <div class="relative">
     <!-- Category item -->
     <div
-      class="flex items-center gap-2 p-2 rounded-lg border border-gray-100 theme-dark:border-slate-700 cursor-pointer hover:bg-gray-50 theme-dark:hover:bg-slate-700 hover:border-indigo-200 transition-all duration-150"
+      class="flex items-center gap-2 p-2 rounded-lg border border-line cursor-pointer hover:bg-surface-2 hover:border-indigo-200 transition-all duration-150"
       @click="handleGo"
     >
       <!-- Toggle button (if has children) -->
       <button
         v-if="hasChildren"
         @click="handleToggle"
-        class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700 theme-dark:hover:text-gray-200 hover:bg-gray-100 theme-dark:hover:bg-slate-600 rounded text-xs transition"
+        class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-ink-3 hover:text-ink-2 hover:bg-surface-2 rounded text-xs transition"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -68,16 +68,18 @@ const handleGo = () => {
       <span v-else class="flex-shrink-0 w-5"></span>
 
       <!-- Subcategory image -->
-      <div :class="['flex-shrink-0', imgSize.w, imgSize.h, 'rounded-lg bg-gray-100 theme-dark:bg-slate-600 overflow-hidden']">
+      <div :class="['flex-shrink-0', imgSize.w, imgSize.h, 'rounded-lg bg-surface-3 overflow-hidden']">
         <img
           v-if="category.image_light || category.image_dark"
           :src="category.image_light || category.image_dark"
           :alt="catName(category)"
+          loading="lazy"
+          decoding="async"
           class="w-full h-full object-cover"
         />
         <div
           v-else
-          class="w-full h-full flex items-center justify-center text-gray-300 theme-dark:text-slate-500"
+          class="w-full h-full flex items-center justify-center text-ink-3"
         >
           <svg xmlns="http://www.w3.org/2000/svg" :class="imgSize.icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -87,14 +89,14 @@ const handleGo = () => {
 
       <!-- Subcategory name -->
       <div class="min-w-0 flex-1">
-        <div class="text-[11px] font-medium text-gray-800 theme-dark:text-gray-200 truncate">
+        <div class="text-[11px] font-medium text-ink truncate">
           {{ catName(category) }}
         </div>
         <div
           v-if="category.products_count != null && category.products_count > 0"
-          class="text-[9px] text-gray-400 theme-dark:text-slate-500"
+          class="text-[11px] text-ink-3"
         >
-          {{ Number(category.products_count).toLocaleString('ru-RU') }}
+          {{ Number(category.products_count).toLocaleString() }}
         </div>
       </div>
     </div>
@@ -102,7 +104,7 @@ const handleGo = () => {
     <!-- Children (nested) -->
     <div
       v-if="isExpanded && hasChildren"
-      class="mt-1 ml-5 pl-2 border-l border-gray-200 theme-dark:border-slate-600 space-y-1"
+      class="mt-1 ml-5 pl-2 border-l border-line space-y-1"
     >
       <CategorySubItem
         v-for="child in children"

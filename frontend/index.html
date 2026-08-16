@@ -4,7 +4,24 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <meta name="description" content="MakoShop — онлайн-каталог товаров от проверенных продавцов" />
+    <title>MakoShop</title>
+    <script>
+      // Apply saved theme before paint to avoid FOUC
+      (function () {
+        try {
+          var saved = localStorage.getItem('makoshop_theme');
+          var theme = saved || 'auto';
+          var effective =
+            theme === 'auto'
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+              : theme;
+          document.documentElement.classList.add('theme-' + effective);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

@@ -3,12 +3,14 @@ import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
+import { useFormat } from '../composables/useFormat';
 
 const router = useRouter();
 const orders = ref([]);
 const loading = ref(true);
 const error = ref(null);
 const { t } = useI18n();
+const { formatPrice, formatDate } = useFormat();
 
 const statusLabels = computed(() => ({
   new: t('orders.statuses.new'),
@@ -28,21 +30,7 @@ const statusColors = {
   shipped: 'text-purple-600 bg-purple-50',
   delivered: 'text-green-600 bg-green-50',
   cancelled: 'text-red-600 bg-red-50',
-  refunded: 'text-gray-600 bg-gray-50',
-};
-
-const formatPrice = (price) => {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
-};
-
-const formatDate = (dateStr) => {
-  return new Date(dateStr).toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  refunded: 'text-ink-2 bg-surface-2',
 };
 
 const fetchOrders = async () => {
@@ -76,7 +64,7 @@ onMounted(fetchOrders);
     </div>
 
     <!-- Empty -->
-    <div v-else-if="orders.length === 0" class="text-center py-12 text-gray-500">
+    <div v-else-if="orders.length === 0" class="text-center py-12 text-ink-3">
       {{ t('orders.no_orders') }}
       <router-link to="/" class="block mt-2 text-indigo-600 hover:underline">{{ t('orders.go_to_catalog') }}</router-link>
     </div>
@@ -86,25 +74,25 @@ onMounted(fetchOrders);
       <div
         v-for="order in orders"
         :key="order.id"
-        class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition cursor-pointer"
+        class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition cursor-pointer"
         @click="router.push({ name: 'order-detail', params: { id: order.id } })"
       >
         <div class="flex items-center justify-between">
           <div>
             <div class="font-medium">{{ t('orders.order', { id: order.id }) }}</div>
-            <div class="text-sm text-gray-500">{{ formatDate(order.created_at) }}</div>
+            <div class="text-sm text-ink-3">{{ formatDate(order.created_at, true) }}</div>
           </div>
           <div class="flex items-center gap-4">
             <span class="text-sm font-medium">{{ formatPrice(order.total_amount || order.total) }}</span>
             <span
               class="px-2.5 py-1 rounded-full text-xs font-medium"
-              :class="statusColors[order.status] || 'text-gray-600 bg-gray-50'"
+              :class="statusColors[order.status] || 'text-ink-2 bg-surface-2'"
             >
               {{ statusLabels[order.status] || order.status }}
             </span>
           </div>
         </div>
-        <div class="mt-2 text-sm text-gray-500">
+        <div class="mt-2 text-sm text-ink-3">
           {{ t('orders.items', { count: order.items?.length || 0 }) }}
         </div>
       </div>

@@ -14,7 +14,7 @@ const form = reactive({
   description: '',
   category_id: 0,
   price: 0,
-  currency: 'RUB',
+  currency: 'EUR',
   stock_qty: 0,
   status: 'active',
 });
@@ -36,12 +36,12 @@ const fetchProduct = async () => {
       description: p.description || '',
       category_id: p.category_id || 0,
       price: p.price || 0,
-      currency: p.currency || 'RUB',
+      currency: p.currency || 'EUR',
       stock_qty: p.stock_qty || 0,
       status: p.status || 'active',
     });
   } catch (e) {
-    error.value = 'Товар не найден';
+    error.value = t('seller.product_not_found');
   } finally {
     loading.value = false;
   }
@@ -49,7 +49,7 @@ const fetchProduct = async () => {
 
 const submit = async () => {
   if (!form.name || !form.sku || !form.price) {
-    error.value = 'Заполните обязательные поля';
+    error.value = t('seller.fill_required_fields');
     return;
   }
   submitting.value = true;
@@ -63,7 +63,7 @@ const submit = async () => {
     }
     router.push({ name: 'seller-products' });
   } catch (e) {
-    error.value = e.response?.data?.message || 'Ошибка сохранения';
+    error.value = e.response?.data?.message || t('seller.save_error');
   } finally {
     submitting.value = false;
   }
@@ -76,7 +76,7 @@ onMounted(() => {
 
 <template>
   <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <h1 class="text-2xl font-bold mb-6">{{ isEdit() ? 'Редактировать товар' : 'Новый товар' }}</h1>
+    <h1 class="text-2xl font-bold mb-6">{{ isEdit() ? t('seller.edit_product') : t('seller.new_product') }}</h1>
 
     <!-- Loading -->
     <div v-if="loading" class="flex justify-center py-12">
@@ -89,40 +89,40 @@ onMounted(() => {
         {{ error }}
       </div>
 
-      <form @submit.prevent="submit" class="bg-white rounded-lg shadow-sm p-6 space-y-4">
+      <form @submit.prevent="submit" class="bg-surface rounded-lg shadow-sm p-6 space-y-4">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm text-gray-700 mb-1">SKU *</label>
-            <input v-model="form.sku" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg" required />
+            <label class="block text-sm text-ink-2 mb-1">SKU *</label>
+            <input v-model="form.sku" type="text" class="w-full px-3 py-2 border border-line rounded-lg" required />
           </div>
           <div>
-            <label class="block text-sm text-gray-700 mb-1">Цена *</label>
-            <input v-model.number="form.price" type="number" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg" required />
+            <label class="block text-sm text-ink-2 mb-1">{{ t('seller.price') }}</label>
+            <input v-model.number="form.price" type="number" min="0" class="w-full px-3 py-2 border border-line rounded-lg" required />
           </div>
         </div>
 
         <div>
-          <label class="block text-sm text-gray-700 mb-1">Название *</label>
-          <input v-model="form.name" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg" required />
+          <label class="block text-sm text-ink-2 mb-1">{{ t('seller.product_name') }}</label>
+          <input v-model="form.name" type="text" class="w-full px-3 py-2 border border-line rounded-lg" required />
         </div>
 
         <div>
-          <label class="block text-sm text-gray-700 mb-1">Описание</label>
-          <textarea v-model="form.description" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg"></textarea>
+          <label class="block text-sm text-ink-2 mb-1">{{ t('seller.description') }}</label>
+          <textarea v-model="form.description" rows="4" class="w-full px-3 py-2 border border-line rounded-lg"></textarea>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label class="block text-sm text-gray-700 mb-1">Категория (ID)</label>
-            <input v-model.number="form.category_id" type="number" class="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+            <label class="block text-sm text-ink-2 mb-1">{{ t('seller.category_id') }}</label>
+            <input v-model.number="form.category_id" type="number" class="w-full px-3 py-2 border border-line rounded-lg" />
           </div>
           <div>
-            <label class="block text-sm text-gray-700 mb-1">Остаток</label>
-            <input v-model.number="form.stock_qty" type="number" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+            <label class="block text-sm text-ink-2 mb-1">{{ t('seller.stock') }}</label>
+            <input v-model.number="form.stock_qty" type="number" min="0" class="w-full px-3 py-2 border border-line rounded-lg" />
           </div>
           <div>
-            <label class="block text-sm text-gray-700 mb-1">{{ t('seller.status') }}</label>
-            <select v-model="form.status" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+            <label class="block text-sm text-ink-2 mb-1">{{ t('seller.status') }}</label>
+            <select v-model="form.status" class="w-full px-3 py-2 border border-line rounded-lg">
               <option value="active">{{ t('seller.status_active') }}</option>
               <option value="draft">{{ t('seller.status_draft') }}</option>
               <option value="hidden">{{ t('seller.status_hidden') }}</option>
@@ -134,7 +134,7 @@ onMounted(() => {
           <button type="submit" :disabled="submitting" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40">
             {{ submitting ? t('seller.saving') : t('seller.save') }}
           </button>
-          <router-link to="/seller/products" class="px-4 py-2 border rounded-lg hover:bg-gray-50">
+          <router-link to="/seller/products" class="px-4 py-2 border rounded-lg hover:bg-surface-2">
             {{ t('seller.cancel') }}
           </router-link>
         </div>

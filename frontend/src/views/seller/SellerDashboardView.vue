@@ -3,15 +3,13 @@ import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import api from '../../api';
 import { useAuthStore } from '../../stores/auth';
+import { useFormat } from '../../composables/useFormat';
 
 const auth = useAuthStore();
 const { t } = useI18n();
+const { formatPrice } = useFormat();
 const stats = ref({ products: 0, orders: 0, revenue: 0, campaigns: 0 });
 const loading = ref(true);
-
-const formatPrice = (price) => {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(price);
-};
 
 const fetchStats = async () => {
   loading.value = true;
@@ -67,41 +65,41 @@ onMounted(fetchStats);
     <div v-else>
       <!-- Stats cards -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div class="bg-white rounded-lg shadow-sm p-4">
-          <div class="text-sm text-gray-500">{{ t('seller.products') }}</div>
+        <div class="bg-surface rounded-lg shadow-sm p-4">
+          <div class="text-sm text-ink-3">{{ t('seller.products') }}</div>
           <div class="text-2xl font-bold">{{ stats.products }}</div>
         </div>
-        <div class="bg-white rounded-lg shadow-sm p-4">
-          <div class="text-sm text-gray-500">{{ t('seller.orders') }}</div>
+        <div class="bg-surface rounded-lg shadow-sm p-4">
+          <div class="text-sm text-ink-3">{{ t('seller.orders') }}</div>
           <div class="text-2xl font-bold">{{ stats.orders }}</div>
         </div>
-        <div class="bg-white rounded-lg shadow-sm p-4">
-          <div class="text-sm text-gray-500">{{ t('seller.revenue') }}</div>
+        <div class="bg-surface rounded-lg shadow-sm p-4">
+          <div class="text-sm text-ink-3">{{ t('seller.revenue') }}</div>
           <div class="text-2xl font-bold text-green-600">{{ formatPrice(stats.revenue) }}</div>
         </div>
-        <div class="bg-white rounded-lg shadow-sm p-4">
-          <div class="text-sm text-gray-500">{{ t('seller.campaigns') }}</div>
+        <div class="bg-surface rounded-lg shadow-sm p-4">
+          <div class="text-sm text-ink-3">{{ t('seller.campaigns') }}</div>
           <div class="text-2xl font-bold">{{ stats.campaigns }}</div>
         </div>
       </div>
 
       <!-- Quick links -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <router-link to="/seller/products" class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition">
+        <router-link to="/seller/products" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
           <div class="font-medium">{{ t('seller.manage_products') }}</div>
-          <div class="text-sm text-gray-500 mt-1">{{ t('seller.manage_products_desc') }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('seller.manage_products_desc') }}</div>
         </router-link>
-        <router-link to="/seller/orders" class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition">
+        <router-link to="/seller/orders" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
           <div class="font-medium">{{ t('seller.orders_title') }}</div>
-          <div class="text-sm text-gray-500 mt-1">{{ t('seller.orders_desc') }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('seller.orders_desc') }}</div>
         </router-link>
-        <router-link to="/seller/promo" class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition">
+        <router-link to="/seller/promo" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
           <div class="font-medium">{{ t('seller.promotion_title') }}</div>
-          <div class="text-sm text-gray-500 mt-1">{{ t('seller.promotion_desc') }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('seller.promotion_desc') }}</div>
         </router-link>
-        <a href="#" class="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition cursor-not-allowed opacity-60">
+        <a href="#" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition cursor-not-allowed opacity-60">
           <div class="font-medium">{{ t('seller.analytics_title') }}</div>
-          <div class="text-sm text-gray-500 mt-1">{{ t('seller.analytics_desc') }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('seller.analytics_desc') }}</div>
         </a>
       </div>
     </div>

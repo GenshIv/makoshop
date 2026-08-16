@@ -115,7 +115,8 @@ const onOptionChange = () => {
 }
 
 .cookie-banner {
-  background: white;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   border-radius: 12px;
   max-width: 520px;
   width: 100%;
@@ -129,7 +130,7 @@ const onOptionChange = () => {
   align-items: center;
   justify-content: space-between;
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .cookie-banner-header h3 {
@@ -179,7 +180,7 @@ const onOptionChange = () => {
   align-items: flex-start;
   padding: 0.75rem;
   border-radius: 8px;
-  border: 1px solid #eee;
+  border: 1px solid var(--border-color);
 }
 
 .cookie-option-header {
@@ -208,7 +209,7 @@ const onOptionChange = () => {
 .cookie-option-desc {
   margin: 0.25rem 0 0;
   font-size: 0.8rem;
-  color: #777;
+  color: var(--text-muted);
   line-height: 1.4;
 }
 
@@ -230,7 +231,7 @@ const onOptionChange = () => {
 .cookie-toggle-slider {
   position: absolute;
   inset: 0;
-  background: #ddd;
+  background: var(--border-color);
   border-radius: 24px;
   transition: background 0.2s;
 }
@@ -242,7 +243,7 @@ const onOptionChange = () => {
   height: 18px;
   left: 3px;
   bottom: 3px;
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 50%;
   transition: transform 0.2s;
 }
@@ -259,7 +260,7 @@ const onOptionChange = () => {
   display: flex;
   gap: 0.5rem;
   padding: 1rem 1.5rem;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-color);
   flex-wrap: wrap;
 }
 
@@ -285,8 +286,8 @@ const onOptionChange = () => {
 }
 
 .cookie-banner-footer .btn-secondary {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .cookie-banner-footer .btn-secondary:hover {

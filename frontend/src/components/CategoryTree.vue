@@ -127,7 +127,7 @@ defineOptions({ name: 'CategoryTree' });
 
 <template>
   <nav class="space-y-0.5 text-sm category-tree-nav">
-    <div v-if="loading" class="text-gray-400 py-2">{{ t('common.loading', 'Загрузка...') }}</div>
+    <div v-if="loading" class="text-ink-3 py-2">{{ t('common.loading') }}</div>
     <template v-else>
       <!-- Root "All" category -->
       <CategoryTreeNode

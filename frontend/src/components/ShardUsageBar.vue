@@ -98,7 +98,7 @@ const runCompact = async () => {
   try {
     await api.post('/admin/db/compact');
     compactResult.value = { ok: true, message: 'Compact completed successfully' };
-    // Обновим статистику после компакта
+    // Refresh stats after compaction
     await fetchShards(true);
   } catch (e) {
     compactResult.value = { ok: false, message: e.message || String(e) };
@@ -131,49 +131,49 @@ onUnmounted(() => {
         'bg-red-100 text-red-800': usageRatio() >= 0.9,
       }"
       @click="showDetails = !showDetails"
-      :title="'Использование: ' + usagePercent() + '% (' + formatBytes(totalFreeOffset) + '/' + formatBytes(totalMaxSize) + '). Клик для деталей.'"
+      :title="t('db_monitor.usage_title', { percent: usagePercent(), used: formatBytes(totalFreeOffset), max: formatBytes(totalMaxSize) })"
     >
       <!-- Icon -->
       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 1.1.9 2 2 2h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2zm0 0h16M4 11h16" />
       </svg>
       <span class="font-medium">{{ usagePercent() }}%</span>
-      <span class="text-[10px] opacity-70">{{ mode === 'active' ? '(active)' : '' }}</span>
+      <span class="text-[11px] opacity-70">{{ mode === 'active' ? '(active)' : '' }}</span>
     </div>
 
     <!-- Active scan button -->
     <button
       @click="fetchActive"
       :disabled="loadingActive"
-      class="px-1.5 py-0.5 text-[10px] rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50"
+      class="px-1.5 py-0.5 text-[11px] rounded-full bg-surface-2 text-ink-3 hover:bg-surface-3 disabled:opacity-50"
       :title="t('db_monitor.active_scan')"
     >
       {{ loadingActive ? '...' : 'Active' }}
     </button>
 
     <!-- Error indicator -->
-    <span v-if="error" class="text-[10px] text-red-500" :title="error">!</span>
+    <span v-if="error" class="text-[11px] text-red-500" :title="error">!</span>
 
     <!-- Details dropdown -->
     <div
       v-if="showDetails"
-      class="absolute top-10 right-4 z-50 bg-white border border-gray-200 rounded-lg shadow-xl p-3 w-[340px] max-h-[60vh] overflow-y-auto text-xs"
+      class="absolute top-10 right-4 z-50 bg-surface border border-line rounded-lg shadow-xl p-3 w-[340px] max-h-[60vh] overflow-y-auto text-xs"
     >
       <div class="flex items-center justify-between mb-1">
-        <span class="font-semibold text-gray-700">{{ t('db_monitor.shards_usage') }}</span>
-        <button @click="showDetails = false" class="text-gray-400 hover:text-gray-600">
+        <span class="font-semibold text-ink-2">{{ t('db_monitor.shards_usage') }}</span>
+        <button @click="showDetails = false" class="text-ink-3 hover:text-ink-2" :aria-label="t('common.close')">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
-      <div class="text-[10px] text-gray-500 mb-2">
+      <div class="text-[11px] text-ink-3 mb-2">
         {{ formatBytes(totalFreeOffset) }} / {{ formatBytes(totalMaxSize) }} ({{ usagePercent() }}%)
       </div>
 
-      <div v-if="loading" class="text-gray-500">Загрузка...</div>
+      <div v-if="loading" class="text-ink-3">{{ t('common.loading') }}</div>
 
-      <div v-else-if="shards.length === 0" class="text-gray-500">Нет данных</div>
+      <div v-else-if="shards.length === 0" class="text-ink-3">{{ t('common.no_data') }}</div>
 
       <div v-else class="space-y-1">
         <div
@@ -183,10 +183,10 @@ onUnmounted(() => {
           :title="getShardTooltip(shard)"
         >
           <!-- Number -->
-          <span class="w-5 text-right text-gray-400 text-[10px]">{{ shard.ShardIndex }}</span>
+          <span class="w-5 text-right text-ink-3 text-[11px]">{{ shard.ShardIndex }}</span>
 
           <!-- Bar -->
-          <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div class="flex-1 h-2 bg-surface-2 rounded-full overflow-hidden">
             <div
               class="h-full rounded-full transition-all"
               :class="getShardColor(shard)"
@@ -195,19 +195,19 @@ onUnmounted(() => {
           </div>
 
           <!-- Percent -->
-          <span class="w-10 text-right text-[10px] text-gray-500">{{ formatPercent(shard) }}</span>
+          <span class="w-10 text-right text-[11px] text-ink-3">{{ formatPercent(shard) }}</span>
         </div>
 
         <!-- Legend -->
-        <div class="mt-3 pt-2 border-t border-gray-100 flex flex-wrap gap-2 text-[10px] text-gray-500">
+        <div class="mt-3 pt-2 border-t border-line flex flex-wrap gap-2 text-[11px] text-ink-3">
           <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500"></span> &lt;50%</span>
           <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-yellow-500"></span> 50-75%</span>
           <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-orange-500"></span> 75-90%</span>
           <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-600"></span> &gt;90%</span>
         </div>
 
-        <div v-if="mode === 'active'" class="mt-2 pt-2 border-t border-gray-100 space-y-1">
-          <div class="text-[10px] text-gray-400">
+        <div v-if="mode === 'active'" class="mt-2 pt-2 border-t border-line space-y-1">
+          <div class="text-[11px] text-ink-3">
             {{ t('db_monitor.mode_active') }}
           </div>
           <button
@@ -217,11 +217,11 @@ onUnmounted(() => {
           >
             {{ compacting ? t('db_monitor.compact_running') : t('db_monitor.compact_button') }}
           </button>
-          <div v-if="compactResult" class="text-[10px]" :class="compactResult.ok ? 'text-green-600' : 'text-red-600'">
+          <div v-if="compactResult" class="text-[11px]" :class="compactResult.ok ? 'text-green-600' : 'text-red-600'">
             {{ compactResult.message }}
           </div>
         </div>
-        <div v-else class="mt-1 text-[10px] text-gray-400">
+        <div v-else class="mt-1 text-[11px] text-ink-3">
           {{ t('db_monitor.mode_fast') }}
         </div>
       </div>
