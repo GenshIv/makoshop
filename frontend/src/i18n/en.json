@@ -87,6 +87,7 @@
   "catalog": {
     "all_products": "All products",
     "catalog_title": "Product catalog",
+    "root_description": "Welcome to MakoShop catalog. Find thousands of products from trusted sellers.",
     "reset_filters": "Reset filters",
     "back_to_catalog": "← Back to catalog",
     "in_stock": "In stock",

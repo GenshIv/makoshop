@@ -19,10 +19,87 @@ const form = reactive({
   slug: '',
   parent_id: null,
   description: '',
+  description_ru: '',
+  description_ua: '',
+  description_pl: '',
+  description_en: '',
+  image_light_url: '',
+  image_dark_url: '',
   is_active: true,
   sort_order: 0,
   anchor_keywords: '', // comma-separated
 });
+
+const uploading = ref({ light: false, dark: false });
+const uploadError = ref({ light: '', dark: '' });
+
+// Upload image file
+const uploadImage = async (file, theme) => {
+  if (!file) return;
+
+  // Validate file type
+  const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+  if (!validTypes.includes(file.type)) {
+    uploadError.value[theme] = 'Invalid file type. Use JPG, PNG, WEBP or GIF.';
+    return;
+  }
+
+  // Validate file size (max 10MB)
+  if (file.size > 10 * 1024 * 1024) {
+    uploadError.value[theme] = 'File too large. Max 10MB.';
+    return;
+  }
+
+  uploading.value[theme] = true;
+  uploadError.value[theme] = '';
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await api.post('/admin/upload-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+
+    if (theme === 'light') {
+      form.image_light_url = response.data.url;
+    } else {
+      form.image_dark_url = response.data.url;
+    }
+  } catch (e) {
+    uploadError.value[theme] = e.response?.data?.message || 'Upload failed';
+  } finally {
+    uploading.value[theme] = false;
+  }
+};
+
+// Remove image
+const removeImage = async (theme) => {
+  const url = theme === 'light' ? form.image_light_url : form.image_dark_url;
+  if (!url) return;
+
+  try {
+    // Extract filename from URL: /uploads/categories/{filename}
+    const filename = url.split('/').pop();
+    await api.delete(`/admin/upload-image/${filename}`);
+  } catch (e) {
+    console.error('Failed to delete image:', e);
+  }
+
+  if (theme === 'light') {
+    form.image_light_url = '';
+  } else {
+    form.image_dark_url = '';
+  }
+};
+
+// Handle file input change
+const onFileChange = (event, theme) => {
+  const file = event.target.files?.[0];
+  if (file) {
+    uploadImage(file, theme);
+  }
+};
 
 const fetchCategories = async () => {
   loading.value = true;
@@ -89,6 +166,12 @@ const resetForm = () => {
     slug: '',
     parent_id: null,
     description: '',
+    description_ru: '',
+    description_ua: '',
+    description_pl: '',
+    description_en: '',
+    image_light_url: '',
+    image_dark_url: '',
     is_active: true,
     sort_order: 0,
     anchor_keywords: '',
@@ -106,6 +189,12 @@ const editCategory = (cat) => {
   form.slug = cat.slug || '';
   form.parent_id = cat.parent_id || null;
   form.description = cat.description || '';
+  form.description_ru = cat.description_ru || '';
+  form.description_ua = cat.description_ua || '';
+  form.description_pl = cat.description_pl || '';
+  form.description_en = cat.description_en || '';
+  form.image_light_url = cat.image_light_url || '';
+  form.image_dark_url = cat.image_dark_url || '';
   form.is_active = cat.is_active;
   form.sort_order = cat.sort_order || 0;
   form.anchor_keywords = (cat.anchor_keywords || []).join(', ');
@@ -132,6 +221,12 @@ const saveCategory = async () => {
       slug: form.slug || null,
       parent_id: form.parent_id,
       description: form.description,
+      description_ru: form.description_ru,
+      description_ua: form.description_ua,
+      description_pl: form.description_pl,
+      description_en: form.description_en,
+      image_light_url: form.image_light_url,
+      image_dark_url: form.image_dark_url,
       is_active: form.is_active,
       sort_order: form.sort_order,
       anchor_keywords: keywords,
@@ -233,7 +328,70 @@ watch(showForm, (val) => {
             {{ '  '.repeat(opt.level) }}{{ opt.name }}
           </option>
         </select>
-        <textarea v-model="form.description" :placeholder="t('admin.description_placeholder')" rows="2" class="sm:col-span-2 px-3 py-2 border border-gray-300 rounded-lg text-sm"></textarea>
+        <!-- Descriptions per language -->
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Descriptions</label>
+          <textarea v-model="form.description_ru" placeholder="Description RU" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-1"></textarea>
+          <textarea v-model="form.description_ua" placeholder="Description UA" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-1"></textarea>
+          <textarea v-model="form.description_pl" placeholder="Description PL" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-1"></textarea>
+          <textarea v-model="form.description_en" placeholder="Description EN" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></textarea>
+        </div>
+        <!-- Images (dark/light theme) -->
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Category Images</label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Light theme image -->
+            <div class="border border-gray-200 rounded-lg p-3">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-sm font-medium text-gray-700">Light Theme</span>
+                <span class="text-xs text-gray-500">JPG, PNG, WEBP (max 10MB)</span>
+              </div>
+              <div v-if="form.image_light_url" class="mb-2">
+                <img :src="form.image_light_url" alt="Light theme" class="w-full h-32 object-cover rounded-lg border border-gray-200" />
+              </div>
+              <div v-else class="mb-2 h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
+                <span class="text-xs text-gray-400">No image</span>
+              </div>
+              <div class="flex gap-2">
+                <label class="flex-1 cursor-pointer">
+                  <span class="inline-block px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700">
+                    {{ uploading.light ? 'Uploading...' : 'Upload' }}
+                  </span>
+                  <input type="file" accept="image/*" class="hidden" @change="onFileChange($event, 'light')" :disabled="uploading.light" />
+                </label>
+                <button v-if="form.image_light_url" @click="removeImage('light')" class="px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700">
+                  Remove
+                </button>
+              </div>
+              <p v-if="uploadError.light" class="text-xs text-red-500 mt-1">{{ uploadError.light }}</p>
+            </div>
+            <!-- Dark theme image -->
+            <div class="border border-gray-200 rounded-lg p-3">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-sm font-medium text-gray-700">Dark Theme</span>
+                <span class="text-xs text-gray-500">JPG, PNG, WEBP (max 10MB)</span>
+              </div>
+              <div v-if="form.image_dark_url" class="mb-2">
+                <img :src="form.image_dark_url" alt="Dark theme" class="w-full h-32 object-cover rounded-lg border border-gray-200" />
+              </div>
+              <div v-else class="mb-2 h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
+                <span class="text-xs text-gray-400">No image</span>
+              </div>
+              <div class="flex gap-2">
+                <label class="flex-1 cursor-pointer">
+                  <span class="inline-block px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700">
+                    {{ uploading.dark ? 'Uploading...' : 'Upload' }}
+                  </span>
+                  <input type="file" accept="image/*" class="hidden" @change="onFileChange($event, 'dark')" :disabled="uploading.dark" />
+                </label>
+                <button v-if="form.image_dark_url" @click="removeImage('dark')" class="px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700">
+                  Remove
+                </button>
+              </div>
+              <p v-if="uploadError.dark" class="text-xs text-red-500 mt-1">{{ uploadError.dark }}</p>
+            </div>
+          </div>
+        </div>
         <div class="flex items-center gap-4">
           <label class="flex items-center gap-2 text-sm">
             <input v-model="form.is_active" type="checkbox" />

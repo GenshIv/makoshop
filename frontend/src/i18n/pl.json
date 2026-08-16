@@ -87,6 +87,7 @@
   "catalog": {
     "all_products": "Wszystkie produkty",
     "catalog_title": "Katalog produktów",
+    "root_description": "Witamy w katalogu MakoShop. Znajdź tysiące produktów od zaufanych sprzedawców.",
     "reset_filters": "Resetuj filtry",
     "back_to_catalog": "← Wróć do katalogu",
     "search_label": "Szukaj",

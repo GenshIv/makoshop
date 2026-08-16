@@ -420,6 +420,12 @@ type CreateCategoryRequest struct {
 	NameEn         string   `json:"name_en"`
 	Slug           string   `json:"slug"`
 	Description    string   `json:"description,omitempty"`
+	DescriptionRu  string   `json:"description_ru,omitempty"`
+	DescriptionUa  string   `json:"description_ua,omitempty"`
+	DescriptionPl  string   `json:"description_pl,omitempty"`
+	DescriptionEn  string   `json:"description_en,omitempty"`
+	ImageLightURL  string   `json:"image_light_url,omitempty"`
+	ImageDarkURL   string   `json:"image_dark_url,omitempty"`
 	IsActive       bool     `json:"is_active"`
 	IsActivePtr    *bool    `json:"-"` // pointer to detect if is_active was explicitly sent in PATCH
 	SortOrder      int      `json:"sort_order"`
@@ -522,6 +528,36 @@ func (h *Handlers) HandleCategoryUpdate(w http.ResponseWriter, r *http.Request) 
 			req.Description = s
 		}
 	}
+	if v, ok := raw["description_ru"]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			req.DescriptionRu = s
+		}
+	}
+	if v, ok := raw["description_ua"]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			req.DescriptionUa = s
+		}
+	}
+	if v, ok := raw["description_pl"]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			req.DescriptionPl = s
+		}
+	}
+	if v, ok := raw["description_en"]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			req.DescriptionEn = s
+		}
+	}
+	if v, ok := raw["image_light_url"]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			req.ImageLightURL = s
+		}
+	}
+	if v, ok := raw["image_dark_url"]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			req.ImageDarkURL = s
+		}
+	}
 	if v, ok := raw["is_active"]; ok && v != nil {
 		if b, ok := v.(bool); ok {
 			req.IsActive = b
@@ -569,6 +605,24 @@ func (h *Handlers) HandleCategoryUpdate(w http.ResponseWriter, r *http.Request) 
 
 		if req.Description != "" {
 			c.Desc = req.Description
+		}
+		if req.DescriptionRu != "" {
+			c.DescRu = req.DescriptionRu
+		}
+		if req.DescriptionUa != "" {
+			c.DescUa = req.DescriptionUa
+		}
+		if req.DescriptionPl != "" {
+			c.DescPl = req.DescriptionPl
+		}
+		if req.DescriptionEn != "" {
+			c.DescEn = req.DescriptionEn
+		}
+		if req.ImageLightURL != "" {
+			c.ImageLightURL = req.ImageLightURL
+		}
+		if req.ImageDarkURL != "" {
+			c.ImageDarkURL = req.ImageDarkURL
 		}
 		if req.SortOrder != 0 {
 			c.SortOrder = req.SortOrder

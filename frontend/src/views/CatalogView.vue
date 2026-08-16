@@ -1,9 +1,8 @@
 <script setup>
-import { ref, reactive, onMounted, watch, computed, defineAsyncComponent } from 'vue';
+import { ref, reactive, onMounted, watch, computed, defineAsyncComponent, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
-import Breadcrumbs from '../components/Breadcrumbs.vue';
 
 // Lazy-load SCUPageView to avoid circular imports
 const SCUPageView = defineAsyncComponent(() => import('../views/SCUPageView.vue'));
@@ -16,6 +15,17 @@ const products = ref([]);
 const categoryAttrs = ref([]);
 const categoryPath = ref([]); // [{id, name}, ...]
 const pagination = reactive({ page: 1, per_page: 50, total: 0, total_pages: 0 });
+
+// Root categories for horizontal bar above products
+const rootCategories = ref([]);
+const rootCatsLoading = ref(false);
+
+// Current browsing path inside categories bar: [{id, slug, name, description, ...}, ...]
+const categoryBrowsePath = ref([]);
+
+// Current category object from API (with description)
+const currentCategory = ref(null);
+
 const loading = ref(false);
 const error = ref(null);
 const maintenanceMode = ref(false);
@@ -155,8 +165,11 @@ const fetchProducts = async () => {
     // Build category path via API for proper localized names
     if (data.category_id) {
       fetchCategoryPath(data.category_id);
+      // Сохраняем текущую категорию с описанием
+      currentCategory.value = data.category || null;
     } else {
       categoryPath.value = [];
+      currentCategory.value = null;
     }
   } catch (e) {
     if (e.response?.status === 503) {
@@ -200,6 +213,132 @@ const fetchCategoryPath = async (categoryId) => {
     categoryPath.value = [];
   }
 };
+
+// Fetch root categories for horizontal bar
+const fetchRootCategories = async () => {
+  if (rootCategories.value.length > 0) return; // already loaded
+  rootCatsLoading.value = true;
+  try {
+    const response = await api.get('/categories/tree');
+    rootCategories.value = Array.isArray(response.data) ? response.data : [];
+  } catch (e) {
+    console.error('Failed to fetch root categories:', e);
+    rootCategories.value = [];
+  } finally {
+    rootCatsLoading.value = false;
+  }
+};
+
+// Get localized category name
+// Check if image URL is valid (not a placeholder CDN URL)
+const isValidImage = (url) => {
+  if (!url) return false;
+  return !url.includes('cdn.makoshop.com');
+};
+
+// Check if root category is active (we are browsing it or its subtree)
+const isRootCategoryActive = (rootCat) => {
+  if (!currentBrowseCategory.value) return false;
+  // Direct match
+  if (rootCat.id === currentBrowseCategory.value.id) return true;
+  // Check if current category is in this root's subtree
+  const find = (nodes) => {
+    for (const node of nodes) {
+      if (node.id === currentBrowseCategory.value.id) return true;
+      if (node.children?.length && find(node.children)) return true;
+    }
+    return false;
+  };
+  return rootCat.children?.length && find(rootCat.children);
+};
+
+const catName = (cat) => {
+  if (!cat) return '';
+  const langField = `name_${locale.value}`;
+  return cat[langField] || cat.name_en || cat.name_ru || cat.name_ua || cat.name_pl || '';
+};
+
+// Navigate to category using slugs from tree
+const buildCategoryPath = (targetId, nodes, path = []) => {
+  for (const node of nodes) {
+    path.push(node.slug);
+    if (node.id === targetId) {
+      return path;
+    }
+    if (node.children && node.children.length > 0) {
+      const result = buildCategoryPath(targetId, node.children, path);
+      if (result) return result;
+    }
+    path.pop();
+  }
+  return null;
+};
+
+// Build category path from URL slugs
+const buildPathFromUrl = () => {
+  if (!rootCategories.value.length || !route.path.startsWith('/shop')) {
+    categoryBrowsePath.value = [];
+    return;
+  }
+
+  const slugs = route.path.slice(6).split('/').filter(Boolean);
+  const path = [];
+  let nodes = rootCategories.value;
+
+  for (const slug of slugs) {
+    const cat = nodes.find(c => c.slug === slug);
+    if (!cat) break;
+    path.push(cat);
+    nodes = cat.children || [];
+  }
+
+  categoryBrowsePath.value = path;
+};
+
+// Navigate into a category (updates products)
+const navigateToCategory = (cat) => {
+  const slugs = buildCategoryPath(cat.id, rootCategories.value);
+  const query = { ...route.query };
+  delete query.page;
+
+  let path = '/shop';
+  if (slugs && slugs.length > 0) {
+    path = '/shop/' + slugs.join('/');
+  }
+
+  router.push({ path, query });
+};
+
+// Get localized description for category
+const catDescription = (cat) => {
+  if (!cat) return '';
+  const langField = `description_${locale.value}`;
+  return cat[langField] || cat.description || '';
+};
+
+// Current category in browse panel
+const currentBrowseCategory = computed(() => {
+  if (categoryBrowsePath.value.length === 0) return null;
+  return categoryBrowsePath.value[categoryBrowsePath.value.length - 1];
+});
+
+// Computed: current context title and description
+const contextTitle = computed(() => {
+  if (currentCategory.value) {
+    return catName(currentCategory.value);
+  }
+  return t('catalog.catalog_title'); // корневой каталог
+});
+
+const contextDescription = computed(() => {
+  if (currentCategory.value) {
+    return catDescription(currentCategory.value);
+  }
+  // Описание корневого каталога (можно вынести в i18n)
+  return t('catalog.root_description', 'Добро пожаловать в каталог MakoShop. Здесь вы найдете тысячи товаров от проверенных продавцов.');
+});
+
+
 
 const toggleAttrFilter = (code, value, checked) => {
   if (!attrFilters[code]) attrFilters[code] = [];
@@ -323,6 +462,10 @@ const visibleBrands = computed(() => {
   return [];
 });
 
+const hasAttrsOrBrands = computed(() => {
+  return visibleAttrs.value.length > 0 || visibleBrands.value.length > 0;
+});
+
 const applyFilters = () => {
   pagination.page = 1;
   const query = { ...route.query };
@@ -387,6 +530,10 @@ onMounted(async () => {
   syncFiltersFromRoute();
   updatePerPage();
 
+  // Load root categories for horizontal bar
+  await fetchRootCategories();
+  buildPathFromUrl();
+
   // Use pre-rendered data if available (from SSR/proxy)
   if (typeof window !== 'undefined' && window.__INITIAL_DATA__) {
     const data = window.__INITIAL_DATA__;
@@ -409,8 +556,11 @@ onMounted(async () => {
     // Build category path via API for proper localized names
     if (data.category_id) {
       fetchCategoryPath(data.category_id);
+      // Сохраняем текущую категорию с описанием
+      currentCategory.value = data.category || null;
     } else {
       categoryPath.value = [];
+      currentCategory.value = null;
     }
 
     loading.value = false;
@@ -426,6 +576,7 @@ watch(
   () => [route.query, route.path],
   async () => {
     syncFiltersFromRoute();
+    buildPathFromUrl();
     fetchProducts();
   },
   { deep: true }
@@ -508,12 +659,203 @@ defineOptions({ name: 'CatalogView' });
   <!-- Render SCUPageView if API returned an SCUPage -->
   <SCUPageView v-else-if="scuPageData" :data="scuPageData" />
 
-  <div v-else class="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <!-- Breadcrumbs -->
-    <Breadcrumbs :categories="categoryPath" />
+  <div v-else class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- Root categories grid -->
+    <div class="mb-4">
+      <!-- Loading state -->
+      <div v-if="rootCatsLoading" class="flex gap-2">
+        <div v-for="i in 12" :key="i" class="flex-1 aspect-square rounded-lg bg-gray-200 animate-pulse" />
+      </div>
+
+      <!-- Categories row (single line) -->
+      <div v-else class="flex gap-2">
+        <div
+          v-for="cat in rootCategories"
+          :key="cat.id"
+          :class="[
+            'flex-1 cursor-pointer group rounded-xl overflow-hidden border transition-all duration-200 flex flex-col',
+            // Active category (we are browsing it or its subtree)
+            isRootCategoryActive(cat)
+              ? 'border-indigo-500 ring-2 ring-indigo-200 shadow-md'
+              : 'border-gray-200 hover:border-indigo-300 hover:shadow-md'
+          ]"
+          @click="navigateToCategory(cat)"
+        >
+            <!-- Category image -->
+            <div class="relative w-full pt-[100%] bg-gray-100 overflow-hidden">
+              <!-- Light theme image -->
+              <img
+                v-if="isValidImage(cat.image_light_url)"
+                :src="cat.image_light_url"
+                :alt="catName(cat)"
+                class="absolute inset-1 w-full h-full object-cover theme-dark:hidden"
+              />
+              <!-- Dark theme image -->
+              <img
+                v-if="isValidImage(cat.image_dark_url)"
+                :src="cat.image_dark_url"
+                :alt="catName(cat)"
+                class="absolute inset-1 w-full h-full object-cover hidden theme-dark:block"
+              />
+              <!-- Fallback placeholder -->
+              <div
+                v-if="!isValidImage(cat.image_light_url) && !isValidImage(cat.image_dark_url)"
+                class="absolute inset-1 flex items-center justify-center text-gray-400 theme-dark:text-slate-500"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <!-- Chevron indicator -->
+              <div
+                v-if="cat.children && cat.children.length > 0"
+                class="absolute inset-4 flex items-center justify-center bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-full"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-5 w-5 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+
+            <!-- Category name -->
+            <div
+              :class="[
+                'flex-1 flex items-center px-2 py-1.5',
+                isRootCategoryActive(cat)
+                  ? 'bg-indigo-50 theme-dark:bg-indigo-900/30'
+                  : 'bg-white theme-dark:bg-slate-800'
+              ]"
+            >
+              <div
+                :class="[
+                  'text-xs font-medium text-left line-clamp-2',
+                  isRootCategoryActive(cat)
+                    ? 'text-indigo-700 theme-dark:text-indigo-300 font-semibold'
+                    : 'text-gray-800 theme-dark:text-gray-200'
+                ]"
+              >
+                {{ catName(cat) }}
+              </div>
+            </div>
+          </div>
+      </div>
+
+      <!-- Categories panel with description and subcategories -->
+      <div class="mt-2 bg-white theme-dark:bg-slate-800 rounded-xl border border-gray-200 theme-dark:border-slate-700 overflow-hidden">
+        <div class="p-4">
+          <!-- Breadcrumbs-style path -->
+          <div class="flex items-center flex-wrap gap-1 text-xs text-gray-500 theme-dark:text-slate-400 mb-2">
+            <span
+              class="cursor-pointer hover:text-indigo-600 hover:underline"
+              @click="navigateToCategory({ id: '', slug: '' })"
+            >
+              {{ t('catalog.all_products') }}
+            </span>
+            <span v-for="(cat, idx) in categoryBrowsePath" :key="cat.id" class="flex items-center gap-1">
+              <span class="text-gray-300 theme-dark:text-slate-600">/</span>
+              <span
+                class="cursor-pointer hover:text-indigo-600 hover:underline"
+                :class="idx === categoryBrowsePath.length - 1 ? 'font-semibold text-gray-800 theme-dark:text-gray-200' : ''"
+                @click="navigateToCategory(cat)"
+              >
+                {{ catName(cat) }}
+              </span>
+            </span>
+          </div>
+
+          <!-- Current category header with full description and image -->
+          <div class="mb-3">
+            <div class="flex flex-col lg:flex-row gap-4">
+              <!-- Category name and full description -->
+              <div class="flex-1 min-w-0">
+                <h2 class="text-xl font-semibold text-gray-900 theme-dark:text-gray-100">
+                  {{ currentBrowseCategory ? catName(currentBrowseCategory) : t('catalog.all_products') }}
+                </h2>
+                <p
+                  v-if="currentBrowseCategory && catDescription(currentBrowseCategory)"
+                  class="mt-1 text-sm text-gray-600 theme-dark:text-slate-300"
+                >
+                  {{ catDescription(currentBrowseCategory) }}
+                </p>
+              </div>
+              <!-- Category image on the right -->
+              <div
+                v-if="currentBrowseCategory && (isValidImage(currentBrowseCategory.image_light_url) || isValidImage(currentBrowseCategory.image_dark_url))"
+                class="flex-shrink-0 w-48 aspect-square relative rounded-xl overflow-hidden shadow-md border border-gray-200 theme-dark:border-slate-700"
+              >
+                <img
+                  v-if="isValidImage(currentBrowseCategory.image_light_url)"
+                  :src="currentBrowseCategory.image_light_url"
+                  :alt="catName(currentBrowseCategory)"
+                  class="absolute inset-0 w-full h-full object-cover"
+                />
+                <img
+                  v-if="isValidImage(currentBrowseCategory.image_dark_url)"
+                  :src="currentBrowseCategory.image_dark_url"
+                  :alt="catName(currentBrowseCategory)"
+                  class="absolute inset-0 w-full h-full object-cover hidden theme-dark:block"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Subcategories list as tags -->
+          <div
+            v-if="currentBrowseCategory && currentBrowseCategory.children && currentBrowseCategory.children.length > 0"
+            class="flex flex-wrap gap-2"
+          >
+            <button
+              v-for="sub in currentBrowseCategory.children"
+              :key="sub.id"
+              @click="navigateToCategory(sub)"
+              :class="[
+                'inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-150 cursor-pointer',
+                // Active category (we are inside it)
+                currentCategory && currentCategory.id === sub.id
+                  ? 'border-indigo-500 bg-indigo-50 theme-dark:bg-indigo-900/30 text-indigo-700 theme-dark:text-indigo-300'
+                  // Has children — slightly highlighted
+                  : sub.children && sub.children.length > 0
+                    ? 'border-gray-300 theme-dark:border-slate-500 bg-gray-50 theme-dark:bg-slate-700 text-gray-800 theme-dark:text-gray-100 hover:border-indigo-300 hover:text-indigo-600 theme-dark:hover:text-indigo-400 hover:bg-indigo-50 theme-dark:hover:bg-slate-600'
+                    // Leaf category
+                    : 'border-gray-200 theme-dark:border-slate-600 text-gray-700 theme-dark:text-gray-200 hover:border-indigo-300 hover:text-indigo-600 theme-dark:hover:text-indigo-400 hover:bg-indigo-50 theme-dark:hover:bg-slate-700'
+              ]"
+            >
+              {{ catName(sub) }}
+              <!-- Arrow for categories with children -->
+              <svg
+                v-if="sub.children && sub.children.length > 0"
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-3 w-3 flex-shrink-0 opacity-60"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2.5"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+              <span
+                v-if="sub.products_count != null && sub.products_count > 0"
+                class="text-[10px] opacity-60"
+              >
+                · {{ Number(sub.products_count).toLocaleString('ru-RU') }}
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
 
     <div class="flex items-center justify-between mb-3">
-      <h1 class="text-2xl font-bold">{{ pageTitle }}</h1>
       <div class="flex items-center gap-2">
         <!-- Mobile filters button -->
         <button
@@ -540,9 +882,41 @@ defineOptions({ name: 'CatalogView' });
       {{ error }}
     </div>
 
+    <!-- Inline filters (when no attributes — shown above products) -->
+    <div
+      v-if="!hasAttrsOrBrands"
+      class="mb-4 flex flex-wrap items-center gap-3 bg-white rounded-lg shadow-sm border border-gray-200 p-3"
+    >
+      <!-- Search -->
+      <div class="flex-1 min-w-[200px]">
+        <input
+          v-model="filters.q"
+          type="text"
+          :placeholder="t('catalog.search_placeholder')"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+      <!-- Price range -->
+      <div class="flex items-center gap-2">
+        <input
+          v-model="filters.price_min"
+          type="number"
+          :placeholder="t('catalog.price_from')"
+          class="w-24 px-2 py-2 border border-gray-300 rounded-lg text-sm"
+        />
+        <span class="text-gray-400">—</span>
+        <input
+          v-model="filters.price_max"
+          type="number"
+          :placeholder="t('catalog.price_to')"
+          class="w-24 px-2 py-2 border border-gray-300 rounded-lg text-sm"
+        />
+      </div>
+    </div>
+
     <div class="flex gap-6">
-      <!-- Sidebar: Filters -->
-      <aside class="w-64 flex-shrink-0 hidden md:block">
+      <!-- Sidebar: Filters (only when attributes exist) -->
+      <aside v-if="hasAttrsOrBrands" class="w-64 flex-shrink-0 hidden md:block">
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-4">
           <!-- Search -->
           <div>
@@ -882,3 +1256,21 @@ defineOptions({ name: 'CatalogView' });
     </div>
   </div>
 </template>
+
+
+<style scoped>
+/* Thin scrollbar for horizontal categories */
+.scrollbar-thin::-webkit-scrollbar {
+  height: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.4);
+  border-radius: 999px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 163, 175, 0.7);
+}
+</style>

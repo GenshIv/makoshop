@@ -65,6 +65,11 @@ export default defineConfig({
         target: 'http://localhost:9090',
         changeOrigin: true,
       },
+      // Proxy /uploads/* for category images
+      '/uploads': {
+        target: 'http://localhost:9090',
+        changeOrigin: true,
+      },
     },
   },
 })

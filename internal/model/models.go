@@ -59,6 +59,7 @@ type AttrDef struct {
 	Unit         string    `json:"unit,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 }
+
 // Company
 
 type CompanyStatus string
@@ -127,7 +128,13 @@ type Category struct {
 	NamePl         string    `json:"name_pl"`
 	NameEn         string    `json:"name_en"`
 	Slug           string    `json:"slug"`
-	Desc           string    `json:"description,omitempty"`
+	Desc           string    `json:"description,omitempty"` // legacy, kept for compat
+	DescRu         string    `json:"description_ru,omitempty"`
+	DescUa         string    `json:"description_ua,omitempty"`
+	DescPl         string    `json:"description_pl,omitempty"`
+	DescEn         string    `json:"description_en,omitempty"`
+	ImageLightURL  string    `json:"image_light_url,omitempty"` // light theme image
+	ImageDarkURL   string    `json:"image_dark_url,omitempty"`  // dark theme image
 	IsActive       bool      `json:"is_active"`
 	SortOrder      int       `json:"sort_order"`
 	AnchorKeywords []string  `json:"anchor_keywords,omitempty"` // keywords for auto-catalogization

@@ -87,6 +87,7 @@
   "catalog": {
     "all_products": "Усі товари",
     "catalog_title": "Каталог товарів",
+    "root_description": "Ласкаво просимо до каталогу MakoShop. Тут ви знайдете тисячі товарів від перевірених продавців.",
     "reset_filters": "Скинути фільтри",
     "back_to_catalog": "← Повернутися до каталогу",
     "search_label": "Пошук",

@@ -755,6 +755,21 @@ func main() {
 		}
 	})
 
+	// Image upload (admin only)
+	// POST /admin/upload-image — upload category image
+	mux.Handle("/admin/upload-image", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleUploadImage(w, r)
+	}), model.RoleAdmin))
+
+	// DELETE /admin/upload-image/{filename} — delete uploaded image
+	mux.Handle("/admin/upload-image/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleDeleteImage(w, r)
+	}), model.RoleAdmin))
+
+	// Public static file serving for uploads
+	// GET /uploads/{path}
+	mux.HandleFunc("/uploads/", api.HandleUploadsStatic)
+
 	// Brands
 	// GET /brands
 	mux.HandleFunc("/brands", func(w http.ResponseWriter, r *http.Request) {

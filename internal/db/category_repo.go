@@ -555,18 +555,24 @@ func (r *CategoryRepo) ListActive() ([]model.Category, error) {
 // ---------- Tree operations (optimized) ----------
 
 type CategoryTreeNode struct {
-	ID        int64               `json:"id"`
-	ParentID  *int64              `json:"parent_id,omitempty"`
-	Name      string              `json:"name"`
-	NameRu    string              `json:"name_ru"`
-	NameUa    string              `json:"name_ua"`
-	NamePl    string              `json:"name_pl"`
-	NameEn    string              `json:"name_en"`
-	Slug      string              `json:"slug"`
-	Desc      string              `json:"description,omitempty"`
-	IsActive  bool                `json:"is_active"`
-	SortOrder int                 `json:"sort_order"`
-	Children  []*CategoryTreeNode `json:"children,omitempty"`
+	ID            int64               `json:"id"`
+	ParentID      *int64              `json:"parent_id,omitempty"`
+	Name          string              `json:"name"`
+	NameRu        string              `json:"name_ru"`
+	NameUa        string              `json:"name_ua"`
+	NamePl        string              `json:"name_pl"`
+	NameEn        string              `json:"name_en"`
+	Slug          string              `json:"slug"`
+	Desc          string              `json:"description,omitempty"`
+	DescRu        string              `json:"description_ru,omitempty"`
+	DescUa        string              `json:"description_ua,omitempty"`
+	DescPl        string              `json:"description_pl,omitempty"`
+	DescEn        string              `json:"description_en,omitempty"`
+	ImageLightURL string              `json:"image_light_url,omitempty"`
+	ImageDarkURL  string              `json:"image_dark_url,omitempty"`
+	IsActive      bool                `json:"is_active"`
+	SortOrder     int                 `json:"sort_order"`
+	Children      []*CategoryTreeNode `json:"children,omitempty"`
 }
 
 // GetTree returns the full category tree (only active categories).
@@ -615,17 +621,23 @@ func (r *CategoryRepo) buildTree(categories []model.Category, rootParentID *int6
 			name = c.NameRu
 		}
 		byID[c.ID] = &CategoryTreeNode{
-			ID:        c.ID,
-			ParentID:  c.ParentID,
-			Name:      name,
-			NameRu:    c.NameRu,
-			NameUa:    c.NameUa,
-			NamePl:    c.NamePl,
-			NameEn:    c.NameEn,
-			Slug:      c.Slug,
-			Desc:      c.Desc,
-			IsActive:  c.IsActive,
-			SortOrder: c.SortOrder,
+			ID:            c.ID,
+			ParentID:      c.ParentID,
+			Name:          name,
+			NameRu:        c.NameRu,
+			NameUa:        c.NameUa,
+			NamePl:        c.NamePl,
+			NameEn:        c.NameEn,
+			Slug:          c.Slug,
+			Desc:          c.Desc,
+			DescRu:        c.DescRu,
+			DescUa:        c.DescUa,
+			DescPl:        c.DescPl,
+			DescEn:        c.DescEn,
+			ImageLightURL: c.ImageLightURL,
+			ImageDarkURL:  c.ImageDarkURL,
+			IsActive:      c.IsActive,
+			SortOrder:     c.SortOrder,
 		}
 	}
 

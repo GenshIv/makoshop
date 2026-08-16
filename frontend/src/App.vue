@@ -134,8 +134,15 @@ watch(() => route.fullPath, () => {
             </button>
 
             <!-- Logo -->
-            <router-link to="/" class="text-xl font-bold text-indigo-600 hover:text-indigo-700 whitespace-nowrap">
-              MakoShop
+            <router-link to="/" class="flex items-center gap-2">
+              <img
+                src="/koshik.png"
+                alt="MakoShop"
+                class="h-8 w-auto"
+              />
+              <span class="text-xl font-bold text-indigo-600 hover:text-indigo-700 whitespace-nowrap">
+                MakoShop
+              </span>
             </router-link>
           </div>
 
@@ -299,14 +306,7 @@ watch(() => route.fullPath, () => {
       </div>
     </div>
 
-    <!-- Categories sidebar (desktop: left column, mobile: overlay) -->
-    <!-- Desktop sidebar -->
-    <aside class="hidden lg:block fixed left-0 top-16 w-64 h-[calc(100vh-4rem)] bg-white border-r border-gray-200 theme-dark:bg-slate-900 theme-dark:border-slate-700 overflow-y-auto z-20">
-      <div class="p-3">
-        <h3 class="text-[11px] font-semibold text-gray-400 theme-dark:text-slate-500 uppercase tracking-wider mb-2 px-2">{{ t('common.categories') }}</h3>
-        <CategoryTree />
-      </div>
-    </aside>
+    <!-- Categories sidebar: mobile overlay only (desktop sidebar hidden) -->
 
     <!-- Mobile categories overlay -->
     <div
@@ -330,12 +330,12 @@ watch(() => route.fullPath, () => {
     </div>
 
     <!-- Main content -->
-    <main class="flex-1 lg:ml-64">
+    <main class="flex-1">
       <router-view />
     </main>
 
     <!-- Footer -->
-    <footer class="bg-white border-t py-4 lg:ml-64">
+    <footer class="bg-white border-t py-4">
       <div class="max-w-7xl mx-auto px-4">
         <div class="flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-gray-500">
           <span>© {{ new Date().getFullYear() }} {{ t('common.app_name') }} — {{ t('common.app_tagline') }}</span>
