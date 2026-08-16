@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import api from '../../api';
 import { useToast } from '../../composables/useToast';
 import ConfirmDialog from '../../components/ConfirmDialog.vue';
+import EmptyState from '../../components/EmptyState.vue';
 
 const { t } = useI18n();
 const { toast } = useToast();
@@ -139,6 +140,9 @@ onMounted(fetchItems);
 
     <!-- List -->
     <div v-if="loading" class="text-sm text-ink-3">{{ t('common.loading') }}</div>
+    <div v-else-if="items.length === 0" class="bg-surface rounded-lg shadow-sm">
+      <EmptyState icon="tag" :title="t('admin.no_items')" />
+    </div>
     <table v-else class="min-w-full text-sm">
       <thead class="border-b">
         <tr>
@@ -159,9 +163,6 @@ onMounted(fetchItems);
             <button @click="openEdit(item)" class="text-xs text-purple-700 hover:underline">{{ t('admin.edit') }}</button>
             <button @click="askRemove(item)" class="text-xs text-red-600 hover:underline">{{ t('admin.delete') }}</button>
           </td>
-        </tr>
-        <tr v-if="items.length === 0">
-          <td colspan="5" class="py-4 text-sm text-ink-3">{{ t('admin.no_items') }}</td>
         </tr>
       </tbody>
     </table>

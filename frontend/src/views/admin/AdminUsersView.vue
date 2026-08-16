@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import api from '../../api';
 import { useToast } from '../../composables/useToast';
 import { useFormat } from '../../composables/useFormat';
+import EmptyState from '../../components/EmptyState.vue';
 
 const { t } = useI18n();
 const { toast } = useToast();
@@ -50,6 +51,10 @@ onMounted(fetchUsers);
 
     <div v-else-if="error" class="p-4 bg-red-100 text-red-700 rounded-lg">
       {{ error }}
+    </div>
+
+    <div v-else-if="users.length === 0" class="bg-surface rounded-lg shadow-sm">
+      <EmptyState icon="users" :title="t('admin.no_items')" />
     </div>
 
     <div v-else class="bg-surface rounded-lg shadow-sm overflow-hidden">

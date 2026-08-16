@@ -68,7 +68,7 @@ const register = async () => {
         <button
           type="submit"
           :disabled="auth.loading"
-          class="w-full px-4 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-40"
+          class="w-full btn btn-primary"
         >
           {{ auth.loading ? t('auth.registering') : t('auth.register_link') }}
         </button>

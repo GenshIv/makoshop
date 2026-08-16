@@ -91,13 +91,13 @@ onMounted(loadProfile);
         <!-- Actions -->
         <div class="flex gap-3 pt-4">
           <template v-if="!editing">
-            <button @click="editing = true" class="px-4 py-2 border border-line rounded-lg hover:bg-surface-2">
+            <button @click="editing = true" class="btn btn-secondary">
               {{ t('profile.edit') }}
             </button>
-            <router-link to="/orders" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+            <router-link to="/orders" class="btn btn-primary">
               {{ t('profile.my_orders') }}
             </router-link>
-            <router-link to="/reviews" class="px-4 py-2 border border-line rounded-lg hover:bg-surface-2">
+            <router-link to="/reviews" class="btn btn-secondary">
               {{ t('profile.my_reviews') }}
             </router-link>
           </template>
@@ -105,11 +105,11 @@ onMounted(loadProfile);
             <button
               @click="saveProfile"
               :disabled="saving"
-              class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40"
+              class="btn btn-primary"
             >
               {{ saving ? t('profile.saving') : t('profile.save') }}
             </button>
-            <button @click="editing = false; loadProfile()" class="px-4 py-2 border border-line rounded-lg hover:bg-surface-2">
+            <button @click="editing = false; loadProfile()" class="btn btn-secondary">
               {{ t('profile.cancel') }}
             </button>
           </template>

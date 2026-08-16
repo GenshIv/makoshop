@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
 import { useFormat } from '../composables/useFormat';
+import EmptyState from '../components/EmptyState.vue';
 
 const router = useRouter();
 const orders = ref([]);
@@ -64,9 +65,10 @@ onMounted(fetchOrders);
     </div>
 
     <!-- Empty -->
-    <div v-else-if="orders.length === 0" class="text-center py-12 text-ink-3">
-      {{ t('orders.no_orders') }}
-      <router-link to="/" class="block mt-2 text-indigo-600 hover:underline">{{ t('orders.go_to_catalog') }}</router-link>
+    <div v-else-if="orders.length === 0" class="bg-surface rounded-lg shadow-sm">
+      <EmptyState icon="doc" :title="t('orders.no_orders')">
+        <router-link to="/" class="btn btn-primary">{{ t('orders.go_to_catalog') }}</router-link>
+      </EmptyState>
     </div>
 
     <!-- Orders list -->

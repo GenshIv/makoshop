@@ -52,7 +52,7 @@ onMounted(() => {
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
       </svg>
       <p class="text-ink-3 mb-4">{{ t('cart.empty') }}</p>
-      <router-link to="/" class="inline-block px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
+      <router-link to="/" class="btn btn-primary">
         {{ t('cart.go_to_catalog') }}
       </router-link>
     </div>
@@ -128,10 +128,7 @@ onMounted(() => {
           <div class="text-sm text-ink-3">{{ t('cart.items_count', { count: cart.totalCount }) }}</div>
           <div class="text-xl font-bold text-indigo-600">{{ formatPrice(cart.totalPrice) }}</div>
         </div>
-        <button
-          @click="goToCheckout"
-          class="px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition whitespace-nowrap"
-        >
+        <button @click="goToCheckout" class="btn btn-primary btn-lg">
           {{ t('cart.checkout') }}
         </button>
       </div>

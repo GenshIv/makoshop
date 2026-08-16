@@ -232,7 +232,7 @@ onMounted(() => {
         <button
           @click="addToCart"
           :disabled="!isInStock()"
-          class="mt-6 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          class="mt-6 btn btn-primary btn-lg w-full sm:w-auto"
         >
           {{ t('catalog.add_to_cart') }}
         </button>
@@ -272,7 +272,7 @@ onMounted(() => {
         <button
           @click="submitReview"
           :disabled="submittingReview"
-          class="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-40"
+          class="mt-2 btn btn-primary"
         >
           {{ submittingReview ? t('catalog.sending_review') : t('catalog.send_review') }}
         </button>
@@ -302,7 +302,7 @@ onMounted(() => {
         <button
           @click="() => { reviewsPagination.page--; fetchReviews(); }"
           :disabled="reviewsPagination.page <= 1"
-          class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-40 hover:bg-surface-2"
+          class="btn btn-secondary btn-sm"
         >
           {{ t('common.back') }}
         </button>
@@ -312,7 +312,7 @@ onMounted(() => {
         <button
           @click="() => { reviewsPagination.page++; fetchReviews(); }"
           :disabled="reviewsPagination.page >= reviewsPagination.total_pages"
-          class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-40 hover:bg-surface-2"
+          class="btn btn-secondary btn-sm"
         >
           {{ t('common.next') }}
         </button>

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import api from '../../api';
 import { useToast } from '../../composables/useToast';
 import ConfirmDialog from '../../components/ConfirmDialog.vue';
+import EmptyState from '../../components/EmptyState.vue';
 
 const { t } = useI18n();
 const { toast } = useToast();
@@ -147,8 +148,8 @@ onMounted(fetchCompanies);
       {{ error }}
     </div>
 
-    <div v-else-if="companies.length === 0" class="text-center py-12 text-ink-3">
-      {{ t('admin.no_companies') }}
+    <div v-else-if="companies.length === 0" class="bg-surface rounded-lg shadow-sm">
+      <EmptyState icon="users" :title="t('admin.no_companies')" />
     </div>
 
     <div v-else class="bg-surface rounded-lg shadow-sm overflow-hidden">

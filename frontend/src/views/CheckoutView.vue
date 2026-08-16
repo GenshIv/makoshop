@@ -90,10 +90,10 @@ onMounted(async () => {
       <div class="text-green-700 font-medium text-lg mb-2">{{ t('checkout.order_created') }}</div>
       <div class="text-green-600 text-sm mb-4">{{ t('checkout.order_number', { id: orderId }) }}</div>
       <div class="flex justify-center gap-3">
-        <router-link :to="{ name: 'order-detail', params: { id: orderId } }" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
+        <router-link :to="{ name: 'order-detail', params: { id: orderId } }" class="btn btn-primary">
           {{ t('checkout.view_order') }}
         </router-link>
-        <router-link to="/" class="px-4 py-2 border border-line rounded-lg text-sm hover:bg-surface-2">
+        <router-link to="/" class="btn btn-secondary">
           {{ t('checkout.to_catalog') }}
         </router-link>
       </div>
@@ -162,7 +162,7 @@ onMounted(async () => {
         <button
           @click="submitOrder"
           :disabled="submitting || cart.loading"
-          class="mt-6 w-full px-4 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-40 transition"
+          class="mt-6 btn btn-primary btn-lg w-full"
         >
           {{ submitting ? t('checkout.creating_order') : t('checkout.confirm_order') }}
         </button>

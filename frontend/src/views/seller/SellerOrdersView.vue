@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import api from '../../api';
 import { useAuthStore } from '../../stores/auth';
 import { useFormat } from '../../composables/useFormat';
+import EmptyState from '../../components/EmptyState.vue';
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -73,8 +74,8 @@ onMounted(fetchOrders);
     </div>
 
     <!-- Empty -->
-    <div v-else-if="orders.length === 0" class="text-center py-12 text-ink-3">
-      {{ t('seller.no_orders') }}
+    <div v-else-if="orders.length === 0" class="bg-surface rounded-lg shadow-sm">
+      <EmptyState icon="doc" :title="t('seller.no_orders')" />
     </div>
 
     <!-- Orders table -->

@@ -26,7 +26,7 @@ func TestBenchListWithTurbo(t *testing.T) {
 
 	// Открываем существующую БД makoshop
 	cfg := config.DatabaseConfig{
-		Path:               "../makoshop_db",
+		Path:               "/home/ihar/IdeaProjects/makoshop/makoshop_db",
 		NumShards:          16,
 		MaxTotalSize:       40 * 1024 * 1024 * 1024,
 		NumBucketsPerShard: 5_000_000,

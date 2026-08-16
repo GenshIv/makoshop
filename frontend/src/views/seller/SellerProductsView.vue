@@ -6,6 +6,7 @@ import api from '../../api';
 import { useAuthStore } from '../../stores/auth';
 import { useFormat } from '../../composables/useFormat';
 import { useToast } from '../../composables/useToast';
+import EmptyState from '../../components/EmptyState.vue';
 import ConfirmDialog from '../../components/ConfirmDialog.vue';
 
 const router = useRouter();
@@ -79,11 +80,10 @@ onMounted(fetchProducts);
     </div>
 
     <!-- Empty -->
-    <div v-else-if="products.length === 0" class="text-center py-12 text-ink-3">
-      {{ t('seller.no_products') }}
-      <router-link to="/seller/products/new" class="block mt-2 text-indigo-600 hover:underline">
-        {{ t('seller.add_first_product') }}
-      </router-link>
+    <div v-else-if="products.length === 0" class="bg-surface rounded-lg shadow-sm">
+      <EmptyState icon="box" :title="t('seller.no_products')">
+        <router-link to="/seller/products/new" class="btn btn-primary">{{ t('seller.add_first_product') }}</router-link>
+      </EmptyState>
     </div>
 
     <!-- Products table -->
