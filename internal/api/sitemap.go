@@ -274,7 +274,7 @@ func (h *Handlers) HandleSitemapSCUPage(w http.ResponseWriter, r *http.Request) 
 
 		urls = append(urls, SitemapURL{
 			Loc:        sitemapBaseURL + loc,
-			LastMod:    sp.UpdatedAt.UTC().Format(time.RFC3339),
+			LastMod:    sp.UpdatedAt,
 			ChangeFreq: "daily",
 			Priority:   "0.8",
 		})

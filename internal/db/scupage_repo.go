@@ -97,8 +97,8 @@ func (r *SCUPageRepo) CreateNoListIndex(s *model.SCUPage) error {
 		return fmt.Errorf("next_id scupage: %w", err)
 	}
 	s.ID = id
-	s.CreatedAt = time.Now()
-	s.UpdatedAt = time.Now()
+	s.CreatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+	s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
 	if s.Slug == "" {
 		s.Slug = toSCUPageSlug(s.SCU, s.Title)
 	}
@@ -137,8 +137,8 @@ func (r *SCUPageRepo) Create(s *model.SCUPage) error {
 		return fmt.Errorf("next_id scupage: %w", err)
 	}
 	s.ID = id
-	s.CreatedAt = time.Now()
-	s.UpdatedAt = time.Now()
+	s.CreatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+	s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
 	if s.Slug == "" {
 		s.Slug = toSCUPageSlug(s.SCU, s.Title)
 	}
@@ -226,7 +226,7 @@ func (r *SCUPageRepo) Update(id int64, updater func(*model.SCUPage)) error {
 	oldSCU := s.SCU
 	oldSlug := s.Slug
 	updater(s)
-	s.UpdatedAt = time.Now()
+	s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
 
 	data := MarshalSCUPage(*s)
 	if err := r.Store.DocPut(KeySCUPage(s.ID), data); err != nil {
@@ -311,7 +311,7 @@ func (r *SCUPageRepo) AddProduct(id int64, productID int64) error {
 		return err
 	}
 	s.ProductCount++
-	s.UpdatedAt = time.Now()
+	s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
 	data := MarshalSCUPage(*s)
 	return r.Store.DocPut(KeySCUPage(s.ID), data)
 }
@@ -327,7 +327,7 @@ func (r *SCUPageRepo) RemoveProduct(id int64, productID int64) error {
 	if s.ProductCount > 0 {
 		s.ProductCount--
 	}
-	s.UpdatedAt = time.Now()
+	s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
 	data := MarshalSCUPage(*s)
 	return r.Store.DocPut(KeySCUPage(s.ID), data)
 }
@@ -345,7 +345,7 @@ func (r *SCUPageRepo) UpsertBySCU(scu string, updater func(*model.SCUPage)) (*mo
 	if err == nil {
 		// Update existing
 		updater(s)
-		s.UpdatedAt = time.Now()
+		s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
 		data := MarshalSCUPage(*s)
 		if err := r.Store.DocPut(KeySCUPage(s.ID), data); err != nil {
 			return nil, fmt.Errorf("update scupage: %w", err)
@@ -407,8 +407,8 @@ func (r *SCUPageRepo) UpsertFromProduct(product *model.Product) error {
 		Currency:     product.Currency,
 		Attributes:   mergeAttributes(nil, product.Attributes),
 		ProductCount: 1,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		CreatedAt:    strconv.Itoa(int(time.Now().UnixNano())),
+		UpdatedAt:    strconv.Itoa(int(time.Now().UnixNano())),
 	}
 
 	return r.Create(s)
@@ -436,7 +436,7 @@ func (r *SCUPageRepo) updateSCUPageFromProduct(s *model.SCUPage, product *model.
 		s.Content = product.Description
 	}
 
-	s.UpdatedAt = time.Now()
+	s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
 
 	// Save
 	data := MarshalSCUPage(*s)
@@ -732,8 +732,8 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 					Currency:     p.Currency,
 					Attributes:   mergeAttributes(nil, p.Attributes),
 					ProductCount: 1,
-					CreatedAt:    time.Now(),
-					UpdatedAt:    time.Now(),
+					CreatedAt:    strconv.Itoa(int(time.Now().UnixNano())),
+					UpdatedAt:    strconv.Itoa(int(time.Now().UnixNano())),
 				}
 			}
 		}
@@ -765,7 +765,7 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 				s.Content = p.Description
 			}
 
-			s.UpdatedAt = time.Now()
+			s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
 		}
 	}
 
@@ -879,7 +879,7 @@ func (r *SCUPageRepo) RecalculateProductCounts() error {
 		newCount := len(products)
 		if newCount != sp.ProductCount {
 			sp.ProductCount = newCount
-			sp.UpdatedAt = time.Now()
+			sp.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
 			data := MarshalSCUPage(sp)
 			if err := r.Store.DocPut(KeySCUPage(sp.ID), data); err != nil {
 				fmt.Printf("WARN: update product_count for scupage %d: %v\n", sp.ID, err)

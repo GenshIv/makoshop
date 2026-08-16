@@ -1,5 +1,10 @@
 {
   "ui.catalog_title": "Product Catalog — MakoShop",
+  "ui.catalog_label": "Product Catalog",
+  "ui.brand_label": "Brand",
+  "ui.offer_count_singular": "offer",
+  "ui.offer_count_plural": "offers",
+  "ui.offer_count_many": "offers",
   "ui.company_magazilla_name": "Magazilla",
   "ui.company_magazilla_desc": "Largest electronics and home goods retailer",
   "ui.company_dns_name": "DNS",

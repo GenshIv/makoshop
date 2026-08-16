@@ -351,10 +351,11 @@ func (s *SCUPageSearch) BuildSortIndexes() error {
 		docID := uint64(sp.ID)
 		priceVal := uint64(sp.MinPrice * 100)
 
+		scCreated, _ := strconv.Atoi(sp.CreatedAt)
 		// Add to global (catID=0) index
 		catPricesAsc[0] = append(catPricesAsc[0], priced{docID: docID, price: sp.MinPrice})
 		catPricesDesc[0] = append(catPricesDesc[0], priced{docID: docID, price: sp.MinPrice})
-		catCreatedDesc[0] = append(catCreatedDesc[0], timed{docID: docID, ts: sp.CreatedAt.UnixNano()})
+		catCreatedDesc[0] = append(catCreatedDesc[0], timed{docID: docID, ts: int64(scCreated)})
 		catPricePairs[0] = append(catPricePairs[0], makodb.TurboNumSortPair{Value: priceVal, DocID: docID})
 
 		// Add to all ancestor categories
@@ -366,7 +367,7 @@ func (s *SCUPageSearch) BuildSortIndexes() error {
 			for _, cid := range ancestors {
 				catPricesAsc[cid] = append(catPricesAsc[cid], priced{docID: docID, price: sp.MinPrice})
 				catPricesDesc[cid] = append(catPricesDesc[cid], priced{docID: docID, price: sp.MinPrice})
-				catCreatedDesc[cid] = append(catCreatedDesc[cid], timed{docID: docID, ts: sp.CreatedAt.UnixNano()})
+				catCreatedDesc[cid] = append(catCreatedDesc[cid], timed{docID: docID, ts: int64(scCreated)})
 				catPricePairs[cid] = append(catPricePairs[cid], makodb.TurboNumSortPair{Value: priceVal, DocID: docID})
 			}
 		}

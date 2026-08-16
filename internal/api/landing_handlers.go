@@ -5,14 +5,17 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/i18n"
 	"github.com/GenshIv/makoshop/internal/model"
+	"github.com/GenshIv/silentjson/v2"
 )
 
 // --- Landing Page handlers ---
@@ -711,7 +714,7 @@ func writeHTMLResponse(w http.ResponseWriter, r *http.Request, title string, dat
 			ogURL = baseURL + "/shop"
 		}
 		html := fmt.Sprintf(`<!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -727,6 +730,7 @@ func writeHTMLResponse(w http.ResponseWriter, r *http.Request, title string, dat
   <script>window.__INITIAL_DATA__=%s</script>
 </body>
 </html>`,
+
 			html.EscapeString(title),
 			html.EscapeString(desc),
 			canonicalTag,
@@ -745,7 +749,7 @@ func writeHTMLResponse(w http.ResponseWriter, r *http.Request, title string, dat
 
 	// Minimal HTML for browsers (SPA)
 	html := fmt.Sprintf(`<!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -766,6 +770,26 @@ func writeHTMLResponse(w http.ResponseWriter, r *http.Request, title string, dat
 	w.Write([]byte(html))
 }
 
+// declineRussian declines a number into correct Russian form (1/2-4/5-20, 21, etc).
+// singular: 1, 21, 31...
+// plural: 2-4, 22-24, 32-34...
+// many: 5-20, 25-30, 35-40...
+func declineRussian(n int, singular, plural, many string) string {
+	lastTwo := n % 100
+	lastOne := n % 10
+	if lastTwo >= 11 && lastTwo <= 19 {
+		return many
+	}
+	switch lastOne {
+	case 1:
+		return singular
+	case 2, 3, 4:
+		return plural
+	default:
+		return many
+	}
+}
+
 // renderSSRContent generates inline HTML for bots from JSON data.
 func renderSSRContent(jsonData []byte) string {
 	var data map[string]json.RawMessage
@@ -775,13 +799,18 @@ func renderSSRContent(jsonData []byte) string {
 
 	var buf strings.Builder
 
+	catalogLabel := i18n.T("ui.catalog_label")
+	brandLabel := i18n.T("ui.brand_label")
+
 	// Check if this is a catalog page (has "items")
 	if raw, ok := data["items"]; ok {
 		var items []map[string]interface{}
 		if err := json.Unmarshal(raw, &items); err == nil && len(items) > 0 {
-			buf.WriteString(`<div class="ssr-catalog"><h1>Каталог товаров</h1><div class="ssr-grid">`)
+			buf.WriteString(`<div class="ssr-catalog"><h1>`)
+			buf.WriteString(html.EscapeString(catalogLabel))
+			buf.WriteString(`</h1><div class="ssr-grid">`)
 			for _, m := range items {
-				buf.WriteString(renderSSRProductCard(m))
+				buf.WriteString(renderSSRProductCard(m, brandLabel))
 			}
 			buf.WriteString(`</div></div>`)
 			return buf.String()
@@ -802,10 +831,10 @@ func renderSSRContent(jsonData []byte) string {
 				buf.WriteString(fmt.Sprintf(`<p class="ssr-desc">%s</p>`, html.EscapeString(page.Description)))
 			}
 			if page.Brand != "" {
-				buf.WriteString(fmt.Sprintf(`<p>Бренд: %s</p>`, html.EscapeString(page.Brand)))
+				buf.WriteString(fmt.Sprintf(`<p>%s: %s</p>`, html.EscapeString(brandLabel), html.EscapeString(page.Brand)))
 			}
 			if page.MinPrice > 0 {
-				buf.WriteString(fmt.Sprintf(`<p class="ssr-price">Цена от: %.2f %s</p>`, page.MinPrice, page.Currency))
+				buf.WriteString(fmt.Sprintf(`<p class="ssr-price">%.2f %s</p>`, page.MinPrice, page.Currency))
 			}
 			if len(page.Images) > 0 {
 				buf.WriteString(fmt.Sprintf(`<img src="%s" alt="%s" class="ssr-image">`,
@@ -835,7 +864,7 @@ func renderSSRContent(jsonData []byte) string {
 }
 
 // renderSSRProductCard renders a single product card for catalog SSR.
-func renderSSRProductCard(m map[string]interface{}) string {
+func renderSSRProductCard(m map[string]interface{}, brandLabel string) string {
 	title, _ := m["title"].(string)
 	slug, _ := m["slug"].(string)
 	seoURL, _ := m["seo_url"].(string)
@@ -862,11 +891,21 @@ func renderSSRProductCard(m map[string]interface{}) string {
 	}
 	buf.WriteString(fmt.Sprintf(`<h2>%s</h2>`, html.EscapeString(title)))
 	if brand != "" {
-		buf.WriteString(fmt.Sprintf(`<p>Бренд: %s</p>`, html.EscapeString(brand)))
+		buf.WriteString(fmt.Sprintf(`<p>%s: %s</p>`, html.EscapeString(brandLabel), html.EscapeString(brand)))
 	}
 	buf.WriteString(fmt.Sprintf(`<p class="ssr-price">%.2f %s</p>`, minPrice, currency))
 	if productCount > 1 {
-		buf.WriteString(fmt.Sprintf(`<p>%d предложений</p>`, productCount))
+		lang := i18n.Current()
+		offersText := declineRussian(productCount,
+			i18n.T("ui.offer_count_singular"),
+			i18n.T("ui.offer_count_plural"),
+			i18n.T("ui.offer_count_many"),
+		)
+		if lang == "en" {
+			// English doesn't need complex declension; just plural
+			offersText = i18n.T("ui.offer_count_plural")
+		}
+		buf.WriteString(fmt.Sprintf(`<p>%d %s</p>`, productCount, offersText))
 	}
 	buf.WriteString(`</a></div>`)
 	return buf.String()
@@ -923,6 +962,8 @@ func buildSEOURL(sp *model.SCUPage, treePath []string) string {
 	return "/shop/" + strings.Join(parts, "/")
 }
 
+var transReg = silentjson.BuildRegistry(reflect.TypeOf(model.SCUPage{}))
+
 // injectSeoURL adds "seo_url" field to a raw SCUPage JSON via text operations.
 // Reads slug and category_id from JSON, builds canonical URL, inserts field before closing brace.
 func injectSeoURL(raw json.RawMessage, catRepo *db.CategoryRepo) json.RawMessage {
@@ -930,16 +971,16 @@ func injectSeoURL(raw json.RawMessage, catRepo *db.CategoryRepo) json.RawMessage
 		return raw
 	}
 
-	s := string(raw)
+	s := []byte(raw)
 
-	// Extract slug: find "slug":"value"
-	slug := extractJSONStringField(s, "slug")
-	if slug == "" {
+	resSCU := new(model.SCUPage)
+	if err := silentjson.ParseObject(s, transReg, unsafe.Pointer(resSCU)); resSCU.ID == 0 && err == nil {
 		return raw
 	}
 
-	// Extract category_id: find "category_id":123
-	catID := extractJSONIntField(s, "category_id")
+	slug := resSCU.Slug
+
+	catID := resSCU.CategoryID
 
 	// Build seo_url
 	seoURL := "/shop/" + slug
@@ -959,55 +1000,6 @@ func injectSeoURL(raw json.RawMessage, catRepo *db.CategoryRepo) json.RawMessage
 	buf = append(buf, insert...)
 	buf = append(buf, '}')
 	return json.RawMessage(buf)
-}
-
-// extractJSONStringField extracts a string value for a given key from JSON text.
-// Looks for "key":"value" pattern. Simple and fast, no full parse.
-func extractJSONStringField(s, key string) string {
-	search := `"` + key + `":"`
-	idx := strings.Index(s, search)
-	if idx == -1 {
-		return ""
-	}
-	start := idx + len(search)
-	if start >= len(s) {
-		return ""
-	}
-	// Find closing quote (handle escaped quotes)
-	for i := start; i < len(s); i++ {
-		if s[i] == '\\' {
-			i++ // skip escaped char
-			continue
-		}
-		if s[i] == '"' {
-			return s[start:i]
-		}
-	}
-	return ""
-}
-
-// extractJSONIntField extracts an integer value for a given key from JSON text.
-// Looks for "key":123 pattern.
-func extractJSONIntField(s, key string) int64 {
-	search := `"` + key + `":`
-	idx := strings.Index(s, search)
-	if idx == -1 {
-		return 0
-	}
-	start := idx + len(search)
-	if start >= len(s) {
-		return 0
-	}
-	// Read digits
-	end := start
-	for end < len(s) && s[end] >= '0' && s[end] <= '9' {
-		end++
-	}
-	if end == start {
-		return 0
-	}
-	v, _ := strconv.ParseInt(s[start:end], 10, 64)
-	return v
 }
 
 // --- Request types ---
@@ -1181,7 +1173,7 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 			existing.Attributes = attrs
 			existing.ProductCount = len(products)
 			existing.IsActive = true
-			existing.UpdatedAt = time.Now()
+			existing.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
 
 			data := db.MarshalSCUPage(*existing)
 			if err := h.scuPageRepo.Store.DocPut(db.KeySCUPage(existing.ID), data); err != nil {
@@ -1208,8 +1200,8 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 				Attributes:   attrs,
 				ProductCount: len(products),
 				IsActive:     true,
-				CreatedAt:    time.Now(),
-				UpdatedAt:    time.Now(),
+				CreatedAt:    strconv.Itoa(int(time.Now().UnixNano())),
+				UpdatedAt:    strconv.Itoa(int(time.Now().UnixNano())),
 			}
 
 			// Create without list index (will be batched)

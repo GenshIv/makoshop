@@ -218,17 +218,17 @@ type Product struct {
 // Все товары с этим SCU редиректятся на эту страницу.
 
 type LandingPage struct {
-	ID          int64     `json:"id"`
-	SCU         string    `json:"scu"`         // unique identifier
-	Slug        string    `json:"slug"`        // URL-friendly path
-	Title       string    `json:"title"`       // page title
-	Description string    `json:"description"` // meta description
-	Content     string    `json:"content"`     // HTML/markdown content
-	Images      []string  `json:"images"`      // page images
-	IsActive    bool      `json:"is_active"`
-	ProductIDs  []int64   `json:"product_ids"` // cached list of product IDs with this SCU
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          int64    `json:"id"`
+	SCU         string   `json:"scu"`         // unique identifier
+	Slug        string   `json:"slug"`        // URL-friendly path
+	Title       string   `json:"title"`       // page title
+	Description string   `json:"description"` // meta description
+	Content     string   `json:"content"`     // HTML/markdown content
+	Images      []string `json:"images"`      // page images
+	IsActive    bool     `json:"is_active"`
+	ProductIDs  []int64  `json:"product_ids"` // cached list of product IDs with this SCU
+	CreatedAt   string   `json:"created_at"`
+	UpdatedAt   string   `json:"updated_at"`
 }
 
 // SCUPage — SEO-страница для группы товаров с одинаковым SCU.
@@ -251,8 +251,8 @@ type SCUPage struct {
 	Currency     string                 `json:"currency"`             // currency (default: RUB)
 	Attributes   map[string]interface{} `json:"attributes,omitempty"` // merged attributes (no duplicates)
 	ProductCount int                    `json:"product_count"`        // number of products with this SCU
-	CreatedAt    time.Time              `json:"created_at"`
-	UpdatedAt    time.Time              `json:"updated_at"`
+	CreatedAt    string                 `json:"created_at"`
+	UpdatedAt    string                 `json:"updated_at"`
 }
 
 // NOTE: ProductIDs removed from SCUPage to prevent DB bloat.
