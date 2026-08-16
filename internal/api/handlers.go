@@ -4598,6 +4598,25 @@ func (h *Handlers) HandleAdminSCUPageRebuildToken(w http.ResponseWriter, r *http
 	})
 }
 
+// POST /admin/scupages/recalculate-product-counts
+// Recalculates ProductCount for all SCU pages based on actual products.
+func (h *Handlers) HandleAdminSCUPageRecalculateCounts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	if err := h.scuPageRepo.RecalculateProductCounts(); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "ok",
+		"message": "Product counts recalculated",
+	})
+}
+
 // --- Payment Methods CRUD ---
 
 func (h *Handlers) HandlePaymentMethodsList(w http.ResponseWriter, r *http.Request) {

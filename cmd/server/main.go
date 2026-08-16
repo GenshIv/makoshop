@@ -991,6 +991,12 @@ func main() {
 			return
 		}
 
+		// POST /admin/scupages/recalculate-product-counts
+		if path == "/admin/scupages/recalculate-product-counts" && r.Method == http.MethodPost {
+			h.HandleAdminSCUPageRecalculateCounts(w, r)
+			return
+		}
+
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleAdminSCUPageGet(w, r)

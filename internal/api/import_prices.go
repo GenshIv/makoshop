@@ -247,6 +247,14 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 	}
 	fmt.Printf("[IMPORT-CSV] Phase 4: Sort indexes rebuilt in %v\n", time.Since(phase4Start))
 
+	// Phase 5: Recalculate SCU page product counts
+	fmt.Println("[IMPORT-CSV] Phase 5: Recalculating SCU page product counts...")
+	phase5Start := time.Now()
+	if err := h.scuPageRepo.RecalculateProductCounts(); err != nil {
+		fmt.Printf("[IMPORT-CSV] WARN: recalculate product counts: %v\n", err)
+	}
+	fmt.Printf("[IMPORT-CSV] Phase 5: Product counts recalculated in %v\n", time.Since(phase5Start))
+
 	writeJSON(w, http.StatusOK, ImportPricesResult{
 		Status:           "completed",
 		Categories:       finalCategories,
@@ -431,6 +439,14 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	fmt.Printf("[IMPORT-NORMALIZED] Phase 3: Indexes built in %v\n", time.Since(phase3Start))
+
+	// Phase 4: Recalculate SCU page product counts
+	fmt.Println("[IMPORT-NORMALIZED] Phase 4: Recalculating SCU page product counts...")
+	phase4Start := time.Now()
+	if err := h.scuPageRepo.RecalculateProductCounts(); err != nil {
+		fmt.Printf("[IMPORT-NORMALIZED] WARN: recalculate product counts: %v\n", err)
+	}
+	fmt.Printf("[IMPORT-NORMALIZED] Phase 4: Product counts recalculated in %v\n", time.Since(phase4Start))
 
 	elapsed := time.Since(startTime)
 	fmt.Printf("[IMPORT-NORMALIZED] Completed: created=%d skipped=%d time=%v (%.0f products/sec)\n",
@@ -1277,9 +1293,19 @@ func streamImportCSVFile(
 		if len(batch) == 0 {
 			return nil
 		}
-		created, count := prodRepo.CreateBatchWithIdxBuild(batch)
-		allProducts = append(allProducts, created...)
-		imported += int64(count)
+		for _, p := range batch {
+			id, isNew, err := prodRepo.GetOrCreateByKey(p)
+			if err != nil {
+				atomic.AddInt64(&skipped, 1)
+				continue
+			}
+			if isNew {
+				if prod, err := prodRepo.Get(id); err == nil {
+					allProducts = append(allProducts, prod)
+				}
+			}
+			imported++
+		}
 		batch = batch[:0]
 		return nil
 	}
@@ -2001,6 +2027,14 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	fmt.Printf("[IMPORT-MULTI] Phase 3: SCU pages done in %v\n", time.Since(phase3Start))
+
+	// Phase 4: Recalculate SCU page product counts
+	fmt.Println("[IMPORT-MULTI] Phase 4: Recalculating SCU page product counts...")
+	phase4Start := time.Now()
+	if err := h.scuPageRepo.RecalculateProductCounts(); err != nil {
+		fmt.Printf("[IMPORT-MULTI] WARN: recalculate product counts: %v\n", err)
+	}
+	fmt.Printf("[IMPORT-MULTI] Phase 4: Product counts recalculated in %v\n", time.Since(phase4Start))
 
 	elapsed := time.Since(startTime)
 	fmt.Printf("[IMPORT-MULTI] Complete: total_imported=%d total_skipped=%d time=%v\n",
