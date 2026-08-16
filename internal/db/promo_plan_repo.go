@@ -22,8 +22,8 @@ func (r *PromoPlanRepo) Create(p *model.PromoPlan) error {
 		return fmt.Errorf("next_id promo_plan: %w", err)
 	}
 	p.ID = id
-	p.CreatedAt = time.Now()
-	p.UpdatedAt = time.Now()
+	p.CreatedAt = time.Now().Unix()
+	p.UpdatedAt = time.Now().Unix()
 
 	data := MarshalPromoPlan(*p)
 	if err := r.store.DocPut(KeyPromoPlan(p.ID), data); err != nil {
@@ -55,7 +55,7 @@ func (r *PromoPlanRepo) Update(id int64, updater func(*model.PromoPlan)) error {
 		return err
 	}
 	updater(p)
-	p.UpdatedAt = time.Now()
+	p.UpdatedAt = time.Now().Unix()
 	data := MarshalPromoPlan(*p)
 	return r.store.DocPut(KeyPromoPlan(p.ID), data)
 }

@@ -21,8 +21,8 @@ func (r *BrandRepo) Create(b *model.Brand) error {
 		return fmt.Errorf("next_id brand: %w", err)
 	}
 	b.ID = id
-	b.CreatedAt = time.Now()
-	b.UpdatedAt = time.Now()
+	b.CreatedAt = time.Now().Unix()
+	b.UpdatedAt = time.Now().Unix()
 
 	data := MarshalBrand(*b)
 	if err := r.store.DocPut(KeyBrand(b.ID), data); err != nil {
@@ -64,7 +64,7 @@ func (r *BrandRepo) Update(id int64, updater func(*model.Brand)) error {
 		return err
 	}
 	updater(b)
-	b.UpdatedAt = time.Now()
+	b.UpdatedAt = time.Now().Unix()
 
 	data := MarshalBrand(*b)
 	if err := r.store.DocPut(KeyBrand(b.ID), data); err != nil {

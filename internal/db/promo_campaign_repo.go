@@ -23,8 +23,8 @@ func (r *PromoCampaignRepo) Create(c *model.PromoCampaign) error {
 		return fmt.Errorf("next_id promo_campaign: %w", err)
 	}
 	c.ID = id
-	c.CreatedAt = time.Now()
-	c.UpdatedAt = time.Now()
+	c.CreatedAt = time.Now().Unix()
+	c.UpdatedAt = time.Now().Unix()
 	if c.Status == "" {
 		c.Status = model.PromoCampaignStatusPending
 	}
@@ -82,7 +82,7 @@ func (r *PromoCampaignRepo) ListByCompany(companyID int64) ([]model.PromoCampaig
 	// Sort by created_at desc
 	for i := len(result)/2 - 1; i >= 0; i-- {
 		j := len(result) - 1 - i
-		if result[i].CreatedAt.Before(result[j].CreatedAt) {
+		if result[i].CreatedAt < result[j].CreatedAt {
 			result[i], result[j] = result[j], result[i]
 		}
 	}
@@ -96,7 +96,7 @@ func (r *PromoCampaignRepo) Update(id int64, updater func(*model.PromoCampaign))
 		return err
 	}
 	updater(c)
-	c.UpdatedAt = time.Now()
+	c.UpdatedAt = time.Now().Unix()
 	data := MarshalPromoCampaign(*c)
 	return r.store.DocPut(KeyPromoCampaign(c.ID), data)
 }
@@ -154,7 +154,7 @@ func (r *PromoCampaignRepo) GetActiveCampaigns() ([]model.PromoCampaign, error) 
 	}
 
 	ids := makodb.TurboUnsafeReadTokens(data)
-	now := time.Now()
+	now := time.Now().Unix()
 	var result []model.PromoCampaign
 
 	for _, id := range ids {
@@ -162,7 +162,7 @@ func (r *PromoCampaignRepo) GetActiveCampaigns() ([]model.PromoCampaign, error) 
 		if err != nil {
 			continue
 		}
-		if c.Status == model.PromoCampaignStatusActive && !c.EndAt.Before(now) {
+		if c.Status == model.PromoCampaignStatusActive && c.EndAt >= now {
 			result = append(result, *c)
 		}
 	}

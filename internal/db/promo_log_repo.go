@@ -23,7 +23,7 @@ func (r *PromoLogRepo) Create(l *model.PromoLog) error {
 		return fmt.Errorf("next_id promo_log: %w", err)
 	}
 	l.ID = id
-	l.CreatedAt = time.Now()
+	l.CreatedAt = time.Now().Unix()
 
 	data := MarshalPromoLog(*l)
 	if err := r.store.DocPut(KeyPromoLog(l.ID), data); err != nil {

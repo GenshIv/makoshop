@@ -34,8 +34,8 @@ func (r *CartRepo) Create(userID *int64, sessionID string) (*model.Cart, error) 
 		SessionID: sessionID,
 		Items:     []model.CartItem{},
 		Currency:  "RUB",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
 	}
 
 	if err := r.save(cart); err != nil {
@@ -124,7 +124,7 @@ func (r *CartRepo) AddItem(cartID string, productID int64, productName string, q
 		if item.ProductID == productID {
 			cart.Items[i].Qty += qty
 			cart.Items[i].Price = price // update price to latest
-			cart.UpdatedAt = time.Now()
+			cart.UpdatedAt = time.Now().Unix()
 			cart.TotalAmount = r.calcTotal(cart)
 			if err := r.save(cart); err != nil {
 				return nil, fmt.Errorf("save cart after add item: %w", err)
@@ -140,7 +140,7 @@ func (r *CartRepo) AddItem(cartID string, productID int64, productName string, q
 		Qty:         qty,
 		Price:       price,
 	})
-	cart.UpdatedAt = time.Now()
+	cart.UpdatedAt = time.Now().Unix()
 	cart.TotalAmount = r.calcTotal(cart)
 
 	if err := r.save(cart); err != nil {
@@ -178,7 +178,7 @@ func (r *CartRepo) UpdateItem(cartID string, productID int64, qty int) (*model.C
 	}
 
 	cart.Items = newItems
-	cart.UpdatedAt = time.Now()
+	cart.UpdatedAt = time.Now().Unix()
 	cart.TotalAmount = r.calcTotal(cart)
 
 	if err := r.save(cart); err != nil {
@@ -236,7 +236,7 @@ func (r *CartRepo) AssignToUser(cartID string, userID int64) (*model.Cart, error
 	// No existing cart for user, just assign
 	cart.UserID = &userID
 	cart.SessionID = ""
-	cart.UpdatedAt = time.Now()
+	cart.UpdatedAt = time.Now().Unix()
 
 	if err := r.save(cart); err != nil {
 		return nil, fmt.Errorf("save cart: %w", err)

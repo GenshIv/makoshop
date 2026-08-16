@@ -114,16 +114,17 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 		}
 	}
 
-	for code, val := range p.Attributes {
-		if valStr, ok := val.(string); ok && valStr != "" {
-			if _, err := t.store.db.TurboPutIndex(turboKeyAttr(code, valStr), docID); err != nil {
+	for _, kv := range p.Attributes {
+		valStr := kv.Value
+		if valStr != "" {
+			if _, err := t.store.db.TurboPutIndex(turboKeyAttr(kv.Key, valStr), docID); err != nil {
 				return fmt.Errorf("turbo attr index: %w", err)
 			}
 			// Обновляем справочник значений атрибута (глобальный)
-			t.ensureAttrValueInRef(code, valStr)
+			t.ensureAttrValueInRef(kv.Key, valStr)
 			// Обновляем категориальный индекс значений атрибута
 			if p.CategoryID != 0 {
-				t.ensureAttrValueInCatRef(code, p.CategoryID, valStr)
+				t.ensureAttrValueInCatRef(kv.Key, p.CategoryID, valStr)
 			}
 		}
 	}
@@ -312,9 +313,10 @@ func (t *TurboProductSearch) UnindexProduct(p *model.Product) error {
 			t.store.db.TurboDeleteIndex(turboKeyCategory(cid), docID)
 		}
 	}
-	for code, val := range p.Attributes {
-		if valStr, ok := val.(string); ok && valStr != "" {
-			t.store.db.TurboDeleteIndex(turboKeyAttr(code, valStr), docID)
+	for _, kv := range p.Attributes {
+		valStr := kv.Value
+		if valStr != "" {
+			t.store.db.TurboDeleteIndex(turboKeyAttr(kv.Key, valStr), docID)
 		}
 	}
 	for _, tok := range tokenizeProduct(p) {
@@ -378,24 +380,25 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 				indexes[turboKeyCategory(cid)] = append(indexes[turboKeyCategory(cid)], docID)
 			}
 		}
-		for code, val := range p.Attributes {
-			if valStr, ok := val.(string); ok && valStr != "" {
-				indexes[turboKeyAttr(code, valStr)] = append(indexes[turboKeyAttr(code, valStr)], docID)
+		for _, kv := range p.Attributes {
+			valStr := kv.Value
+			if valStr != "" {
+				indexes[turboKeyAttr(kv.Key, valStr)] = append(indexes[turboKeyAttr(kv.Key, valStr)], docID)
 				// Справочник значений атрибута (глобальный)
-				if attrRef[code] == nil {
-					attrRef[code] = make(map[uint64]string)
+				if attrRef[kv.Key] == nil {
+					attrRef[kv.Key] = make(map[uint64]string)
 				}
 				h := Fnv64(valStr)
-				attrRef[code][h] = valStr
+				attrRef[kv.Key][h] = valStr
 				// Справочник значений атрибута по категории
 				if p.CategoryID != 0 {
-					if attrCatRef[code] == nil {
-						attrCatRef[code] = make(map[int64]map[uint64]string)
+					if attrCatRef[kv.Key] == nil {
+						attrCatRef[kv.Key] = make(map[int64]map[uint64]string)
 					}
-					if attrCatRef[code][p.CategoryID] == nil {
-						attrCatRef[code][p.CategoryID] = make(map[uint64]string)
+					if attrCatRef[kv.Key][p.CategoryID] == nil {
+						attrCatRef[kv.Key][p.CategoryID] = make(map[uint64]string)
 					}
-					attrCatRef[code][p.CategoryID][h] = valStr
+					attrCatRef[kv.Key][p.CategoryID][h] = valStr
 				}
 			}
 		}
@@ -434,7 +437,7 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 	for _, p := range products {
 		docID := uint64(p.ID)
 		priceEntries = append(priceEntries, priceEntry{docID: docID, price: uint64(p.Price * 100)})
-		createdEntries = append(createdEntries, createdEntry{docID: docID, ts: uint64(p.CreatedAt.UnixNano())})
+		createdEntries = append(createdEntries, createdEntry{docID: docID, ts: uint64(p.CreatedAt * 1e9)})
 	}
 	if len(priceEntries) > 0 {
 		priceVals := make([]uint64, len(priceEntries))
@@ -520,7 +523,7 @@ func (t *TurboProductSearch) BuildSortIndexes() error {
 		return nil
 	}
 
-	start := time.Now()
+	start := time.Now().Unix()
 	fmt.Println("[TURBO] Building sort indexes...")
 
 	// Read product IDs from product_list
@@ -628,7 +631,7 @@ func (t *TurboProductSearch) BuildSortIndexes() error {
 		return err
 	}
 
-	fmt.Printf("[TURBO] Sort indexes built: %d products, %v\n", len(docIDs), time.Since(start))
+	fmt.Printf("[TURBO] Sort indexes built: %d products, %v\n", len(docIDs), time.Since(time.Unix(start, 0)))
 	return nil
 }
 
@@ -679,7 +682,7 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 		params.Limit = 200
 	}
 
-	// start := time.Now()
+	// start := time.Now().Unix()
 
 	// 1) AND-индексы
 	var andTokens []string

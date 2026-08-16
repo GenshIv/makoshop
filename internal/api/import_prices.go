@@ -494,17 +494,17 @@ func (h *Handlers) parseProductsFile(file string, companyID int64, companyName s
 	var skipped int
 
 	type productRow struct {
-		SKU         string                 `json:"sku"`
-		SCU         string                 `json:"scu"`
-		Name        string                 `json:"name"`
-		Description string                 `json:"description"`
-		CategoryID  int64                  `json:"category_id"`
-		BrandID     int64                  `json:"brand_id"`
-		Brand       string                 `json:"brand"`
-		Price       interface{}            `json:"price"`
-		StockQty    int64                  `json:"stock_qty"`
-		Images      []string               `json:"images,omitempty"`
-		Attributes  map[string]interface{} `json:"attributes,omitempty"`
+		SKU         string           `json:"sku"`
+		SCU         string           `json:"scu"`
+		Name        string           `json:"name"`
+		Description string           `json:"description"`
+		CategoryID  int64            `json:"category_id"`
+		BrandID     int64            `json:"brand_id"`
+		Brand       string           `json:"brand"`
+		Price       interface{}      `json:"price"`
+		StockQty    int64            `json:"stock_qty"`
+		Images      []string         `json:"images,omitempty"`
+		Attributes  []model.KeyValue `json:"attributes,omitempty"`
 	}
 
 	for scanner.Scan() {
@@ -840,17 +840,17 @@ func (h *Handlers) importNormalizedFileBatched(
 	var allCreated []*model.Product // collect all new products for batch SCU page upsert
 
 	type productRow struct {
-		SKU         string                 `json:"sku"`
-		SCU         string                 `json:"scu"`
-		Name        string                 `json:"name"`
-		Description string                 `json:"description"`
-		CategoryID  int64                  `json:"category_id"`
-		BrandID     int64                  `json:"brand_id"`
-		Brand       string                 `json:"brand"`
-		Price       interface{}            `json:"price"`
-		StockQty    int64                  `json:"stock_qty"`
-		Images      []string               `json:"images,omitempty"`
-		Attributes  map[string]interface{} `json:"attributes,omitempty"`
+		SKU         string           `json:"sku"`
+		SCU         string           `json:"scu"`
+		Name        string           `json:"name"`
+		Description string           `json:"description"`
+		CategoryID  int64            `json:"category_id"`
+		BrandID     int64            `json:"brand_id"`
+		Brand       string           `json:"brand"`
+		Price       interface{}      `json:"price"`
+		StockQty    int64            `json:"stock_qty"`
+		Images      []string         `json:"images,omitempty"`
+		Attributes  []model.KeyValue `json:"attributes,omitempty"`
 	}
 
 	flushBatch := func() bool {
@@ -892,10 +892,11 @@ func (h *Handlers) importNormalizedFileBatched(
 					}
 
 					// attributes
-					for code, val := range prod.Attributes {
-						if valStr, ok := val.(string); ok && valStr != "" {
+					for _, kv := range prod.Attributes {
+						valStr := string(kv.Value)
+						if valStr != "" {
 							h := db.Fnv64(valStr)
-							(*batchAccum).AddIndex("attr:"+code+":"+strconv.FormatUint(h, 16), docID)
+							(*batchAccum).AddIndex("attr:"+kv.Key+":"+strconv.FormatUint(h, 16), docID)
 						}
 					}
 
@@ -1112,17 +1113,17 @@ func (h *Handlers) importNormalizedFile(file string, limit, globalImported, batc
 	var batchCount int
 
 	type productRow struct {
-		SKU         string                 `json:"sku"`
-		SCU         string                 `json:"scu"`
-		Name        string                 `json:"name"`
-		Description string                 `json:"description"`
-		CategoryID  int64                  `json:"category_id"`
-		BrandID     int64                  `json:"brand_id"`
-		Brand       string                 `json:"brand"`
-		Price       interface{}            `json:"price"`
-		StockQty    int64                  `json:"stock_qty"`
-		Images      []string               `json:"images,omitempty"`
-		Attributes  map[string]interface{} `json:"attributes,omitempty"`
+		SKU         string           `json:"sku"`
+		SCU         string           `json:"scu"`
+		Name        string           `json:"name"`
+		Description string           `json:"description"`
+		CategoryID  int64            `json:"category_id"`
+		BrandID     int64            `json:"brand_id"`
+		Brand       string           `json:"brand"`
+		Price       interface{}      `json:"price"`
+		StockQty    int64            `json:"stock_qty"`
+		Images      []string         `json:"images,omitempty"`
+		Attributes  []model.KeyValue `json:"attributes,omitempty"`
 	}
 
 	for scanner.Scan() {
@@ -1495,28 +1496,26 @@ func streamImportCSVFile(
 		}
 		stockQty := parseStockQtyCSV(stockStr)
 
-		var attrMap map[string]interface{}
+		var attrKV []model.KeyValue
 		if !noAttrs {
-			attrMap = make(map[string]interface{})
-
 			// New format: read attr_* columns
 			for _, col := range header {
 				if strings.HasPrefix(col, "attr_") {
 					code := strings.TrimPrefix(col, "attr_")
 					val := get(row, col)
 					if val != "" {
-						attrMap[code] = parseAttrValue(code, val)
+						attrKV = append(attrKV, model.KeyValue{Key: code, Value: fmt.Sprintf("%v", parseAttrValue(code, val))})
 					}
 				}
 			}
 
 			// Old format: parse HTML table (fallback)
-			if len(attrMap) == 0 {
+			if len(attrKV) == 0 {
 				htmlAttrs := get(row, "Характеристики (HTML/Table)")
 				parsedAttrs := attrs.ParseTable(htmlAttrs)
 				for code, values := range parsedAttrs {
 					if len(values) > 0 {
-						attrMap[code] = values[0]
+						attrKV = append(attrKV, model.KeyValue{Key: code, Value: values[0]})
 					}
 				}
 			}
@@ -1535,7 +1534,7 @@ func streamImportCSVFile(
 			Currency:    "RUB",
 			StockQty:    stockQty,
 			Status:      model.ProductStatusActive,
-			Attributes:  attrMap,
+			Attributes:  attrKV,
 			Images:      images,
 			SEO: model.ProductSEO{
 				Title: fmt.Sprintf("%s — MakoShop", name),
@@ -2133,7 +2132,7 @@ func (h *Handlers) HandleAdminRebuildSortIndexes(w http.ResponseWriter, r *http.
 			item := sortItem{
 				DocID: docID,
 				Price: p.Price,
-				Time:  p.CreatedAt.UnixNano(),
+				Time:  p.CreatedAt * 1e9,
 			}
 
 			priceAsc = append(priceAsc, item)

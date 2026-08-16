@@ -67,7 +67,7 @@ func (r *AttrDefRepo) GetByCode(code string) (*model.AttrDef, error) {
 		IsFilterable: true,
 		IsSortable:   false,
 		SortOrder:    0,
-		CreatedAt:    time.Now(),
+		CreatedAt:    time.Now().Unix(),
 	}
 
 	buf, _ := json.Marshal(ad)
@@ -326,7 +326,7 @@ func (r *AttrDefRepo) Create(code string, ad *model.AttrDef) error {
 
 	ad.ID = id
 	ad.Code = code
-	ad.CreatedAt = time.Now()
+	ad.CreatedAt = time.Now().Unix()
 	if ad.IsActive == false {
 		ad.IsActive = true
 	}
@@ -466,7 +466,7 @@ func (r *AttrDefRepo) UpsertCode(code string, catID int64) error {
 		ID:         id,
 		Code:       code,
 		Categories: []int64{catID},
-		CreatedAt:  time.Now(),
+		CreatedAt:  time.Now().Unix(),
 	}
 
 	data, _ := json.Marshal(ad)
@@ -710,7 +710,7 @@ func (r *AttrDefRepo) GetOrCreate(code string) (*model.AttrDef, error) {
 		Type:         model.AttrTypeString,
 		IsActive:     true,
 		IsFilterable: true,
-		CreatedAt:    time.Now(),
+		CreatedAt:    time.Now().Unix(),
 	}
 
 	if err := r.Create(code, ad); err != nil {
@@ -749,7 +749,7 @@ func (r *AttrDefRepo) AddCodeToCategory(code string, catID int64) error {
 			IsActive:     true,
 			IsFilterable: true,
 			Categories:   cats,
-			CreatedAt:    time.Now(),
+			CreatedAt:    time.Now().Unix(),
 		}
 		return r.Create(code, ad)
 	}

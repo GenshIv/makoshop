@@ -3,7 +3,6 @@ package db
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	intHache "github.com/GenshIv/intHache"
 	"github.com/GenshIv/makoshop/internal/model"
@@ -83,8 +82,8 @@ func MarshalUser(u model.User) []byte {
 		Role         string            `json:"role"`
 		Status       string            `json:"status"`
 		Profile      model.UserProfile `json:"profile,omitempty"`
-		CreatedAt    time.Time         `json:"created_at"`
-		UpdatedAt    time.Time         `json:"updated_at"`
+		CreatedAt    int64             `json:"created_at"`
+		UpdatedAt    int64             `json:"updated_at"`
 	}
 	b, _ := json.Marshal(UserWithHash{
 		ID:           u.ID,
@@ -107,8 +106,8 @@ func UnmarshalUser(data []byte) (*model.User, error) {
 		Role         string            `json:"role"`
 		Status       string            `json:"status"`
 		Profile      model.UserProfile `json:"profile,omitempty"`
-		CreatedAt    time.Time         `json:"created_at"`
-		UpdatedAt    time.Time         `json:"updated_at"`
+		CreatedAt    int64             `json:"created_at"`
+		UpdatedAt    int64             `json:"updated_at"`
 	}
 	var uwh UserWithHash
 	if err := json.Unmarshal(data, &uwh); err != nil {

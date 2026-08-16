@@ -26,8 +26,8 @@ type ImportJob struct {
 	ImportedCount int          `json:"imported_count"`
 	SkippedCount  int          `json:"skipped_count"`
 	Errors        []string     `json:"errors,omitempty"`
-	CreatedAt     time.Time    `json:"created_at"`
-	CompletedAt   *time.Time   `json:"completed_at,omitempty"`
+	CreatedAt     int64        `json:"created_at"`
+	CompletedAt   *int64       `json:"completed_at,omitempty"`
 }
 
 type ProductImportRepo struct {
@@ -49,7 +49,7 @@ func (r *ProductImportRepo) CreateImportJob(reader io.Reader, companyID int64) (
 	job := &ImportJob{
 		ID:        id,
 		Status:    ImportStatusProcessing,
-		CreatedAt: time.Now(),
+		CreatedAt: time.Now().Unix(),
 		Errors:    []string{},
 	}
 
@@ -101,7 +101,7 @@ func (r *ProductImportRepo) CreateImportJob(reader io.Reader, companyID int64) (
 		job.ImportedCount++
 	}
 
-	now := time.Now()
+	now := time.Now().Unix()
 	job.Status = ImportStatusCompleted
 	job.CompletedAt = &now
 

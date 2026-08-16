@@ -27,7 +27,7 @@ func (r *PaymentRepo) Create(p *model.Payment) error {
 		return fmt.Errorf("next_id payment: %w", err)
 	}
 	p.ID = id
-	p.CreatedAt = time.Now()
+	p.CreatedAt = time.Now().Unix()
 	if p.Status == "" {
 		p.Status = model.PaymentStatusPending
 	}
@@ -136,7 +136,7 @@ func (r *PaymentRepo) CleanupTimedOutPayments(maxPendingMinutes int) (*TimeoutCl
 		maxPendingMinutes = 30
 	}
 
-	cutoff := time.Now().Add(-time.Duration(maxPendingMinutes) * time.Minute)
+	cutoff := time.Now().Unix() - int64(maxPendingMinutes)*60
 
 	result := &TimeoutCleanupResult{}
 
@@ -160,7 +160,7 @@ func (r *PaymentRepo) CleanupTimedOutPayments(maxPendingMinutes int) (*TimeoutCl
 		if p.Status != model.PaymentStatusPending {
 			continue
 		}
-		if p.CreatedAt.After(cutoff) {
+		if p.CreatedAt > cutoff {
 			continue
 		}
 
@@ -216,7 +216,7 @@ func (r *PaymentRepo) UpdateOrderStatus(id int64, status model.OrderStatus) erro
 	}
 
 	order.Status = status
-	order.UpdatedAt = time.Now()
+	order.UpdatedAt = time.Now().Unix()
 
 	data := MarshalOrder(*order)
 	if err := r.store.DocPut(KeyOrder(order.ID), data); err != nil {

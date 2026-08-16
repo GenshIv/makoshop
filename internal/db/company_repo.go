@@ -31,8 +31,8 @@ func (r *CompanyRepo) Create(c *model.Company) error {
 		return fmt.Errorf("next_id company: %w", err)
 	}
 	c.ID = id
-	c.CreatedAt = time.Now()
-	c.UpdatedAt = time.Now()
+	c.CreatedAt = time.Now().Unix()
+	c.UpdatedAt = time.Now().Unix()
 	if c.Status == "" {
 		c.Status = model.CompanyStatusPending
 	}
@@ -114,7 +114,7 @@ func (r *CompanyRepo) Update(id int64, updater func(*model.Company)) error {
 
 	oldSlug := c.Slug
 	updater(c)
-	c.UpdatedAt = time.Now()
+	c.UpdatedAt = time.Now().Unix()
 
 	data := MarshalCompany(*c)
 	if err := r.Store.DocPut(KeyCompany(c.ID), data); err != nil {

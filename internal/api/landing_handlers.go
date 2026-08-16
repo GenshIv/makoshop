@@ -1128,11 +1128,13 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 		}
 
 		// Merge attributes (no duplicates)
-		attrs := make(map[string]interface{})
+		var attrs []model.KeyValue
+		attrSet := make(map[string]struct{})
 		for _, p := range products {
-			for k, v := range p.Attributes {
-				if attrs[k] == nil {
-					attrs[k] = v
+			for _, kv := range p.Attributes {
+				if _, exists := attrSet[kv.Key]; !exists {
+					attrSet[kv.Key] = struct{}{}
+					attrs = append(attrs, kv)
 				}
 			}
 		}
@@ -1173,7 +1175,7 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 			existing.Attributes = attrs
 			existing.ProductCount = len(products)
 			existing.IsActive = true
-			existing.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+			existing.UpdatedAt = time.Now().Unix()
 
 			data := db.MarshalSCUPage(*existing)
 			if err := h.scuPageRepo.Store.DocPut(db.KeySCUPage(existing.ID), data); err != nil {
@@ -1200,8 +1202,8 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 				Attributes:   attrs,
 				ProductCount: len(products),
 				IsActive:     true,
-				CreatedAt:    strconv.Itoa(int(time.Now().UnixNano())),
-				UpdatedAt:    strconv.Itoa(int(time.Now().UnixNano())),
+				CreatedAt:    time.Now().Unix(),
+				UpdatedAt:    time.Now().Unix(),
 			}
 
 			// Create without list index (will be batched)

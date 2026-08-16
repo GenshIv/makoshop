@@ -879,20 +879,20 @@ func (h *Handlers) HandleAttributeValues(w http.ResponseWriter, r *http.Request)
 // --- Products ---
 
 type CreateProductRequest struct {
-	SKU         string                 `json:"sku"`
-	SCU         string                 `json:"scu,omitempty"` // Standard Catalog Unit — links to landing page
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	CategoryID  int64                  `json:"category_id"`
-	CompanyID   int64                  `json:"company_id"`
-	Brand       string                 `json:"brand,omitempty"`
-	Price       float64                `json:"price"`
-	Currency    string                 `json:"currency"`
-	StockQty    int64                  `json:"stock_qty"`
-	Status      string                 `json:"status"`
-	Attributes  map[string]interface{} `json:"attributes,omitempty"`
-	Images      []string               `json:"images,omitempty"`
-	SEO         model.ProductSEO       `json:"seo,omitempty"`
+	SKU         string           `json:"sku"`
+	SCU         string           `json:"scu,omitempty"` // Standard Catalog Unit — links to landing page
+	Name        string           `json:"name"`
+	Description string           `json:"description,omitempty"`
+	CategoryID  int64            `json:"category_id"`
+	CompanyID   int64            `json:"company_id"`
+	Brand       string           `json:"brand,omitempty"`
+	Price       float64          `json:"price"`
+	Currency    string           `json:"currency"`
+	StockQty    int64            `json:"stock_qty"`
+	Status      string           `json:"status"`
+	Attributes  []model.KeyValue `json:"attributes,omitempty"`
+	Images      []string         `json:"images,omitempty"`
+	SEO         model.ProductSEO `json:"seo,omitempty"`
 }
 
 func (h *Handlers) HandleProductsList(w http.ResponseWriter, r *http.Request) {
@@ -2429,13 +2429,13 @@ func (h *Handlers) HandleAdminPromoPlanCreate(w http.ResponseWriter, r *http.Req
 	}
 
 	var req struct {
-		Name         string                 `json:"name"`
-		Type         string                 `json:"type"`
-		DurationDays int                    `json:"duration_days"`
-		Price        float64                `json:"price"`
-		Currency     string                 `json:"currency"`
-		Description  string                 `json:"description,omitempty"`
-		Constraints  map[string]interface{} `json:"constraints,omitempty"`
+		Name         string           `json:"name"`
+		Type         string           `json:"type"`
+		DurationDays int              `json:"duration_days"`
+		Price        float64          `json:"price"`
+		Currency     string           `json:"currency"`
+		Description  string           `json:"description,omitempty"`
+		Constraints  []model.KeyValue `json:"constraints,omitempty"`
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -2486,13 +2486,13 @@ func (h *Handlers) HandleAdminPromoPlanUpdate(w http.ResponseWriter, r *http.Req
 	}
 
 	var req struct {
-		Name         string                 `json:"name,omitempty"`
-		Type         string                 `json:"type,omitempty"`
-		DurationDays int                    `json:"duration_days"`
-		Price        float64                `json:"price"`
-		Currency     string                 `json:"currency,omitempty"`
-		Description  string                 `json:"description,omitempty"`
-		Constraints  map[string]interface{} `json:"constraints,omitempty"`
+		Name         string           `json:"name,omitempty"`
+		Type         string           `json:"type,omitempty"`
+		DurationDays int              `json:"duration_days"`
+		Price        float64          `json:"price"`
+		Currency     string           `json:"currency,omitempty"`
+		Description  string           `json:"description,omitempty"`
+		Constraints  []model.KeyValue `json:"constraints,omitempty"`
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -2568,16 +2568,16 @@ func (h *Handlers) HandleAdminPromoCampaignCreate(w http.ResponseWriter, r *http
 		return
 	}
 
-	startAt := time.Now()
-	endAt := startAt.AddDate(0, 0, plan.DurationDays)
+	startAt := time.Now().Unix()
+	endAt := startAt + int64(plan.DurationDays)*86400
 	if req.StartAt != "" {
 		if t, e := time.Parse(time.RFC3339, req.StartAt); e == nil {
-			startAt = t
+			startAt = t.Unix()
 		}
 	}
 	if req.EndAt != "" {
 		if t, e := time.Parse(time.RFC3339, req.EndAt); e == nil {
-			endAt = t
+			endAt = t.Unix()
 		}
 	}
 
@@ -2700,12 +2700,12 @@ func (h *Handlers) HandleAdminPromoCampaignUpdate(w http.ResponseWriter, r *http
 		}
 		if req.StartAt != "" {
 			if t, e := time.Parse(time.RFC3339, req.StartAt); e == nil {
-				camp.StartAt = t
+				camp.StartAt = t.Unix()
 			}
 		}
 		if req.EndAt != "" {
 			if t, e := time.Parse(time.RFC3339, req.EndAt); e == nil {
-				camp.EndAt = t
+				camp.EndAt = t.Unix()
 			}
 		}
 	}); err != nil {
@@ -2822,16 +2822,16 @@ func (h *Handlers) HandleCompanyPromoCampaignCreate(w http.ResponseWriter, r *ht
 		return
 	}
 
-	startAt := time.Now()
-	endAt := startAt.AddDate(0, 0, plan.DurationDays)
+	startAt := time.Now().Unix()
+	endAt := startAt + int64(plan.DurationDays)*86400
 	if req.StartAt != "" {
 		if t, e := time.Parse(time.RFC3339, req.StartAt); e == nil {
-			startAt = t
+			startAt = t.Unix()
 		}
 	}
 	if req.EndAt != "" {
 		if t, e := time.Parse(time.RFC3339, req.EndAt); e == nil {
-			endAt = t
+			endAt = t.Unix()
 		}
 	}
 
@@ -2925,10 +2925,10 @@ func (h *Handlers) HandlePromoLogCreate(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req struct {
-		CampaignID int64                  `json:"campaign_id"`
-		EventType  string                 `json:"event_type"`
-		Context    map[string]interface{} `json:"context,omitempty"`
-		Cost       float64                `json:"cost"`
+		CampaignID int64            `json:"campaign_id"`
+		EventType  string           `json:"event_type"`
+		Context    []model.KeyValue `json:"context,omitempty"`
+		Cost       float64          `json:"cost"`
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -3599,8 +3599,16 @@ func (h *Handlers) HandleAdminSCUPageUpdate(w http.ResponseWriter, r *http.Reque
 			}
 		}
 		if v, ok := updates["attributes"]; ok {
-			if m, ok := v.(map[string]interface{}); ok {
-				sp.Attributes = m
+			if arr, ok := v.([]interface{}); ok {
+				var kvs []model.KeyValue
+				for _, item := range arr {
+					if kv, ok := item.(map[string]interface{}); ok {
+						k := fmt.Sprintf("%v", kv["key"])
+						val := fmt.Sprintf("%v", kv["value"])
+						kvs = append(kvs, model.KeyValue{Key: k, Value: val})
+					}
+				}
+				sp.Attributes = kvs
 			}
 		}
 	}
@@ -3991,6 +3999,12 @@ func (h *Handlers) HandleAdminCategoriesExport(w http.ResponseWriter, r *http.Re
 		NameEn         string   `json:"name_en"`
 		Slug           string   `json:"slug"`
 		Description    string   `json:"description,omitempty"`
+		DescriptionRu  string   `json:"description_ru,omitempty"`
+		DescriptionUa  string   `json:"description_ua,omitempty"`
+		DescriptionPl  string   `json:"description_pl,omitempty"`
+		DescriptionEn  string   `json:"description_en,omitempty"`
+		ImageLightURL  string   `json:"image_light_url,omitempty"`
+		ImageDarkURL   string   `json:"image_dark_url,omitempty"`
 		IsActive       bool     `json:"is_active"`
 		SortOrder      int      `json:"sort_order"`
 		AnchorKeywords []string `json:"anchor_keywords,omitempty"`
@@ -4011,6 +4025,12 @@ func (h *Handlers) HandleAdminCategoriesExport(w http.ResponseWriter, r *http.Re
 			NameEn:         cat.NameEn,
 			Slug:           cat.Slug,
 			Description:    cat.Desc,
+			DescriptionRu:  cat.DescRu,
+			DescriptionUa:  cat.DescUa,
+			DescriptionPl:  cat.DescPl,
+			DescriptionEn:  cat.DescEn,
+			ImageLightURL:  cat.ImageLightURL,
+			ImageDarkURL:   cat.ImageDarkURL,
 			IsActive:       cat.IsActive,
 			SortOrder:      cat.SortOrder,
 			AnchorKeywords: cat.AnchorKeywords,
@@ -4044,6 +4064,12 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 		NameEn         string   `json:"name_en"`
 		Slug           string   `json:"slug"`
 		Description    string   `json:"description,omitempty"`
+		DescriptionRu  string   `json:"description_ru,omitempty"`
+		DescriptionUa  string   `json:"description_ua,omitempty"`
+		DescriptionPl  string   `json:"description_pl,omitempty"`
+		DescriptionEn  string   `json:"description_en,omitempty"`
+		ImageLightURL  string   `json:"image_light_url,omitempty"`
+		ImageDarkURL   string   `json:"image_dark_url,omitempty"`
 		IsActive       bool     `json:"is_active"`
 		SortOrder      int      `json:"sort_order"`
 		AnchorKeywords []string `json:"anchor_keywords,omitempty"`
@@ -4134,6 +4160,24 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 				if ic.Description != "" {
 					c.Desc = ic.Description
 				}
+				if ic.DescriptionRu != "" {
+					c.DescRu = ic.DescriptionRu
+				}
+				if ic.DescriptionUa != "" {
+					c.DescUa = ic.DescriptionUa
+				}
+				if ic.DescriptionPl != "" {
+					c.DescPl = ic.DescriptionPl
+				}
+				if ic.DescriptionEn != "" {
+					c.DescEn = ic.DescriptionEn
+				}
+				if ic.ImageLightURL != "" {
+					c.ImageLightURL = ic.ImageLightURL
+				}
+				if ic.ImageDarkURL != "" {
+					c.ImageDarkURL = ic.ImageDarkURL
+				}
 				c.IsActive = ic.IsActive
 				if ic.SortOrder != 0 {
 					c.SortOrder = ic.SortOrder
@@ -4162,6 +4206,12 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 				Slug:           slug,
 				ParentID:       dbParentID,
 				Desc:           ic.Description,
+				DescRu:         ic.DescriptionRu,
+				DescUa:         ic.DescriptionUa,
+				DescPl:         ic.DescriptionPl,
+				DescEn:         ic.DescriptionEn,
+				ImageLightURL:  ic.ImageLightURL,
+				ImageDarkURL:   ic.ImageDarkURL,
 				IsActive:       ic.IsActive,
 				SortOrder:      ic.SortOrder,
 				AnchorKeywords: ic.AnchorKeywords,
@@ -4294,9 +4344,9 @@ func (h *Handlers) HandleAdminSCUPageRelink(w http.ResponseWriter, r *http.Reque
 
 		// Build text from SCU page
 		text := strings.ToLower(sp.Title + " " + sp.Description + " " + sp.Content)
-		for _, v := range sp.Attributes {
-			if s, ok := v.(string); ok {
-				text += " " + strings.ToLower(s)
+		for _, kv := range sp.Attributes {
+			if len(kv.Value) > 0 {
+				text += " " + strings.ToLower(string(kv.Value))
 			}
 		}
 

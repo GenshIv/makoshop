@@ -496,13 +496,29 @@ const formatPrice = (price) => {
   return new Intl.NumberFormat(loc, { style: 'currency', currency }).format(price);
 };
 
+// Convert []KeyValue to {key: value} map.
+const normalizeAttrs = (attrs) => {
+  if (!attrs) return {};
+  if (Array.isArray(attrs)) {
+    const out = {};
+    for (const kv of attrs) {
+      if (kv.key && kv.value != null) {
+        out[kv.key] = kv.value;
+      }
+    }
+    return out;
+  }
+  return attrs;
+};
+
 // Возвращает строку параметров в одну строку через ";"
 const getAttributesString = (attrs) => {
-  if (!attrs || typeof attrs !== 'object') return '';
+  const m = normalizeAttrs(attrs);
+  if (!m || Object.keys(m).length === 0) return '';
   const parts = [];
-  const keys = Object.keys(attrs);
+  const keys = Object.keys(m);
   for (const key of keys.slice(0, 4)) {
-    const value = attrs[key];
+    const value = m[key];
     if (value != null && String(value).trim() !== '') {
       parts.push(`${key}: ${String(value).trim()}`);
     }
@@ -1111,7 +1127,7 @@ defineOptions({ name: 'CatalogView' });
               <div v-if="product.brand" class="text-[11px] sm:text-xs text-gray-500">{{ product.brand }}</div>
 
               <!-- Параметры (если есть) -->
-              <div v-if="product.attributes && Object.keys(product.attributes).length" class="text-[10px] text-gray-500 truncate">
+              <div v-if="getAttributesString(product.attributes)" class="text-[10px] text-gray-500 truncate">
                 {{ getAttributesString(product.attributes) }}
               </div>
 

@@ -35,8 +35,8 @@ func (r *LandingRepo) Create(l *model.LandingPage) error {
 		return fmt.Errorf("next_id landing: %w", err)
 	}
 	l.ID = id
-	l.CreatedAt = strconv.Itoa(int(time.Now().UnixNano()))
-	l.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+	l.CreatedAt = time.Now().Unix()
+	l.UpdatedAt = time.Now().Unix()
 	if l.Slug == "" {
 		l.Slug = toLandingSlug(l.SCU)
 	}
@@ -106,7 +106,7 @@ func (r *LandingRepo) Update(id int64, updater func(*model.LandingPage)) error {
 
 	oldSCU := l.SCU
 	updater(l)
-	l.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+	l.UpdatedAt = time.Now().Unix()
 
 	data := MarshalLandingPage(*l)
 	if err := r.Store.DocPut(KeyLandingPage(l.ID), data); err != nil {
@@ -179,7 +179,7 @@ func (r *LandingRepo) AddProduct(id int64, productID int64) error {
 	}
 
 	l.ProductIDs = append(l.ProductIDs, productID)
-	l.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+	l.UpdatedAt = time.Now().Unix()
 
 	data := MarshalLandingPage(*l)
 	return r.Store.DocPut(KeyLandingPage(l.ID), data)
@@ -200,7 +200,7 @@ func (r *LandingRepo) RemoveProduct(id int64, productID int64) error {
 	}
 
 	l.ProductIDs = newIDs
-	l.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+	l.UpdatedAt = time.Now().Unix()
 
 	data := MarshalLandingPage(*l)
 	return r.Store.DocPut(KeyLandingPage(l.ID), data)
@@ -219,7 +219,7 @@ func (r *LandingRepo) UpsertBySCU(scu string, updater func(*model.LandingPage)) 
 	if err == nil {
 		// Update existing
 		updater(l)
-		l.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+		l.UpdatedAt = time.Now().Unix()
 		data := MarshalLandingPage(*l)
 		if err := r.Store.DocPut(KeyLandingPage(l.ID), data); err != nil {
 			return nil, fmt.Errorf("update landing: %w", err)

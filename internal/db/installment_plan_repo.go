@@ -57,8 +57,8 @@ func (r *InstallmentPlanRepo) Create(ip *model.InstallmentPlan) error {
 		return fmt.Errorf("generate installment plan id: %w", err)
 	}
 	ip.ID = id
-	ip.CreatedAt = time.Now()
-	ip.UpdatedAt = time.Now()
+	ip.CreatedAt = time.Now().Unix()
+	ip.UpdatedAt = time.Now().Unix()
 	if ip.SortOrder == 0 {
 		ip.SortOrder = 999
 	}
@@ -126,7 +126,7 @@ func (r *InstallmentPlanRepo) Update(id int64, updateFn func(*model.InstallmentP
 
 	oldSlug := ip.Slug
 	updateFn(ip)
-	ip.UpdatedAt = time.Now()
+	ip.UpdatedAt = time.Now().Unix()
 
 	if ip.Slug != "" && strings.ToLower(ip.Slug) != strings.ToLower(oldSlug) {
 		slugKey := keyInstallmentPlanBySlug(ip.Slug)

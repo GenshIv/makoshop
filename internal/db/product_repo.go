@@ -90,8 +90,8 @@ func (r *ProductRepo) doCreateBatch(products []*model.Product) batchResult {
 			continue
 		}
 		p.ID = id
-		p.CreatedAt = time.Now()
-		p.UpdatedAt = time.Now()
+		p.CreatedAt = time.Now().Unix()
+		p.UpdatedAt = time.Now().Unix()
 		if p.Status == "" {
 			p.Status = model.ProductStatusDraft
 		}
@@ -152,8 +152,8 @@ func (r *ProductRepo) CreateBatchWithIdxBuild(products []*model.Product) ([]*mod
 			continue
 		}
 		p.ID = id
-		p.CreatedAt = time.Now()
-		p.UpdatedAt = time.Now()
+		p.CreatedAt = time.Now().Unix()
+		p.UpdatedAt = time.Now().Unix()
 		if p.Status == "" {
 			p.Status = model.ProductStatusDraft
 		}
@@ -196,8 +196,8 @@ func (r *ProductRepo) CreateBatchWithIdxBuildAndOffset(products []*model.Product
 			continue
 		}
 		p.ID = id + idOffset
-		p.CreatedAt = time.Now()
-		p.UpdatedAt = time.Now()
+		p.CreatedAt = time.Now().Unix()
+		p.UpdatedAt = time.Now().Unix()
 		if p.Status == "" {
 			p.Status = model.ProductStatusDraft
 		}
@@ -231,8 +231,8 @@ func (r *ProductRepo) Create(p *model.Product) error {
 		return fmt.Errorf("next_id product: %w", err)
 	}
 	p.ID = id
-	p.CreatedAt = time.Now()
-	p.UpdatedAt = time.Now()
+	p.CreatedAt = time.Now().Unix()
+	p.UpdatedAt = time.Now().Unix()
 	if p.Status == "" {
 		p.Status = model.ProductStatusDraft
 	}
@@ -274,7 +274,7 @@ func (r *ProductRepo) Update(id int64, updater func(*model.Product)) error {
 	}
 
 	updater(p)
-	p.UpdatedAt = time.Now()
+	p.UpdatedAt = time.Now().Unix()
 
 	data := MarshalProduct(*p)
 	if err := r.store.DocPut(KeyProduct(p.ID), data); err != nil {
@@ -319,17 +319,21 @@ func attrsHash(attrs map[string]interface{}) string {
 	return fmt.Sprintf("%x", Fnv64(b.String()))
 }
 
-// productUniqueKey строит ключ уникальности: SKU + CompanyID + option.
-// option — модификатор товара (цвет и т.п.), последняя колонка в прайсе.
-func productUniqueKey(sku string, companyID int64, attrs map[string]interface{}) string {
-	var option string
-	if attrs != nil {
-		if v, ok := attrs["option"]; ok && v != nil {
-			option = fmt.Sprintf("%v", v)
+// kvGet returns the value for the given key from a KeyValue slice, or ("", false) if not found.
+func kvGet(attrs []model.KeyValue, key string) (string, bool) {
+	for _, kv := range attrs {
+		if kv.Key == key {
+			return kv.Value, true
 		}
 	}
-	if option != "" {
-		return fmt.Sprintf("%s:%d:%s", sku, companyID, option)
+	return "", false
+}
+
+// productUniqueKey строит ключ уникальности: SKU + CompanyID + option.
+// option — модификатор товара (цвет и т.п.), последняя колонка в прайсе.
+func productUniqueKey(sku string, companyID int64, attrs []model.KeyValue) string {
+	if v, ok := kvGet(attrs, "option"); ok && v != "" {
+		return fmt.Sprintf("%s:%d:%s", sku, companyID, v)
 	}
 	return fmt.Sprintf("%s:%d", sku, companyID)
 }
@@ -361,7 +365,7 @@ func (r *ProductRepo) GetOrCreateByKey(p *model.Product) (int64, bool, error) {
 			// Обновляем цену, если изменилась
 			if existing.Price != p.Price {
 				existing.Price = p.Price
-				existing.UpdatedAt = time.Now()
+				existing.UpdatedAt = time.Now().Unix()
 				_ = r.store.DocPut(KeyProduct(existingID), MarshalProduct(*existing))
 			}
 			return existingID, false, nil
@@ -559,18 +563,18 @@ type PriceRange struct {
 
 // ProductListItem is the response shape for a product in list results.
 type ProductListItem struct {
-	ID         int64                  `json:"id"`
-	SKU        string                 `json:"sku"`
-	Name       string                 `json:"name"`
-	CategoryID int64                  `json:"category_id"`
-	CompanyID  int64                  `json:"company_id"`
-	Brand      string                 `json:"brand,omitempty"`
-	Price      float64                `json:"price"`
-	Currency   string                 `json:"currency"`
-	Status     model.ProductStatus    `json:"status"`
-	Attributes map[string]interface{} `json:"attributes,omitempty"`
-	Images     []string               `json:"images,omitempty"`
-	Promoted   bool                   `json:"promoted,omitempty"` // true if shown via promotion campaign
+	ID         int64               `json:"id"`
+	SKU        string              `json:"sku"`
+	Name       string              `json:"name"`
+	CategoryID int64               `json:"category_id"`
+	CompanyID  int64               `json:"company_id"`
+	Brand      string              `json:"brand,omitempty"`
+	Price      float64             `json:"price"`
+	Currency   string              `json:"currency"`
+	Status     model.ProductStatus `json:"status"`
+	Attributes []model.KeyValue    `json:"attributes,omitempty"`
+	Images     []string            `json:"images,omitempty"`
+	Promoted   bool                `json:"promoted,omitempty"` // true if shown via promotion campaign
 }
 
 // List returns paginated product list with search, filters, sorting.
@@ -637,7 +641,7 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*ListResult, error) {
 				item.Price = toFloat64Val(v)
 			}
 			if v, ok := m["attributes"]; ok {
-				item.Attributes = toAttrMap(v)
+				item.Attributes = toAttrKV(v)
 			}
 			if v, ok := m["images"]; ok {
 				item.Images = toStringSlice(v)
@@ -785,11 +789,11 @@ func toFloat64Val(v any) float64 {
 }
 
 // toAttrMap converts a JSON-decoded value to map[string]interface{}.
-func toAttrMap(v any) map[string]interface{} {
+func toAttrKV(v any) []model.KeyValue {
 	if m, ok := v.(map[string]any); ok {
-		out := make(map[string]interface{}, len(m))
+		out := make([]model.KeyValue, 0, len(m))
 		for k, val := range m {
-			out[k] = val
+			out = append(out, model.KeyValue{Key: k, Value: fmt.Sprintf("%v", val)})
 		}
 		return out
 	}
@@ -830,7 +834,7 @@ func (r *ProductRepo) loadProductsFromIDs(ids map[int64]struct{}, params ListPar
 		// Attribute range filters
 		skip := false
 		for code, rng := range params.AttrRanges {
-			val, ok := p.Attributes[code]
+			val, ok := kvGet(p.Attributes, code)
 			if !ok {
 				skip = true
 				break
@@ -1056,11 +1060,12 @@ func (r *ProductRepo) campaignMatchesContext(c *model.PromoCampaign, ctx *Search
 
 	// If campaign specifies attribute_filters, current context must include all of them
 	if len(tf.AttributeFilters) > 0 && len(ctx.AttrFilters) > 0 {
-		for code, expectedVal := range tf.AttributeFilters {
-			actualVals, ok := ctx.AttrFilters[code]
+		for _, kv := range tf.AttributeFilters {
+			actualVals, ok := ctx.AttrFilters[kv.Key]
 			if !ok {
 				return false
 			}
+			expectedVal := kv.Value
 			// Check if any of the actual values matches the expected value
 			if !r.valueMatchesFilter(actualVals, expectedVal) {
 				return false
@@ -1103,13 +1108,13 @@ func (r *ProductRepo) productMatchesTargetFilters(p model.Product, tf model.Targ
 	}
 
 	// Check attribute filters
-	for code, expectedVal := range tf.AttributeFilters {
-		actualVal, ok := p.Attributes[code]
+	for _, kv := range tf.AttributeFilters {
+		actualVal, ok := kvGet(p.Attributes, kv.Key)
 		if !ok {
 			return false
 		}
-		actualStr := fmt.Sprintf("%v", actualVal)
-		expectedStr := fmt.Sprintf("%v", expectedVal)
+		actualStr := actualVal
+		expectedStr := kv.Value
 		if !strings.EqualFold(actualStr, expectedStr) {
 			return false
 		}
@@ -1150,16 +1155,18 @@ func (r *ProductRepo) logPromoImpressions(promoted map[int64]int64, ctx *SearchC
 	}
 
 	// Build context info for logging
-	contextMap := make(map[string]interface{})
-	contextMap["query"] = ctx.Q
+	var contextKV []model.KeyValue
+	contextKV = append(contextKV, model.KeyValue{Key: "query", Value: ctx.Q})
 	if ctx.CategoryID != 0 {
-		contextMap["category_id"] = ctx.CategoryID
+		contextKV = append(contextKV, model.KeyValue{Key: "category_id", Value: fmt.Sprintf("%d", ctx.CategoryID)})
 	}
 	if ctx.Brand != "" {
-		contextMap["brand"] = ctx.Brand
+		contextKV = append(contextKV, model.KeyValue{Key: "brand", Value: ctx.Brand})
 	}
 	if len(ctx.AttrFilters) > 0 {
-		contextMap["attr_filters"] = ctx.AttrFilters
+		// Serialize attr_filters as JSON
+		attrJSON, _ := json.Marshal(ctx.AttrFilters)
+		contextKV = append(contextKV, model.KeyValue{Key: "attr_filters", Value: string(attrJSON)})
 	}
 
 	// Create a log entry for each promoted product -> campaign
@@ -1167,9 +1174,9 @@ func (r *ProductRepo) logPromoImpressions(promoted map[int64]int64, ctx *SearchC
 		log := &model.PromoLog{
 			CampaignID: campaignId,
 			EventType:  model.PromoEventImpression,
-			Context:    contextMap,
+			Context:    contextKV,
 			Cost:       0, // cost calculated later during billing
-			CreatedAt:  time.Now(),
+			CreatedAt:  time.Now().Unix(),
 		}
 		if err := r.promoLogRepo.Create(log); err != nil {
 			fmt.Printf("promo log create error: %v\n", err)

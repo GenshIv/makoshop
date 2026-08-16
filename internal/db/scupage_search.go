@@ -108,15 +108,16 @@ func (s *SCUPageSearch) IndexSCUPage(sp *model.SCUPage) error {
 	}
 
 	// Attributes index
-	for code, val := range sp.Attributes {
-		if valStr, ok := val.(string); ok && valStr != "" {
-			indexes[scupageKeyAttr(code, valStr)] = append(indexes[scupageKeyAttr(code, valStr)], docID)
+	for _, kv := range sp.Attributes {
+		valStr := kv.Value
+		if valStr != "" {
+			indexes[scupageKeyAttr(kv.Key, valStr)] = append(indexes[scupageKeyAttr(kv.Key, valStr)], docID)
 			// Attr values per category for filter UI: own category only (no ancestors)
 			if sp.CategoryID != 0 {
 				h := Fnv64(valStr)
-				labelKey := "attr_label:" + code + ":" + strconv.FormatUint(h, 16)
+				labelKey := "attr_label:" + kv.Key + ":" + strconv.FormatUint(h, 16)
 				_ = s.db.TurboRawWrite(labelKey, []byte(valStr))
-				key := "attr_values_cat:" + code + ":" + strconv.FormatInt(sp.CategoryID, 10)
+				key := "attr_values_cat:" + kv.Key + ":" + strconv.FormatInt(sp.CategoryID, 10)
 				if _, err := s.db.TurboPutIndex(key, h); err != nil {
 					fmt.Printf("WARN: scupage attr_values_cat index %s: %v\n", key, err)
 				}
@@ -129,13 +130,13 @@ func (s *SCUPageSearch) IndexSCUPage(sp *model.SCUPage) error {
 				}
 				found := false
 				for _, c := range codes {
-					if c == code {
+					if c == kv.Key {
 						found = true
 						break
 					}
 				}
 				if !found {
-					codes = append(codes, code)
+					codes = append(codes, kv.Key)
 					buf, _ := json.Marshal(codes)
 					_ = s.db.TurboRawWrite(catCodesKey, buf)
 				}
@@ -195,24 +196,25 @@ func (s *SCUPageSearch) IndexSCUPageBatch(pages []*model.SCUPage) error {
 		}
 
 		// Attributes index
-		for code, val := range sp.Attributes {
-			if valStr, ok := val.(string); ok && valStr != "" {
-				indexes[scupageKeyAttr(code, valStr)] = append(indexes[scupageKeyAttr(code, valStr)], docID)
+		for _, kv := range sp.Attributes {
+			valStr := kv.Value
+			if valStr != "" {
+				indexes[scupageKeyAttr(kv.Key, valStr)] = append(indexes[scupageKeyAttr(kv.Key, valStr)], docID)
 				// Attr values per category for filter UI: own category only (no ancestors)
 				if sp.CategoryID != 0 {
-					if attrCatRef[code] == nil {
-						attrCatRef[code] = make(map[int64]map[uint64]string)
+					if attrCatRef[kv.Key] == nil {
+						attrCatRef[kv.Key] = make(map[int64]map[uint64]string)
 					}
-					if attrCatRef[code][sp.CategoryID] == nil {
-						attrCatRef[code][sp.CategoryID] = make(map[uint64]string)
+					if attrCatRef[kv.Key][sp.CategoryID] == nil {
+						attrCatRef[kv.Key][sp.CategoryID] = make(map[uint64]string)
 					}
 					h := Fnv64(valStr)
-					attrCatRef[code][sp.CategoryID][h] = valStr
+					attrCatRef[kv.Key][sp.CategoryID][h] = valStr
 					// Track code for this category
 					if catCodes[sp.CategoryID] == nil {
 						catCodes[sp.CategoryID] = make(map[string]struct{})
 					}
-					catCodes[sp.CategoryID][code] = struct{}{}
+					catCodes[sp.CategoryID][kv.Key] = struct{}{}
 				}
 			}
 		}
@@ -302,9 +304,10 @@ func (s *SCUPageSearch) UnindexSCUPage(sp *model.SCUPage) error {
 		s.db.TurboDeleteIndex(scupageKeyBrand(sp.BrandID), docID)
 	}
 
-	for code, val := range sp.Attributes {
-		if valStr, ok := val.(string); ok && valStr != "" {
-			s.db.TurboDeleteIndex(scupageKeyAttr(code, valStr), docID)
+	for _, kv := range sp.Attributes {
+		valStr := kv.Value
+		if valStr != "" {
+			s.db.TurboDeleteIndex(scupageKeyAttr(kv.Key, valStr), docID)
 		}
 	}
 
@@ -323,7 +326,7 @@ func (s *SCUPageSearch) BuildSortIndexes() error {
 		return nil
 	}
 
-	start := time.Now()
+	start := time.Now().Unix()
 	fmt.Println("[SCUPAGE] Building sort indexes per category...")
 
 	all, err := s.repo.List()
@@ -351,7 +354,7 @@ func (s *SCUPageSearch) BuildSortIndexes() error {
 		docID := uint64(sp.ID)
 		priceVal := uint64(sp.MinPrice * 100)
 
-		scCreated, _ := strconv.Atoi(sp.CreatedAt)
+		scCreated := sp.CreatedAt
 		// Add to global (catID=0) index
 		catPricesAsc[0] = append(catPricesAsc[0], priced{docID: docID, price: sp.MinPrice})
 		catPricesDesc[0] = append(catPricesDesc[0], priced{docID: docID, price: sp.MinPrice})
@@ -432,7 +435,7 @@ func (s *SCUPageSearch) BuildSortIndexes() error {
 		}
 	}
 
-	fmt.Printf("[SCUPAGE] Sort indexes built: %d pages, %d categories, %v\n", len(all), len(catPricesAsc), time.Since(start))
+	fmt.Printf("[SCUPAGE] Sort indexes built: %d pages, %d categories, %v\n", len(all), len(catPricesAsc), time.Since(time.Unix(start, 0)))
 	return nil
 }
 
@@ -501,7 +504,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 			Candidates: nil,
 			Page:       params.Page - 1,
 			PageSize:   params.Limit,
-			Desc:       false,
+			Desc:       sortType == scupageSortTypePriceDesc,
 			DocPrefix:  "scupage:",
 		})
 		if err != nil {
@@ -796,7 +799,7 @@ func (s *SCUPageSearch) RebuildAllIndexes() error {
 		return nil
 	}
 
-	start := time.Now()
+	start := time.Now().Unix()
 	fmt.Println("[SCUPAGE] RebuildAllIndexes: starting...")
 
 	// Step 1: Clear all indexable keys
@@ -855,9 +858,10 @@ func (s *SCUPageSearch) RebuildAllIndexes() error {
 		// If needed, compute from products; for now skip to avoid heavy scan.
 
 		// Attributes index
-		for code, val := range sp.Attributes {
-			if valStr, ok := val.(string); ok && valStr != "" {
-				indexes[scupageKeyAttr(code, valStr)] = append(indexes[scupageKeyAttr(code, valStr)], docID)
+		for _, kv := range sp.Attributes {
+			valStr := kv.Value
+			if valStr != "" {
+				indexes[scupageKeyAttr(kv.Key, valStr)] = append(indexes[scupageKeyAttr(kv.Key, valStr)], docID)
 			}
 		}
 
@@ -880,7 +884,7 @@ func (s *SCUPageSearch) RebuildAllIndexes() error {
 		fmt.Printf("WARN: rebuild sort indexes: %v\n", err)
 	}
 
-	fmt.Printf("[SCUPAGE] RebuildAllIndexes: done in %v\n", time.Since(start))
+	fmt.Printf("[SCUPAGE] RebuildAllIndexes: done in %v\n", time.Since(time.Unix(start, 0)))
 	return nil
 }
 

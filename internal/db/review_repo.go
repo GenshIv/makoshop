@@ -31,7 +31,7 @@ func (r *ReviewRepo) Create(review *model.Review) error {
 		return fmt.Errorf("next_id review: %w", err)
 	}
 	review.ID = id
-	review.CreatedAt = time.Now()
+	review.CreatedAt = time.Now().Unix()
 
 	data := MarshalReview(*review)
 	if err := r.store.DocPut(KeyReview(review.ID), data); err != nil {
@@ -99,7 +99,7 @@ func (r *ReviewRepo) ListByProduct(productID int64, page, limit int) ([]model.Re
 	// Sort by created_at desc (newest first)
 	for i := len(reviews)/2 - 1; i >= 0; i-- {
 		j := len(reviews) - 1 - i
-		if reviews[i].CreatedAt.Before(reviews[j].CreatedAt) {
+		if reviews[i].CreatedAt < reviews[j].CreatedAt {
 			reviews[i], reviews[j] = reviews[j], reviews[i]
 		}
 	}
@@ -150,7 +150,7 @@ func (r *ReviewRepo) ListByUser(userID int64, page, limit int) ([]model.Review, 
 	// Sort by created_at desc
 	for i := len(reviews)/2 - 1; i >= 0; i-- {
 		j := len(reviews) - 1 - i
-		if reviews[i].CreatedAt.Before(reviews[j].CreatedAt) {
+		if reviews[i].CreatedAt < reviews[j].CreatedAt {
 			reviews[i], reviews[j] = reviews[j], reviews[i]
 		}
 	}

@@ -164,7 +164,7 @@ func (h *Handlers) HandleSitemapCategories(w http.ResponseWriter, r *http.Reques
 
 		urls = append(urls, SitemapURL{
 			Loc:        sitemapBaseURL + loc,
-			LastMod:    cat.UpdatedAt.UTC().Format(time.RFC3339),
+			LastMod:    time.Unix(cat.UpdatedAt, 0).UTC().Format(time.RFC3339),
 			ChangeFreq: "weekly",
 			Priority:   "0.7",
 		})
@@ -274,7 +274,7 @@ func (h *Handlers) HandleSitemapSCUPage(w http.ResponseWriter, r *http.Request) 
 
 		urls = append(urls, SitemapURL{
 			Loc:        sitemapBaseURL + loc,
-			LastMod:    sp.UpdatedAt,
+			LastMod:    time.Unix(sp.UpdatedAt, 0).UTC().Format(time.RFC3339),
 			ChangeFreq: "daily",
 			Priority:   "0.8",
 		})

@@ -60,8 +60,8 @@ func (r *PaymentMethodRepo) Create(pm *model.CompanyPaymentMethod) error {
 		return fmt.Errorf("generate payment method id: %w", err)
 	}
 	pm.ID = id
-	pm.CreatedAt = time.Now()
-	pm.UpdatedAt = time.Now()
+	pm.CreatedAt = time.Now().Unix()
+	pm.UpdatedAt = time.Now().Unix()
 	if pm.SortOrder == 0 {
 		pm.SortOrder = 999
 	}
@@ -133,7 +133,7 @@ func (r *PaymentMethodRepo) Update(id int64, updateFn func(*model.CompanyPayment
 	// Check slug uniqueness if changed
 	oldSlug := pm.Slug
 	updateFn(pm)
-	pm.UpdatedAt = time.Now()
+	pm.UpdatedAt = time.Now().Unix()
 
 	if pm.Slug != "" && strings.ToLower(pm.Slug) != strings.ToLower(oldSlug) {
 		slugKey := keyPaymentMethodBySlug(pm.Slug)

@@ -97,8 +97,8 @@ func (r *SCUPageRepo) CreateNoListIndex(s *model.SCUPage) error {
 		return fmt.Errorf("next_id scupage: %w", err)
 	}
 	s.ID = id
-	s.CreatedAt = strconv.Itoa(int(time.Now().UnixNano()))
-	s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+	s.CreatedAt = time.Now().Unix()
+	s.UpdatedAt = time.Now().Unix()
 	if s.Slug == "" {
 		s.Slug = toSCUPageSlug(s.SCU, s.Title)
 	}
@@ -137,8 +137,8 @@ func (r *SCUPageRepo) Create(s *model.SCUPage) error {
 		return fmt.Errorf("next_id scupage: %w", err)
 	}
 	s.ID = id
-	s.CreatedAt = strconv.Itoa(int(time.Now().UnixNano()))
-	s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+	s.CreatedAt = time.Now().Unix()
+	s.UpdatedAt = time.Now().Unix()
 	if s.Slug == "" {
 		s.Slug = toSCUPageSlug(s.SCU, s.Title)
 	}
@@ -226,7 +226,7 @@ func (r *SCUPageRepo) Update(id int64, updater func(*model.SCUPage)) error {
 	oldSCU := s.SCU
 	oldSlug := s.Slug
 	updater(s)
-	s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+	s.UpdatedAt = time.Now().Unix()
 
 	data := MarshalSCUPage(*s)
 	if err := r.Store.DocPut(KeySCUPage(s.ID), data); err != nil {
@@ -311,7 +311,7 @@ func (r *SCUPageRepo) AddProduct(id int64, productID int64) error {
 		return err
 	}
 	s.ProductCount++
-	s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+	s.UpdatedAt = time.Now().Unix()
 	data := MarshalSCUPage(*s)
 	return r.Store.DocPut(KeySCUPage(s.ID), data)
 }
@@ -327,7 +327,7 @@ func (r *SCUPageRepo) RemoveProduct(id int64, productID int64) error {
 	if s.ProductCount > 0 {
 		s.ProductCount--
 	}
-	s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+	s.UpdatedAt = time.Now().Unix()
 	data := MarshalSCUPage(*s)
 	return r.Store.DocPut(KeySCUPage(s.ID), data)
 }
@@ -345,7 +345,7 @@ func (r *SCUPageRepo) UpsertBySCU(scu string, updater func(*model.SCUPage)) (*mo
 	if err == nil {
 		// Update existing
 		updater(s)
-		s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+		s.UpdatedAt = time.Now().Unix()
 		data := MarshalSCUPage(*s)
 		if err := r.Store.DocPut(KeySCUPage(s.ID), data); err != nil {
 			return nil, fmt.Errorf("update scupage: %w", err)
@@ -407,8 +407,8 @@ func (r *SCUPageRepo) UpsertFromProduct(product *model.Product) error {
 		Currency:     product.Currency,
 		Attributes:   mergeAttributes(nil, product.Attributes),
 		ProductCount: 1,
-		CreatedAt:    strconv.Itoa(int(time.Now().UnixNano())),
-		UpdatedAt:    strconv.Itoa(int(time.Now().UnixNano())),
+		CreatedAt:    time.Now().Unix(),
+		UpdatedAt:    time.Now().Unix(),
 	}
 
 	return r.Create(s)
@@ -436,7 +436,7 @@ func (r *SCUPageRepo) updateSCUPageFromProduct(s *model.SCUPage, product *model.
 		s.Content = product.Description
 	}
 
-	s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+	s.UpdatedAt = time.Now().Unix()
 
 	// Save
 	data := MarshalSCUPage(*s)
@@ -641,35 +641,43 @@ func deduplicateStrings(slice []string) []string {
 
 // mergeAttributes merges two attribute maps.
 // For duplicates: keeps first occurrence (no overwriting).
-func mergeAttributes(a, b map[string]interface{}) map[string]interface{} {
-	if a == nil && b == nil {
+// mergeAttributes merges two KeyValue slices. Keys from 'a' take precedence.
+func mergeAttributes(a, b []model.KeyValue) []model.KeyValue {
+	if len(a) == 0 && len(b) == 0 {
 		return nil
 	}
-	if a == nil {
-		return copyMap(b)
+	if len(a) == 0 {
+		return cloneKeyValueSlice(b)
 	}
-	if b == nil {
-		return copyMap(a)
+	if len(b) == 0 {
+		return cloneKeyValueSlice(a)
 	}
 
-	result := copyMap(a)
-	for k, v := range b {
-		if _, exists := result[k]; !exists {
-			result[k] = v
+	// Start with a copy of a
+	result := cloneKeyValueSlice(a)
+	// Add keys from b that don't exist in a
+	for _, kv := range b {
+		found := false
+		for _, r := range result {
+			if r.Key == kv.Key {
+				found = true
+				break
+			}
+		}
+		if !found {
+			result = append(result, kv)
 		}
 	}
 	return result
 }
 
-// copyMap creates a shallow copy of a map.
-func copyMap(m map[string]interface{}) map[string]interface{} {
-	if m == nil {
+// cloneKeyValueSlice creates a copy of a KeyValue slice.
+func cloneKeyValueSlice(src []model.KeyValue) []model.KeyValue {
+	if src == nil {
 		return nil
 	}
-	result := make(map[string]interface{}, len(m))
-	for k, v := range m {
-		result[k] = v
-	}
+	result := make([]model.KeyValue, len(src))
+	copy(result, src)
 	return result
 }
 
@@ -732,8 +740,8 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 					Currency:     p.Currency,
 					Attributes:   mergeAttributes(nil, p.Attributes),
 					ProductCount: 1,
-					CreatedAt:    strconv.Itoa(int(time.Now().UnixNano())),
-					UpdatedAt:    strconv.Itoa(int(time.Now().UnixNano())),
+					CreatedAt:    time.Now().Unix(),
+					UpdatedAt:    time.Now().Unix(),
 				}
 			}
 		}
@@ -765,7 +773,7 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 				s.Content = p.Description
 			}
 
-			s.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+			s.UpdatedAt = time.Now().Unix()
 		}
 	}
 
@@ -879,7 +887,7 @@ func (r *SCUPageRepo) RecalculateProductCounts() error {
 		newCount := len(products)
 		if newCount != sp.ProductCount {
 			sp.ProductCount = newCount
-			sp.UpdatedAt = strconv.Itoa(int(time.Now().UnixNano()))
+			sp.UpdatedAt = time.Now().Unix()
 			data := MarshalSCUPage(sp)
 			if err := r.Store.DocPut(KeySCUPage(sp.ID), data); err != nil {
 				fmt.Printf("WARN: update product_count for scupage %d: %v\n", sp.ID, err)

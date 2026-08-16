@@ -27,8 +27,8 @@ func (r *OrderRepo) Create(o *model.Order) error {
 		return fmt.Errorf("next_id order: %w", err)
 	}
 	o.ID = id
-	o.CreatedAt = time.Now()
-	o.UpdatedAt = time.Now()
+	o.CreatedAt = time.Now().Unix()
+	o.UpdatedAt = time.Now().Unix()
 	if o.Status == "" {
 		o.Status = model.OrderStatusNew
 	}
@@ -92,7 +92,7 @@ func (r *OrderRepo) GetUserOrders(userID int64) ([]model.Order, error) {
 	// Sort by created_at desc (newest first)
 	for i := len(orders)/2 - 1; i >= 0; i-- {
 		j := len(orders) - 1 - i
-		if orders[i].CreatedAt.Before(orders[j].CreatedAt) {
+		if orders[i].CreatedAt < orders[j].CreatedAt {
 			orders[i], orders[j] = orders[j], orders[i]
 		}
 	}
@@ -108,7 +108,7 @@ func (r *OrderRepo) Update(id int64, updater func(*model.Order)) error {
 	}
 
 	updater(o)
-	o.UpdatedAt = time.Now()
+	o.UpdatedAt = time.Now().Unix()
 
 	data := MarshalOrder(*o)
 	if err := r.store.DocPut(KeyOrder(o.ID), data); err != nil {
@@ -168,7 +168,7 @@ func (r *OrderRepo) GetOrdersByCompanyID(companyID int64) ([]model.Order, error)
 	// Sort by created_at desc
 	for i := len(result)/2 - 1; i >= 0; i-- {
 		j := len(result) - 1 - i
-		if result[i].CreatedAt.Before(result[j].CreatedAt) {
+		if result[i].CreatedAt < result[j].CreatedAt {
 			result[i], result[j] = result[j], result[i]
 		}
 	}

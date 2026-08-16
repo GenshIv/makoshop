@@ -45,8 +45,8 @@ func (r *UserRepo) Create(u *model.User, plainPassword string) error {
 		return fmt.Errorf("generate user id: %w", err)
 	}
 	u.ID = id
-	u.CreatedAt = time.Now()
-	u.UpdatedAt = time.Now()
+	u.CreatedAt = time.Now().Unix()
+	u.UpdatedAt = time.Now().Unix()
 	if u.Status == "" {
 		u.Status = model.UserStatusActive
 	}
@@ -114,7 +114,7 @@ func (r *UserRepo) Update(id int64, updateFn func(*model.User)) error {
 	}
 
 	updateFn(u)
-	u.UpdatedAt = time.Now()
+	u.UpdatedAt = time.Now().Unix()
 
 	key := KeyUser(id)
 	data := MarshalUser(*u)
@@ -137,7 +137,7 @@ func (r *UserRepo) UpdatePassword(u *model.User, plainPassword string) error {
 		return fmt.Errorf("hash password: %w", err)
 	}
 	u.PasswordHash = string(hash)
-	u.UpdatedAt = time.Now()
+	u.UpdatedAt = time.Now().Unix()
 
 	key := KeyUser(u.ID)
 	data := MarshalUser(*u)

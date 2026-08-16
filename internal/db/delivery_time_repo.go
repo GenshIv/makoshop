@@ -57,8 +57,8 @@ func (r *DeliveryTimeRepo) Create(dt *model.DeliveryTime) error {
 		return fmt.Errorf("generate delivery time id: %w", err)
 	}
 	dt.ID = id
-	dt.CreatedAt = time.Now()
-	dt.UpdatedAt = time.Now()
+	dt.CreatedAt = time.Now().Unix()
+	dt.UpdatedAt = time.Now().Unix()
 	if dt.SortOrder == 0 {
 		dt.SortOrder = 999
 	}
@@ -126,7 +126,7 @@ func (r *DeliveryTimeRepo) Update(id int64, updateFn func(*model.DeliveryTime)) 
 
 	oldSlug := dt.Slug
 	updateFn(dt)
-	dt.UpdatedAt = time.Now()
+	dt.UpdatedAt = time.Now().Unix()
 
 	if dt.Slug != "" && strings.ToLower(dt.Slug) != strings.ToLower(oldSlug) {
 		slugKey := keyDeliveryTimeBySlug(dt.Slug)

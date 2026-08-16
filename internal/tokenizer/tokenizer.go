@@ -3,6 +3,8 @@ package tokenizer
 import (
 	"strings"
 	"unicode"
+
+	"github.com/GenshIv/makoshop/internal/model"
 )
 
 // Stop words (Russian + common non-topical words)
@@ -194,7 +196,7 @@ type CachedCategoryTokens struct {
 
 // BuildSCUTokensFullText combines all text fields of an SCU page for tokenization.
 // Used for better matching during catalogization.
-func BuildSCUTokensFullText(title, description, content string, attrs map[string]interface{}) string {
+func BuildSCUTokensFullText(title, description, content string, attrs []model.KeyValue) string {
 	var sb strings.Builder
 	if title != "" {
 		sb.WriteString(title)
@@ -208,12 +210,10 @@ func BuildSCUTokensFullText(title, description, content string, attrs map[string
 		sb.WriteString(content)
 		sb.WriteString(" ")
 	}
-	if attrs != nil {
-		for _, v := range attrs {
-			if s, ok := v.(string); ok && s != "" {
-				sb.WriteString(s)
-				sb.WriteString(" ")
-			}
+	for _, kv := range attrs {
+		if kv.Value != "" {
+			sb.WriteString(kv.Value)
+			sb.WriteString(" ")
 		}
 	}
 	return strings.TrimSpace(sb.String())

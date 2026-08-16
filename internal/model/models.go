@@ -1,6 +1,10 @@
 package model
 
-import "time"
+// KeyValue is a generic key-value pair for attributes, constraints, contexts, etc.
+type KeyValue struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
 
 // User
 
@@ -36,28 +40,28 @@ type User struct {
 	Status       UserStatus  `json:"status"`
 	Profile      UserProfile `json:"profile,omitempty"`
 	IsFirstLogin bool        `json:"is_first_login"` // for superadmin initial setup
-	CreatedAt    time.Time   `json:"created_at"`
-	UpdatedAt    time.Time   `json:"updated_at"`
+	CreatedAt    int64       `json:"created_at"`
+	UpdatedAt    int64       `json:"updated_at"`
 }
 
 // AttrDef — attribute definition linked to categories.
 // Code is unique (from normalized data, e.g. "diagonal-ekrana").
 type AttrDef struct {
-	ID           int64     `json:"id"`
-	Code         string    `json:"code"`
-	NameRu       string    `json:"name_ru,omitempty"`
-	NameUa       string    `json:"name_ua,omitempty"`
-	NamePl       string    `json:"name_pl,omitempty"`
-	NameEn       string    `json:"name_en,omitempty"`
-	Categories   []int64   `json:"categories"`
-	Type         AttrType  `json:"type"`
-	IsActive     bool      `json:"is_active"`
-	IsFilterable bool      `json:"is_filterable"`
-	IsSortable   bool      `json:"is_sortable"`
-	SortOrder    int       `json:"sort_order"`
-	RangeParams  []string  `json:"range_params,omitempty"`
-	Unit         string    `json:"unit,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID           int64    `json:"id"`
+	Code         string   `json:"code"`
+	NameRu       string   `json:"name_ru,omitempty"`
+	NameUa       string   `json:"name_ua,omitempty"`
+	NamePl       string   `json:"name_pl,omitempty"`
+	NameEn       string   `json:"name_en,omitempty"`
+	Categories   []int64  `json:"categories"`
+	Type         AttrType `json:"type"`
+	IsActive     bool     `json:"is_active"`
+	IsFilterable bool     `json:"is_filterable"`
+	IsSortable   bool     `json:"is_sortable"`
+	SortOrder    int      `json:"sort_order"`
+	RangeParams  []string `json:"range_params,omitempty"`
+	Unit         string   `json:"unit,omitempty"`
+	CreatedAt    int64    `json:"created_at"`
 }
 
 // Company
@@ -105,41 +109,41 @@ type Company struct {
 	PaymentMethodIds   []int64          `json:"payment_method_ids,omitempty"`
 	DeliveryTimeIds    []int64          `json:"delivery_time_ids,omitempty"`
 	InstallmentPlanIds []int64          `json:"installment_plan_ids,omitempty"`
-	CreatedAt          time.Time        `json:"created_at"`
-	UpdatedAt          time.Time        `json:"updated_at"`
+	CreatedAt          int64            `json:"created_at"`
+	UpdatedAt          int64            `json:"updated_at"`
 }
 
 // Brand
 
 type Brand struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
 // Category
 
 type Category struct {
-	ID             int64     `json:"id"`
-	ParentID       *int64    `json:"parent_id,omitempty"`
-	NameRu         string    `json:"name_ru"`
-	NameUa         string    `json:"name_ua"`
-	NamePl         string    `json:"name_pl"`
-	NameEn         string    `json:"name_en"`
-	Slug           string    `json:"slug"`
-	Desc           string    `json:"description,omitempty"` // legacy, kept for compat
-	DescRu         string    `json:"description_ru,omitempty"`
-	DescUa         string    `json:"description_ua,omitempty"`
-	DescPl         string    `json:"description_pl,omitempty"`
-	DescEn         string    `json:"description_en,omitempty"`
-	ImageLightURL  string    `json:"image_light_url,omitempty"` // light theme image
-	ImageDarkURL   string    `json:"image_dark_url,omitempty"`  // dark theme image
-	IsActive       bool      `json:"is_active"`
-	SortOrder      int       `json:"sort_order"`
-	AnchorKeywords []string  `json:"anchor_keywords,omitempty"` // keywords for auto-catalogization
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             int64    `json:"id"`
+	ParentID       *int64   `json:"parent_id,omitempty"`
+	NameRu         string   `json:"name_ru"`
+	NameUa         string   `json:"name_ua"`
+	NamePl         string   `json:"name_pl"`
+	NameEn         string   `json:"name_en"`
+	Slug           string   `json:"slug"`
+	Desc           string   `json:"description,omitempty"` // legacy, kept for compat
+	DescRu         string   `json:"description_ru,omitempty"`
+	DescUa         string   `json:"description_ua,omitempty"`
+	DescPl         string   `json:"description_pl,omitempty"`
+	DescEn         string   `json:"description_en,omitempty"`
+	ImageLightURL  string   `json:"image_light_url,omitempty"` // light theme image
+	ImageDarkURL   string   `json:"image_dark_url,omitempty"`  // dark theme image
+	IsActive       bool     `json:"is_active"`
+	SortOrder      int      `json:"sort_order"`
+	AnchorKeywords []string `json:"anchor_keywords,omitempty"` // keywords for auto-catalogization
+	CreatedAt      int64    `json:"created_at"`
+	UpdatedAt      int64    `json:"updated_at"`
 }
 
 // AttributeDefinition
@@ -158,22 +162,22 @@ const (
 )
 
 type AttributeDefinition struct {
-	ID           int64     `json:"id"`
-	CategoryID   int64     `json:"category_id"`
-	NameRu       string    `json:"name_ru"`
-	NameUa       string    `json:"name_ua,omitempty"`
-	NamePl       string    `json:"name_pl,omitempty"`
-	NameEn       string    `json:"name_en,omitempty"`
-	Code         string    `json:"code"`
-	Type         AttrType  `json:"type"`
-	Options      []string  `json:"options,omitempty"`
-	IsRequired   bool      `json:"is_required"`
-	IsFilterable bool      `json:"is_filterable"`
-	IsSortable   bool      `json:"is_sortable"`
-	IsSearchable bool      `json:"is_searchable"`
-	SortOrder    int       `json:"sort_order"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           int64    `json:"id"`
+	CategoryID   int64    `json:"category_id"`
+	NameRu       string   `json:"name_ru"`
+	NameUa       string   `json:"name_ua,omitempty"`
+	NamePl       string   `json:"name_pl,omitempty"`
+	NameEn       string   `json:"name_en,omitempty"`
+	Code         string   `json:"code"`
+	Type         AttrType `json:"type"`
+	Options      []string `json:"options,omitempty"`
+	IsRequired   bool     `json:"is_required"`
+	IsFilterable bool     `json:"is_filterable"`
+	IsSortable   bool     `json:"is_sortable"`
+	IsSearchable bool     `json:"is_searchable"`
+	SortOrder    int      `json:"sort_order"`
+	CreatedAt    int64    `json:"created_at"`
+	UpdatedAt    int64    `json:"updated_at"`
 }
 
 // Product
@@ -194,24 +198,24 @@ type ProductSEO struct {
 }
 
 type Product struct {
-	ID          int64                  `json:"id"`
-	SKU         string                 `json:"sku"`
-	SCU         string                 `json:"scu,omitempty"` // Standard Catalog Unit — links to landing page
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	CategoryID  int64                  `json:"category_id"`
-	BrandID     int64                  `json:"brand_id,omitempty"`
-	CompanyID   int64                  `json:"company_id"`
-	Brand       string                 `json:"brand,omitempty"`
-	Price       float64                `json:"price"`
-	Currency    string                 `json:"currency"`
-	StockQty    int64                  `json:"stock_qty"`
-	Status      ProductStatus          `json:"status"`
-	Attributes  map[string]interface{} `json:"attributes,omitempty"`
-	Images      []string               `json:"images,omitempty"`
-	SEO         ProductSEO             `json:"seo,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	ID          int64         `json:"id"`
+	SKU         string        `json:"sku"`
+	SCU         string        `json:"scu,omitempty"` // Standard Catalog Unit — links to landing page
+	Name        string        `json:"name"`
+	Description string        `json:"description,omitempty"`
+	CategoryID  int64         `json:"category_id"`
+	BrandID     int64         `json:"brand_id,omitempty"`
+	CompanyID   int64         `json:"company_id"`
+	Brand       string        `json:"brand,omitempty"`
+	Price       float64       `json:"price"`
+	Currency    string        `json:"currency"`
+	StockQty    int64         `json:"stock_qty"`
+	Status      ProductStatus `json:"status"`
+	Attributes  []KeyValue    `json:"attributes,omitempty"`
+	Images      []string      `json:"images,omitempty"`
+	SEO         ProductSEO    `json:"seo,omitempty"`
+	CreatedAt   int64         `json:"created_at"`
+	UpdatedAt   int64         `json:"updated_at"`
 }
 
 // LandingPage — посадочная страница для группы товаров с одинаковым SCU.
@@ -227,8 +231,8 @@ type LandingPage struct {
 	Images      []string `json:"images"`      // page images
 	IsActive    bool     `json:"is_active"`
 	ProductIDs  []int64  `json:"product_ids"` // cached list of product IDs with this SCU
-	CreatedAt   string   `json:"created_at"`
-	UpdatedAt   string   `json:"updated_at"`
+	CreatedAt   int64    `json:"created_at"`
+	UpdatedAt   int64    `json:"updated_at"`
 }
 
 // SCUPage — SEO-страница для группы товаров с одинаковым SCU.
@@ -236,23 +240,23 @@ type LandingPage struct {
 // Путь: /shop/{category_tree}/{slug}
 
 type SCUPage struct {
-	ID           int64                  `json:"id"`
-	SCU          string                 `json:"scu"`         // unique identifier from supplier
-	Slug         string                 `json:"slug"`        // URL-friendly slug (unique)
-	Title        string                 `json:"title"`       // SEO title (from first product name)
-	Description  string                 `json:"description"` // SEO meta description
-	Content      string                 `json:"content"`     // full HTML content
-	Images       []string               `json:"images"`      // unique product images (limited to maxSCUPageImages)
-	CategoryID   int64                  `json:"category_id"` // main category
-	Brand        string                 `json:"brand"`       // brand name
-	BrandID      int64                  `json:"brand_id"`    // brand ID
-	IsActive     bool                   `json:"is_active"`
-	MinPrice     float64                `json:"min_price"`            // minimum price among all products
-	Currency     string                 `json:"currency"`             // currency (default: RUB)
-	Attributes   map[string]interface{} `json:"attributes,omitempty"` // merged attributes (no duplicates)
-	ProductCount int                    `json:"product_count"`        // number of products with this SCU
-	CreatedAt    string                 `json:"created_at"`
-	UpdatedAt    string                 `json:"updated_at"`
+	ID           int64      `json:"id"`
+	SCU          string     `json:"scu"`         // unique identifier from supplier
+	Slug         string     `json:"slug"`        // URL-friendly slug (unique)
+	Title        string     `json:"title"`       // SEO title (from first product name)
+	Description  string     `json:"description"` // SEO meta description
+	Content      string     `json:"content"`     // full HTML content
+	Images       []string   `json:"images"`      // unique product images (limited to maxSCUPageImages)
+	CategoryID   int64      `json:"category_id"` // main category
+	Brand        string     `json:"brand"`       // brand name
+	BrandID      int64      `json:"brand_id"`    // brand ID
+	IsActive     bool       `json:"is_active"`
+	MinPrice     float64    `json:"min_price"`            // minimum price among all products
+	Currency     string     `json:"currency"`             // currency (default: RUB)
+	Attributes   []KeyValue `json:"attributes,omitempty"` // merged attributes (no duplicates)
+	ProductCount int        `json:"product_count"`        // number of products with this SCU
+	CreatedAt    int64      `json:"created_at"`
+	UpdatedAt    int64      `json:"updated_at"`
 }
 
 // NOTE: ProductIDs removed from SCUPage to prevent DB bloat.
@@ -275,8 +279,8 @@ type Cart struct {
 	Items       []CartItem `json:"items"`
 	TotalAmount float64    `json:"total_amount"`
 	Currency    string     `json:"currency"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	CreatedAt   int64      `json:"created_at"`
+	UpdatedAt   int64      `json:"updated_at"`
 }
 
 // Order
@@ -330,8 +334,8 @@ type Order struct {
 	PaymentStatus PaymentStatus `json:"payment_status"`
 	ShippingInfo  ShippingInfo  `json:"shipping_info"`
 	Comment       string        `json:"comment,omitempty"`
-	CreatedAt     time.Time     `json:"created_at"`
-	UpdatedAt     time.Time     `json:"updated_at"`
+	CreatedAt     int64         `json:"created_at"`
+	UpdatedAt     int64         `json:"updated_at"`
 }
 
 // Payment
@@ -353,18 +357,18 @@ type Payment struct {
 	Status            PaymentStatus `json:"status"`
 	ExternalPaymentID string        `json:"external_payment_id,omitempty"`
 	PaymentURL        string        `json:"payment_url,omitempty"`
-	CreatedAt         time.Time     `json:"created_at"`
+	CreatedAt         int64         `json:"created_at"`
 }
 
 // Review
 
 type Review struct {
-	ID        int64     `json:"id"`
-	ProductID int64     `json:"product_id"`
-	UserID    int64     `json:"user_id"`
-	Rating    int       `json:"rating"`
-	Comment   string    `json:"comment,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        int64  `json:"id"`
+	ProductID int64  `json:"product_id"`
+	UserID    int64  `json:"user_id"`
+	Rating    int    `json:"rating"`
+	Comment   string `json:"comment,omitempty"`
+	CreatedAt int64  `json:"created_at"`
 }
 
 // Promotion
@@ -379,16 +383,16 @@ const (
 )
 
 type PromoPlan struct {
-	ID           int64                  `json:"id"`
-	Name         string                 `json:"name"`
-	Type         PromoPlanType          `json:"type"`
-	DurationDays int                    `json:"duration_days"`
-	Price        float64                `json:"price"`
-	Currency     string                 `json:"currency"`
-	Description  string                 `json:"description,omitempty"`
-	Constraints  map[string]interface{} `json:"constraints,omitempty"`
-	CreatedAt    time.Time              `json:"created_at"`
-	UpdatedAt    time.Time              `json:"updated_at"`
+	ID           int64         `json:"id"`
+	Name         string        `json:"name"`
+	Type         PromoPlanType `json:"type"`
+	DurationDays int           `json:"duration_days"`
+	Price        float64       `json:"price"`
+	Currency     string        `json:"currency"`
+	Description  string        `json:"description,omitempty"`
+	Constraints  []KeyValue    `json:"constraints,omitempty"`
+	CreatedAt    int64         `json:"created_at"`
+	UpdatedAt    int64         `json:"updated_at"`
 }
 
 type PromoCampaignStatus string
@@ -402,8 +406,8 @@ const (
 )
 
 type TargetFilters struct {
-	CategoryIDs      []int64                `json:"category_ids,omitempty"`
-	AttributeFilters map[string]interface{} `json:"attribute_filters,omitempty"`
+	CategoryIDs      []int64    `json:"category_ids,omitempty"`
+	AttributeFilters []KeyValue `json:"attribute_filters,omitempty"`
 }
 
 type PromoCampaign struct {
@@ -416,10 +420,10 @@ type PromoCampaign struct {
 	ProductIDs     []int64             `json:"product_ids,omitempty"` // if empty, all company products matching TargetFilters are promoted
 	BudgetTotal    float64             `json:"budget_total"`
 	BudgetUsed     float64             `json:"budget_used"`
-	StartAt        time.Time           `json:"start_at"`
-	EndAt          time.Time           `json:"end_at"`
-	CreatedAt      time.Time           `json:"created_at"`
-	UpdatedAt      time.Time           `json:"updated_at"`
+	StartAt        int64               `json:"start_at"`
+	EndAt          int64               `json:"end_at"`
+	CreatedAt      int64               `json:"created_at"`
+	UpdatedAt      int64               `json:"updated_at"`
 }
 
 type PromoEventType string
@@ -431,44 +435,44 @@ const (
 )
 
 type PromoLog struct {
-	ID         int64                  `json:"id"`
-	CampaignID int64                  `json:"campaign_id"`
-	EventType  PromoEventType         `json:"event_type"`
-	Context    map[string]interface{} `json:"context,omitempty"`
-	Cost       float64                `json:"cost"`
-	CreatedAt  time.Time              `json:"created_at"`
+	ID         int64          `json:"id"`
+	CampaignID int64          `json:"campaign_id"`
+	EventType  PromoEventType `json:"event_type"`
+	Context    []KeyValue     `json:"context,omitempty"`
+	Cost       float64        `json:"cost"`
+	CreatedAt  int64          `json:"created_at"`
 }
 
 // --- Company settings: payment methods, delivery times, installment plans ---
 
 type CompanyPaymentMethod struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	IsActive  bool      `json:"is_active"`
-	SortOrder int       `json:"sort_order"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	IsActive  bool   `json:"is_active"`
+	SortOrder int    `json:"sort_order"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
 type DeliveryTime struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	IsActive  bool      `json:"is_active"`
-	SortOrder int       `json:"sort_order"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	IsActive  bool   `json:"is_active"`
+	SortOrder int    `json:"sort_order"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
 type InstallmentPlan struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	IsActive  bool      `json:"is_active"`
-	SortOrder int       `json:"sort_order"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	IsActive  bool   `json:"is_active"`
+	SortOrder int    `json:"sort_order"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
 // CompanySettingsV2 holds company-specific options (payment, delivery, installment).

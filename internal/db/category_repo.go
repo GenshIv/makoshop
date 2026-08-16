@@ -45,8 +45,8 @@ func (r *CategoryRepo) Create(c *model.Category) error {
 		return fmt.Errorf("next_id category: %w", err)
 	}
 	c.ID = id
-	c.CreatedAt = time.Now()
-	c.UpdatedAt = time.Now()
+	c.CreatedAt = time.Now().Unix()
+	c.UpdatedAt = time.Now().Unix()
 	if c.IsActive == false {
 		c.IsActive = true
 	}
@@ -80,7 +80,7 @@ func (r *CategoryRepo) Update(id int64, updater func(*model.Category)) error {
 
 	cat := *oldCat
 	updater(&cat)
-	cat.UpdatedAt = time.Now()
+	cat.UpdatedAt = time.Now().Unix()
 
 	data := MarshalCategory(cat)
 	if err := r.store.DocPut(KeyCategory(cat.ID), data); err != nil {

@@ -396,12 +396,31 @@ const hasAnyInStock = computed(() => {
   return products.value.some(p => isInStock(p));
 });
 
+// Convert []KeyValue to {key: value} map.
+const normalizeAttrs = (attrs) => {
+  if (!attrs) return {};
+  if (Array.isArray(attrs)) {
+    const out = {};
+    for (const kv of attrs) {
+      if (kv.key && kv.value != null) {
+        out[kv.key] = kv.value;
+      }
+    }
+    return out;
+  }
+  return attrs;
+};
+
 // Атрибуты для отображения (из selectedProduct, если есть, иначе из page)
 const displayAttributes = computed(() => {
-  if (selectedProduct.value?.attributes && Object.keys(selectedProduct.value.attributes).length) {
-    return selectedProduct.value.attributes;
+  if (selectedProduct.value?.attributes) {
+    const m = normalizeAttrs(selectedProduct.value.attributes);
+    if (Object.keys(m).length) return m;
   }
-  return page.value?.attributes || {};
+  if (page.value?.attributes) {
+    return normalizeAttrs(page.value.attributes);
+  }
+  return {};
 });
 
 // Общее количество офферов (после фильтров)
