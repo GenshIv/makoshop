@@ -69,8 +69,9 @@ func main() {
 
 	client := &http.Client{
 		Transport: &http.Transport{
-			MaxIdleConns:        200,
-			MaxIdleConnsPerHost: 200,
+			MaxIdleConns:        1000,
+			MaxIdleConnsPerHost: 1000,
+			MaxConnsPerHost:     1000,
 			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
 		},
 		Timeout: 10 * time.Second,
@@ -89,12 +90,11 @@ func main() {
 	start := time.Now()
 	done := make(chan struct{})
 
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-
 	for i := 0; i < *concurrency; i++ {
 		wg.Add(1)
-		go func() {
+		go func(idx int) {
 			defer wg.Done()
+			rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(idx)))
 			for {
 				select {
 				case <-done:
@@ -144,11 +144,12 @@ func main() {
 					stat.Add(latency, 0)
 					continue
 				}
-				_, _ = io.Copy(io.Discard, resp.Body)
+				// Drain body to reuse connection, but limit to 64KB to avoid memory pressure
+				_, _ = io.CopyN(io.Discard, resp.Body, 64*1024)
 				resp.Body.Close()
 				stat.Add(latency, resp.StatusCode)
 			}
-		}()
+		}(i)
 	}
 
 	// Progress reporting
