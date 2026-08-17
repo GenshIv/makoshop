@@ -151,7 +151,9 @@ func (h *Handlers) SetCompanySettingsRepos(
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(v)
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {

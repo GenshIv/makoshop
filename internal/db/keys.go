@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 	"unsafe"
 
 	intHache "github.com/GenshIv/intHache"
@@ -153,7 +154,21 @@ func UnmarshalCategory(data []byte) (*model.Category, error) {
 	if err := silentjson.ParseObject(data, catReg, unsafe.Pointer(&c)); err != nil {
 		return nil, err
 	}
+	// Fix corrupted unicode escapes in stored data (u0026 -> &)
+	c.NameRu = fixUnicodeEscapes(c.NameRu)
+	c.NameUa = fixUnicodeEscapes(c.NameUa)
+	c.NamePl = fixUnicodeEscapes(c.NamePl)
+	c.NameEn = fixUnicodeEscapes(c.NameEn)
+	c.Desc = fixUnicodeEscapes(c.Desc)
+	c.DescRu = fixUnicodeEscapes(c.DescRu)
+	c.DescUa = fixUnicodeEscapes(c.DescUa)
+	c.DescPl = fixUnicodeEscapes(c.DescPl)
+	c.DescEn = fixUnicodeEscapes(c.DescEn)
 	return &c, nil
+}
+
+func fixUnicodeEscapes(s string) string {
+	return strings.ReplaceAll(s, "u0026", "&")
 }
 
 func MarshalAttrDef(a model.AttributeDefinition) []byte {

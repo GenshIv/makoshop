@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"html"
 	"net/http"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/i18n"
@@ -962,25 +960,20 @@ func buildSEOURL(sp *model.SCUPage, treePath []string) string {
 	return "/shop/" + strings.Join(parts, "/")
 }
 
-var transReg = silentjson.BuildRegistry(reflect.TypeOf(model.SCUPage{}))
-
 // injectSeoURL adds "seo_url" field to a raw SCUPage JSON via text operations.
 // Reads slug and category_id from JSON, builds canonical URL, inserts field before closing brace.
+// Uses silentjson raw operations — no full parse, no reflection.
 func injectSeoURL(raw json.RawMessage, catRepo *db.CategoryRepo) json.RawMessage {
 	if len(raw) == 0 || raw[len(raw)-1] != '}' {
 		return raw
 	}
 
-	s := []byte(raw)
+	slug, slugOk := silentjson.GetStringValue(raw, "slug")
+	catID, catOk := silentjson.GetInt64Value(raw, "category_id")
 
-	resSCU := new(model.SCUPage)
-	if err := silentjson.ParseObject(s, transReg, unsafe.Pointer(resSCU)); resSCU.ID == 0 && err == nil {
+	if !slugOk || !catOk || slug == "" {
 		return raw
 	}
-
-	slug := resSCU.Slug
-
-	catID := resSCU.CategoryID
 
 	// Build seo_url
 	seoURL := "/shop/" + slug
@@ -990,16 +983,9 @@ func injectSeoURL(raw json.RawMessage, catRepo *db.CategoryRepo) json.RawMessage
 		}
 	}
 
-	// Insert "seo_url":"..." before closing brace
-	// Escape quotes in seo_url
-	escaped := strings.ReplaceAll(seoURL, "\"", "\\\"")
-	insert := fmt.Sprintf(`,"seo_url":"%s"`, escaped)
-
-	buf := make([]byte, 0, len(raw)+len(insert))
-	buf = append(buf, raw[:len(raw)-1]...) // everything except closing brace
-	buf = append(buf, insert...)
-	buf = append(buf, '}')
-	return json.RawMessage(buf)
+	// Insert "seo_url":"..." into JSON
+	result := silentjson.InjectFieldBeforeClose(raw, "seo_url", seoURL)
+	return json.RawMessage(result)
 }
 
 // --- Request types ---

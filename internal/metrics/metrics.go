@@ -29,13 +29,27 @@ func Middleware(mw *Writer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			next.ServeHTTP(w, r)
 
-			// X-Response-Time-Ms оставляем для фронтенда.
-			durationNs := time.Since(start).Nanoseconds()
-			w.Header().Set("X-Response-Time-Ms", fmt.Sprintf("%.3f", float64(durationNs)/1e6))
+			sw := &responseWriter{ResponseWriter: w, start: start}
+			next.ServeHTTP(sw, r)
 		})
 	}
+}
+
+type responseWriter struct {
+	http.ResponseWriter
+	start time.Time
+}
+
+func (sw *responseWriter) WriteHeader(code int) {
+	// X-Response-Time-Ms ставим ДО WriteHeader, чтобы заголовок ушёл в ответ.
+	durationNs := time.Since(sw.start).Nanoseconds()
+	sw.ResponseWriter.Header().Set("X-Response-Time-Ms", fmt.Sprintf("%.3f", float64(durationNs)/1e6))
+	sw.ResponseWriter.WriteHeader(code)
+}
+
+func (sw *responseWriter) Write(p []byte) (int, error) {
+	return sw.ResponseWriter.Write(p)
 }
 
 func clientIP(r *http.Request) string {
