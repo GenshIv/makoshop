@@ -909,7 +909,7 @@ func (h *Handlers) importNormalizedFileBatched(
 
 					// attributes
 					for _, kv := range prod.Attributes {
-						valStr := string(kv.Value)
+						valStr := kv.Value
 						if valStr != "" {
 							h := db.Fnv64(valStr)
 							(*batchAccum).AddIndex("attr:"+kv.Key+":"+strconv.FormatUint(h, 16), docID)
@@ -1293,19 +1293,9 @@ func streamImportCSVFile(
 		if len(batch) == 0 {
 			return nil
 		}
-		for _, p := range batch {
-			id, isNew, err := prodRepo.GetOrCreateByKey(p)
-			if err != nil {
-				atomic.AddInt64(&skipped, 1)
-				continue
-			}
-			if isNew {
-				if prod, err := prodRepo.Get(id); err == nil {
-					allProducts = append(allProducts, prod)
-				}
-			}
-			imported++
-		}
+		created, count := prodRepo.CreateBatchWithIdxBuild(batch)
+		allProducts = append(allProducts, created...)
+		imported += int64(count)
 		batch = batch[:0]
 		return nil
 	}

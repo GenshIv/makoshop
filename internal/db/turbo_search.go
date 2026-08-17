@@ -92,8 +92,7 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 		if _, err := t.store.db.TurboPutIndex(turboKeyBrand(p.BrandID), docID); err != nil {
 			return fmt.Errorf("turbo brand index: %w", err)
 		}
-		// Обновляем справочник брендов
-		t.ensureBrandInRef(p.BrandID, p.Brand)
+		// NOTE: ensureBrandInRef убран — делается в IndexProductBatch (один write для всех)
 	}
 
 	if p.CompanyID != 0 {
@@ -120,12 +119,8 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 			if _, err := t.store.db.TurboPutIndex(turboKeyAttr(kv.Key, valStr), docID); err != nil {
 				return fmt.Errorf("turbo attr index: %w", err)
 			}
-			// Обновляем справочник значений атрибута (глобальный)
-			t.ensureAttrValueInRef(kv.Key, valStr)
-			// Обновляем категориальный индекс значений атрибута
-			if p.CategoryID != 0 {
-				t.ensureAttrValueInCatRef(kv.Key, p.CategoryID, valStr)
-			}
+			// NOTE: ensureAttrValueInRef / ensureAttrValueInCatRef убраны —
+			// делаются в IndexProductBatch (batch write)
 		}
 	}
 
@@ -458,29 +453,34 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 		}
 	}
 
-	// Записываем справочник брендов
+	// Записываем справочник брендов (один read + один write для brand_list)
 	t.mu.Lock()
-	for bid, name := range brandRef {
-		// Добавляем в brand_list
+	if len(brandRef) > 0 {
+		// Читаем brand_list один раз
 		brandListData, _ := t.store.db.TurboRawRead(turboKeyBrandList)
 		var brandList []uint64
 		if brandListData != nil && len(brandListData) > 0 {
 			brandList = makodb.TurboUnsafeReadTokens(brandListData)
 		}
-		found := false
+		existingSet := make(map[uint64]struct{}, len(brandList))
 		for _, id := range brandList {
-			if id == bid {
-				found = true
-				break
+			existingSet[id] = struct{}{}
+		}
+		// Добавляем новые бренды
+		for bid := range brandRef {
+			if _, ok := existingSet[bid]; !ok {
+				brandList = append(brandList, bid)
+				existingSet[bid] = struct{}{}
 			}
 		}
-		if !found {
-			brandList = append(brandList, bid)
+		// Один write для brand_list
+		if len(brandList) > 0 {
+			buf := makodb.TurboBinaryNew(brandList)
+			t.store.TurboWrite(turboKeyBrandList, buf)
 		}
-		buf := makodb.TurboBinaryNew(brandList)
-		t.store.TurboWrite(turboKeyBrandList, buf)
-
-		// Записываем имя
+	}
+	// Записываем имена брендов
+	for bid, name := range brandRef {
 		key := turboKeyBrandNamePrefix + strconv.FormatUint(bid, 10)
 		t.store.TurboWrite(key, []byte(name))
 	}
