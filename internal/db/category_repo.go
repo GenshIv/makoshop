@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/GenshIv/makodb/v2"
@@ -30,7 +31,8 @@ const (
 )
 
 type CategoryRepo struct {
-	store *Store
+	store         *Store
+	treePathCache sync.Map // catID int64 → []string
 }
 
 func NewCategoryRepo(store *Store) *CategoryRepo {
@@ -686,8 +688,12 @@ func (r *CategoryRepo) sortChildren(node *CategoryTreeNode) {
 }
 
 // GetTreePath returns the path from root to the given category as [slug1, slug2, ...].
-// Uses cached ancestors for O(1) lookup.
+// Uses cached ancestors for O(1) lookup, plus in-memory cache for slugs.
 func (r *CategoryRepo) GetTreePath(catID int64) ([]string, error) {
+	if v, ok := r.treePathCache.Load(catID); ok {
+		return v.([]string), nil
+	}
+
 	ancestors, err := r.GetAncestors(catID)
 	if err != nil {
 		return nil, err
@@ -713,6 +719,7 @@ func (r *CategoryRepo) GetTreePath(catID int64) ([]string, error) {
 		path = append(path, cat.Slug)
 	}
 
+	r.treePathCache.Store(catID, path)
 	return path, nil
 }
 
