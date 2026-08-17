@@ -3,10 +3,15 @@ package db
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"unsafe"
 
 	intHache "github.com/GenshIv/intHache"
 	"github.com/GenshIv/makoshop/internal/model"
+	"github.com/GenshIv/silentjson/v2"
 )
+
+var catReg = silentjson.BuildRegistry(reflect.TypeOf(model.Category{}))
 
 // Key builders
 
@@ -145,7 +150,7 @@ func MarshalCategory(c model.Category) []byte {
 
 func UnmarshalCategory(data []byte) (*model.Category, error) {
 	var c model.Category
-	if err := json.Unmarshal(data, &c); err != nil {
+	if err := silentjson.ParseObject(data, catReg, unsafe.Pointer(&c)); err != nil {
 		return nil, err
 	}
 	return &c, nil
