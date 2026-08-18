@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/i18n"
@@ -694,14 +695,14 @@ func writeHTMLResponse(w http.ResponseWriter, r *http.Request, title string, dat
 
 	canonicalTag := ""
 	if seoURL != "" {
-		canonicalTag = fmt.Sprintf(`  <link rel="canonical" href="%s">
-`, baseURL+seoURL)
+		canonicalTag = `  <link rel="canonical" href="` + baseURL + seoURL + `">
+`
 	}
 
 	ogTags := ""
 	if image != "" {
-		ogTags = fmt.Sprintf(`  <meta property="og:image" content="%s">
-`, html.EscapeString(image))
+		ogTags = `  <meta property="og:image" content="` + html.EscapeString(image) + `">
+`
 	}
 
 	if isBot(r) {
@@ -711,61 +712,51 @@ func writeHTMLResponse(w http.ResponseWriter, r *http.Request, title string, dat
 		if ogURL == baseURL {
 			ogURL = baseURL + "/shop"
 		}
-		html := fmt.Sprintf(`<!DOCTYPE html>
+		htmlStr := `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>%s</title>
-  <meta name="description" content="%s">
-%s%s  <meta property="og:title" content="%s">
-  <meta property="og:description" content="%s">
+  <title>` + html.EscapeString(title) + `</title>
+  <meta name="description" content="` + html.EscapeString(desc) + `">
+` + canonicalTag + ogTags + `  <meta property="og:title" content="` + html.EscapeString(title) + `">
+  <meta property="og:description" content="` + html.EscapeString(desc) + `">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="%s">
+  <meta property="og:url" content="` + ogURL + `">
 </head>
 <body>
-  <div id="app">%s</div>
-  <script>window.__INITIAL_DATA__=%s</script>
+  <div id="app">` + bodyContent + `</div>
+  <script>window.__INITIAL_DATA__=` + safeJSON + `</script>
 </body>
-</html>`,
+</html>`
 
-			html.EscapeString(title),
-			html.EscapeString(desc),
-			canonicalTag,
-			ogTags,
-			html.EscapeString(title),
-			html.EscapeString(desc),
-			ogURL,
-			bodyContent,
-			safeJSON,
-		)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(html))
+		w.Write(stringToBytes(htmlStr))
 		return
 	}
 
 	// Minimal HTML for browsers (SPA)
-	html := fmt.Sprintf(`<!DOCTYPE html>
+	htmlStr := `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>%s</title>
-%s</head>
+  <title>` + html.EscapeString(title) + `</title>
+` + canonicalTag + `</head>
 <body>
   <div id="app"></div>
-  <script>window.__INITIAL_DATA__=%s</script>
+  <script>window.__INITIAL_DATA__=` + safeJSON + `</script>
   <script type="module" src="/src/main.js"></script>
 </body>
-</html>`,
-		html.EscapeString(title),
-		canonicalTag,
-		safeJSON,
-	)
+</html>`
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(html))
+	w.Write(stringToBytes(htmlStr))
+}
+
+func stringToBytes(s string) []byte {
+	return *((*[]byte)(unsafe.Pointer(&s)))
 }
 
 // declineRussian declines a number into correct Russian form (1/2-4/5-20, 21, etc).
