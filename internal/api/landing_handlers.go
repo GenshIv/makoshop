@@ -436,6 +436,30 @@ func (h *Handlers) HandleSCUPageByPath(w http.ResponseWriter, r *http.Request) {
 	writeError(w, http.StatusNotFound, "NOT_FOUND", "page not found")
 }
 
+type (
+	AttrItem struct {
+		Code         string   `json:"code"`
+		Options      []string `json:"options"`
+		NameRU       string   `json:"name_ru,omitempty"`
+		NameUA       string   `json:"name_ua,omitempty"`
+		NamePL       string   `json:"name_pl,omitempty"`
+		NameEN       string   `json:"name_en,omitempty"`
+		Type         string   `json:"type,omitempty"`
+		IsFilterable bool     `json:"is_filterable,omitempty"`
+	}
+
+	SCUListRespData struct {
+		Items         []json.RawMessage `json:"items"`
+		Total         int64             `json:"total"`
+		Page          int               `json:"page"`
+		Limit         int               `json:"limit"`
+		CategoryAttrs []AttrItem        `json:"category_attrs,omitempty"`
+		CatID         int64             `json:"category_id,omitempty"`
+		TreePath      []string          `json:"tree_path,omitempty"`
+		Category      *model.Category   `json:"category,omitempty"`
+	}
+)
+
 // handleSCUPageCatalog returns a paginated list of SCU pages for a category.
 func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, catID int64) {
 	q := r.URL.Query().Get("q")
@@ -491,7 +515,7 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// Build category filter attributes
-	var categoryAttrs []interface{}
+	var categoryAttrs []AttrItem
 	if catID > 0 && h.attrDefRepo != nil {
 		codes, err := h.attrDefRepo.GetCodesForCategoryTree(catID, h.categoryRepo)
 		if err != nil {
@@ -504,20 +528,20 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 				continue
 			}
 			def, _ := h.attrDefRepo.GetByCode(code)
-			attrMap := map[string]interface{}{
-				"code":    code,
-				"options": values,
+			attrMap := AttrItem{
+				Code:    code,
+				Options: values,
 			}
 			if def != nil {
-				attrMap["name_ru"] = def.NameRu
-				attrMap["name_ua"] = def.NameUa
-				attrMap["name_pl"] = def.NamePl
-				attrMap["name_en"] = def.NameEn
-				attrMap["type"] = string(def.Type)
-				attrMap["is_filterable"] = def.IsFilterable
+				attrMap.NameRU = def.NameRu
+				attrMap.NameUA = def.NameUa
+				attrMap.NamePL = def.NamePl
+				attrMap.NameEN = def.NameEn
+				attrMap.Type = string(def.Type)
+				attrMap.IsFilterable = def.IsFilterable
 			} else {
-				attrMap["type"] = "string"
-				attrMap["is_filterable"] = true
+				attrMap.Type = "string"
+				attrMap.IsFilterable = true
 			}
 			categoryAttrs = append(categoryAttrs, attrMap)
 		}
@@ -547,28 +571,28 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 			items = append(items, injectSeoURL(raw, h.categoryRepo))
 		}
 
-		respData := map[string]interface{}{
-			"items":          items,
-			"total":          result.Total,
-			"page":           result.Page,
-			"limit":          result.Limit,
-			"category_attrs": categoryAttrs,
+		respData := SCUListRespData{
+			Items:         items,
+			Total:         result.Total,
+			Page:          result.Page,
+			Limit:         result.Limit,
+			CategoryAttrs: categoryAttrs,
 		}
 
 		// Add category info for breadcrumbs and UI
 		if catID > 0 {
-			respData["category_id"] = catID
+			respData.CatID = catID
 			if treePath, err := h.categoryRepo.GetTreePath(catID); err == nil && len(treePath) > 0 {
-				respData["tree_path"] = treePath
+				respData.TreePath = treePath
 			}
 			// Include full category object (with descriptions and images)
 			if cat, err := h.categoryRepo.Get(catID); err == nil {
-				respData["category"] = cat
+				respData.Category = cat
 			}
 		}
 
 		if wantsHTML(r) {
-			writeHTMLResponse(w, r, i18n.T("ui.catalog_title"), respData)
+			writeHTMLResponseSCUList(w, r, i18n.T("ui.catalog_title"), respData)
 			return
 		}
 		writeJSON(w, http.StatusOK, respData)
@@ -669,6 +693,110 @@ func wantsHTML(r *http.Request) bool {
 
 // writeHTMLResponse writes an HTML page with embedded data for SSR
 // For bots: full SSR with inline content. For browsers: minimal HTML + JS.
+func writeHTMLResponseSCUList(w http.ResponseWriter, r *http.Request, title string, data SCUListRespData) {
+	jsonData, _ := json.Marshal(data)
+	safeJSON := strings.ReplaceAll(string(jsonData), "<", "\\u003c")
+
+	// Base URL
+	baseURL := "https://makoshop.com"
+
+	// Extract SEO fields
+	seoURL := ""
+	desc := "MakoShop — маркетплейс товаров по лучшим ценам от проверенных поставщиков."
+	image := ""
+
+	canonicalTag := ""
+	if seoURL != "" {
+		canonicalTag = `  <link rel="canonical" href="` + baseURL + seoURL + `">
+`
+	}
+
+	ogTags := ""
+	if image != "" {
+		ogTags = `  <meta property="og:image" content="` + html.EscapeString(image) + `">
+`
+	}
+
+	if isBot(r) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		// Full SSR for bots: inline content + SEO tags
+		bodyContent := renderSSRContent(jsonData)
+
+		w.WriteHeader(http.StatusOK)
+
+		ogURL := baseURL + seoURL
+		if ogURL == baseURL {
+			ogURL = baseURL + "/shop"
+		}
+		w.Write(stringToBytes(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>`))
+		w.Write(stringToBytes(html.EscapeString(title)))
+
+		w.Write(stringToBytes(`</title>
+  <meta name="description" content="`))
+		w.Write(stringToBytes(html.EscapeString(desc)))
+		w.Write(stringToBytes(`">
+`))
+		w.Write(stringToBytes(canonicalTag))
+		w.Write(stringToBytes(ogTags))
+		w.Write(stringToBytes(`  <meta property="og:title" content="`))
+		w.Write(stringToBytes(html.EscapeString(title)))
+		w.Write(stringToBytes(`">
+  <meta property="og:description" content="`))
+		w.Write(stringToBytes(html.EscapeString(desc)))
+		w.Write(stringToBytes(`">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="`))
+		w.Write(stringToBytes(ogURL))
+		w.Write(stringToBytes(`">
+</head>
+<body>
+  <div id="app">`))
+		w.Write(stringToBytes(bodyContent))
+		w.Write(stringToBytes(`</div>
+  <script>window.__INITIAL_DATA__=`))
+		w.Write(stringToBytes(safeJSON))
+		w.Write(stringToBytes(`</script>
+</body>
+</html>`))
+
+		//w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		//w.WriteHeader(http.StatusOK)
+		//w.Write(stringToBytes(htmlStr))
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	// Minimal HTML for browsers (SPA)
+	w.Write(stringToBytes(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>`))
+	w.Write(stringToBytes(html.EscapeString(title)))
+	w.Write(stringToBytes(`</title>
+`))
+	w.Write(stringToBytes(canonicalTag))
+	w.Write(stringToBytes(`</head>
+<body>
+  <div id="app"></div>
+  <script>window.__INITIAL_DATA__=`))
+	w.Write(stringToBytes(safeJSON))
+	w.Write(stringToBytes(`</script>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>`))
+	//w.Write(stringToBytes(htmlStr))
+}
+
+// writeHTMLResponse writes an HTML page with embedded data for SSR
+// For bots: full SSR with inline content. For browsers: minimal HTML + JS.
 func writeHTMLResponse(w http.ResponseWriter, r *http.Request, title string, data map[string]interface{}) {
 	jsonData, _ := json.Marshal(data)
 	safeJSON := strings.ReplaceAll(string(jsonData), "<", "\\u003c")
@@ -706,53 +834,81 @@ func writeHTMLResponse(w http.ResponseWriter, r *http.Request, title string, dat
 	}
 
 	if isBot(r) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		// Full SSR for bots: inline content + SEO tags
 		bodyContent := renderSSRContent(jsonData)
+
+		w.WriteHeader(http.StatusOK)
+
 		ogURL := baseURL + seoURL
 		if ogURL == baseURL {
 			ogURL = baseURL + "/shop"
 		}
-		htmlStr := `<!DOCTYPE html>
+		w.Write(stringToBytes(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>` + html.EscapeString(title) + `</title>
-  <meta name="description" content="` + html.EscapeString(desc) + `">
-` + canonicalTag + ogTags + `  <meta property="og:title" content="` + html.EscapeString(title) + `">
-  <meta property="og:description" content="` + html.EscapeString(desc) + `">
+  <title>`))
+		w.Write(stringToBytes(html.EscapeString(title)))
+
+		w.Write(stringToBytes(`</title>
+  <meta name="description" content="`))
+		w.Write(stringToBytes(html.EscapeString(desc)))
+		w.Write(stringToBytes(`">
+`))
+		w.Write(stringToBytes(canonicalTag))
+		w.Write(stringToBytes(ogTags))
+		w.Write(stringToBytes(`  <meta property="og:title" content="`))
+		w.Write(stringToBytes(html.EscapeString(title)))
+		w.Write(stringToBytes(`">
+  <meta property="og:description" content="`))
+		w.Write(stringToBytes(html.EscapeString(desc)))
+		w.Write(stringToBytes(`">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="` + ogURL + `">
+  <meta property="og:url" content="`))
+		w.Write(stringToBytes(ogURL))
+		w.Write(stringToBytes(`">
 </head>
 <body>
-  <div id="app">` + bodyContent + `</div>
-  <script>window.__INITIAL_DATA__=` + safeJSON + `</script>
+  <div id="app">`))
+		w.Write(stringToBytes(bodyContent))
+		w.Write(stringToBytes(`</div>
+  <script>window.__INITIAL_DATA__=`))
+		w.Write(stringToBytes(safeJSON))
+		w.Write(stringToBytes(`</script>
 </body>
-</html>`
+</html>`))
 
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		w.Write(stringToBytes(htmlStr))
+		//w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		//w.WriteHeader(http.StatusOK)
+		//w.Write(stringToBytes(htmlStr))
 		return
 	}
 
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
 	// Minimal HTML for browsers (SPA)
-	htmlStr := `<!DOCTYPE html>
+	w.Write(stringToBytes(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>` + html.EscapeString(title) + `</title>
-` + canonicalTag + `</head>
+  <title>`))
+	w.Write(stringToBytes(html.EscapeString(title)))
+	w.Write(stringToBytes(`</title>
+`))
+	w.Write(stringToBytes(canonicalTag))
+	w.Write(stringToBytes(`</head>
 <body>
   <div id="app"></div>
-  <script>window.__INITIAL_DATA__=` + safeJSON + `</script>
+  <script>window.__INITIAL_DATA__=`))
+	w.Write(stringToBytes(safeJSON))
+	w.Write(stringToBytes(`</script>
   <script type="module" src="/src/main.js"></script>
 </body>
-</html>`
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	w.Write(stringToBytes(htmlStr))
+</html>`))
+	//w.Write(stringToBytes(htmlStr))
 }
 
 func stringToBytes(s string) []byte {
