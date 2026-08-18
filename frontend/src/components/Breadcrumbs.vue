@@ -28,7 +28,7 @@ const crumbs = computed(() => {
   const items = [];
   
   // Always start with catalog
-  items.push({ name: t('catalog.all_products'), to: { path: '/' } });
+  items.push({ name: t('catalog.all_products'), to: { path: '/shop' } });
   
   // Add category path using slugs
   let path = '/shop';

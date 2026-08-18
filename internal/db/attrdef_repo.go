@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -161,44 +162,57 @@ func (r *AttrDefRepo) GetCodesForCategoryTree(catID int64, categoryRepo *Categor
 		return nil, err
 	}
 	if len(children) == 0 {
-		return []string{}, nil
+		return nil, nil
 	}
 
-	// 3. Intersect codes of all direct children (O(1) each)
+	// 3. Intersect codes of all direct children using sorted slices (less alloc than map).
 	firstCodes, err := r.GetCodesForCategory(children[0])
-	if err != nil {
-		return nil, err
+	if err != nil || len(firstCodes) == 0 {
+		return nil, nil
 	}
-	firstSet := make(map[string]struct{}, len(firstCodes))
-	for _, c := range firstCodes {
-		firstSet[c] = struct{}{}
-	}
+	sort.Strings(firstCodes)
 
 	for _, cid := range children[1:] {
 		childCodes, err := r.GetCodesForCategory(cid)
-		if err != nil {
-			continue
+		if err != nil || len(childCodes) == 0 {
+			return nil, nil
 		}
-		childSet := make(map[string]struct{}, len(childCodes))
-		for _, c := range childCodes {
-			childSet[c] = struct{}{}
+		sort.Strings(childCodes)
+		firstCodes = intersectSortedStrings(firstCodes, childCodes)
+		if len(firstCodes) == 0 {
+			return nil, nil
 		}
-
-		newSet := make(map[string]struct{})
-		for c := range firstSet {
-			if _, ok := childSet[c]; ok {
-				newSet[c] = struct{}{}
-			}
-		}
-		firstSet = newSet
 	}
 
-	result := make([]string, 0, len(firstSet))
-	for c := range firstSet {
-		result = append(result, c)
-	}
+	return firstCodes, nil
+}
 
-	return result, nil
+// intersectSortedStrings returns the intersection of two sorted string slices.
+func intersectSortedStrings(a, b []string) []string {
+	if len(a) == 0 || len(b) == 0 {
+		return nil
+	}
+	result := make([]string, 0, minLen(len(a), len(b)))
+	i, j := 0, 0
+	for i < len(a) && j < len(b) {
+		if a[i] == b[j] {
+			result = append(result, a[i])
+			i++
+			j++
+		} else if a[i] < b[j] {
+			i++
+		} else {
+			j++
+		}
+	}
+	return result
+}
+
+func minLen(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // GetAttrValuesForCategory returns all values for an attribute code in a specific category.

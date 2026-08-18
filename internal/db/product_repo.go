@@ -10,6 +10,7 @@ import (
 
 	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
+	"github.com/GenshIv/silentjson/v2"
 )
 
 type ProductRepo struct {
@@ -544,6 +545,36 @@ type ListResult struct {
 	Facets *Facets           `json:"facets,omitempty"`
 }
 
+type (
+	AttrItem struct {
+		Code         string   `json:"code"`
+		Options      []string `json:"options"`
+		NameRU       string   `json:"name_ru,omitempty"`
+		NameUA       string   `json:"name_ua,omitempty"`
+		NamePL       string   `json:"name_pl,omitempty"`
+		NameEN       string   `json:"name_en,omitempty"`
+		Type         string   `json:"type,omitempty"`
+		IsFilterable bool     `json:"is_filterable,omitempty"`
+	}
+
+	SCUListRespData struct {
+		Items         []silentjson.RawMessage `json:"items,omitempty"`
+		Total         int64                   `json:"total"`
+		Page          int                     `json:"page"`
+		Limit         int                     `json:"limit"`
+		CategoryAttrs []AttrItem              `json:"category_attrs,omitempty"`
+		CatID         int64                   `json:"category_id,omitempty"`
+		TreePath      []string                `json:"tree_path,omitempty"`
+		Category      model.Category          `json:"category,omitempty"`
+		Subcategories silentjson.RawMessage   `json:"subcategories,omitempty"` // precomputed JSON []byte, no struct->json
+		Facets        *Facets                 `json:"facets,omitempty"`
+		Products      []model.Product         `json:"products,omitempty"`
+		SCUPage       *model.SCUPage          `json:"scu_page,omitempty"`
+		TreePathFull  []CategoryTreeNode      `json:"tree_path_full,omitempty"`
+		SEOURL        string                  `json:"seo_url,omitempty"`
+	}
+)
+
 // Facets holds facet counts for filtering UI.
 type Facets struct {
 	Brands map[string]int            `json:"brands,omitempty"` // brand name -> count
@@ -580,7 +611,7 @@ type ProductListItem struct {
 // List returns paginated product list with search, filters, sorting.
 // Returns: items, totalCount.
 // Deprecated: use ListWithFacets for faceted search support.
-func (r *ProductRepo) List(params ListParams) ([]ProductListItem, int64, error) {
+func (r *ProductRepo) List(params ListParams) ([]silentjson.RawMessage, int64, error) {
 	result, err := r.ListWithFacets(params)
 	if err != nil {
 		return nil, 0, err
@@ -590,7 +621,7 @@ func (r *ProductRepo) List(params ListParams) ([]ProductListItem, int64, error) 
 
 // ListWithFacets returns paginated list with optional facets.
 // Now uses SCUPageSearch as primary backend (catalog shows SCU pages, not individual products).
-func (r *ProductRepo) ListWithFacets(params ListParams) (*ListResult, error) {
+func (r *ProductRepo) ListWithFacets(params ListParams) (*SCUListRespData, error) {
 	if params.Page < 1 {
 		params.Page = 1
 	}
@@ -620,45 +651,45 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*ListResult, error) {
 		}
 
 		// Return raw SCUPage JSON directly (front-end will parse it)
-		items := make([]ProductListItem, 0, len(result.Items))
-		for _, raw := range result.Items {
-			var m map[string]any
-			if err := json.Unmarshal(raw, &m); err != nil {
-				continue
-			}
-			item := ProductListItem{
-				ID:       toInt64(m["id"]),
-				Name:     toString(m["title"]),
-				SKU:      toString(m["scu"]),
-				Brand:    toString(m["brand"]),
-				Currency: toString(m["currency"]),
-				Status:   model.ProductStatusActive,
-			}
-			if v, ok := m["category_id"]; ok {
-				item.CategoryID = toInt64(v)
-			}
-			if v, ok := m["min_price"]; ok {
-				item.Price = toFloat64Val(v)
-			}
-			if v, ok := m["attributes"]; ok {
-				item.Attributes = toAttrKV(v)
-			}
-			if v, ok := m["images"]; ok {
-				item.Images = toStringSlice(v)
-			}
-			// CompanyID from first product in products[]
-			if prods, ok := m["products"]; ok {
-				if arr, ok := prods.([]any); ok && len(arr) > 0 {
-					if first, ok := arr[0].(map[string]any); ok {
-						item.CompanyID = toInt64(first["company_id"])
-					}
-				}
-			}
-			items = append(items, item)
-		}
+		//items := make([]ProductListItem, 0, len(result.Items))
+		//for _, raw := range result.Items {
+		//	var m map[string]any
+		//	if err := json.Unmarshal(raw, &m); err != nil {
+		//		continue
+		//	}
+		//	item := ProductListItem{
+		//		ID:       toInt64(m["id"]),
+		//		Name:     toString(m["title"]),
+		//		SKU:      toString(m["scu"]),
+		//		Brand:    toString(m["brand"]),
+		//		Currency: toString(m["currency"]),
+		//		Status:   model.ProductStatusActive,
+		//	}
+		//	if v, ok := m["category_id"]; ok {
+		//		item.CategoryID = toInt64(v)
+		//	}
+		//	if v, ok := m["min_price"]; ok {
+		//		item.Price = toFloat64Val(v)
+		//	}
+		//	if v, ok := m["attributes"]; ok {
+		//		item.Attributes = toAttrKV(v)
+		//	}
+		//	if v, ok := m["images"]; ok {
+		//		item.Images = toStringSlice(v)
+		//	}
+		//	// CompanyID from first product in products[]
+		//	if prods, ok := m["products"]; ok {
+		//		if arr, ok := prods.([]any); ok && len(arr) > 0 {
+		//			if first, ok := arr[0].(map[string]any); ok {
+		//				item.CompanyID = toInt64(first["company_id"])
+		//			}
+		//		}
+		//	}
+		//	items = append(items, item)
+		//}
 
-		return &ListResult{
-			Items: items,
+		return &SCUListRespData{
+			Items: result.Items,
 			Total: result.Total,
 			Page:  result.Page,
 			Limit: result.Limit,
@@ -707,7 +738,7 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*ListResult, error) {
 			}
 		}
 
-		return &ListResult{
+		return &SCUListRespData{
 			Items:  result.Items,
 			Total:  result.Total,
 			Page:   result.Page,
@@ -716,7 +747,7 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*ListResult, error) {
 		}, nil
 	}
 
-	return &ListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
+	return &SCUListRespData{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 }
 
 func toFloat64(v interface{}) (float64, bool) {

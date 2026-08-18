@@ -388,14 +388,8 @@ func (h *Handlers) HandleSCUPageByPath(w http.ResponseWriter, r *http.Request) {
 		rest = ""
 	}
 
-	parts := strings.Split(rest, "/")
-	// Filter empty parts
-	var cleanParts []string
-	for _, p := range parts {
-		if p != "" {
-			cleanParts = append(cleanParts, p)
-		}
-	}
+	// Split and filter empty parts in one pass to reduce allocs.
+	cleanParts := splitNonEmpty(rest, '/')
 
 	if len(cleanParts) == 0 {
 		// /shop — root catalog (all SCU pages)
@@ -403,14 +397,39 @@ func (h *Handlers) HandleSCUPageByPath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 1: Try to find category by full path
+	// Step 1: Try SCU page by last part as slug
+	// If it's a single part, it might be an SCU page slug (e.g. /shop/samsung-galaxy-s7)
+	// or a category slug (e.g. /shop/elektronika).
+	// We check SCU page first if it's a single part to allow redirects.
+	if len(cleanParts) == 1 {
+		slug := cleanParts[0]
+		sp, err := h.scuPageRepo.GetBySlug(slug)
+		if err == nil {
+			canonical := "/shop/" + sp.Slug
+			if sp.CategoryID != 0 {
+				treePath, tpErr := h.categoryRepo.GetTreePath(sp.CategoryID)
+				if tpErr == nil && len(treePath) > 0 {
+					canonical = "/shop/" + strings.Join(treePath, "/") + "/" + sp.Slug
+				}
+			}
+			// currentPath := "/shop/" + strings.Join(cleanParts, "/")
+			if path != canonical {
+				http.Redirect(w, r, canonical, http.StatusMovedPermanently)
+				return
+			}
+			h.writeSCUPageResponse(w, r, sp)
+			return
+		}
+	}
+
+	// Step 2: Try to find category by full path
 	catID, err := h.findCategoryByPath(cleanParts)
 	if err == nil {
 		h.handleSCUPageCatalog(w, r, catID)
 		return
 	}
 
-	// Step 2: Try SCU page by last part as slug
+	// Step 3: Try SCU page by last part as slug (for deep paths that didn't match category)
 	slug := cleanParts[len(cleanParts)-1]
 	sp, err := h.scuPageRepo.GetBySlug(slug)
 	if err == nil {
@@ -437,31 +456,7 @@ func (h *Handlers) HandleSCUPageByPath(w http.ResponseWriter, r *http.Request) {
 	writeError(w, http.StatusNotFound, "NOT_FOUND", "page not found")
 }
 
-type (
-	AttrItem struct {
-		Code         string   `json:"code"`
-		Options      []string `json:"options"`
-		NameRU       string   `json:"name_ru,omitempty"`
-		NameUA       string   `json:"name_ua,omitempty"`
-		NamePL       string   `json:"name_pl,omitempty"`
-		NameEN       string   `json:"name_en,omitempty"`
-		Type         string   `json:"type,omitempty"`
-		IsFilterable bool     `json:"is_filterable,omitempty"`
-	}
-
-	SCUListRespData struct {
-		Items         []silentjson.RawMessage `json:"items"`
-		Total         int64                   `json:"total"`
-		Page          int                     `json:"page"`
-		Limit         int                     `json:"limit"`
-		CategoryAttrs []AttrItem              `json:"category_attrs,omitempty"`
-		CatID         int64                   `json:"category_id,omitempty"`
-		TreePath      []string                `json:"tree_path,omitempty"`
-		Category      model.Category          `json:"category,omitempty"`
-	}
-)
-
-var scuListRespRegistry = silentjson.BuildRegistry(reflect.TypeOf(SCUListRespData{}))
+var scuListRespRegistry = silentjson.BuildRegistry(reflect.TypeOf(db.SCUListRespData{}))
 
 // handleSCUPageCatalog returns a paginated list of SCU pages for a category.
 func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, catID int64) {
@@ -517,38 +512,8 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 
-	// Build category filter attributes
-	var categoryAttrs []AttrItem
-	if catID > 0 && h.attrDefRepo != nil {
-		codes, err := h.attrDefRepo.GetCodesForCategoryTree(catID, h.categoryRepo)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
-			return
-		}
-		for _, code := range codes {
-			values, _ := h.attrDefRepo.GetAttrValuesForCategory(code, catID)
-			if len(values) == 0 {
-				continue
-			}
-			def, _ := h.attrDefRepo.GetByCode(code)
-			attrMap := AttrItem{
-				Code:    code,
-				Options: values,
-			}
-			if def != nil {
-				attrMap.NameRU = def.NameRu
-				attrMap.NameUA = def.NameUa
-				attrMap.NamePL = def.NamePl
-				attrMap.NameEN = def.NameEn
-				attrMap.Type = string(def.Type)
-				attrMap.IsFilterable = def.IsFilterable
-			} else {
-				attrMap.Type = "string"
-				attrMap.IsFilterable = true
-			}
-			categoryAttrs = append(categoryAttrs, attrMap)
-		}
-	}
+	// Build category filter attributes (cached)
+	categoryAttrs := h.GetCategoryAttrs(catID)
 
 	// Use SCUPageSearch for catalog listing
 	if h.scuPageSearch != nil {
@@ -569,12 +534,14 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 		}
 
 		// Add seo_url to each item via text replacement (no unmarshal)
+		// Pre-cache tree paths for categories that appear in results.
 		items := make([]silentjson.RawMessage, 0, len(result.Items))
+		treePathCache := make(map[int64][]string, 16)
 		for _, raw := range result.Items {
-			items = append(items, injectSeoURL(raw, h.categoryRepo))
+			items = append(items, injectSeoURLCached(raw, h.categoryRepo, treePathCache))
 		}
 
-		respData := SCUListRespData{
+		respData := db.SCUListRespData{
 			Items:         items,
 			Total:         result.Total,
 			Page:          result.Page,
@@ -591,6 +558,10 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 			// Include full category object (with descriptions and images)
 			if cat, err := h.categoryRepo.Get(catID); err == nil {
 				respData.Category = *cat
+				// Add subcategories as precomputed JSON (no struct->json)
+				if subsJSON, err := h.categoryRepo.GetTreeByParentJSON(catID); err == nil && len(subsJSON) > 0 {
+					respData.Subcategories = silentjson.RawMessage(subsJSON)
+				}
 			}
 		}
 
@@ -616,12 +587,7 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"items": result.Items,
-		"total": result.Total,
-		"page":  result.Page,
-		"limit": result.Limit,
-	})
+	writeJSONSCUList(w, http.StatusOK, *result)
 }
 
 // writeSCUPageResponse writes the SCU page with its products.
@@ -634,7 +600,7 @@ func (h *Handlers) writeSCUPageResponse(w http.ResponseWriter, r *http.Request, 
 
 	// Build category tree path for SEO and breadcrumbs
 	var treePath []string
-	var treePathFull []*model.Category
+	var treePathFull []db.CategoryTreeNode
 	if sp.CategoryID != 0 {
 		treePath, _ = h.categoryRepo.GetTreePath(sp.CategoryID)
 		treePathFull, _ = h.categoryRepo.GetTreePathFull(sp.CategoryID)
@@ -642,20 +608,32 @@ func (h *Handlers) writeSCUPageResponse(w http.ResponseWriter, r *http.Request, 
 
 	seoURL := buildSEOURL(sp, treePath)
 
-	respData := map[string]interface{}{
-		"page":           sp,
-		"products":       products,
-		"tree_path":      treePath,
-		"tree_path_full": treePathFull,
-		"seo_url":        seoURL,
+	// writeJSONSCUList
+	respData := db.SCUListRespData{
+		SCUPage:      sp,
+		Products:     products,
+		TreePath:     treePath,
+		TreePathFull: treePathFull,
+		SEOURL:       seoURL,
+		CatID:        sp.CategoryID,
+	}
+
+	if sp.CategoryID != 0 {
+		if cat, err := h.categoryRepo.Get(sp.CategoryID); err == nil {
+			respData.Category = *cat
+			// Add subcategories as precomputed JSON (no struct->json)
+			if subsJSON, err := h.categoryRepo.GetTreeByParentJSON(sp.CategoryID); err == nil && len(subsJSON) > 0 {
+				respData.Subcategories = silentjson.RawMessage(subsJSON)
+			}
+		}
 	}
 
 	title := sp.Title + " — MakoShop"
 	if wantsHTML(r) {
-		writeHTMLResponse(w, r, title, respData)
+		writeHTMLResponseSCUList(w, r, title, respData)
 		return
 	}
-	writeJSON(w, http.StatusOK, respData)
+	writeJSONSCUList(w, http.StatusOK, respData)
 }
 
 // isBot checks if the request is from a search engine bot
@@ -696,10 +674,10 @@ func wantsHTML(r *http.Request) bool {
 
 // writeHTMLResponse writes an HTML page with embedded data for SSR
 // For bots: full SSR with inline content. For browsers: minimal HTML + JS.
-func writeHTMLResponseSCUList(w http.ResponseWriter, r *http.Request, title string, data SCUListRespData) {
-	jsonData := silentjson.Marshal(&data, scuListRespRegistry, nil)
-	// jsonData, _ := json.Marshal(data)
-	safeJSON := strings.ReplaceAll(string(jsonData), "<", "\\u003c")
+func writeHTMLResponseSCUList(w http.ResponseWriter, r *http.Request, title string, data db.SCUListRespData) {
+	jsonData := marshalWithPool(&data, scuListRespRegistry)
+	// No bytes.ReplaceAll — write JSON directly with inline escaping to avoid alloc.
+	// safeJSON replaced by writeSafeJSON below.
 
 	// Base URL
 	baseURL := "https://makoshop.com"
@@ -763,7 +741,7 @@ func writeHTMLResponseSCUList(w http.ResponseWriter, r *http.Request, title stri
 		w.Write(stringToBytes(bodyContent))
 		w.Write(stringToBytes(`</div>
   <script>window.__INITIAL_DATA__=`))
-		w.Write(stringToBytes(safeJSON))
+		writeSafeJSON(w, jsonData)
 		w.Write(stringToBytes(`</script>
 </body>
 </html>`))
@@ -791,7 +769,7 @@ func writeHTMLResponseSCUList(w http.ResponseWriter, r *http.Request, title stri
 <body>
   <div id="app"></div>
   <script>window.__INITIAL_DATA__=`))
-	w.Write(stringToBytes(safeJSON))
+	writeSafeJSON(w, jsonData)
 	w.Write(stringToBytes(`</script>
   <script type="module" src="/src/main.js"></script>
 </body>
@@ -917,6 +895,63 @@ func writeHTMLResponse(w http.ResponseWriter, r *http.Request, title string, dat
 
 func stringToBytes(s string) []byte {
 	return *((*[]byte)(unsafe.Pointer(&s)))
+}
+
+// splitNonEmpty splits s by sep, returning only non-empty parts.
+// Avoids the extra alloc of strings.Split + loop.
+func splitNonEmpty(s string, sep rune) []string {
+	if s == "" {
+		return nil
+	}
+	count := 0
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if rune(s[i]) == sep {
+			if i > start {
+				count++
+			}
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		count++
+	}
+	if count == 0 {
+		return nil
+	}
+	result := make([]string, 0, count)
+	start = 0
+	for i := 0; i < len(s); i++ {
+		if rune(s[i]) == sep {
+			if i > start {
+				result = append(result, s[start:i])
+			}
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		result = append(result, s[start:])
+	}
+	return result
+}
+
+// writeSafeJSON writes JSON to w, escaping '<' as '\u003c' to prevent
+// script injection in HTML context. Streams directly without allocating
+// a full copy (avoids bytes.ReplaceAll).
+func writeSafeJSON(w interface{ Write([]byte) (int, error) }, data []byte) {
+	last := 0
+	for i := 0; i < len(data); i++ {
+		if data[i] == '<' {
+			if i > last {
+				_, _ = w.Write(data[last:i])
+			}
+			_, _ = w.Write([]byte("\u003c"))
+			last = i + 1
+		}
+	}
+	if last < len(data) {
+		_, _ = w.Write(data[last:])
+	}
 }
 
 // declineRussian declines a number into correct Russian form (1/2-4/5-20, 21, etc).
@@ -1115,6 +1150,12 @@ func buildSEOURL(sp *model.SCUPage, treePath []string) string {
 // Reads slug and category_id from JSON, builds canonical URL, inserts field before closing brace.
 // Uses silentjson raw operations — no full parse, no reflection.
 func injectSeoURL(raw silentjson.RawMessage, catRepo *db.CategoryRepo) silentjson.RawMessage {
+	return injectSeoURLCached(raw, catRepo, nil)
+}
+
+// injectSeoURLCached is like injectSeoURL but uses a tree path cache to avoid
+// repeated GetTreePath calls for the same category.
+func injectSeoURLCached(raw silentjson.RawMessage, catRepo *db.CategoryRepo, treePathCache map[int64][]string) silentjson.RawMessage {
 	if len(raw) == 0 || raw[len(raw)-1] != '}' {
 		return raw
 	}
@@ -1129,7 +1170,19 @@ func injectSeoURL(raw silentjson.RawMessage, catRepo *db.CategoryRepo) silentjso
 	// Build seo_url
 	seoURL := "/shop/" + slug
 	if catID != 0 && catRepo != nil {
-		if treePath, err := catRepo.GetTreePath(catID); err == nil && len(treePath) > 0 {
+		var treePath []string
+		if treePathCache != nil {
+			var ok bool
+			if treePath, ok = treePathCache[catID]; !ok {
+				treePath, _ = catRepo.GetTreePath(catID)
+				if treePath != nil {
+					treePathCache[catID] = treePath
+				}
+			}
+		} else {
+			treePath, _ = catRepo.GetTreePath(catID)
+		}
+		if len(treePath) > 0 {
 			seoURL = "/shop/" + strings.Join(treePath, "/") + "/" + slug
 		}
 	}
@@ -1371,6 +1424,14 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 	fmt.Printf("[REBUILD-SCUPAGES] Indexing %d products (scu:{scu} indexes)...\n", len(allIDs))
 	idxStart := time.Now()
 	if h.productRepo.TurboSearch() != nil && len(allIDs) > 0 {
+		// Clear global product list first to avoid duplicates
+		_ = h.productRepo.Store().DB().TurboClearIndex(db.TurboKeyProductList)
+
+		// Also clear all SCU indexes
+		for scu := range scuProducts {
+			_ = h.productRepo.Store().DB().TurboClearIndex("scu:" + scu)
+		}
+
 		// Read all products in batches for indexing
 		const idxBatchSize = 10000
 		for i := 0; i < len(allIDs); i += idxBatchSize {

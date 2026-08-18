@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -164,6 +165,11 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 }
 
 func main() {
+	// Enable mutex and block profiling for production profiling.
+	// These are read via /debug/pprof/mutex and /debug/pprof/block.
+	runtime.SetMutexProfileFraction(1)
+	runtime.SetBlockProfileRate(1)
+
 	cfg := config.DefaultConfig()
 
 	// Load i18n translations
@@ -435,6 +441,24 @@ func main() {
 	mux.Handle("/admin/rebuild-scupages", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			h.HandleAdminRebuildSCUPages(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}), model.RoleAdmin))
+
+	// POST /admin/rebuild-category-trees — rebuild precomputed category tree JSONs
+	mux.Handle("/admin/rebuild-category-trees", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			h.HandleRebuildCategoryTrees(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}), model.RoleAdmin))
+
+	// GET /admin/debug-category-counts — debug info about categories
+	mux.Handle("/admin/debug-category-counts", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			h.HandleDebugCategoryCounts(w, r)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

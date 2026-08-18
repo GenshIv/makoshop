@@ -36,11 +36,14 @@ const goBack = () => {
 };
 
 const page = ref(null);
+const category = ref(null);
+const subcategories = ref([]);
 const products = ref([]);
 const treePath = ref([]);
 const treePathFull = ref([]);
 const loading = ref(true);
 const error = ref(null);
+
 
 useSeo({
   title: computed(() => (page.value?.title ? `${page.value.title} — MakoShop` : t('pages.default_title'))),
@@ -105,13 +108,20 @@ const filterForm = reactive({
 });
 
 const fetchSCUPage = async () => {
+  if (props.data) {
+    // Already initialized from props
+    return;
+  }
   loading.value = true;
   error.value = null;
   try {
     // Use the full route path: /shop/{tree}/{slug}
     const response = await api.get(route.path);
     const data = response.data;
-    page.value = data.page;
+    // console.log('SCUPageView fetched data:', data);
+    page.value = data.scu_page;
+    category.value = data.category || (data.scu_page ? data.scu_page.category : null);
+    subcategories.value = data.subcategories || [];
     products.value = data.products || [];
     treePath.value = data.tree_path || [];
     treePathFull.value = data.tree_path_full || [];
@@ -125,7 +135,7 @@ const fetchSCUPage = async () => {
   }
 };
 
-const initFromData = () => {
+function initFromData() {
   // Page title / meta are handled reactively by useSeo()
 
   // Select cheapest product by default (first supplier of first modification).
@@ -149,7 +159,7 @@ const initFromData = () => {
   }
 
   // Load company settings for badges
-  fetchCompanySettings();
+  // fetchCompanySettings(); // REMOVED: This causes a second request that overwrites data if not careful
 };
 
 const addToCart = async () => {
@@ -385,6 +395,11 @@ const uniqueCompanyCount = computed(() => {
   return allSuppliers.value.length;
 });
 
+// Total count of offers across all modifications (after filtering)
+const filteredOfferCount = computed(() => {
+  return modifications.value.reduce((acc, mod) => acc + mod.suppliers.length, 0);
+});
+
 // Whether at least one product is in stock
 const hasAnyInStock = computed(() => {
   return products.value.some(p => isInStock(p));
@@ -417,10 +432,34 @@ const displayAttributes = computed(() => {
   return {};
 });
 
-// Total number of offers (after filters)
-const filteredOfferCount = computed(() => {
-  return modifications.value.reduce((sum, mod) => sum + mod.suppliers.length, 0);
-});
+// Get localized category name
+const catName = (cat) => {
+  if (!cat) return '';
+  const langField = `name_${locale.value}`;
+  return cat[langField] || cat.name_en || cat.name_ru || cat.name_ua || cat.name_pl || '';
+};
+
+// Get localized description for category
+const catDescription = (cat) => {
+  if (!cat) return '';
+  const langField = `description_${locale.value}`;
+  return cat[langField] || cat.description || '';
+};
+
+const isValidImage = (url) => {
+  if (!url) return false;
+  return !url.includes('cdn.makoshop.com');
+};
+
+const navigateToCategory = (sub) => {
+  if (!sub.slug) return;
+  // If we have treePath for current category, prepend it
+  if (treePath.value.length > 0) {
+    router.push({ path: '/shop/' + treePath.value.join('/') + '/' + sub.slug });
+  } else {
+    router.push({ path: '/shop/' + sub.slug });
+  }
+};
 
 // Pluralized word form for "Where to buy (N options)"
 const offersPlural = computed(() => {
@@ -431,10 +470,10 @@ const offersPlural = computed(() => {
 // Pluralization helper using locale-specific i18n keys
 const pluralize = (n, oneKey, fewKey, manyKey) => {
   const abs = Math.abs(n) % 100;
-  const last = abs % 10;
+  const lastDigit = abs % 10;
   if (abs > 10 && abs < 20) return t(manyKey);
-  if (last > 1 && last < 5) return t(fewKey);
-  if (last === 1) return t(oneKey);
+  if (lastDigit === 1) return t(oneKey);
+  if (lastDigit >= 2 && lastDigit <= 4) return t(fewKey);
   return t(manyKey);
 };
 
@@ -453,19 +492,23 @@ const selectProduct = (product) => {
   }
 };
 
+// Initialize from props.data if available
+if (props.data) {
+  page.value = props.data.scu_page;
+  products.value = props.data.products || [];
+  category.value = props.data.category;
+  subcategories.value = props.data.subcategories || [];
+  treePath.value = props.data.tree_path || [];
+  treePathFull.value = props.data.tree_path_full || [];
+  loading.value = false;
+  initFromData();
+}
+
 onMounted(() => {
-  // If data provided via props (from CatalogView), use it directly
-  if (props.data) {
-    page.value = props.data.page;
-    products.value = props.data.products || [];
-    treePath.value = props.data.tree_path || [];
-    treePathFull.value = props.data.tree_path_full || [];
-    loading.value = false;
-    initFromData();
-    return;
-  }
   // Otherwise fetch from API
-  fetchSCUPage();
+  if (!props.data) {
+    fetchSCUPage();
+  }
 });
 
 // Watch for props.data changes (when rendered from CatalogView)
@@ -473,7 +516,9 @@ watch(
   () => props.data,
   (newData) => {
     if (newData) {
-      page.value = newData.page;
+      page.value = newData.scu_page;
+      category.value = newData.category || (newData.scu_page ? newData.scu_page.category : null);
+      subcategories.value = newData.subcategories || [];
       products.value = newData.products || [];
       treePath.value = newData.tree_path || [];
       treePathFull.value = newData.tree_path_full || [];
@@ -499,20 +544,20 @@ watch(
 
     <!-- SCU Page -->
     <div v-else-if="page" class="space-y-6">
-      <!-- Top section: breadcrumbs + title -->
+      <!-- Top section: breadcrumbs + category info -->
       <div>
         <Breadcrumbs :categories="treePathFull" />
 
-        <div class="mt-3 flex items-start justify-between gap-4">
+        <div class="mt-4 flex items-start justify-between gap-4">
           <div class="min-w-0">
             <h1 class="text-2xl font-bold text-ink break-words">{{ mainProductName }}</h1>
             <div class="mt-1 flex items-center gap-2 text-sm text-ink-3 flex-wrap">
               <span v-if="page.brand">{{ page.brand }}</span>
               <span v-if="uniqueCompanyCount > 1">
-                · {{ uniqueCompanyCount }} {{ pluralize(uniqueCompanyCount, t('scupage.store_one'), t('scupage.store_few'), t('scupage.store_many')) }}
+                · {{ uniqueCompanyCount }} {{ pluralize(uniqueCompanyCount, 'scupage.store_one', 'scupage.store_few', 'scupage.store_many') }}
               </span>
               <span v-if="modifications.length > 1">
-                · {{ modifications.length }} {{ pluralize(modifications.length, t('scupage.mod_one'), t('scupage.mod_few'), t('scupage.mod_many')) }}
+                · {{ modifications.length }} {{ pluralize(modifications.length, 'scupage.mod_one', 'scupage.mod_few', 'scupage.mod_many') }}
               </span>
             </div>
             <!-- Tags -->

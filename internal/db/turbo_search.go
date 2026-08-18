@@ -10,6 +10,7 @@ import (
 
 	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
+	"github.com/GenshIv/silentjson/v2"
 )
 
 // TurboProductSearch — строго по turbo_index_guide.md.
@@ -654,7 +655,7 @@ type TurboListParams struct {
 }
 
 type TurboListResult struct {
-	Items  []ProductListItem
+	Items  []silentjson.RawMessage
 	Total  int64
 	Page   int
 	Limit  int
@@ -800,28 +801,16 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 	}
 
 	// Парсим документы
-	items := make([]ProductListItem, 0, len(res.Docs))
+	items := make([]silentjson.RawMessage, 0, len(res.Docs))
 	for _, doc := range res.Docs {
 		if doc == nil {
 			continue
 		}
-		p, err := UnmarshalProduct(doc)
+		// p, err := UnmarshalProduct(doc)
 		if err != nil {
 			continue
 		}
-		items = append(items, ProductListItem{
-			ID:         p.ID,
-			SKU:        p.SKU,
-			Name:       p.Name,
-			CategoryID: p.CategoryID,
-			CompanyID:  p.CompanyID,
-			Brand:      p.Brand,
-			Price:      p.Price,
-			Currency:   p.Currency,
-			Status:     p.Status,
-			Attributes: p.Attributes,
-			Images:     p.Images,
-		})
+		items = append(items, doc)
 	}
 
 	total := int64(res.Total)
@@ -1022,8 +1011,18 @@ func (t *TurboProductSearch) GetAllProducts() ([]model.Product, error) {
 		return nil, nil
 	}
 
+	// Deduplicate IDs
+	seen := make(map[uint64]bool)
+	uniqueIDs := make([]uint64, 0, len(docIDs))
+	for _, id := range docIDs {
+		if !seen[id] {
+			seen[id] = true
+			uniqueIDs = append(uniqueIDs, id)
+		}
+	}
+
 	var result []model.Product
-	for _, docID := range docIDs {
+	for _, docID := range uniqueIDs {
 		p, err := t.repo.Get(int64(docID))
 		if err != nil {
 			continue
@@ -1051,8 +1050,13 @@ func (t *TurboProductSearch) GetProductsBySCU(scu string) ([]model.Product, erro
 		return nil, nil
 	}
 
-	var result []model.Product
-	for _, docID := range docIDs {
+	// Deduplicate IDs using sort+unique instead of map (less alloc).
+	// Turbo indexes are usually sorted, but we sort again to be safe.
+	sortUint64(docIDs)
+	uniqueIDs := uniqueSortedUint64(docIDs)
+
+	result := make([]model.Product, 0, len(uniqueIDs))
+	for _, docID := range uniqueIDs {
 		p, err := t.repo.Get(int64(docID))
 		if err != nil {
 			continue
@@ -1061,6 +1065,61 @@ func (t *TurboProductSearch) GetProductsBySCU(scu string) ([]model.Product, erro
 	}
 
 	return result, nil
+}
+
+// sortUint64 sorts a slice of uint64 using simple quicksort.
+func sortUint64(a []uint64) {
+	if len(a) <= 1 {
+		return
+	}
+	quickSortUint64(a, 0, len(a)-1)
+}
+
+func quickSortUint64(a []uint64, lo, hi int) {
+	for lo < hi {
+		p := partitionUint64(a, lo, hi)
+		if p-lo < hi-p {
+			quickSortUint64(a, lo, p-1)
+			lo = p + 1
+		} else {
+			quickSortUint64(a, p+1, hi)
+			hi = p - 1
+		}
+	}
+}
+
+func partitionUint64(a []uint64, lo, hi int) int {
+	pivot := a[lo+(hi-lo)/3]
+	i, j := lo, hi
+	for i <= j {
+		for a[i] < pivot {
+			i++
+		}
+		for a[j] > pivot {
+			j--
+		}
+		if i <= j {
+			a[i], a[j] = a[j], a[i]
+			i++
+			j--
+		}
+	}
+	return i
+}
+
+// uniqueSortedUint64 returns a new slice with duplicates removed from a sorted slice.
+func uniqueSortedUint64(a []uint64) []uint64 {
+	if len(a) == 0 {
+		return nil
+	}
+	result := make([]uint64, 0, len(a))
+	result = append(result, a[0])
+	for i := 1; i < len(a); i++ {
+		if a[i] != a[i-1] {
+			result = append(result, a[i])
+		}
+	}
+	return result
 }
 
 // intersectSorted — оба слайса отсортированы (turbo-индексы гарантируют это).

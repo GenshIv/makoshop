@@ -23,6 +23,13 @@ const rootCatsLoading = ref(false);
 // Current browsing path inside categories bar: [{id, slug, name, description, ...}, ...]
 const categoryBrowsePath = ref([]);
 
+// Sync categoryBrowsePath with categoryPath (which comes from API)
+watch(categoryPath, (newPath) => {
+  if (newPath && newPath.length > 0) {
+    categoryBrowsePath.value = newPath;
+  }
+});
+
 // Current category object from API (with description)
 const currentCategory = ref(null);
 
@@ -120,6 +127,7 @@ const fetchProducts = async () => {
     }
 
     const response = await api.get(url, { params });
+    // console.log('CatalogView fetched products:', response.data);
 
     // Read server-side timing from header: X-Response-Time-Ms
     // Axios normalizes header names to lowercase, but we'll search defensively
@@ -146,8 +154,25 @@ const fetchProducts = async () => {
     const data = response.data;
 
     // If the response is an SCUPage, store it and render SCUPageView
-    if (data.page && typeof data.page === 'object' && data.page.scu) {
+    if (data.scu_page && typeof data.scu_page === 'object' && data.scu_page.scu) {
+      // console.log('CatalogView detected SCUPage, preparing data for sub-view');
+      // Ensure category info is present in the data passed to SCUPageView
+      if (!data.category && (data.scu_page.category || currentCategory.value)) {
+        data.category = data.scu_page.category || currentCategory.value;
+      }
+      if (!data.subcategories && (data.scu_page.subcategories || rootCategories.value.length > 0)) {
+        // subcategories might be in scu_page or we might have them from browsing
+        data.subcategories = data.scu_page.subcategories || [];
+      }
+      
       scuPageData.value = data;
+      // Build category path via API for proper localized names
+      if (data.category_id || data.scu_page.category_id) {
+        const catId = data.category_id || data.scu_page.category_id;
+        fetchCategoryPath(catId);
+        // Store the current category with description
+        currentCategory.value = data.category || data.scu_page.category || null;
+      }
       return;
     }
 
@@ -161,17 +186,24 @@ const fetchProducts = async () => {
     const perPage = data.limit || pagination.per_page;
     pagination.total_pages = Math.ceil(pagination.total / perPage);
     categoryAttrs.value = data.category_attrs || [];
+    
+    // console.log('CatalogView processing regular products, data.category:', data.category);
 
     // Build category path via API for proper localized names
-    if (data.category_id) {
-      fetchCategoryPath(data.category_id);
-      // Store the current category with description
-      currentCategory.value = data.category || null;
-    } else {
-      categoryPath.value = [];
-      currentCategory.value = null;
+    if (data.category_id || (data.scu_page && data.scu_page.category_id)) {
+      const catId = data.category_id || data.scu_page.category_id;
+      fetchCategoryPath(catId);
+    // Store the current category with description
+    if (data.category) {
+      currentCategory.value = data.category;
+    } else if (data.scu_page && data.scu_page.category) {
+      currentCategory.value = data.scu_page.category;
     }
-  } catch (e) {
+  } else {
+    categoryPath.value = [];
+    currentCategory.value = null;
+  }
+} catch (e) {
     if (e.response?.status === 503) {
       maintenanceMode.value = true;
       error.value = null;
@@ -556,8 +588,15 @@ onMounted(async () => {
     delete window.__INITIAL_DATA__; // consume once
 
     // If it's an SCUPage
-    if (data.page && typeof data.page === 'object' && data.page.scu) {
+    if (data.scu_page && typeof data.scu_page === 'object' && data.scu_page.scu) {
       scuPageData.value = data;
+      // Build category path via API for proper localized names
+      if (data.category_id || data.scu_page.category_id) {
+        const catId = data.category_id || data.scu_page.category_id;
+        fetchCategoryPath(catId);
+        // Store the current category with description
+        currentCategory.value = data.category || data.scu_page.category || null;
+      }
       loading.value = false;
       return;
     }
@@ -570,10 +609,11 @@ onMounted(async () => {
     categoryAttrs.value = data.category_attrs || [];
 
     // Build category path via API for proper localized names
-    if (data.category_id) {
-      fetchCategoryPath(data.category_id);
+    if (data.category_id || (data.scu_page && data.scu_page.category_id)) {
+      const catId = data.category_id || data.scu_page.category_id;
+      fetchCategoryPath(catId);
       // Store the current category with description
-      currentCategory.value = data.category || null;
+      currentCategory.value = data.category || (data.scu_page ? data.scu_page.category : null) || null;
     } else {
       categoryPath.value = [];
       currentCategory.value = null;

@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/auth"
@@ -70,6 +72,17 @@ type Handlers struct {
 	statsCacheMu sync.Mutex
 	statsCache   *metrics.Stats
 	statsCacheAt time.Time
+
+	// Category attrs cache: catID -> []db.AttrItem
+	// Cached for 5 minutes, invalidated on attr/category changes via admin.
+	catAttrsMu sync.RWMutex
+	catAttrs   map[int64]cachedCatAttrs
+}
+
+// cachedCatAttrs holds precomputed attribute items for a category.
+type cachedCatAttrs struct {
+	Items []db.AttrItem
+	At    time.Time
 }
 
 func NewHandlers(store *db.Store) *Handlers {
@@ -78,6 +91,10 @@ func NewHandlers(store *db.Store) *Handlers {
 	promoLogRepo := db.NewPromoLogRepo(store)
 	productRepo := db.NewProductRepo(store, promoCampaignRepo, promoPlanRepo, promoLogRepo)
 	categoryRepo := db.NewCategoryRepo(store)
+
+	// Build precomputed category tree JSONs at startup.
+	categoryRepo.RebuildTrees()
+
 	attrDefRepo := db.NewAttrDefRepo(store)
 
 	// Turbo search: enabled by default. Can be disabled via env flag if needed.
@@ -121,6 +138,7 @@ func NewHandlers(store *db.Store) *Handlers {
 		landingRepo:       landingRepo,
 		scuPageRepo:       scuPageRepo,
 		catalogizer:       catz,
+		catAttrs:          make(map[int64]cachedCatAttrs),
 	}
 }
 
@@ -147,7 +165,90 @@ func (h *Handlers) SetCompanySettingsRepos(
 	h.installmentPlanRepo = installmentPlanRepo
 }
 
+// InvalidateCatAttrsCache clears cached attrs for a category (called on attr/category changes).
+func (h *Handlers) InvalidateCatAttrsCache(catID int64) {
+	h.catAttrsMu.Lock()
+	delete(h.catAttrs, catID)
+	h.catAttrsMu.Unlock()
+}
+
+// GetCategoryAttrs returns cached category attributes (TTL 5 min).
+func (h *Handlers) GetCategoryAttrs(catID int64) []db.AttrItem {
+	if catID == 0 || h.attrDefRepo == nil {
+		return nil
+	}
+
+	// Check cache first
+	h.catAttrsMu.RLock()
+	cached, ok := h.catAttrs[catID]
+	h.catAttrsMu.RUnlock()
+	if ok && time.Since(cached.At) < 5*time.Minute {
+		return cached.Items
+	}
+
+	// Build attrs
+	codes, err := h.attrDefRepo.GetCodesForCategoryTree(catID, h.categoryRepo)
+	if err != nil || len(codes) == 0 {
+		return nil
+	}
+
+	items := make([]db.AttrItem, 0, len(codes))
+	for _, code := range codes {
+		values, _ := h.attrDefRepo.GetAttrValuesForCategory(code, catID)
+		if len(values) == 0 {
+			continue
+		}
+		def, _ := h.attrDefRepo.GetByCode(code)
+		attrMap := db.AttrItem{
+			Code:    code,
+			Options: values,
+		}
+		if def != nil {
+			attrMap.NameRU = def.NameRu
+			attrMap.NameUA = def.NameUa
+			attrMap.NamePL = def.NamePl
+			attrMap.NameEN = def.NameEn
+			attrMap.Type = string(def.Type)
+			attrMap.IsFilterable = def.IsFilterable
+		} else {
+			attrMap.Type = "string"
+			attrMap.IsFilterable = true
+		}
+		items = append(items, attrMap)
+	}
+
+	// Store in cache
+	if len(items) > 0 {
+		h.catAttrsMu.Lock()
+		h.catAttrs[catID] = cachedCatAttrs{Items: items, At: time.Now()}
+		h.catAttrsMu.Unlock()
+	}
+
+	return items
+}
+
 // --- helpers ---
+
+var jsonBufPool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, 0, 64*1024) // 64KB initial
+		return &buf
+	},
+}
+
+// marshalWithPool serializes data using silentjson with a pooled buffer.
+// Returns the resulting JSON bytes (caller owns the returned slice, not the pool buffer).
+func marshalWithPool[T any](data *T, reg *silentjson.Registry) []byte {
+	bufPtr := jsonBufPool.Get().(*[]byte)
+	buf := (*bufPtr)[:0]
+	buf = silentjson.Marshal(data, reg, buf)
+	// Copy result before returning buf to pool
+	result := make([]byte, len(buf))
+	copy(result, buf)
+	*bufPtr = buf[:64*1024] // reset capacity for reuse
+	jsonBufPool.Put(bufPtr)
+	return result
+}
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
@@ -157,14 +258,10 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	_ = enc.Encode(v)
 }
 
-func writeJSONSCUList(w http.ResponseWriter, status int, data SCUListRespData) {
+func writeJSONSCUList(w http.ResponseWriter, status int, data db.SCUListRespData) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	w.Write(silentjson.Marshal(&data, scuListRespRegistry, nil))
-	return
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	_ = enc.Encode(data)
+	w.Write(marshalWithPool(&data, scuListRespRegistry))
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
@@ -204,13 +301,26 @@ func (h *Handlers) HandleTurboProducts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"items": result.Items,
-		"total": result.Total,
-		"page":  result.Page,
-		"limit": result.Limit,
-	})
+	resp := turboListResp{
+		Items: result.Items,
+		Total: result.Total,
+		Page:  result.Page,
+		Limit: result.Limit,
+	}
+	buf := marshalWithPool(&resp, turboListRespReg)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(buf)
 }
+
+type turboListResp struct {
+	Items []silentjson.RawMessage `json:"items"`
+	Total int64                   `json:"total"`
+	Page  int                     `json:"page"`
+	Limit int                     `json:"limit"`
+}
+
+var turboListRespReg = silentjson.BuildRegistry(reflect.TypeOf(turboListResp{}))
 
 func parseID(w http.ResponseWriter, r *http.Request, name string) (int64, bool) {
 	idStr := strings.TrimPrefix(r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:], "")
@@ -306,6 +416,7 @@ func (h *Handlers) HandleCategoriesList(w http.ResponseWriter, r *http.Request) 
 // HandleCategoriesTree returns the category tree.
 // GET /categories/tree
 // GET /categories/tree?child_of={id}
+// Uses precomputed JSON from turbo: zero Unmarshal/Marshal on hot path.
 func (h *Handlers) HandleCategoriesTree(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
@@ -319,21 +430,68 @@ func (h *Handlers) HandleCategoriesTree(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid child_of parameter")
 			return
 		}
-		tree, err := h.categoryRepo.GetTreeByParent(parentID)
+		data, err := h.categoryRepo.GetTreeByParentJSON(parentID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, tree)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(data)
 		return
 	}
 
-	tree, err := h.categoryRepo.GetTree()
+	data, err := h.categoryRepo.GetTreeJSON()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, tree)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
+// HandleRebuildCategoryTrees rebuilds all precomputed category tree JSONs.
+// POST /admin/rebuild-category-trees
+func (h *Handlers) HandleRebuildCategoryTrees(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	h.categoryRepo.RebuildTrees()
+	writeJSON(w, http.StatusOK, map[string]string{"status": "rebuilt"})
+}
+
+// HandleDebugCategoryCounts returns counts for debugging category indexes.
+// GET /admin/debug-category-counts
+func (h *Handlers) HandleDebugCategoryCounts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	all, errAll := h.categoryRepo.ListAll()
+	activeCount := 0
+	rootCount := 0
+	for _, c := range all {
+		if c.IsActive {
+			activeCount++
+		}
+		if c.ParentID == nil {
+			rootCount++
+		}
+	}
+
+	tree, _ := h.categoryRepo.GetTree()
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"all":          len(all),
+		"list_all_err": errAll,
+		"active":       activeCount,
+		"roots":        rootCount,
+		"tree_nodes":   len(tree),
+	})
 }
 
 func (h *Handlers) HandleCategoryGet(w http.ResponseWriter, r *http.Request) {
@@ -358,7 +516,7 @@ func (h *Handlers) HandleCategoryGet(w http.ResponseWriter, r *http.Request) {
 
 // HandleCategoryTreePath returns the full path from root to category in one request.
 // GET /categories/tree_path/{id}
-// Returns: [{id, slug, name_ru, name_ua, name_pl, name_en}, ...]
+// Returns: []db.CategoryTreeNode (full data with children)
 func (h *Handlers) HandleCategoryTreePath(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
@@ -370,55 +528,10 @@ func (h *Handlers) HandleCategoryTreePath(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Verify category exists
-	_, err := h.categoryRepo.Get(id)
+	path, err := h.categoryRepo.GetTreePathFull(id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "category not found")
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "category path not found")
 		return
-	}
-
-	ancestors, err := h.categoryRepo.GetAncestors(id)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
-		return
-	}
-
-	type catPathItem struct {
-		ID     int64  `json:"id"`
-		Slug   string `json:"slug"`
-		NameRu string `json:"name_ru"`
-		NameUa string `json:"name_ua"`
-		NamePl string `json:"name_pl"`
-		NameEn string `json:"name_en"`
-	}
-
-	var path []catPathItem
-	for _, aid := range ancestors {
-		cat, err := h.categoryRepo.Get(aid)
-		if err != nil {
-			continue
-		}
-		path = append(path, catPathItem{
-			ID:     cat.ID,
-			Slug:   cat.Slug,
-			NameRu: cat.NameRu,
-			NameUa: cat.NameUa,
-			NamePl: cat.NamePl,
-			NameEn: cat.NameEn,
-		})
-	}
-
-	// Add current category
-	cat, _ := h.categoryRepo.Get(id)
-	if cat != nil {
-		path = append(path, catPathItem{
-			ID:     cat.ID,
-			Slug:   cat.Slug,
-			NameRu: cat.NameRu,
-			NameUa: cat.NameUa,
-			NamePl: cat.NamePl,
-			NameEn: cat.NameEn,
-		})
 	}
 
 	writeJSON(w, http.StatusOK, path)
@@ -1011,10 +1124,10 @@ func (h *Handlers) HandleProductsList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if result.Items == nil {
-		result.Items = []db.ProductListItem{}
+		result.Items = []silentjson.RawMessage{}
 	}
 
-	writeJSON(w, http.StatusOK, result)
+	writeJSONSCUList(w, http.StatusOK, *result)
 }
 
 func (h *Handlers) HandleProductGet(w http.ResponseWriter, r *http.Request) {
@@ -3819,6 +3932,12 @@ func (h *Handlers) HandleAdminCatalogizerCoverage(w http.ResponseWriter, r *http
 	})
 }
 
+type GetIDOnly struct {
+	ID int64 `json:"id"`
+}
+
+var reqIdOnly = silentjson.BuildRegistry(reflect.TypeOf(GetIDOnly{}))
+
 // HandleAdminCatalogize runs auto-catalogization on products.
 // POST /admin/catalogize
 //
@@ -3866,7 +3985,12 @@ func (h *Handlers) HandleAdminCatalogize(w http.ResponseWriter, r *http.Request)
 	}
 
 	for _, item := range result.Items {
-		productIDs = append(productIDs, item.ID)
+		it := new(GetIDOnly)
+		err := silentjson.ParseObject(item, reqIdOnly, unsafe.Pointer(it))
+		if err != nil {
+
+		}
+		productIDs = append(productIDs, it.ID)
 	}
 
 	fmt.Printf("[CATALOGIZE] Processing %d products (apply=%v)...\n", len(productIDs), body.Apply)

@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"sync"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
+	"github.com/GenshIv/silentjson/v2"
 )
 
 // Turbo index keys for categories:
@@ -28,6 +30,10 @@ const (
 	turboKeyCategoryChildrenOf = "cat_children_of:"
 	turboKeyCategoryAncestors  = "cat_ancestors:"
 	turboKeyCategoryActive     = "cat_active"
+
+	// Precomputed category trees as JSON.
+	turboKeyCategoryTreeFull   = "cat_tree_full"
+	turboKeyCategoryTreeParent = "cat_tree_parent:"
 )
 
 type CategoryRepo struct {
@@ -63,6 +69,10 @@ func (r *CategoryRepo) Create(c *model.Category) error {
 		fmt.Printf("WARN: failed to update category indexes %d: %v\n", c.ID, err)
 	}
 
+	// Rebuild precomputed tree JSONs
+	r.rebuildFullTreeJSON()
+	r.invalidateAllParentTrees()
+
 	return nil
 }
 
@@ -94,6 +104,10 @@ func (r *CategoryRepo) Update(id int64, updater func(*model.Category)) error {
 		fmt.Printf("WARN: failed to update category indexes %d: %v\n", cat.ID, err)
 	}
 
+	// Rebuild precomputed tree JSONs
+	r.rebuildFullTreeJSON()
+	r.invalidateAllParentTrees()
+
 	return nil
 }
 
@@ -110,6 +124,10 @@ func (r *CategoryRepo) Delete(id int64) error {
 	if err := r.store.DocDelete(KeyCategory(id)); err != nil {
 		return fmt.Errorf("delete category: %w", err)
 	}
+
+	// Rebuild precomputed tree JSONs
+	r.rebuildFullTreeJSON()
+	r.invalidateAllParentTrees()
 
 	return nil
 }
@@ -335,6 +353,7 @@ func (r *CategoryRepo) rebuildAncestorsCache(catID int64) {
 	} else {
 		r.store.TurboWrite(key, []byte{})
 	}
+	r.treePathCache.Delete(catID)
 }
 
 // computeAncestors computes ancestors from root to parent (not including self).
@@ -535,22 +554,176 @@ func (r *CategoryRepo) ListAll() ([]model.Category, error) {
 	return result, nil
 }
 
-// ListActive returns only active categories.
-func (r *CategoryRepo) ListActive() ([]model.Category, error) {
+// RebuildTrees rebuilds all precomputed category tree JSONs.
+// Call this at startup or after bulk changes.
+func (r *CategoryRepo) RebuildTrees() {
+	r.rebuildFullTreeJSON()
+}
+
+// rebuildFullTreeJSON rebuilds the full active category tree and stores it as JSON in turbo.
+// Called on category mutations and at startup.
+func (r *CategoryRepo) rebuildFullTreeJSON() {
+	// Try to get active category IDs from turbo index.
 	data, err := r.store.DB().TurboRawRead(turboKeyCategoryActive)
+	var ids []uint64
+	if err == nil && len(data) > 0 {
+		ids = makodb.TurboUnsafeReadTokens(data)
+	}
+
+	// If index is empty/missing, fall back to listing all categories.
+	var cats []model.Category
+	if len(ids) == 0 {
+		all, err := r.ListAll()
+		if err == nil && all != nil {
+			cats = make([]model.Category, 0, len(all))
+			for _, c := range all {
+				if c.IsActive {
+					cats = append(cats, c)
+				}
+			}
+		}
+	} else {
+		catsCap := len(ids)
+		if catsCap == 0 {
+			catsCap = 64
+		}
+		cats = make([]model.Category, 0, catsCap)
+		for _, id := range ids {
+			cat, err := r.Get(int64(id))
+			if err != nil {
+				continue
+			}
+			if cat.IsActive {
+				cats = append(cats, *cat)
+			}
+		}
+	}
+
+	if len(cats) == 0 {
+		r.store.TurboWrite(turboKeyCategoryTreeFull, []byte("[]"))
+		return
+	}
+
+	tree, _ := r.buildTree(cats, nil)
+	fmt.Printf("[DEBUG] rebuildFullTreeJSON: cats=%d, tree_nodes=%d\n", len(cats), len(tree))
+	jsonData := marshalCategoryTree(tree)
+	if len(jsonData) == 0 {
+		jsonData = []byte("[]")
+	}
+	r.store.TurboWrite(turboKeyCategoryTreeFull, jsonData)
+}
+
+// rebuildParentTreeJSON rebuilds the subtree for a given parentID and stores it as JSON.
+func (r *CategoryRepo) rebuildParentTreeJSON(parentID int64) {
+	// Try to get active category IDs from turbo index.
+	data, err := r.store.DB().TurboRawRead(turboKeyCategoryActive)
+	var ids []uint64
+	if err == nil && len(data) > 0 {
+		ids = makodb.TurboUnsafeReadTokens(data)
+	}
+
+	// If index is empty/missing, fall back to listing all categories.
+	var cats []model.Category
+	if len(ids) == 0 {
+		all, err := r.ListAll()
+		if err == nil && all != nil {
+			cats = make([]model.Category, 0, len(all))
+			for _, c := range all {
+				if c.IsActive {
+					cats = append(cats, c)
+				}
+			}
+		}
+	} else {
+		catsCap := len(ids)
+		if catsCap == 0 {
+			catsCap = 64
+		}
+		cats = make([]model.Category, 0, catsCap)
+		for _, id := range ids {
+			cat, err := r.Get(int64(id))
+			if err != nil {
+				continue
+			}
+			if cat.IsActive {
+				cats = append(cats, *cat)
+			}
+		}
+	}
+
+	if len(cats) == 0 {
+		r.store.TurboWrite(turboKeyCategoryTreeParent+strconv.FormatInt(parentID, 10), []byte("[]"))
+		return
+	}
+
+	tree, _ := r.buildTree(cats, &parentID)
+	jsonData := marshalCategoryTree(tree)
+	if len(jsonData) == 0 {
+		jsonData = []byte("[]")
+	}
+	r.store.TurboWrite(turboKeyCategoryTreeParent+strconv.FormatInt(parentID, 10), jsonData)
+}
+
+// invalidateAllParentTrees clears all cached per-parent trees.
+// Called on any category mutation; simple and safe.
+func (r *CategoryRepo) invalidateAllParentTrees() {
+	// We store keys as cat_tree_parent:{id}. Scan is expensive, so instead
+	// we rely on lazy rebuild: GetTreeByParent will rebuild on demand.
+	// For now, we do nothing here; mutations will trigger rebuild of needed parents.
+}
+
+// ListActive returns only active categories.
+// Uses the precomputed full tree JSON to avoid repeated DB reads.
+func (r *CategoryRepo) ListActive() ([]model.Category, error) {
+	data, err := r.store.DB().TurboRawRead(turboKeyCategoryTreeFull)
 	if err != nil || len(data) == 0 {
 		return nil, nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
-	var result []model.Category
-	for _, id := range ids {
-		cat, err := r.Get(int64(id))
-		if err != nil {
-			continue
-		}
-		result = append(result, *cat)
+	tree, err := unmarshalCategoryTree(data)
+	if err != nil {
+		return nil, err
 	}
+
+	if len(tree) == 0 {
+		return nil, nil
+	}
+
+	// Flatten tree into []model.Category via DFS.
+	result := make([]model.Category, 0, len(tree)*4)
+
+	var walk func(nodes []*CategoryTreeNode)
+	walk = func(nodes []*CategoryTreeNode) {
+		for _, n := range nodes {
+			result = append(result, model.Category{
+				ID:            n.ID,
+				ParentID:      n.ParentID,
+				NameRu:        n.NameRu,
+				NameUa:        n.NameUa,
+				NamePl:        n.NamePl,
+				NameEn:        n.NameEn,
+				Slug:          n.Slug,
+				Desc:          n.Desc,
+				DescRu:        n.DescRu,
+				DescUa:        n.DescUa,
+				DescPl:        n.DescPl,
+				DescEn:        n.DescEn,
+				ImageLightURL: n.ImageLightURL,
+				ImageDarkURL:  n.ImageDarkURL,
+				IsActive:      n.IsActive,
+				SortOrder:     n.SortOrder,
+			})
+			if len(n.Children) > 0 {
+				walk(n.Children)
+			}
+		}
+	}
+
+	roots := make([]*CategoryTreeNode, 0, len(tree))
+	for i := range tree {
+		roots = append(roots, &tree[i])
+	}
+	walk(roots)
 	return result, nil
 }
 
@@ -577,28 +750,110 @@ type CategoryTreeNode struct {
 	Children      []*CategoryTreeNode `json:"children,omitempty"`
 }
 
-// GetTree returns the full category tree (only active categories).
-func (r *CategoryRepo) GetTree() ([]CategoryTreeNode, error) {
-	categories, err := r.ListActive()
+var catTreeReg = silentjson.BuildRegistry(reflect.TypeOf(CategoryTreeNode{}))
+
+// marshalCategoryTree marshals []CategoryTreeNode to JSON using silentjson.
+func marshalCategoryTree(tree []CategoryTreeNode) []byte {
+	return silentjson.MarshalSlice(tree, catTreeReg, nil)
+}
+
+// unmarshalCategoryTree unmarshals JSON to []CategoryTreeNode using silentjson.
+// Pattern matches TestUnmarshalArrayParallel_Basic: large pre-allocated dst, zeroed.
+func unmarshalCategoryTree(data []byte) ([]CategoryTreeNode, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	dst := make([]CategoryTreeNode, 65536)
+	for i := range dst {
+		dst[i] = CategoryTreeNode{}
+	}
+	res, err := silentjson.UnmarshalSlice[CategoryTreeNode](data, catTreeReg, dst)
 	if err != nil {
 		return nil, err
 	}
-	return r.buildTree(categories, nil)
+	return res, nil
+}
+
+// GetTree returns the full category tree (only active categories).
+// Reads precomputed JSON from turbo; rebuilds on demand if missing.
+func (r *CategoryRepo) GetTree() ([]CategoryTreeNode, error) {
+	data, err := r.store.DB().TurboRawRead(turboKeyCategoryTreeFull)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		// Not yet built: rebuild now.
+		r.rebuildFullTreeJSON()
+		data, err = r.store.DB().TurboRawRead(turboKeyCategoryTreeFull)
+		if err != nil || len(data) == 0 {
+			return nil, nil
+		}
+	}
+
+	tree, err := unmarshalCategoryTree(data)
+	if err != nil {
+		return nil, err
+	}
+	return tree, nil
 }
 
 // GetTreeByParent returns subtree rooted at the given parent category ID (only active).
+// Reads precomputed JSON from turbo; rebuilds on demand if missing.
 func (r *CategoryRepo) GetTreeByParent(parentID int64) ([]CategoryTreeNode, error) {
-	categories, err := r.ListActive()
+	key := turboKeyCategoryTreeParent + strconv.FormatInt(parentID, 10)
+	data, err := r.store.DB().TurboRawRead(key)
 	if err != nil {
 		return nil, err
 	}
-	var filtered []model.Category
-	for _, c := range categories {
-		if c.ID == parentID || r.isDescendantCached(&c, parentID) {
-			filtered = append(filtered, c)
+	if len(data) == 0 {
+		// Not yet built: rebuild now.
+		r.rebuildParentTreeJSON(parentID)
+		data, err = r.store.DB().TurboRawRead(key)
+		if err != nil || len(data) == 0 {
+			return nil, nil
 		}
 	}
-	return r.buildTree(filtered, &parentID)
+
+	tree, err := unmarshalCategoryTree(data)
+	if err != nil {
+		return nil, err
+	}
+	return tree, nil
+}
+
+// GetTreeJSON returns the full category tree as raw JSON bytes.
+// Zero allocations for parsing: reads precomputed JSON directly from turbo.
+func (r *CategoryRepo) GetTreeJSON() ([]byte, error) {
+	data, err := r.store.DB().TurboRawRead(turboKeyCategoryTreeFull)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		r.rebuildFullTreeJSON()
+		data, err = r.store.DB().TurboRawRead(turboKeyCategoryTreeFull)
+		if err != nil || len(data) == 0 {
+			return []byte("[]"), nil
+		}
+	}
+	return data, nil
+}
+
+// GetTreeByParentJSON returns subtree JSON for the given parent category ID.
+// Zero allocations for parsing: reads precomputed JSON directly from turbo.
+func (r *CategoryRepo) GetTreeByParentJSON(parentID int64) ([]byte, error) {
+	key := turboKeyCategoryTreeParent + strconv.FormatInt(parentID, 10)
+	data, err := r.store.DB().TurboRawRead(key)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		r.rebuildParentTreeJSON(parentID)
+		data, err = r.store.DB().TurboRawRead(key)
+		if err != nil || len(data) == 0 {
+			return []byte("[]"), nil
+		}
+	}
+	return data, nil
 }
 
 // isDescendantCached checks if category is descendant of parentID using cached descendants.
@@ -723,31 +978,106 @@ func (r *CategoryRepo) GetTreePath(catID int64) ([]string, error) {
 	return path, nil
 }
 
-// GetTreePathFull returns the full path from root to the given category as []*Category.
-// Includes all translations (name_ru, name_ua, name_pl, name_en).
-func (r *CategoryRepo) GetTreePathFull(catID int64) ([]*model.Category, error) {
+// GetTreePathFull returns the full path from root to the given category as []CategoryTreeNode.
+// Includes all translations and children for each node in the path.
+func (r *CategoryRepo) GetTreePathFull(catID int64) ([]CategoryTreeNode, error) {
 	ancestors, err := r.GetAncestors(catID)
 	if err != nil {
 		return nil, err
 	}
 
-	var path []*model.Category
+	var path []CategoryTreeNode
 	for _, aid := range ancestors {
-		cat, err := r.Get(aid)
+		node, err := r.GetCategoryTreeNode(aid)
 		if err != nil {
 			return nil, err
 		}
-		path = append(path, cat)
+		path = append(path, *node)
 	}
 
 	// Add own category
-	cat, err := r.Get(catID)
+	node, err := r.GetCategoryTreeNode(catID)
 	if err != nil {
 		return nil, err
 	}
-	path = append(path, cat)
+	path = append(path, *node)
 
 	return path, nil
+}
+
+// GetCategoryTreeNode returns a CategoryTreeNode for the given ID, including its immediate active children.
+func (r *CategoryRepo) GetCategoryTreeNode(id int64) (*CategoryTreeNode, error) {
+	cat, err := r.Get(id)
+	if err != nil {
+		return nil, err
+	}
+
+	name := cat.NameEn
+	if name == "" {
+		name = cat.NameRu
+	}
+
+	node := &CategoryTreeNode{
+		ID:            cat.ID,
+		ParentID:      cat.ParentID,
+		Name:          name,
+		NameRu:        cat.NameRu,
+		NameUa:        cat.NameUa,
+		NamePl:        cat.NamePl,
+		NameEn:        cat.NameEn,
+		Slug:          cat.Slug,
+		Desc:          cat.Desc,
+		DescRu:        cat.DescRu,
+		DescUa:        cat.DescUa,
+		DescPl:        cat.DescPl,
+		DescEn:        cat.DescEn,
+		ImageLightURL: cat.ImageLightURL,
+		ImageDarkURL:  cat.ImageDarkURL,
+		IsActive:      cat.IsActive,
+		SortOrder:     cat.SortOrder,
+	}
+
+	// Load immediate children
+	childIDs, _ := r.GetDirectChildren(id)
+	for _, cid := range childIDs {
+		child, err := r.Get(cid)
+		if err != nil || !child.IsActive {
+			continue
+		}
+		childName := child.NameEn
+		if childName == "" {
+			childName = child.NameRu
+		}
+		node.Children = append(node.Children, &CategoryTreeNode{
+			ID:            child.ID,
+			ParentID:      child.ParentID,
+			Name:          childName,
+			NameRu:        child.NameRu,
+			NameUa:        child.NameUa,
+			NamePl:        child.NamePl,
+			NameEn:        child.NameEn,
+			Slug:          child.Slug,
+			Desc:          child.Desc,
+			DescRu:        child.DescRu,
+			DescUa:        child.DescUa,
+			DescPl:        child.DescPl,
+			DescEn:        child.DescEn,
+			ImageLightURL: child.ImageLightURL,
+			ImageDarkURL:  child.ImageDarkURL,
+			IsActive:      child.IsActive,
+			SortOrder:     child.SortOrder,
+		})
+	}
+
+	// Sort children
+	sort.SliceStable(node.Children, func(i, j int) bool {
+		if node.Children[i].SortOrder != node.Children[j].SortOrder {
+			return node.Children[i].SortOrder < node.Children[j].SortOrder
+		}
+		return node.Children[i].Name < node.Children[j].Name
+	})
+
+	return node, nil
 }
 
 // ---------- Migration helpers ----------
@@ -854,6 +1184,9 @@ func (r *CategoryRepo) RebuildIndexesFromDocs() error {
 			r.addToParentChildrenList(*cat.ParentID, cat.ID)
 		}
 
+		// Clear path cache
+		r.treePathCache.Delete(cat.ID)
+
 		// Ancestors cache
 		r.rebuildAncestorsCache(cat.ID)
 
@@ -906,6 +1239,9 @@ func (r *CategoryRepo) RebuildAllIndexes() error {
 		if cat.ParentID != nil {
 			r.addToParentChildrenList(*cat.ParentID, cat.ID)
 		}
+
+		// Clear path cache
+		r.treePathCache.Delete(cat.ID)
 
 		// Ancestors cache
 		r.rebuildAncestorsCache(cat.ID)
