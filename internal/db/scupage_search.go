@@ -12,6 +12,7 @@ import (
 
 	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
+	"github.com/GenshIv/silentjson/v2"
 )
 
 // SCUPageSearch — turbo-поиск по посадочным страницам (SCUPage).
@@ -455,10 +456,10 @@ type SCUPageListParams struct {
 }
 
 type SCUPageListResult struct {
-	Items []json.RawMessage `json:"items"` // raw SCUPage JSON
-	Total int64             `json:"total"`
-	Page  int               `json:"page"`
-	Limit int               `json:"limit"`
+	Items []silentjson.RawMessage `json:"items"` // raw SCUPage JSON
+	Total int64                   `json:"total"`
+	Page  int                     `json:"page"`
+	Limit int                     `json:"limit"`
 }
 
 // ListWithTurbo returns paginated SCU pages with filters and sorting.
@@ -510,10 +511,10 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		if err != nil {
 			return nil, fmt.Errorf("turbo sort page with docs: %w", err)
 		}
-		items := make([]json.RawMessage, 0, len(res.Docs))
+		items := make([]silentjson.RawMessage, 0, len(res.Docs))
 		for _, doc := range res.Docs {
 			if doc != nil && len(doc) > 0 {
-				items = append(items, json.RawMessage(doc))
+				items = append(items, silentjson.RawMessage(doc))
 			}
 		}
 		return &SCUPageListResult{
@@ -546,10 +547,10 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		if err != nil {
 			return nil, fmt.Errorf("turbo numSort range with docs: %w", err)
 		}
-		items := make([]json.RawMessage, 0, len(res.Docs))
+		items := make([]silentjson.RawMessage, 0, len(res.Docs))
 		for _, doc := range res.Docs {
 			if doc != nil && len(doc) > 0 {
-				items = append(items, json.RawMessage(doc))
+				items = append(items, silentjson.RawMessage(doc))
 			}
 		}
 		return &SCUPageListResult{
@@ -581,10 +582,10 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		if err != nil {
 			return nil, fmt.Errorf("turbo numSort range with docs: %w", err)
 		}
-		items := make([]json.RawMessage, 0, len(res.Docs))
+		items := make([]silentjson.RawMessage, 0, len(res.Docs))
 		for _, doc := range res.Docs {
 			if doc != nil && len(doc) > 0 {
-				items = append(items, json.RawMessage(doc))
+				items = append(items, silentjson.RawMessage(doc))
 			}
 		}
 		return &SCUPageListResult{
@@ -711,10 +712,10 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		return nil, fmt.Errorf("turbo sort page with docs: %w", err)
 	}
 
-	items := make([]json.RawMessage, 0, len(res.Docs))
+	items := make([]silentjson.RawMessage, 0, len(res.Docs))
 	for _, doc := range res.Docs {
 		if doc != nil && len(doc) > 0 {
-			items = append(items, json.RawMessage(doc))
+			items = append(items, silentjson.RawMessage(doc))
 		}
 	}
 

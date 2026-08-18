@@ -17,6 +17,7 @@ import (
 	"github.com/GenshIv/makoshop/internal/metrics"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/makoshop/internal/tokenizer"
+	"github.com/GenshIv/silentjson/v2"
 )
 
 // slugFromNameEn generates a URL-safe slug from English category name.
@@ -154,6 +155,16 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	_ = enc.Encode(v)
+}
+
+func writeJSONSCUList(w http.ResponseWriter, status int, data SCUListRespData) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write(silentjson.Marshal(&data, scuListRespRegistry, nil))
+	return
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(data)
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {

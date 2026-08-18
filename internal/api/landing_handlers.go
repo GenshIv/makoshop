@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -449,16 +450,18 @@ type (
 	}
 
 	SCUListRespData struct {
-		Items         []json.RawMessage `json:"items"`
-		Total         int64             `json:"total"`
-		Page          int               `json:"page"`
-		Limit         int               `json:"limit"`
-		CategoryAttrs []AttrItem        `json:"category_attrs,omitempty"`
-		CatID         int64             `json:"category_id,omitempty"`
-		TreePath      []string          `json:"tree_path,omitempty"`
-		Category      *model.Category   `json:"category,omitempty"`
+		Items         []silentjson.RawMessage `json:"items"`
+		Total         int64                   `json:"total"`
+		Page          int                     `json:"page"`
+		Limit         int                     `json:"limit"`
+		CategoryAttrs []AttrItem              `json:"category_attrs,omitempty"`
+		CatID         int64                   `json:"category_id,omitempty"`
+		TreePath      []string                `json:"tree_path,omitempty"`
+		Category      model.Category          `json:"category,omitempty"`
 	}
 )
+
+var scuListRespRegistry = silentjson.BuildRegistry(reflect.TypeOf(SCUListRespData{}))
 
 // handleSCUPageCatalog returns a paginated list of SCU pages for a category.
 func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, catID int64) {
@@ -566,7 +569,7 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 		}
 
 		// Add seo_url to each item via text replacement (no unmarshal)
-		items := make([]json.RawMessage, 0, len(result.Items))
+		items := make([]silentjson.RawMessage, 0, len(result.Items))
 		for _, raw := range result.Items {
 			items = append(items, injectSeoURL(raw, h.categoryRepo))
 		}
@@ -587,7 +590,7 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 			}
 			// Include full category object (with descriptions and images)
 			if cat, err := h.categoryRepo.Get(catID); err == nil {
-				respData.Category = cat
+				respData.Category = *cat
 			}
 		}
 
@@ -595,7 +598,7 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 			writeHTMLResponseSCUList(w, r, i18n.T("ui.catalog_title"), respData)
 			return
 		}
-		writeJSON(w, http.StatusOK, respData)
+		writeJSONSCUList(w, http.StatusOK, respData)
 		return
 	}
 
@@ -694,7 +697,8 @@ func wantsHTML(r *http.Request) bool {
 // writeHTMLResponse writes an HTML page with embedded data for SSR
 // For bots: full SSR with inline content. For browsers: minimal HTML + JS.
 func writeHTMLResponseSCUList(w http.ResponseWriter, r *http.Request, title string, data SCUListRespData) {
-	jsonData, _ := json.Marshal(data)
+	jsonData := silentjson.Marshal(&data, scuListRespRegistry, nil)
+	// jsonData, _ := json.Marshal(data)
 	safeJSON := strings.ReplaceAll(string(jsonData), "<", "\\u003c")
 
 	// Base URL
@@ -1110,7 +1114,7 @@ func buildSEOURL(sp *model.SCUPage, treePath []string) string {
 // injectSeoURL adds "seo_url" field to a raw SCUPage JSON via text operations.
 // Reads slug and category_id from JSON, builds canonical URL, inserts field before closing brace.
 // Uses silentjson raw operations — no full parse, no reflection.
-func injectSeoURL(raw json.RawMessage, catRepo *db.CategoryRepo) json.RawMessage {
+func injectSeoURL(raw silentjson.RawMessage, catRepo *db.CategoryRepo) silentjson.RawMessage {
 	if len(raw) == 0 || raw[len(raw)-1] != '}' {
 		return raw
 	}
@@ -1132,7 +1136,7 @@ func injectSeoURL(raw json.RawMessage, catRepo *db.CategoryRepo) json.RawMessage
 
 	// Insert "seo_url":"..." into JSON
 	result := silentjson.InjectFieldBeforeClose(raw, "seo_url", seoURL)
-	return json.RawMessage(result)
+	return silentjson.RawMessage(result)
 }
 
 // --- Request types ---
