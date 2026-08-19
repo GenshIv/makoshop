@@ -362,6 +362,9 @@ func (r *SCUPageRepo) UpsertBySCU(scu string, updater func(*model.SCUPage)) (*mo
 	if s.Slug == "" {
 		s.Slug = toSCUPageSlug(s.SCU, s.Title)
 	}
+	if s.SeoURL == "" {
+		s.SeoURL = r.ComputeSeoURL(s.Slug, s.CategoryID, nil)
+	}
 	if err := r.Create(s); err != nil {
 		return nil, err
 	}
@@ -392,9 +395,10 @@ func (r *SCUPageRepo) UpsertFromProduct(product *model.Product) error {
 		}
 	}
 
+	slug := toSCUPageSlug(product.SCU, product.Name)
 	s = &model.SCUPage{
 		SCU:          product.SCU,
-		Slug:         toSCUPageSlug(product.SCU, product.Name),
+		Slug:         slug,
 		Title:        parseTitleFromProductName(product.Name),
 		Description:  product.Description,
 		Content:      product.Description,
@@ -407,6 +411,7 @@ func (r *SCUPageRepo) UpsertFromProduct(product *model.Product) error {
 		Currency:     product.Currency,
 		Attributes:   mergeAttributes(nil, product.Attributes),
 		ProductCount: 1,
+		SeoURL:       r.ComputeSeoURL(slug, categoryID, nil),
 		CreatedAt:    time.Now().Unix(),
 		UpdatedAt:    time.Now().Unix(),
 	}
@@ -434,6 +439,11 @@ func (r *SCUPageRepo) updateSCUPageFromProduct(s *model.SCUPage, product *model.
 	if s.Description == "" && product.Description != "" {
 		s.Description = product.Description
 		s.Content = product.Description
+	}
+
+	// Ensure SeoURL is set
+	if s.SeoURL == "" {
+		s.SeoURL = r.ComputeSeoURL(s.Slug, s.CategoryID, nil)
 	}
 
 	s.UpdatedAt = time.Now().Unix()
@@ -681,22 +691,47 @@ func cloneKeyValueSlice(src []model.KeyValue) []model.KeyValue {
 	return result
 }
 
+// ComputeSeoURL builds seo_url for a SCU page: "/shop/{treePath}/{slug}"
+// Uses treePathCache to avoid repeated DB calls.
+func (r *SCUPageRepo) ComputeSeoURL(slug string, categoryID int64, treePathCache map[int64][]string) string {
+	if categoryID == 0 || r.CategoryRepo == nil {
+		return "/shop/" + slug
+	}
+
+	treePath, cached := treePathCache[categoryID]
+	if !cached {
+		var err error
+		treePath, err = r.CategoryRepo.GetTreePath(categoryID)
+		if err != nil || len(treePath) == 0 {
+			return "/shop/" + slug
+		}
+		treePathCache[categoryID] = treePath
+	}
+
+	return "/shop/" + strings.Join(treePath, "/") + "/" + slug
+}
+
 // BatchUpsertFromProducts creates or updates SCU pages from a batch of products.
 // Returns a map of productID -> SCUPageID for linking.
 // This is much faster than calling UpsertFromProduct in a loop because:
 // - Reads all existing SCU pages once (batch)
 // - Writes all new/updated SCU pages in batch
 // - Uses cached catalogizer tokens (call LoadCatalogizerCache() first)
+// - Computes seo_url with cached category tree paths
 func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int64]int64 {
 	if len(products) == 0 {
 		return nil
 	}
 
-	// Collect all SCUs
+	// Collect all SCUs and unique category IDs
 	scuSet := make(map[string]struct{})
+	catIDs := make(map[int64]struct{})
 	for _, p := range products {
 		if p.SCU != "" {
 			scuSet[p.SCU] = struct{}{}
+		}
+		if p.CategoryID != 0 {
+			catIDs[p.CategoryID] = struct{}{}
 		}
 	}
 
@@ -705,6 +740,19 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 	for scu := range scuSet {
 		if s, err := r.GetBySCU(scu); err == nil {
 			existing[scu] = s
+			if s.CategoryID != 0 {
+				catIDs[s.CategoryID] = struct{}{}
+			}
+		}
+	}
+
+	// Pre-compute tree paths for all category IDs (single pass)
+	treePathCache := make(map[int64][]string)
+	for catID := range catIDs {
+		if r.CategoryRepo != nil {
+			if tp, err := r.CategoryRepo.GetTreePath(catID); err == nil && len(tp) > 0 {
+				treePathCache[catID] = tp
+			}
 		}
 	}
 
@@ -725,9 +773,10 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 		} else {
 			// Create new with category from product
 			if _, ok := newPages[p.SCU]; !ok {
+				slug := toSCUPageSlug(p.SCU, p.Name)
 				newPages[p.SCU] = &model.SCUPage{
 					SCU:          p.SCU,
-					Slug:         toSCUPageSlug(p.SCU, p.Name),
+					Slug:         slug,
 					Title:        parseTitleFromProductName(p.Name),
 					Description:  p.Description,
 					Content:      p.Description,
@@ -740,6 +789,7 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 					Currency:     p.Currency,
 					Attributes:   mergeAttributes(nil, p.Attributes),
 					ProductCount: 1,
+					SeoURL:       r.ComputeSeoURL(slug, p.CategoryID, treePathCache),
 					CreatedAt:    time.Now().Unix(),
 					UpdatedAt:    time.Now().Unix(),
 				}
@@ -771,6 +821,12 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 			if s.Description == "" && p.Description != "" {
 				s.Description = p.Description
 				s.Content = p.Description
+			}
+
+			// Ensure SeoURL is set (compute if missing or category changed)
+			if s.SeoURL == "" || s.CategoryID != p.CategoryID {
+				s.CategoryID = p.CategoryID
+				s.SeoURL = r.ComputeSeoURL(s.Slug, s.CategoryID, treePathCache)
 			}
 
 			s.UpdatedAt = time.Now().Unix()

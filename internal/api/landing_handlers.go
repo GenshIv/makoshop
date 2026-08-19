@@ -547,14 +547,14 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 
 		// Add seo_url to each item via text replacement (no unmarshal)
 		// Pre-cache tree paths for categories that appear in results.
-		items := make([]silentjson.RawMessage, 0, len(result.Items))
-		treePathCache := make(map[int64][]string, 16)
-		for _, raw := range result.Items {
-			items = append(items, injectSeoURLCached(raw, h.categoryRepo, treePathCache))
-		}
+		//items := make([]silentjson.RawMessage, 0, len(result.Items))
+		//treePathCache := make(map[int64][]string, 16)
+		//for _, raw := range result.Items {
+		//	items = append(items, injectSeoURLCached(raw, h.categoryRepo, treePathCache))
+		//}
 
 		respData := db.SCUListRespData{
-			Items:         items,
+			Items:         result.Items,
 			Total:         result.Total,
 			Page:          result.Page,
 			Limit:         result.Limit,
@@ -1289,50 +1289,9 @@ func buildSEOURL(sp *model.SCUPage, treePath []string) string {
 	return "/shop/" + strings.Join(parts, "/")
 }
 
-// injectSeoURL adds "seo_url" field to a raw SCUPage JSON via text operations.
-// Reads slug and category_id from JSON, builds canonical URL, inserts field before closing brace.
-// Uses silentjson raw operations — no full parse, no reflection.
-func injectSeoURL(raw silentjson.RawMessage, catRepo *db.CategoryRepo) silentjson.RawMessage {
-	return injectSeoURLCached(raw, catRepo, nil)
-}
-
-// injectSeoURLCached is like injectSeoURL but uses a tree path cache to avoid
-// repeated GetTreePath calls for the same category.
-func injectSeoURLCached(raw silentjson.RawMessage, catRepo *db.CategoryRepo, treePathCache map[int64][]string) silentjson.RawMessage {
-	if len(raw) == 0 || raw[len(raw)-1] != '}' {
-		return raw
-	}
-
-	slug, slugOk := silentjson.GetStringValue(raw, "slug")
-	catID, catOk := silentjson.GetInt64Value(raw, "category_id")
-
-	if !slugOk || !catOk || slug == "" {
-		return raw
-	}
-
-	// Build seo_url
-	seoURL := "/shop/" + slug
-	if catID != 0 && catRepo != nil {
-		var treePath []string
-		if treePathCache != nil {
-			var ok bool
-			if treePath, ok = treePathCache[catID]; !ok {
-				treePath, _ = catRepo.GetTreePath(catID)
-				if treePath != nil {
-					treePathCache[catID] = treePath
-				}
-			}
-		} else {
-			treePath, _ = catRepo.GetTreePath(catID)
-		}
-		if len(treePath) > 0 {
-			seoURL = "/shop/" + strings.Join(treePath, "/") + "/" + slug
-		}
-	}
-
-	// Insert "seo_url":"..." into JSON
-	result := silentjson.InjectFieldBeforeClose(raw, "seo_url", seoURL)
-	return silentjson.RawMessage(result)
+type SeoSlugSCU struct {
+	Slug       string `json:"slug"`
+	CategoryID int64  `json:"category_id"`
 }
 
 // --- Request types ---
@@ -1417,6 +1376,24 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 	}
 
 	fmt.Printf("[REBUILD-SCUPAGES] Found %d unique SCUs\n", len(scuProducts))
+
+	// Collect unique category IDs and pre-compute tree paths
+	catIDs := make(map[int64]struct{})
+	for _, products := range scuProducts {
+		for _, p := range products {
+			if p.CategoryID != 0 {
+				catIDs[p.CategoryID] = struct{}{}
+			}
+		}
+	}
+	treePathCache := make(map[int64][]string)
+	for catID := range catIDs {
+		if h.categoryRepo != nil {
+			if tp, err := h.categoryRepo.GetTreePath(catID); err == nil && len(tp) > 0 {
+				treePathCache[catID] = tp
+			}
+		}
+	}
 
 	// Build and save SCU pages in batches
 	created := 0
@@ -1508,6 +1485,7 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 			existing.Attributes = attrs
 			existing.ProductCount = len(products)
 			existing.IsActive = true
+			existing.SeoURL = h.scuPageRepo.ComputeSeoURL(existing.Slug, existing.CategoryID, treePathCache)
 			existing.UpdatedAt = time.Now().Unix()
 
 			data := db.MarshalSCUPage(*existing)
@@ -1534,6 +1512,7 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 				Currency:     first.Currency,
 				Attributes:   attrs,
 				ProductCount: len(products),
+				SeoURL:       h.scuPageRepo.ComputeSeoURL(slug, first.CategoryID, treePathCache),
 				IsActive:     true,
 				CreatedAt:    time.Now().Unix(),
 				UpdatedAt:    time.Now().Unix(),
@@ -1571,10 +1550,11 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 		_ = h.productRepo.Store().DB().TurboClearIndex(db.TurboKeyProductList)
 
 		// Also clear all SCU indexes
-		for scu := range scuProducts {
-			_ = h.productRepo.Store().DB().TurboClearIndex("scu:" + scu)
-		}
+		//for scu := range scuProducts {
+		//	_ = h.productRepo.Store().DB().TurboClearIndex("scu:" + scu)
+		//}
 
+		fmt.Printf("[REBUILD-SCUPAGES] start batches)...\n")
 		// Read all products in batches for indexing
 		const idxBatchSize = 10000
 		for i := 0; i < len(allIDs); i += idxBatchSize {
@@ -1582,6 +1562,8 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 			if end > len(allIDs) {
 				end = len(allIDs)
 			}
+
+			fmt.Printf("[REBUILD-SCUPAGES] get data batches Indexes %d)...\n", i)
 			var batch []*model.Product
 			for _, docID := range allIDs[i:end] {
 				p, err := h.productRepo.Get(int64(docID))
@@ -1590,6 +1572,8 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 				}
 				batch = append(batch, p)
 			}
+
+			fmt.Printf("[REBUILD-SCUPAGES] start batches Indexes %d)...\n", i)
 			if len(batch) > 0 {
 				if err := h.productRepo.TurboSearch().IndexProductBatch(batch); err != nil {
 					fmt.Printf("[REBUILD-SCUPAGES] WARN: index product batch: %v\n", err)

@@ -257,6 +257,7 @@ type SCUPage struct {
 	ProductCount int        `json:"product_count"`        // number of products with this SCU
 	CreatedAt    int64      `json:"created_at,omitempty"`
 	UpdatedAt    int64      `json:"updated_at,omitempty"`
+	SeoURL       string     `json:"seo_url,omitempty"`
 }
 
 // NOTE: ProductIDs removed from SCUPage to prevent DB bloat.
