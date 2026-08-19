@@ -250,6 +250,17 @@ func marshalWithPool[T any](data *T, reg *silentjson.Registry) []byte {
 	return result
 }
 
+// writeJSONWithPool marshals data directly to w without extra copy.
+// Optimized for hot paths where we only need to write, not keep the JSON.
+func writeJSONWithPool[T any](w http.ResponseWriter, data *T, reg *silentjson.Registry) {
+	bufPtr := jsonBufPool.Get().(*[]byte)
+	buf := (*bufPtr)[:0]
+	buf = silentjson.Marshal(data, reg, buf)
+	_, _ = w.Write(buf)
+	*bufPtr = buf[:64*1024] // reset capacity for reuse
+	jsonBufPool.Put(bufPtr)
+}
+
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -261,7 +272,7 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 func writeJSONSCUList(w http.ResponseWriter, status int, data db.SCUListRespData) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	w.Write(marshalWithPool(&data, scuListRespRegistry))
+	writeJSONWithPool(w, &data, scuListRespRegistry)
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
@@ -282,7 +293,11 @@ func readJSON(w http.ResponseWriter, r *http.Request, v interface{}) bool {
 }
 
 // HandleTurboProducts handles GET /products/turbo (turbo-index based search).
+// HEAD /products/turbo — returns headers only, body is not sent.
 func (h *Handlers) HandleTurboProducts(w http.ResponseWriter, r *http.Request) {
+	// Support HEAD requests: run full logic but don't send body.
+	headOnly := r.Method == http.MethodHead
+
 	params := ParseTurboSearchParams(r)
 
 	result, err := h.turboSearch.ListWithTurbo(db.TurboListParams{
@@ -309,6 +324,10 @@ func (h *Handlers) HandleTurboProducts(w http.ResponseWriter, r *http.Request) {
 	}
 	buf := marshalWithPool(&resp, turboListRespReg)
 	w.Header().Set("Content-Type", "application/json")
+	if headOnly {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(buf)
 }
@@ -416,12 +435,16 @@ func (h *Handlers) HandleCategoriesList(w http.ResponseWriter, r *http.Request) 
 // HandleCategoriesTree returns the category tree.
 // GET /categories/tree
 // GET /categories/tree?child_of={id}
+// HEAD /categories/tree — returns headers only, body is not sent.
 // Uses precomputed JSON from turbo: zero Unmarshal/Marshal on hot path.
 func (h *Handlers) HandleCategoriesTree(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
+
+	// Support HEAD requests: run full logic but don't send body.
+	headOnly := r.Method == http.MethodHead
 
 	childOf := r.URL.Query().Get("child_of")
 	if childOf != "" {
@@ -436,6 +459,10 @@ func (h *Handlers) HandleCategoriesTree(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
+		if headOnly {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(data)
 		return
@@ -447,6 +474,10 @@ func (h *Handlers) HandleCategoriesTree(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if headOnly {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
 }
@@ -1022,10 +1053,13 @@ type CreateProductRequest struct {
 }
 
 func (h *Handlers) HandleProductsList(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
+
+	// Support HEAD requests: run full logic but don't send body.
+	headOnly := r.Method == http.MethodHead
 
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 
@@ -1127,6 +1161,11 @@ func (h *Handlers) HandleProductsList(w http.ResponseWriter, r *http.Request) {
 		result.Items = []silentjson.RawMessage{}
 	}
 
+	if headOnly {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	writeJSONSCUList(w, http.StatusOK, *result)
 }
 

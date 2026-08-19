@@ -142,8 +142,8 @@ type Category struct {
 	IsActive       bool     `json:"is_active"`
 	SortOrder      int      `json:"sort_order"`
 	AnchorKeywords []string `json:"anchor_keywords,omitempty"` // keywords for auto-catalogization
-	CreatedAt      int64    `json:"created_at"`
-	UpdatedAt      int64    `json:"updated_at"`
+	CreatedAt      int64    `json:"created_at,omitempty"`
+	UpdatedAt      int64    `json:"updated_at,omitempty"`
 }
 
 // AttributeDefinition
@@ -241,22 +241,22 @@ type LandingPage struct {
 
 type SCUPage struct {
 	ID           int64      `json:"id"`
-	SCU          string     `json:"scu"`         // unique identifier from supplier
-	Slug         string     `json:"slug"`        // URL-friendly slug (unique)
-	Title        string     `json:"title"`       // SEO title (from first product name)
-	Description  string     `json:"description"` // SEO meta description
-	Content      string     `json:"content"`     // full HTML content
-	Images       []string   `json:"images"`      // unique product images (limited to maxSCUPageImages)
-	CategoryID   int64      `json:"category_id"` // main category
-	Brand        string     `json:"brand"`       // brand name
-	BrandID      int64      `json:"brand_id"`    // brand ID
+	SCU          string     `json:"scu"`                // unique identifier from supplier
+	Slug         string     `json:"slug"`               // URL-friendly slug (unique)
+	Title        string     `json:"title"`              // SEO title (from first product name)
+	Description  string     `json:"description"`        // SEO meta description
+	Content      string     `json:"content,omitempty"`  // full HTML content (omitted in list responses)
+	Images       []string   `json:"images"`             // unique product images (limited to maxSCUPageImages)
+	CategoryID   int64      `json:"category_id"`        // main category
+	Brand        string     `json:"brand"`              // brand name
+	BrandID      int64      `json:"brand_id,omitempty"` // brand ID
 	IsActive     bool       `json:"is_active"`
 	MinPrice     float64    `json:"min_price"`            // minimum price among all products
 	Currency     string     `json:"currency"`             // currency (default: RUB)
 	Attributes   []KeyValue `json:"attributes,omitempty"` // merged attributes (no duplicates)
 	ProductCount int        `json:"product_count"`        // number of products with this SCU
-	CreatedAt    int64      `json:"created_at"`
-	UpdatedAt    int64      `json:"updated_at"`
+	CreatedAt    int64      `json:"created_at,omitempty"`
+	UpdatedAt    int64      `json:"updated_at,omitempty"`
 }
 
 // NOTE: ProductIDs removed from SCUPage to prevent DB bloat.

@@ -373,7 +373,7 @@ func (h *Handlers) HandleLandingPageProducts(w http.ResponseWriter, r *http.Requ
 // Example: /shop/elektronika/telefony/samsung-galaxy-s7
 // Priority: category first, then SCU page, then redirect to referer/home.
 func (h *Handlers) HandleSCUPageByPath(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
@@ -460,6 +460,11 @@ var scuListRespRegistry = silentjson.BuildRegistry(reflect.TypeOf(db.SCUListResp
 
 // handleSCUPageCatalog returns a paginated list of SCU pages for a category.
 func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, catID int64) {
+	ctx := r.Context()
+
+	// Support HEAD requests: run full logic but don't send body.
+	headOnly := r.Method == http.MethodHead
+
 	q := r.URL.Query().Get("q")
 	sort := r.URL.Query().Get("sort")
 	pageStr := r.URL.Query().Get("page")
@@ -533,6 +538,13 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 
+		// Check if client disconnected after search
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		// Add seo_url to each item via text replacement (no unmarshal)
 		// Pre-cache tree paths for categories that appear in results.
 		items := make([]silentjson.RawMessage, 0, len(result.Items))
@@ -566,7 +578,17 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 		}
 
 		if wantsHTML(r) {
+			if headOnly {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(http.StatusOK)
+				return
+			}
 			writeHTMLResponseSCUList(w, r, i18n.T("ui.catalog_title"), respData)
+			return
+		}
+		if headOnly {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 		writeJSONSCUList(w, http.StatusOK, respData)
@@ -592,10 +614,22 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 
 // writeSCUPageResponse writes the SCU page with its products.
 func (h *Handlers) writeSCUPageResponse(w http.ResponseWriter, r *http.Request, sp *model.SCUPage) {
+	ctx := r.Context()
+
+	// Support HEAD requests: run full logic but don't send body.
+	headOnly := r.Method == http.MethodHead
+
 	// Get products with this SCU via turbo index "scu:{scu}"
 	products, err := h.turboSearch.GetProductsBySCU(sp.SCU)
 	if err != nil || products == nil {
 		products = []model.Product{}
+	}
+
+	// Check if client disconnected after product lookup
+	select {
+	case <-ctx.Done():
+		return
+	default:
 	}
 
 	// Build category tree path for SEO and breadcrumbs
@@ -630,7 +664,17 @@ func (h *Handlers) writeSCUPageResponse(w http.ResponseWriter, r *http.Request, 
 
 	title := sp.Title + " — MakoShop"
 	if wantsHTML(r) {
+		if headOnly {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		writeHTMLResponseSCUList(w, r, title, respData)
+		return
+	}
+	if headOnly {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	writeJSONSCUList(w, http.StatusOK, respData)
@@ -675,9 +719,19 @@ func wantsHTML(r *http.Request) bool {
 // writeHTMLResponse writes an HTML page with embedded data for SSR
 // For bots: full SSR with inline content. For browsers: minimal HTML + JS.
 func writeHTMLResponseSCUList(w http.ResponseWriter, r *http.Request, title string, data db.SCUListRespData) {
-	jsonData := marshalWithPool(&data, scuListRespRegistry)
-	// No bytes.ReplaceAll — write JSON directly with inline escaping to avoid alloc.
-	// safeJSON replaced by writeSafeJSON below.
+	ctx := r.Context()
+
+	// For bots: need jsonData for SSR content. For browsers: write directly to avoid copy.
+	var jsonData []byte
+	if isBot(r) {
+		jsonData = marshalWithPool(&data, scuListRespRegistry)
+		// Check if client disconnected after marshaling
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+	}
 
 	// Base URL
 	baseURL := "https://makoshop.com"
@@ -704,78 +758,165 @@ func writeHTMLResponseSCUList(w http.ResponseWriter, r *http.Request, title stri
 		// Full SSR for bots: inline content + SEO tags
 		bodyContent := renderSSRContent(jsonData)
 
+		// Check if client disconnected after SSR rendering
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		w.WriteHeader(http.StatusOK)
 
 		ogURL := baseURL + seoURL
 		if ogURL == baseURL {
 			ogURL = baseURL + "/shop"
 		}
-		w.Write(stringToBytes(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>`))
-		w.Write(stringToBytes(html.EscapeString(title)))
-
-		w.Write(stringToBytes(`</title>
-  <meta name="description" content="`))
-		w.Write(stringToBytes(html.EscapeString(desc)))
-		w.Write(stringToBytes(`">
-`))
-		w.Write(stringToBytes(canonicalTag))
-		w.Write(stringToBytes(ogTags))
-		w.Write(stringToBytes(`  <meta property="og:title" content="`))
-		w.Write(stringToBytes(html.EscapeString(title)))
-		w.Write(stringToBytes(`">
-  <meta property="og:description" content="`))
-		w.Write(stringToBytes(html.EscapeString(desc)))
-		w.Write(stringToBytes(`">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="`))
+		w.Write(htmlBotHead)
+		writeEscapedString(w, title)
+		w.Write(htmlBotTitleEnd)
+		writeEscapedString(w, desc)
+		w.Write(htmlBotDescEnd)
+		if canonicalTag != "" {
+			w.Write(stringToBytes(canonicalTag))
+		}
+		if ogTags != "" {
+			w.Write(stringToBytes(ogTags))
+		}
+		w.Write(htmlBotOGStart)
+		writeEscapedString(w, title)
+		w.Write(htmlBotOGTitleEnd)
+		writeEscapedString(w, desc)
+		w.Write(htmlBotOGDescEnd)
+		w.Write(htmlBotOGType)
 		w.Write(stringToBytes(ogURL))
-		w.Write(stringToBytes(`">
-</head>
-<body>
-  <div id="app">`))
-		w.Write(stringToBytes(bodyContent))
-		w.Write(stringToBytes(`</div>
-  <script>window.__INITIAL_DATA__=`))
+		w.Write(htmlBotOGURLEnd)
+		w.Write(htmlBotBodyStart)
+		if bodyContent != "" {
+			w.Write(stringToBytes(bodyContent))
+		}
+		w.Write(htmlBotScriptStart)
 		writeSafeJSON(w, jsonData)
-		w.Write(stringToBytes(`</script>
-</body>
-</html>`))
+		w.Write(htmlBotScriptEnd)
 
-		//w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		//w.WriteHeader(http.StatusOK)
-		//w.Write(stringToBytes(htmlStr))
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	// Minimal HTML for browsers (SPA)
-	w.Write(stringToBytes(`<!DOCTYPE html>
+	// Minimal HTML for browsers (SPA) — write JSON directly to avoid copy
+	w.Write(htmlHead)
+	writeEscapedString(w, title)
+	w.Write(htmlTitleEnd)
+	if canonicalTag != "" {
+		w.Write(stringToBytes(canonicalTag))
+	}
+	w.Write(htmlBodyStart)
+	writeSafeJSONWithPool(w, &data, scuListRespRegistry)
+	w.Write(htmlScriptEnd)
+}
+
+// writeSafeJSONWithPool marshals data and writes escaped JSON directly to w.
+// Optimized for hot paths: no extra copy, escapes '<' inline.
+func writeSafeJSONWithPool(w http.ResponseWriter, data *db.SCUListRespData, reg *silentjson.Registry) {
+	bufPtr := jsonBufPool.Get().(*[]byte)
+	buf := (*bufPtr)[:0]
+	buf = silentjson.Marshal(data, reg, buf)
+	// Write with inline escaping of '<' -> '\u003c'
+	last := 0
+	for i := 0; i < len(buf); i++ {
+		if buf[i] == '<' {
+			if i > last {
+				_, _ = w.Write(buf[last:i])
+			}
+			_, _ = w.Write(safeLT)
+			last = i + 1
+		}
+	}
+	if last < len(buf) {
+		_, _ = w.Write(buf[last:])
+	}
+	*bufPtr = buf[:64*1024]
+	jsonBufPool.Put(bufPtr)
+}
+
+var (
+	htmlBotHead = []byte(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>`))
-	w.Write(stringToBytes(html.EscapeString(title)))
-	w.Write(stringToBytes(`</title>
-`))
-	w.Write(stringToBytes(canonicalTag))
-	w.Write(stringToBytes(`</head>
+  <title>`)
+	htmlBotTitleEnd = []byte(`</title>
+  <meta name="description" content="`)
+	htmlBotDescEnd = []byte(`">
+`)
+	htmlBotOGStart    = []byte(`  <meta property="og:title" content="`)
+	htmlBotOGTitleEnd = []byte(`">
+  <meta property="og:description" content="`)
+	htmlBotOGDescEnd = []byte(`">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="`)
+	htmlBotOGType = []byte(`">
+</head>
+<body>
+  <div id="app">`)
+	htmlBotOGURLEnd = []byte(`">
+</head>
+<body>
+  <div id="app">`)
+	htmlBotBodyStart = []byte(`</div>
+  <script>window.__INITIAL_DATA__=`)
+	htmlBotScriptStart = []byte(`</div>
+  <script>window.__INITIAL_DATA__=`)
+	htmlBotScriptEnd = []byte(`</script>
+</body>
+</html>`)
+
+	htmlHead = []byte(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>`)
+	htmlTitleEnd = []byte(`</title>
+`)
+	htmlBodyStart = []byte(`</head>
 <body>
   <div id="app"></div>
-  <script>window.__INITIAL_DATA__=`))
-	writeSafeJSON(w, jsonData)
-	w.Write(stringToBytes(`</script>
+  <script>window.__INITIAL_DATA__=`)
+	htmlScriptEnd = []byte(`</script>
   <script type="module" src="/src/main.js"></script>
 </body>
-</html>`))
-	//w.Write(stringToBytes(htmlStr))
+</html>`)
+)
+
+func writeEscapedString(w http.ResponseWriter, s string) {
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		switch b {
+		case '&':
+			w.Write(htmlAmp)
+		case '<':
+			w.Write(htmlLT)
+		case '>':
+			w.Write(htmlGT)
+		case '"':
+			w.Write(htmlQuote)
+		case '\\':
+			w.Write(htmlBS)
+		default:
+			w.Write([]byte{b})
+		}
+	}
 }
+
+var (
+	htmlAmp   = []byte("&amp;")
+	htmlLT    = []byte("&lt;")
+	htmlGT    = []byte("&gt;")
+	htmlQuote = []byte("&quot;")
+	htmlBS    = []byte("\\")
+)
 
 // writeHTMLResponse writes an HTML page with embedded data for SSR
 // For bots: full SSR with inline content. For browsers: minimal HTML + JS.
@@ -938,6 +1079,8 @@ func splitNonEmpty(s string, sep rune) []string {
 // writeSafeJSON writes JSON to w, escaping '<' as '\u003c' to prevent
 // script injection in HTML context. Streams directly without allocating
 // a full copy (avoids bytes.ReplaceAll).
+var safeLT = []byte("\\u003c")
+
 func writeSafeJSON(w interface{ Write([]byte) (int, error) }, data []byte) {
 	last := 0
 	for i := 0; i < len(data); i++ {
@@ -945,7 +1088,7 @@ func writeSafeJSON(w interface{ Write([]byte) (int, error) }, data []byte) {
 			if i > last {
 				_, _ = w.Write(data[last:i])
 			}
-			_, _ = w.Write([]byte("\u003c"))
+			_, _ = w.Write(safeLT)
 			last = i + 1
 		}
 	}

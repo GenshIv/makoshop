@@ -924,14 +924,14 @@ func main() {
 	// GET /shop — root catalog
 	// GET /shop/{category_tree}/{slug}
 	mux.HandleFunc("/shop", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		h.HandleSCUPageByPath(w, r)
 	})
 	mux.HandleFunc("/shop/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -1056,7 +1056,7 @@ func main() {
 	// GET /products (public catalog)
 	mux.HandleFunc("/products", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
-		case http.MethodGet:
+		case http.MethodGet, http.MethodHead:
 			h.HandleProductsList(w, r)
 		case http.MethodPost:
 			// POST /products: works for anyone, but seller gets ownership binding.
@@ -1072,7 +1072,7 @@ func main() {
 
 	// GET /products/turbo (turbo-index based search)
 	mux.HandleFunc("/products/turbo", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
