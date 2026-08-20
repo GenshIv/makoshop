@@ -45,6 +45,18 @@ func BenchmarkShopRoot(b *testing.B) {
 	}
 }
 
+// BenchmarkShopRootHEAD — корневой каталог (HEAD)
+func BenchmarkShopRootHEAD(b *testing.B) {
+	req := httptest.NewRequest(http.MethodHead, "/shop", nil)
+	w := httptest.NewRecorder()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		testHandlers.HandleSCUPageByPath(w, req)
+		_ = w.Result()
+		w = httptest.NewRecorder()
+	}
+}
+
 // BenchmarkShopRootJSON — корневой каталог (JSON)
 func BenchmarkShopRootJSON(b *testing.B) {
 	req := httptest.NewRequest(http.MethodGet, "/shop?limit=50", nil)
@@ -135,6 +147,18 @@ func BenchmarkCategoriesTree(b *testing.B) {
 // BenchmarkProductsTurbo — turbo-поиск
 func BenchmarkProductsTurbo(b *testing.B) {
 	req := httptest.NewRequest(http.MethodGet, "/products/turbo?q=телефон&limit=20", nil)
+	w := httptest.NewRecorder()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		testHandlers.HandleTurboProducts(w, req)
+		_ = w.Result()
+		w = httptest.NewRecorder()
+	}
+}
+
+// BenchmarkProductsTurboHEAD — turbo-поиск (HEAD)
+func BenchmarkProductsTurboHEAD(b *testing.B) {
+	req := httptest.NewRequest(http.MethodHead, "/products/turbo?q=телефон&limit=20", nil)
 	w := httptest.NewRecorder()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

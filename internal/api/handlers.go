@@ -256,6 +256,10 @@ func writeJSONWithPool[T any](w http.ResponseWriter, data *T, reg *silentjson.Re
 	bufPtr := jsonBufPool.Get().(*[]byte)
 	buf := (*bufPtr)[:0]
 	buf = silentjson.Marshal(data, reg, buf)
+
+	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
+	w.WriteHeader(http.StatusOK)
+
 	_, _ = w.Write(buf)
 	*bufPtr = buf[:64*1024] // reset capacity for reuse
 	jsonBufPool.Put(bufPtr)
@@ -269,9 +273,20 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	_ = enc.Encode(v)
 }
 
-func writeJSONSCUList(w http.ResponseWriter, status int, data db.SCUListRespData) {
+func writeJSONSCUList(w http.ResponseWriter, r *http.Request, status int, data db.SCUListRespData) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+	if r != nil && r.Method == http.MethodHead {
+		// For HEAD, we want the Content-Length but no body.
+		// However, marshalWithPool/writeJSONWithPool is needed to know the length.
+		bufPtr := jsonBufPool.Get().(*[]byte)
+		buf := (*bufPtr)[:0]
+		buf = silentjson.Marshal(&data, scuListRespRegistry, buf)
+		w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
+		w.WriteHeader(status)
+		*bufPtr = buf[:64*1024]
+		jsonBufPool.Put(bufPtr)
+		return
+	}
 	writeJSONWithPool(w, &data, scuListRespRegistry)
 }
 
@@ -324,12 +339,13 @@ func (h *Handlers) HandleTurboProducts(w http.ResponseWriter, r *http.Request) {
 	}
 	buf := marshalWithPool(&resp, turboListRespReg)
 	w.Header().Set("Content-Type", "application/json")
-	if headOnly {
-		w.WriteHeader(http.StatusOK)
-		return
+	if !headOnly {
+		w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
 	}
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(buf)
+	if !headOnly {
+		_, _ = w.Write(buf)
+	}
 }
 
 type turboListResp struct {
@@ -1058,9 +1074,6 @@ func (h *Handlers) HandleProductsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Support HEAD requests: run full logic but don't send body.
-	headOnly := r.Method == http.MethodHead
-
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 
 	catRaw := r.URL.Query().Get("category_id")
@@ -1161,12 +1174,7 @@ func (h *Handlers) HandleProductsList(w http.ResponseWriter, r *http.Request) {
 		result.Items = []silentjson.RawMessage{}
 	}
 
-	if headOnly {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	writeJSONSCUList(w, http.StatusOK, *result)
+	writeJSONSCUList(w, r, http.StatusOK, *result)
 }
 
 func (h *Handlers) HandleProductGet(w http.ResponseWriter, r *http.Request) {

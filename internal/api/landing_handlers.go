@@ -462,9 +462,6 @@ var scuListRespRegistry = silentjson.BuildRegistry(reflect.TypeOf(db.SCUListResp
 func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, catID int64) {
 	ctx := r.Context()
 
-	// Support HEAD requests: run full logic but don't send body.
-	headOnly := r.Method == http.MethodHead
-
 	q := r.URL.Query().Get("q")
 	sort := r.URL.Query().Get("sort")
 	pageStr := r.URL.Query().Get("page")
@@ -578,20 +575,10 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 		}
 
 		if wantsHTML(r) {
-			if headOnly {
-				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				w.WriteHeader(http.StatusOK)
-				return
-			}
 			writeHTMLResponseSCUList(w, r, i18n.T("ui.catalog_title"), respData)
 			return
 		}
-		if headOnly {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		writeJSONSCUList(w, http.StatusOK, respData)
+		writeJSONSCUList(w, r, http.StatusOK, respData)
 		return
 	}
 
@@ -609,15 +596,12 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	writeJSONSCUList(w, http.StatusOK, *result)
+	writeJSONSCUList(w, r, http.StatusOK, *result)
 }
 
 // writeSCUPageResponse writes the SCU page with its products.
 func (h *Handlers) writeSCUPageResponse(w http.ResponseWriter, r *http.Request, sp *model.SCUPage) {
 	ctx := r.Context()
-
-	// Support HEAD requests: run full logic but don't send body.
-	headOnly := r.Method == http.MethodHead
 
 	// Get products with this SCU via turbo index "scu:{scu}"
 	products, err := h.turboSearch.GetProductsBySCU(sp.SCU)
@@ -664,20 +648,10 @@ func (h *Handlers) writeSCUPageResponse(w http.ResponseWriter, r *http.Request, 
 
 	title := sp.Title + " — MakoShop"
 	if wantsHTML(r) {
-		if headOnly {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusOK)
-			return
-		}
 		writeHTMLResponseSCUList(w, r, title, respData)
 		return
 	}
-	if headOnly {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	writeJSONSCUList(w, http.StatusOK, respData)
+	writeJSONSCUList(w, r, http.StatusOK, respData)
 }
 
 // isBot checks if the request is from a search engine bot
@@ -720,6 +694,7 @@ func wantsHTML(r *http.Request) bool {
 // For bots: full SSR with inline content. For browsers: minimal HTML + JS.
 func writeHTMLResponseSCUList(w http.ResponseWriter, r *http.Request, title string, data db.SCUListRespData) {
 	ctx := r.Context()
+	headOnly := r.Method == http.MethodHead
 
 	// For bots: need jsonData for SSR content. For browsers: write directly to avoid copy.
 	var jsonData []byte
@@ -766,6 +741,9 @@ func writeHTMLResponseSCUList(w http.ResponseWriter, r *http.Request, title stri
 		}
 
 		w.WriteHeader(http.StatusOK)
+		if headOnly {
+			return
+		}
 
 		ogURL := baseURL + seoURL
 		if ogURL == baseURL {
@@ -803,6 +781,9 @@ func writeHTMLResponseSCUList(w http.ResponseWriter, r *http.Request, title stri
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
+	if headOnly {
+		return
+	}
 	// Minimal HTML for browsers (SPA) — write JSON directly to avoid copy
 	w.Write(htmlHead)
 	writeEscapedString(w, title)
@@ -821,20 +802,10 @@ func writeSafeJSONWithPool(w http.ResponseWriter, data *db.SCUListRespData, reg 
 	bufPtr := jsonBufPool.Get().(*[]byte)
 	buf := (*bufPtr)[:0]
 	buf = silentjson.Marshal(data, reg, buf)
-	// Write with inline escaping of '<' -> '\u003c'
-	last := 0
-	for i := 0; i < len(buf); i++ {
-		if buf[i] == '<' {
-			if i > last {
-				_, _ = w.Write(buf[last:i])
-			}
-			_, _ = w.Write(safeLT)
-			last = i + 1
-		}
-	}
-	if last < len(buf) {
-		_, _ = w.Write(buf[last:])
-	}
+
+	// Note: we can't easily set Content-Length here because writeSafeJSON
+	// might increase the length by escaping '<'.
+	writeSafeJSON(w, buf)
 	*bufPtr = buf[:64*1024]
 	jsonBufPool.Put(bufPtr)
 }
@@ -891,22 +862,34 @@ var (
 )
 
 func writeEscapedString(w http.ResponseWriter, s string) {
+	if s == "" {
+		return
+	}
+	last := 0
 	for i := 0; i < len(s); i++ {
-		b := s[i]
-		switch b {
+		var esc []byte
+		switch s[i] {
 		case '&':
-			w.Write(htmlAmp)
+			esc = htmlAmp
 		case '<':
-			w.Write(htmlLT)
+			esc = htmlLT
 		case '>':
-			w.Write(htmlGT)
+			esc = htmlGT
 		case '"':
-			w.Write(htmlQuote)
+			esc = htmlQuote
 		case '\\':
-			w.Write(htmlBS)
+			esc = htmlBS
 		default:
-			w.Write([]byte{b})
+			continue
 		}
+		if i > last {
+			_, _ = w.Write(stringToBytes(s[last:i]))
+		}
+		_, _ = w.Write(esc)
+		last = i + 1
+	}
+	if last < len(s) {
+		_, _ = w.Write(stringToBytes(s[last:]))
 	}
 }
 
@@ -921,6 +904,12 @@ var (
 // writeHTMLResponse writes an HTML page with embedded data for SSR
 // For bots: full SSR with inline content. For browsers: minimal HTML + JS.
 func writeHTMLResponse(w http.ResponseWriter, r *http.Request, title string, data map[string]interface{}) {
+	if r.Method == http.MethodHead {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	jsonData, _ := json.Marshal(data)
 	safeJSON := strings.ReplaceAll(string(jsonData), "<", "\\u003c")
 
