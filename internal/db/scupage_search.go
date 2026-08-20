@@ -505,7 +505,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 			Candidates: nil,
 			Page:       params.Page - 1,
 			PageSize:   params.Limit,
-			Desc:       sortType == scupageSortTypePriceDesc,
+			Desc:       false,
 			DocPrefix:  "scupage:",
 		})
 		if err != nil {
@@ -688,13 +688,15 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 	var res makodb.TurboSortPageWithDocsResult
 	var err error
 
+	isDesc := sortType == scupageSortTypePriceDesc
+
 	if candidatesRaw == nil || len(candidatesRaw) == 0 {
 		res, err = s.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
 			Name:       sortKey,
 			Candidates: nil,
 			Page:       params.Page - 1,
 			PageSize:   params.Limit,
-			Desc:       false,
+			Desc:       isDesc,
 			DocPrefix:  "scupage:",
 		})
 	} else {
@@ -703,7 +705,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 			candidatesRaw,
 			params.Page-1,
 			params.Limit,
-			false,
+			isDesc,
 			"scupage:",
 		)
 	}
