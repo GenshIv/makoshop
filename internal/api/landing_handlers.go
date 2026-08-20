@@ -1320,7 +1320,7 @@ type UpdateLandingRequest struct {
 
 // HandleAdminRebuildSCUPages rebuilds all SCU pages from existing products.
 // POST /admin/rebuild-scupages
-// This is an emergency operation that reads all products directly (allowed by rules).
+// Uses the same logic as import: BatchUpsertFromProducts for consistent seo_url generation.
 func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
@@ -1355,239 +1355,66 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Group products by SCU
-	scuProducts := make(map[string][]*model.Product)
-	batchSize := 10000
-	for i := 0; i < len(allIDs); i += batchSize {
-		end := i + batchSize
+	// Read all products into memory (same as import)
+	fmt.Printf("[REBUILD-SCUPAGES] Reading %d products...\n", len(allIDs))
+	readStart := time.Now()
+	var allProducts []*model.Product
+	const readBatchSize = 10000
+	for i := 0; i < len(allIDs); i += readBatchSize {
+		end := i + readBatchSize
 		if end > len(allIDs) {
 			end = len(allIDs)
 		}
-
 		for _, docID := range allIDs[i:end] {
 			p, err := h.productRepo.Get(int64(docID))
-			if err != nil || p.SCU == "" {
+			if err != nil {
 				continue
 			}
-			scuProducts[p.SCU] = append(scuProducts[p.SCU], p)
+			allProducts = append(allProducts, p)
 		}
-
-		fmt.Printf("[REBUILD-SCUPAGES] Processed %d/%d products\n", end, len(allIDs))
-	}
-
-	fmt.Printf("[REBUILD-SCUPAGES] Found %d unique SCUs\n", len(scuProducts))
-
-	// Collect unique category IDs and pre-compute tree paths
-	catIDs := make(map[int64]struct{})
-	for _, products := range scuProducts {
-		for _, p := range products {
-			if p.CategoryID != 0 {
-				catIDs[p.CategoryID] = struct{}{}
-			}
+		if (i+end)/2%100000 == 0 {
+			fmt.Printf("[REBUILD-SCUPAGES] Read %d/%d products\n", (i+end)/2, len(allIDs))
 		}
 	}
-	treePathCache := make(map[int64][]string)
-	for catID := range catIDs {
-		if h.categoryRepo != nil {
-			if tp, err := h.categoryRepo.GetTreePath(catID); err == nil && len(tp) > 0 {
-				treePathCache[catID] = tp
-			}
-		}
+	fmt.Printf("[REBUILD-SCUPAGES] Read %d products in %v\n", len(allProducts), time.Since(readStart))
+
+	if len(allProducts) == 0 {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "no_products_with_scu"})
+		return
 	}
 
-	// Build and save SCU pages in batches
-	created := 0
-	updated := 0
-	errors := 0
+	// Phase 1: Batch upsert SCU pages (uses same logic as import, including seo_url)
+	fmt.Printf("[REBUILD-SCUPAGES] Phase 1: BatchUpsertFromProducts %d products...\n", len(allProducts))
+	phase1Start := time.Now()
+	_ = h.scuPageRepo.BatchUpsertFromProducts(allProducts)
+	fmt.Printf("[REBUILD-SCUPAGES] Phase 1: SCU pages upserted in %v\n", time.Since(phase1Start))
 
-	// Collect new SCU page IDs for batch index update
-	var newSCUPageIDs []uint64
-	const batchFlushSize = 50000
-
-	flushBatch := func() {
-		if len(newSCUPageIDs) == 0 {
-			return
-		}
-		if _, err := h.scuPageRepo.Store.DB().TurboPutBatchIndex(db.TurboKeySCUPageList, newSCUPageIDs); err != nil {
-			fmt.Printf("[REBUILD-SCUPAGES] WARN: batch add to scupage_list: %v\n", err)
-		}
-		newSCUPageIDs = newSCUPageIDs[:0]
-	}
-
-	for scu, products := range scuProducts {
-		// Find min price
-		minPrice := products[0].Price
-		for _, p := range products {
-			if p.Price < minPrice {
-				minPrice = p.Price
-			}
-		}
-
-		// Merge images (unique)
-		imageSet := make(map[string]struct{})
-		var images []string
-		for _, p := range products {
-			for _, img := range p.Images {
-				if img != "" {
-					if _, ok := imageSet[img]; !ok {
-						imageSet[img] = struct{}{}
-						images = append(images, img)
-					}
-				}
-			}
-		}
-
-		// Merge attributes (no duplicates)
-		var attrs []model.KeyValue
-		attrSet := make(map[string]struct{})
-		for _, p := range products {
-			for _, kv := range p.Attributes {
-				if _, exists := attrSet[kv.Key]; !exists {
-					attrSet[kv.Key] = struct{}{}
-					attrs = append(attrs, kv)
-				}
-			}
-		}
-
-		// Collect product IDs
-		var productIDs []int64
-		for _, p := range products {
-			productIDs = append(productIDs, p.ID)
-		}
-
-		// Use first product for title, category, brand
-		first := products[0]
-		title := first.Name
-		// Try to strip option suffix from title
-		for _, suffix := range []string{" черный", " белый", " красный", " синий", " зелёный", " зеленый", " серый", " розовый", " золотой", " серебристый", " коричневый", " 64 гб", " 128 гб", " 256 гб", " 512 гб", " 1 тб", " 64gb", " 128gb", " 256gb", " 512gb", " 1tb", " 4 гб", " 8 гб", " 16 гб", " 32 гб", " 4gb", " 8gb", " 16gb", " 32gb"} {
-			lowerTitle := strings.ToLower(title)
-			if idx := strings.Index(lowerTitle, suffix); idx >= 0 {
-				title = strings.TrimSpace(title[:idx])
-			}
-		}
-		if len(title) < 5 {
-			title = first.Name
-		}
-
-		// Try to get existing SCU page
-		existing, err := h.scuPageRepo.GetBySCU(scu)
-		if err == nil && existing != nil {
-			// Update existing
-			existing.Title = title
-			existing.Description = first.Description
-			existing.Content = first.Description
-			existing.Images = limitStrings(images, 50)
-			existing.CategoryID = first.CategoryID
-			existing.Brand = first.Brand
-			existing.BrandID = first.BrandID
-			existing.MinPrice = minPrice
-			existing.Currency = first.Currency
-			existing.Attributes = attrs
-			existing.ProductCount = len(products)
-			existing.IsActive = true
-			existing.SeoURL = h.scuPageRepo.ComputeSeoURL(existing.Slug, existing.CategoryID, treePathCache)
-			existing.UpdatedAt = time.Now().Unix()
-
-			data := db.MarshalSCUPage(*existing)
-			if err := h.scuPageRepo.Store.DocPut(db.KeySCUPage(existing.ID), data); err != nil {
-				fmt.Printf("[REBUILD-SCUPAGES] WARN: update scupage %s: %v\n", scu, err)
-				errors++
-				continue
-			}
-			updated++
-		} else {
-			// Create new
-			slug := toSlugLocal(title)
-			sp := &model.SCUPage{
-				SCU:          scu,
-				Slug:         slug,
-				Title:        title,
-				Description:  first.Description,
-				Content:      first.Description,
-				Images:       limitStrings(images, 50),
-				CategoryID:   first.CategoryID,
-				Brand:        first.Brand,
-				BrandID:      first.BrandID,
-				MinPrice:     minPrice,
-				Currency:     first.Currency,
-				Attributes:   attrs,
-				ProductCount: len(products),
-				SeoURL:       h.scuPageRepo.ComputeSeoURL(slug, first.CategoryID, treePathCache),
-				IsActive:     true,
-				CreatedAt:    time.Now().Unix(),
-				UpdatedAt:    time.Now().Unix(),
-			}
-
-			// Create without list index (will be batched)
-			if err := h.scuPageRepo.CreateNoListIndex(sp); err != nil {
-				fmt.Printf("[REBUILD-SCUPAGES] WARN: create scupage %s: %v\n", scu, err)
-				errors++
-				continue
-			}
-			newSCUPageIDs = append(newSCUPageIDs, uint64(sp.ID))
-			created++
-
-			// Flush batch periodically
-			if len(newSCUPageIDs) >= batchFlushSize {
-				flushBatch()
-			}
-		}
-		if (created+updated+errors)%50000 == 0 {
-			fmt.Printf("[REBUILD-SCUPAGES] SCU pages processed: %d created, %d updated, %d errors\n", created, updated, errors)
-		}
-	}
-
-	// Flush remaining batch
-	flushBatch()
-
-	fmt.Printf("[REBUILD-SCUPAGES] SCU pages processed completed: %d created, %d updated, %d errors\n", created, updated, errors)
-
-	// Index all products (creates scu:{scu} indexes for SCU→Products lookup)
-	fmt.Printf("[REBUILD-SCUPAGES] Indexing %d products (scu:{scu} indexes)...\n", len(allIDs))
-	idxStart := time.Now()
-	if h.productRepo.TurboSearch() != nil && len(allIDs) > 0 {
+	// Phase 2: Index all products (creates scu:{scu} indexes for SCU→Products lookup)
+	fmt.Printf("[REBUILD-SCUPAGES] Phase 2: Indexing %d products...\n", len(allProducts))
+	phase2Start := time.Now()
+	if h.productRepo.TurboSearch() != nil {
 		// Clear global product list first to avoid duplicates
 		_ = h.productRepo.Store().DB().TurboClearIndex(db.TurboKeyProductList)
 
-		// Also clear all SCU indexes
-		//for scu := range scuProducts {
-		//	_ = h.productRepo.Store().DB().TurboClearIndex("scu:" + scu)
-		//}
-
-		fmt.Printf("[REBUILD-SCUPAGES] start batches)...\n")
-		// Read all products in batches for indexing
 		const idxBatchSize = 10000
-		for i := 0; i < len(allIDs); i += idxBatchSize {
+		for i := 0; i < len(allProducts); i += idxBatchSize {
 			end := i + idxBatchSize
-			if end > len(allIDs) {
-				end = len(allIDs)
+			if end > len(allProducts) {
+				end = len(allProducts)
 			}
-
-			fmt.Printf("[REBUILD-SCUPAGES] get data batches Indexes %d)...\n", i)
-			var batch []*model.Product
-			for _, docID := range allIDs[i:end] {
-				p, err := h.productRepo.Get(int64(docID))
-				if err != nil || p.SCU == "" {
-					continue
-				}
-				batch = append(batch, p)
-			}
-
-			fmt.Printf("[REBUILD-SCUPAGES] start batches Indexes %d)...\n", i)
-			if len(batch) > 0 {
-				if err := h.productRepo.TurboSearch().IndexProductBatch(batch); err != nil {
-					fmt.Printf("[REBUILD-SCUPAGES] WARN: index product batch: %v\n", err)
-				}
+			if err := h.productRepo.TurboSearch().IndexProductBatch(allProducts[i:end]); err != nil {
+				fmt.Printf("[REBUILD-SCUPAGES] WARN: index product batch: %v\n", err)
 			}
 			if (i+end)/2%100000 == 0 {
-				fmt.Printf("[REBUILD-SCUPAGES] Indexed %d/%d products\n", i+end/2, len(allIDs))
+				fmt.Printf("[REBUILD-SCUPAGES] Indexed %d/%d products\n", (i+end)/2, len(allProducts))
 			}
 		}
 	}
-	fmt.Printf("[REBUILD-SCUPAGES] Products indexed in %v\n", time.Since(idxStart))
+	fmt.Printf("[REBUILD-SCUPAGES] Phase 2: Products indexed in %v\n", time.Since(phase2Start))
 
-	// Index all SCU pages
-	fmt.Println("[REBUILD-SCUPAGES] Indexing SCU pages...")
+	// Phase 3: Index all SCU pages
+	fmt.Println("[REBUILD-SCUPAGES] Phase 3: Indexing SCU pages...")
+	phase3Start := time.Now()
 	if h.scuPageSearch != nil {
 		allSCUs, _ := h.scuPageRepo.ListAll()
 		scuPtrs := make([]*model.SCUPage, len(allSCUs))
@@ -1598,28 +1425,43 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 			fmt.Printf("[REBUILD-SCUPAGES] WARN: index SCU pages: %v\n", err)
 		}
 	}
+	fmt.Printf("[REBUILD-SCUPAGES] Phase 3: SCU pages indexed in %v\n", time.Since(phase3Start))
 
-	// Build sort indexes for SCU pages
-	fmt.Println("[REBUILD-SCUPAGES] Building SCU page sort indexes...")
+	// Phase 4: Build sort indexes for SCU pages
+	fmt.Println("[REBUILD-SCUPAGES] Phase 4: Building SCU page sort indexes...")
+	phase4Start := time.Now()
 	if h.scuPageSearch != nil {
 		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
 			fmt.Printf("[REBUILD-SCUPAGES] WARN: build sort indexes: %v\n", err)
-		} else {
-			fmt.Println("[REBUILD-SCUPAGES] Sort indexes built successfully")
 		}
 	}
+	fmt.Printf("[REBUILD-SCUPAGES] Phase 4: Sort indexes built in %v\n", time.Since(phase4Start))
+
+	// Phase 5: Rebuild product sort indexes
+	fmt.Println("[REBUILD-SCUPAGES] Phase 5: Rebuilding product sort indexes...")
+	phase5Start := time.Now()
+	if h.productRepo.TurboSearch() != nil {
+		if err := h.productRepo.TurboSearch().BuildSortIndexes(); err != nil {
+			fmt.Printf("[REBUILD-SCUPAGES] WARN: rebuild product sort indexes: %v\n", err)
+		}
+	}
+	fmt.Printf("[REBUILD-SCUPAGES] Phase 5: Product sort indexes rebuilt in %v\n", time.Since(phase5Start))
+
+	// Phase 6: Recalculate SCU page product counts
+	fmt.Println("[REBUILD-SCUPAGES] Phase 6: Recalculating SCU page product counts...")
+	phase6Start := time.Now()
+	if err := h.scuPageRepo.RecalculateProductCounts(); err != nil {
+		fmt.Printf("[REBUILD-SCUPAGES] WARN: recalculate product counts: %v\n", err)
+	}
+	fmt.Printf("[REBUILD-SCUPAGES] Phase 6: Product counts recalculated in %v\n", time.Since(phase6Start))
 
 	elapsed := time.Since(startTime)
 	fmt.Printf("[REBUILD-SCUPAGES] Completed in %v\n", elapsed)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":          "completed",
-		"products":        len(allIDs),
-		"scus":            len(scuProducts),
-		"scupages_create": created,
-		"scupages_update": updated,
-		"errors":          errors,
-		"elapsed":         elapsed.String(),
+		"status":   "completed",
+		"products": len(allProducts),
+		"elapsed":  elapsed.String(),
 	})
 }
 
