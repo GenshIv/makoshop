@@ -960,3 +960,71 @@ func (r *SCUPageRepo) RecalculateProductCounts() error {
 	fmt.Printf("[SCUPAGE] RecalculateProductCounts: done. Updated %d SCU pages.\n", updated)
 	return nil
 }
+
+// RecalculateMinPrices recalculates MinPrice for all SCU pages
+// based on actual product prices linked via SCU.
+// This fixes inconsistencies after bulk imports or price updates.
+// productRepo is required to fetch product prices.
+func (r *SCUPageRepo) RecalculateMinPrices(productRepo *ProductRepo) error {
+	if r.Store == nil || productRepo == nil {
+		return nil
+	}
+
+	all, err := r.List()
+	if err != nil {
+		return fmt.Errorf("list scupages: %w", err)
+	}
+
+	updated := 0
+	for i, sp := range all {
+		if sp.SCU == "" {
+			continue
+		}
+
+		// Get products with this SCU via turbo index
+		key := "scu:" + sp.SCU
+		data, err := r.Store.db.TurboRawRead(key)
+		if err != nil || len(data) == 0 {
+			// Index may not exist yet; skip
+			continue
+		}
+
+		productIDs := makodb.TurboUnsafeReadTokens(data)
+		if len(productIDs) == 0 {
+			continue
+		}
+
+		// Find minimum price among all products
+		var minPrice float64
+		found := false
+		for _, pid := range productIDs {
+			p, err := productRepo.Get(int64(pid))
+			if err != nil {
+				continue
+			}
+			if !found || p.Price < minPrice {
+				minPrice = p.Price
+				found = true
+			}
+		}
+
+		// Update MinPrice if it changed
+		if found && minPrice != sp.MinPrice {
+			sp.MinPrice = minPrice
+			sp.UpdatedAt = time.Now().Unix()
+			data := MarshalSCUPage(sp)
+			if err := r.Store.DocPut(KeySCUPage(sp.ID), data); err != nil {
+				fmt.Printf("WARN: update min_price for scupage %d: %v\n", sp.ID, err)
+				continue
+			}
+			updated++
+		}
+
+		if (i+1)%10000 == 0 {
+			fmt.Printf("[SCUPAGE] RecalculateMinPrices: processed %d / %d (updated %d)\n", i+1, len(all), updated)
+		}
+	}
+
+	fmt.Printf("[SCUPAGE] RecalculateMinPrices: done. Updated %d SCU pages.\n", updated)
+	return nil
+}

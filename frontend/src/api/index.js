@@ -49,14 +49,22 @@ api.interceptors.response.use(
     // Backend decides: any request with bad token -> 401
     if (error.response?.status === 401) {
       console.log('[API] 401 Unauthorized — clearing session, redirecting to /');
+      
+      // Check if we had a token before clearing (to detect if session was active)
+      const hadToken = !!localStorage.getItem('jwt');
+      
       localStorage.removeItem('jwt');
       localStorage.removeItem('user');
+      
       // Avoid infinite reload if already on root
       if (window.location.pathname !== '/') {
         window.location.href = '/';
-      } else {
+      } else if (hadToken) {
+        // Already on root AND we had a token - reload to clear cached state
+        // This only happens once because after reload, hadToken will be false
         window.location.reload();
       }
+      // If already on root and no token, do nothing (prevents infinite loop)
       return Promise.reject(error);
     }
 

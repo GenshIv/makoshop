@@ -581,7 +581,7 @@ watch(
           </div>
           <button
             @click="goBack"
-            class="text-sm text-indigo-600 hover:underline whitespace-nowrap cursor-pointer shrink-0"
+            class="link-btn text-sm text-indigo-600 whitespace-nowrap cursor-pointer shrink-0"
           >
             {{ t('scupage.to_catalog') }}
           </button>

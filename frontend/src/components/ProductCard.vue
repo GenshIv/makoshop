@@ -58,7 +58,8 @@ const attrsString = computed(() => {
            transition-all duration-200 ease-out
            hover:shadow-lg hover:-translate-y-0.5 hover:border-indigo-300
            focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1
-           active:scale-[0.99]"
+           active:scale-[0.99]
+           flex flex-col h-full"
     @click="$emit('click')"
     @keydown.enter="$emit('click')"
   >
@@ -107,15 +108,15 @@ const attrsString = computed(() => {
     </div>
 
     <!-- Info -->
-    <div class="p-2.5 sm:p-3 space-y-1">
+    <div class="p-2.5 sm:p-3 space-y-1 flex flex-col flex-1 min-h-[80px]">
       <h3 class="font-semibold text-[13px] sm:text-sm leading-tight line-clamp-2 text-ink">{{ title }}</h3>
 
       <div v-if="product.brand" class="text-[11px] sm:text-xs text-ink-3">{{ product.brand }}</div>
 
       <div v-if="attrsString" class="text-[11px] text-ink-3 truncate">{{ attrsString }}</div>
 
-      <!-- Price + sellers + rating -->
-      <div class="flex items-end justify-between pt-1 gap-2">
+      <!-- Price + sellers + rating (pushed to bottom for equal card heights) -->
+      <div class="flex items-end justify-between pt-1 gap-2 mt-auto">
         <div class="flex flex-col">
           <span class="font-bold text-sm sm:text-base text-accent">
             {{ formatPrice(price) }}

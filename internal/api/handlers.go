@@ -4801,6 +4801,34 @@ func (h *Handlers) HandleAdminSCUPageRecalculateCounts(w http.ResponseWriter, r 
 	})
 }
 
+// POST /admin/scupages/recalculate-min-prices
+// Recalculates MinPrice for all SCU pages based on actual product prices.
+// Also rebuilds sort indexes to ensure price filters work correctly.
+func (h *Handlers) HandleAdminSCUPageRecalculateMinPrices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	if err := h.scuPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	// Rebuild sort indexes to reflect updated prices
+	if h.scuPageSearch != nil {
+		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("min prices recalculated but failed to rebuild sort indexes: %v", err))
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "ok",
+		"message": "Min prices recalculated and sort indexes rebuilt",
+	})
+}
+
 // --- Payment Methods CRUD ---
 
 func (h *Handlers) HandlePaymentMethodsList(w http.ResponseWriter, r *http.Request) {

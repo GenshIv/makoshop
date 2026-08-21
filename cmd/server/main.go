@@ -1021,6 +1021,12 @@ func main() {
 			return
 		}
 
+		// POST /admin/scupages/recalculate-min-prices
+		if path == "/admin/scupages/recalculate-min-prices" && r.Method == http.MethodPost {
+			h.HandleAdminSCUPageRecalculateMinPrices(w, r)
+			return
+		}
+
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleAdminSCUPageGet(w, r)

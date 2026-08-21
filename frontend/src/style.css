@@ -164,6 +164,16 @@ body {
   }
 }
 
+/* Disable animations via class (user toggle) */
+.no-animation *,
+.no-animation *::before,
+.no-animation *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
 /* ====== Dark theme overrides (only what semantic tokens cannot cover) ====== */
 
 /* Active category in the tree (indigo highlight) */
@@ -197,6 +207,38 @@ body {
 /* Accent links inside cards in dark theme */
 .theme-dark .text-indigo-600 {
   color: #a5b4fc;
+}
+
+/* ====== Link-as-button styles ======
+   Inline links (not buttons/tags/blocks) get a subtle button-like hover:
+   - pastel background tint
+   - rounded corners
+   - no underline
+   - smooth color/background transition
+   - works for <a> and router-link in both themes */
+.link-btn,
+a:not(.btn):not([class*="bg-surface"]),
+router-link:not(.btn):not([class*="bg-surface"]) {
+  display: inline-block;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.375rem;
+  text-decoration: none !important;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+}
+
+.link-btn:hover,
+a:not(.btn):not([class*="bg-surface"]):hover,
+router-link:not(.btn):not([class*="bg-surface"]):hover {
+  background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-hover);
+  text-decoration: none !important;
+}
+
+.theme-dark .link-btn:hover,
+.theme-dark a:not(.btn):not([class*="bg-surface"]):hover,
+.theme-dark router-link:not(.btn):not([class*="bg-surface"]):hover {
+  background-color: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 /* Themed scrollbars (WebKit) */

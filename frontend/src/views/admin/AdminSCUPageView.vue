@@ -34,6 +34,33 @@ const fetchSCUPages = async () => {
   }
 };
 
+const recalculateMinPrices = () => {
+  console.log('Recalculate button clicked! Function exists:', typeof recalculateMinPrices);
+  
+  if (!confirm('Recalculate min prices for all SCU pages? This may take a while.')) {
+    console.log('User cancelled');
+    return;
+  }
+  
+  console.log('Starting recalculation...');
+  const recalcLoading = ref(true);
+  
+  (async () => {
+    try {
+      console.log('Making API call to:', '/admin/scupages/recalculate-min-prices');
+      const response = await api.post('/admin/scupages/recalculate-min-prices');
+      console.log('API response:', response);
+      toast.success('Min prices recalculated successfully!');
+      await fetchSCUPages();
+    } catch (e) {
+      console.error('Failed to recalculate min prices:', e);
+      toast.error('Failed to recalculate min prices');
+    } finally {
+      recalcLoading.value = false;
+    }
+  })();
+};
+
 const startEdit = (sp) => {
   editing.value = {
     id: sp.id,
@@ -107,12 +134,20 @@ onMounted(fetchSCUPages);
   <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <div class="flex justify-between items-center mb-6">
       <h1 class="text-2xl font-bold text-purple-700">{{ t('admin.scupage_title') || 'SCU Pages' }}</h1>
-      <router-link
-        to="/admin"
-        class="text-sm text-ink-3 hover:text-purple-600"
-      >
-        {{ t('admin.back_to_dashboard') || 'Back to Dashboard' }}
-      </router-link>
+      <div class="flex items-center gap-3">
+        <button
+          @click="recalculateMinPrices"
+          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+        >
+          Recalculate Min Prices
+        </button>
+        <router-link
+          to="/admin"
+          class="text-sm text-ink-3 hover:text-purple-600"
+        >
+          {{ t('admin.back_to_dashboard') || 'Back to Dashboard' }}
+        </router-link>
+      </div>
     </div>
 
     <!-- Search -->

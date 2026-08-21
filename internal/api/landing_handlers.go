@@ -1444,6 +1444,24 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 	}
 	fmt.Printf("[REBUILD-SCUPAGES] Phase 6: Product counts recalculated in %v\n", time.Since(phase6Start))
 
+	// Phase 7: Recalculate SCU page min prices
+	fmt.Println("[REBUILD-SCUPAGES] Phase 7: Recalculating SCU page min prices...")
+	phase7Start := time.Now()
+	if err := h.scuPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
+		fmt.Printf("[REBUILD-SCUPAGES] WARN: recalculate min prices: %v\n", err)
+	}
+	fmt.Printf("[REBUILD-SCUPAGES] Phase 7: Min prices recalculated in %v\n", time.Since(phase7Start))
+
+	// Phase 8: Rebuild SCU page sort indexes (to reflect updated min prices)
+	fmt.Println("[REBUILD-SCUPAGES] Phase 8: Rebuilding SCU page sort indexes...")
+	phase8Start := time.Now()
+	if h.scuPageSearch != nil {
+		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+			fmt.Printf("[REBUILD-SCUPAGES] WARN: rebuild SCU page sort indexes: %v\n", err)
+		}
+	}
+	fmt.Printf("[REBUILD-SCUPAGES] Phase 8: SCU page sort indexes rebuilt in %v\n", time.Since(phase8Start))
+
 	elapsed := time.Since(startTime)
 	fmt.Printf("[REBUILD-SCUPAGES] Completed in %v\n", elapsed)
 

@@ -255,6 +255,24 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 	}
 	fmt.Printf("[IMPORT-CSV] Phase 5: Product counts recalculated in %v\n", time.Since(phase5Start))
 
+	// Phase 6: Recalculate SCU page min prices
+	fmt.Println("[IMPORT-CSV] Phase 6: Recalculating SCU page min prices...")
+	phase6Start := time.Now()
+	if err := h.scuPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
+		fmt.Printf("[IMPORT-CSV] WARN: recalculate min prices: %v\n", err)
+	}
+	fmt.Printf("[IMPORT-CSV] Phase 6: Min prices recalculated in %v\n", time.Since(phase6Start))
+
+	// Phase 7: Rebuild SCU page sort indexes (to reflect updated min prices)
+	fmt.Println("[IMPORT-CSV] Phase 7: Rebuilding SCU page sort indexes...")
+	phase7Start := time.Now()
+	if h.scuPageSearch != nil {
+		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+			fmt.Printf("[IMPORT-CSV] WARN: rebuild SCU page sort indexes: %v\n", err)
+		}
+	}
+	fmt.Printf("[IMPORT-CSV] Phase 7: SCU page sort indexes rebuilt in %v\n", time.Since(phase7Start))
+
 	writeJSON(w, http.StatusOK, ImportPricesResult{
 		Status:           "completed",
 		Categories:       finalCategories,
@@ -447,6 +465,24 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[IMPORT-NORMALIZED] WARN: recalculate product counts: %v\n", err)
 	}
 	fmt.Printf("[IMPORT-NORMALIZED] Phase 4: Product counts recalculated in %v\n", time.Since(phase4Start))
+
+	// Phase 5: Recalculate SCU page min prices
+	fmt.Println("[IMPORT-NORMALIZED] Phase 5: Recalculating SCU page min prices...")
+	phase5Start := time.Now()
+	if err := h.scuPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
+		fmt.Printf("[IMPORT-NORMALIZED] WARN: recalculate min prices: %v\n", err)
+	}
+	fmt.Printf("[IMPORT-NORMALIZED] Phase 5: Min prices recalculated in %v\n", time.Since(phase5Start))
+
+	// Phase 6: Rebuild SCU page sort indexes (to reflect updated min prices)
+	fmt.Println("[IMPORT-NORMALIZED] Phase 6: Rebuilding SCU page sort indexes...")
+	phase6Start := time.Now()
+	if h.scuPageSearch != nil {
+		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+			fmt.Printf("[IMPORT-NORMALIZED] WARN: rebuild SCU page sort indexes: %v\n", err)
+		}
+	}
+	fmt.Printf("[IMPORT-NORMALIZED] Phase 6: SCU page sort indexes rebuilt in %v\n", time.Since(phase6Start))
 
 	elapsed := time.Since(startTime)
 	fmt.Printf("[IMPORT-NORMALIZED] Completed: created=%d skipped=%d time=%v (%.0f products/sec)\n",
@@ -2025,6 +2061,24 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[IMPORT-MULTI] WARN: recalculate product counts: %v\n", err)
 	}
 	fmt.Printf("[IMPORT-MULTI] Phase 4: Product counts recalculated in %v\n", time.Since(phase4Start))
+
+	// Phase 5: Recalculate SCU page min prices
+	fmt.Println("[IMPORT-MULTI] Phase 5: Recalculating SCU page min prices...")
+	phase5Start := time.Now()
+	if err := h.scuPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
+		fmt.Printf("[IMPORT-MULTI] WARN: recalculate min prices: %v\n", err)
+	}
+	fmt.Printf("[IMPORT-MULTI] Phase 5: Min prices recalculated in %v\n", time.Since(phase5Start))
+
+	// Phase 6: Rebuild SCU page sort indexes (to reflect updated min prices)
+	fmt.Println("[IMPORT-MULTI] Phase 6: Rebuilding SCU page sort indexes...")
+	phase6Start := time.Now()
+	if h.scuPageSearch != nil {
+		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+			fmt.Printf("[IMPORT-MULTI] WARN: rebuild SCU page sort indexes: %v\n", err)
+		}
+	}
+	fmt.Printf("[IMPORT-MULTI] Phase 6: SCU page sort indexes rebuilt in %v\n", time.Since(phase6Start))
 
 	elapsed := time.Since(startTime)
 	fmt.Printf("[IMPORT-MULTI] Complete: total_imported=%d total_skipped=%d time=%v\n",

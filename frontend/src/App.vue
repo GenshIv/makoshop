@@ -10,11 +10,13 @@ import ShardUsageBar from './components/ShardUsageBar.vue';
 import BackToTop from './components/BackToTop.vue';
 import { useCookieConsent } from './composables/useCookieConsent';
 import { useTheme } from './composables/useTheme';
+import { useAnimation } from './composables/useAnimation';
 import { useSeo } from './composables/useSeo';
 import { setLocale, SUPPORTED_LOCALES } from './i18n';
 
 const { showSettings } = useCookieConsent();
 const { theme, setTheme, THEMES } = useTheme();
+const { animationEnabled, setAnimationEnabled } = useAnimation();
 const { t, locale } = useI18n();
 
 const langLabels = {
@@ -256,6 +258,24 @@ onBeforeUnmount(() => {
                   {{ langLabels[lang] }}
                 </button>
               </div>
+            </div>
+
+            <!-- Animation toggle -->
+            <div class="relative">
+              <button
+                @click="setAnimationEnabled(!animationEnabled)"
+                class="hidden sm:flex items-center gap-1 px-1.5 py-1 text-xs rounded-md bg-surface-2 text-ink-2 hover:bg-surface-3"
+                :title="animationEnabled ? t('common.disable_animation') : t('common.enable_animation')"
+                :aria-label="animationEnabled ? t('common.disable_animation') : t('common.enable_animation')"
+              >
+                <svg v-if="animationEnabled" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+                <span class="hidden md:inline">{{ animationEnabled ? t('common.animation_on') : t('common.animation_off') }}</span>
+              </button>
             </div>
 
             <!-- Theme switcher -->
