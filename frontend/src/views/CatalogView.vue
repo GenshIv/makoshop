@@ -3,6 +3,10 @@ import { ref, reactive, onMounted, onBeforeUnmount, watch, computed, defineAsync
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
+import ProductCard from '../components/ProductCard.vue';
+import SkeletonCard from '../components/SkeletonCard.vue';
+import ViewToggle from '../components/ViewToggle.vue';
+import EmptyState from '../components/EmptyState.vue';
 
 // Lazy-load SCUPageView to avoid circular imports
 const SCUPageView = defineAsyncComponent(() => import('../views/SCUPageView.vue'));
@@ -81,6 +85,16 @@ const filters = reactive({
   price_max: '',
   sort: 'relevance',
 });
+
+// Grid / List view preference (persisted across pages)
+const VIEW_KEY = 'makoshop_catalog_view';
+const catalogView = ref(
+  typeof localStorage !== 'undefined' ? localStorage.getItem(VIEW_KEY) || 'grid' : 'grid'
+);
+const setCatalogView = (v) => {
+  catalogView.value = v;
+  try { localStorage.setItem(VIEW_KEY, v); } catch {}
+};
 
 const attrFilters = reactive({});
 
@@ -507,6 +521,15 @@ const applyFilters = () => {
   if (filters.price_max) query.price_max = filters.price_max; else delete query.price_max;
   if (filters.sort && filters.sort !== 'relevance') query.sort = filters.sort; else delete query.sort;
 
+  // Save attribute filters to URL query
+  for (const [key, values] of Object.entries(attrFilters)) {
+    if (values.length > 0) {
+      query[`attr_${key}`] = values.join(',');
+    } else {
+      delete query[`attr_${key}`];
+    }
+  }
+
   // Always preserve current route path (category slugs)
   router.replace({ path: route.path, query });
 };
@@ -572,6 +595,15 @@ const syncFiltersFromRoute = () => {
   filters.price_max = route.query.price_max || '';
   filters.sort = route.query.sort || 'relevance';
   if (route.query.page) pagination.page = parseInt(route.query.page, 10);
+
+  // Load attribute filters from URL
+  Object.keys(route.query).forEach(key => {
+    if (key.startsWith('attr_')) {
+      const attrCode = key.slice(5); // remove 'attr_' prefix
+      const values = route.query[key].split(',');
+      attrFilters[attrCode] = values;
+    }
+  });
 };
 
 onMounted(async () => {
@@ -725,7 +757,7 @@ defineOptions({ name: 'CatalogView' });
   <!-- Render SCUPageView if API returned an SCUPage -->
   <SCUPageView v-else-if="scuPageData" :data="scuPageData" />
 
-  <div v-else class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  <div v-else class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
     <!-- Root categories grid -->
     <div class="mb-4">
@@ -944,7 +976,7 @@ defineOptions({ name: 'CatalogView' });
 
         <span
           v-if="lastSearchMs != null"
-          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-50 text-green-700 border border-green-200"
+          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-50 text-green-700 border border-green-200 theme-dark:bg-green-900/30 theme-dark:text-green-300 theme-dark:border-green-800"
         >
           <span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500"></span>
           {{ t('catalog.search_time', { ms: lastSearchMs }) }}
@@ -1126,105 +1158,69 @@ defineOptions({ name: 'CatalogView' });
           <div class="text-sm text-ink-2">
             {{ t('catalog.found', { count: pagination.total }) }}
           </div>
-          <select
-            v-model="filters.sort"
-            class="px-3 py-1.5 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-surface"
-          >
-            <option value="relevance">{{ t('catalog.sort_relevance') }}</option>
-            <option value="price_asc">{{ t('catalog.sort_price_asc') }}</option>
-            <option value="price_desc">{{ t('catalog.sort_price_desc') }}</option>
-          </select>
+          <div class="flex items-center gap-2">
+            <ViewToggle v-model="catalogView" @update:model-value="setCatalogView" />
+            <select
+              v-model="filters.sort"
+              class="px-3 py-1.5 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent bg-surface"
+            >
+              <option value="relevance">{{ t('catalog.sort_relevance') }}</option>
+              <option value="price_asc">{{ t('catalog.sort_price_asc') }}</option>
+              <option value="price_desc">{{ t('catalog.sort_price_desc') }}</option>
+            </select>
+          </div>
         </div>
 
         <!-- Skeleton while loading -->
-        <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4" aria-hidden="true">
-          <div v-for="i in 12" :key="i" class="bg-surface rounded-xl border border-line overflow-hidden">
-            <div class="aspect-[4/3] bg-surface-3 animate-pulse"></div>
-            <div class="p-3 space-y-2">
-              <div class="h-3 bg-surface-3 rounded animate-pulse"></div>
-              <div class="h-3 w-2/3 bg-surface-3 rounded animate-pulse"></div>
-              <div class="h-4 w-1/2 bg-surface-3 rounded animate-pulse"></div>
-            </div>
-          </div>
+        <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4" :class="{ 'lg:grid-cols-4': hasAttrsOrBrands, 'lg:grid-cols-5 xl:grid-cols-6': !hasAttrsOrBrands }" aria-hidden="true">
+          <SkeletonCard v-for="i in 12" :key="i" />
         </div>
 
-        <div v-else-if="products.length === 0" class="text-center py-12 text-ink-3">
-          <p class="mb-2">{{ t('catalog.no_products') }}</p>
-          <button @click="resetFilters" class="text-indigo-600 hover:underline text-sm">
-            {{ t('catalog.reset_filters') }}
-          </button>
+        <div v-else-if="products.length === 0" class="bg-surface rounded-lg border border-line">
+          <EmptyState
+            icon="search"
+            :title="t('catalog.no_results_title')"
+            :message="t('catalog.no_results_message')"
+          >
+            <button @click="resetFilters" class="btn btn-secondary">
+              {{ t('catalog.reset_filters') }}
+            </button>
+          </EmptyState>
         </div>
 
-        <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
-          <div
+        <!-- Grid view -->
+        <div
+          v-else-if="catalogView === 'grid'"
+          class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4"
+          :class="{ 'lg:grid-cols-4': hasAttrsOrBrands, 'lg:grid-cols-5 xl:grid-cols-6': !hasAttrsOrBrands }"
+        >
+          <ProductCard
             v-for="product in products"
             :key="product.id"
-            class="bg-surface rounded-xl border border-line overflow-hidden cursor-pointer relative
-                   transition-all duration-200 ease-out
-                   hover:shadow-lg hover:-translate-y-0.5 hover:border-indigo-300"
+            :product="product"
+            :format-price="formatPrice"
+            :view="'grid'"
             @click="goToSCUPage(product)"
-          >
-            <!-- Badge: ad -->
-            <span v-if="product.promoted" class="absolute top-2 left-2 z-10 bg-yellow-400 text-yellow-900 text-[11px] font-semibold px-1.5 py-0.5 rounded-full">
-              {{ t('catalog.ad') }}
-            </span>
-            <!-- Badge: multiple variants -->
-            <span v-if="product.product_count && product.product_count > 1" class="absolute top-2 right-2 z-10 bg-indigo-600 text-white text-[11px] font-semibold px-1.5 py-0.5 rounded-full">
-              {{ product.product_count }} {{ pluralize(product.product_count, 'catalog.variant_one', 'catalog.variant_few', 'catalog.variant_many') }}
-            </span>
+          />
+        </div>
 
-            <!-- Image -->
-            <div class="aspect-[4/3] bg-surface-2 flex items-center justify-center">
-              <img
-                v-if="product.images?.length"
-                :src="product.images[0]"
-                :alt="product.name"
-                loading="lazy"
-                decoding="async"
-                class="w-full h-full object-cover"
-              />
-              <span v-else class="text-ink-3 text-xs">{{ t('catalog.no_photo') }}</span>
-            </div>
-
-            <!-- Info -->
-            <div class="p-2.5 sm:p-3 space-y-1">
-              <!-- Product name -->
-              <h3 class="font-semibold text-[13px] sm:text-sm leading-tight line-clamp-2 text-ink">{{ product.title || product.name }}</h3>
-
-              <!-- Brand/manufacturer -->
-              <div v-if="product.brand" class="text-[11px] sm:text-xs text-ink-3">{{ product.brand }}</div>
-
-              <!-- Attributes (if any) -->
-              <div v-if="getAttributesString(product.attributes)" class="text-[11px] text-ink-3 truncate">
-                {{ getAttributesString(product.attributes) }}
-              </div>
-
-              <!-- Price + sellers + rating -->
-              <div class="flex items-end justify-between pt-1 gap-2">
-                <div class="flex flex-col">
-                  <span class="font-bold text-sm sm:text-base text-indigo-700">
-                    {{ formatPrice(product.price || product.min_price) }}
-                  </span>
-                  <span
-                    v-if="product.sellers_count && product.sellers_count > 1"
-                    class="text-[11px] text-ink-3"
-                  >
-                    {{ t('catalog.from_price_sellers', { count: product.sellers_count }) }}
-                  </span>
-                </div>
-                <span v-if="product.avg_rating" class="text-xs text-yellow-500 flex-shrink-0">
-                  ★ {{ product.avg_rating.toFixed(1) }}
-                </span>
-              </div>
-            </div>
-          </div>
+        <!-- List view -->
+        <div v-else class="space-y-3">
+          <ProductCard
+            v-for="product in products"
+            :key="product.id"
+            :product="product"
+            :format-price="formatPrice"
+            :view="'list'"
+            @click="goToSCUPage(product)"
+          />
         </div>
 
         <div v-if="pagination.total_pages > 1" class="flex justify-center items-center gap-2 mt-6">
           <button
             @click="goToPage(pagination.page - 1)"
             :disabled="pagination.page <= 1"
-            class="px-3 py-1.5 border border-line rounded-lg text-sm disabled:opacity-40 hover:bg-surface-2 transition"
+            class="btn btn-secondary btn-sm disabled:opacity-40"
           >
             {{ t('catalog.back') }}
           </button>
@@ -1234,7 +1230,7 @@ defineOptions({ name: 'CatalogView' });
           <button
             @click="goToPage(pagination.page + 1)"
             :disabled="pagination.page >= pagination.total_pages"
-            class="px-3 py-1.5 border border-line rounded-lg text-sm disabled:opacity-40 hover:bg-surface-2 transition"
+            class="btn btn-secondary btn-sm disabled:opacity-40"
           >
             {{ t('common.next') }} →
           </button>

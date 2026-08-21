@@ -80,10 +80,38 @@ const buildCategoryPath = (targetId, nodes, path = []) => {
   return null;
 };
 
+const resetFiltersInQuery = (query) => {
+  delete query.q;
+  delete query.price_min;
+  delete query.price_max;
+  delete query.sort;
+  // Remove all attribute filters (they start with attr_)
+  Object.keys(query).forEach(key => {
+    if (key.startsWith('attr_')) {
+      delete query[key];
+    }
+  });
+};
+
+const goToAllCategory = () => {
+  const query = { ...route.query };
+  delete query.page;
+  // Reset filters if switching from a category to "All"
+  if (activeCategoryId.value !== '') {
+    resetFiltersInQuery(query);
+  }
+  router.push({ path: '/shop', query });
+};
+
 const goToCategory = (cat) => {
   const slugs = buildCategoryPath(cat.id, rootCategories.value);
   const query = { ...route.query };
   delete query.page;
+
+  // Reset filters if switching to a different category
+  if (activeCategoryId.value !== cat.id) {
+    resetFiltersInQuery(query);
+  }
 
   let path = '/shop';
   if (slugs && slugs.length > 0) {
@@ -135,11 +163,7 @@ defineOptions({ name: 'CategoryTree' });
         :expanded="expanded"
         :active-id="activeCategoryId"
         @toggle="() => {}"
-        @go="() => {
-          const query = { ...route.query };
-          delete query.page;
-          router.push({ path: '/shop', query });
-        }"
+        @go="goToAllCategory"
       />
 
       <ul class="space-y-0.5">

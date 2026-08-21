@@ -51,7 +51,10 @@
     "theme_light": "Light",
     "theme_dark": "Dark",
     "theme_auto": "Auto",
-    "undo": "Undo"
+    "undo": "Undo",
+    "back_to_top": "Back to top",
+    "view_grid": "Grid view",
+    "view_list": "List view"
   },
   "tables": {
     "orders": "Your orders",
@@ -106,7 +109,8 @@
     "login_error": "Login failed",
     "register_error": "Registration failed",
     "logging_in": "Logging in...",
-    "registering": "Registering..."
+    "registering": "Registering...",
+    "email": "Email"
   },
   "catalog": {
     "all_products": "All products",
@@ -159,7 +163,12 @@
     "virtual_product_notice": "Prices and availability are updating. Load price lists to add to cart.",
     "from_price_sellers": "{count} sellers",
     "search_time": "Search: {ms}ms",
-    "filters": "Filters"
+    "filters": "Filters",
+    "no_results_title": "No results found",
+    "no_results_message": "Try changing your query or resetting filters",
+    "loading_products": "Loading products...",
+    "view_grid": "Grid",
+    "view_list": "List"
   },
   "cart": {
     "title": "Cart",
@@ -170,7 +179,8 @@
     "added_to_cart": "Product added to cart",
     "add_to_cart_error": "Failed to add product to cart",
     "remove_item": "Remove item",
-    "item_removed": "Item removed"
+    "item_removed": "Item removed",
+    "loading": "Loading your cart..."
   },
   "checkout": {
     "title": "Checkout",
@@ -220,7 +230,8 @@
       "delivered": "Delivered",
       "cancelled": "Cancelled",
       "refunded": "Refunded"
-    }
+    },
+    "loading": "Loading orders..."
   },
   "order_detail": {
     "back_to_orders": "← Back to orders",
@@ -232,13 +243,15 @@
     "zip": "ZIP: {zip}",
     "payment": "Payment",
     "status": "Status: {status}",
-    "total": "Total:"
+    "total": "Total:",
+    "loading": "Loading order..."
   },
   "reviews": {
     "title": "My Reviews",
     "no_reviews": "You haven't written any reviews yet",
     "load_error": "Failed to load reviews",
-    "product": "Product #{id}"
+    "product": "Product #{id}",
+    "loading": "Loading reviews..."
   },
   "seller": {
     "dashboard_title": "Seller Dashboard",
@@ -309,7 +322,8 @@
     "review_saved": "Review submitted",
     "review_error": "Failed to submit review",
     "no_description": "No description available",
-    "supplier": "Supplier #{id}"
+    "supplier": "Supplier #{id}",
+    "loading": "Loading product..."
   },
   "scupage": {
     "where_to_buy_base": "Where to buy",
@@ -333,7 +347,11 @@
     "filter_by_company": "Companies",
     "filter_by_payment": "Payment",
     "filter_by_delivery": "Delivery",
-    "filter_by_installment": "Installment"
+    "filter_by_installment": "Installment",
+    "loading": "Loading page...",
+    "best_price": "Best price",
+    "best_price_note": "Among offers: ",
+    "offers_count": "{count} offers"
   },
   "errors": {
     "unknown": "An error occurred",
@@ -715,8 +733,8 @@
       "20": "20 inch",
       "24": "24 inch",
       "26": "26 inch",
-      "27.5": "27.5 inch",
-      "28": "28 inch"
+      "28": "28 inch",
+      "27.5": "27.5 inch"
     },
     "bike_type": {
       "Mountain": "Mountain",

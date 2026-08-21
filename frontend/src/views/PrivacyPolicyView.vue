@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-3xl mx-auto px-4 py-8">
+  <div class="max-w-app mx-auto px-4 py-8">
     <h1 class="text-2xl font-bold mb-6">{{ t('privacy.title') }}</h1>
 
     <p class="text-ink-2 mb-6">{{ t('privacy.intro') }}</p>

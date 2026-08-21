@@ -56,6 +56,13 @@
   --color-success: var(--success);
 }
 
+/* Custom max-width for layout containers - 1504px content width
+   accounting for lg:px-8 (32px left + 32px right = 64px padding)
+   so container width = 1504px + 64px = 1568px */
+.max-w-app {
+  max-width: 1568px;
+}
+
 .theme-dark {
   --color-surface-3: #475569;
 }

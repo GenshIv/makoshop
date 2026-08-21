@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import api from '../api';
 import { useFormat } from '../composables/useFormat';
 import EmptyState from '../components/EmptyState.vue';
+import SkeletonList from '../components/SkeletonList.vue';
 
 const router = useRouter();
 const orders = ref([]);
@@ -51,21 +52,22 @@ onMounted(fetchOrders);
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <h1 class="text-2xl font-bold mb-6">{{ t('orders.title') }}</h1>
+  <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <h1 class="text-2xl font-bold mb-6 text-ink">{{ t('orders.title') }}</h1>
 
     <!-- Loading -->
-    <div v-if="loading" class="flex justify-center py-12">
-      <div class="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div>
+    <div v-if="loading">
+      <p class="text-sm text-ink-3 mb-4">{{ t('orders.loading') }}</p>
+      <SkeletonList :count="4" />
     </div>
 
     <!-- Error -->
-    <div v-else-if="error" class="p-4 bg-red-100 text-red-700 rounded-lg">
+    <div v-else-if="error" class="p-4 bg-red-50 text-red-700 rounded-lg theme-dark:bg-red-900/30 theme-dark:text-red-300">
       {{ error }}
     </div>
 
     <!-- Empty -->
-    <div v-else-if="orders.length === 0" class="bg-surface rounded-lg shadow-sm">
+    <div v-else-if="orders.length === 0" class="bg-surface rounded-lg border border-line">
       <EmptyState icon="doc" :title="t('orders.no_orders')">
         <router-link to="/" class="btn btn-primary">{{ t('orders.go_to_catalog') }}</router-link>
       </EmptyState>
@@ -76,7 +78,7 @@ onMounted(fetchOrders);
       <div
         v-for="order in orders"
         :key="order.id"
-        class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition cursor-pointer"
+        class="bg-surface rounded-lg border border-line p-4 hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer"
         @click="router.push({ name: 'order-detail', params: { id: order.id } })"
       >
         <div class="flex items-center justify-between">

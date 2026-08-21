@@ -8,6 +8,7 @@ import { useToast } from '../composables/useToast';
 import { useFormat } from '../composables/useFormat';
 import { useSeo } from '../composables/useSeo';
 import Breadcrumbs from '../components/Breadcrumbs.vue';
+import PriceSparkline from '../components/PriceSparkline.vue';
 
 const { toast } = useToast();
 const { formatPrice, formatDate } = useFormat();
@@ -39,6 +40,19 @@ const starRating = computed(() => {
   const avg = Number(product.value?.avg_rating) || 0;
   const filled = Math.round(avg);
   return Array.from({ length: 5 }, (_, i) => i < filled);
+});
+
+// Mini price trend derived from the product's offer range (min/max/price)
+const priceTrend = computed(() => {
+  const p = product.value;
+  if (!p) return [];
+  const min = Number(p.min_price);
+  const max = Number(p.max_price);
+  const cur = Number(p.price);
+  if (Number.isFinite(min) && Number.isFinite(max) && max > min && Number.isFinite(cur)) {
+    return [max, (max + cur) / 2, cur, min];
+  }
+  return [];
 });
 
 const fetchProduct = async () => {
@@ -148,30 +162,42 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <!-- Breadcrumbs -->
     <Breadcrumbs :categories="categoryPath" :product-name="product?.name" />
 
     <!-- Back link -->
-    <router-link to="/" class="text-sm text-indigo-600 hover:underline mb-4 inline-block">
+    <router-link to="/" class="text-sm text-accent hover:underline mb-4 inline-block transition-colors">
       {{ t('catalog.back_to_catalog') }}
     </router-link>
 
     <!-- Error -->
-    <div v-if="error" class="p-4 bg-red-100 text-red-700 rounded-lg">
+    <div v-if="error" class="p-4 bg-red-50 text-red-700 rounded-lg theme-dark:bg-red-900/30 theme-dark:text-red-300">
       {{ error }}
     </div>
 
     <!-- Loading -->
-    <div v-else-if="loading" class="flex justify-center py-12">
-      <div class="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div>
+    <div v-else-if="loading" class="grid grid-cols-1 md:grid-cols-2 gap-8" aria-hidden="true">
+      <div>
+        <div class="bg-surface-3 rounded-lg aspect-square animate-pulse"></div>
+        <div class="flex gap-2 mt-2">
+          <div v-for="i in 4" :key="i" class="w-16 h-16 bg-surface-3 rounded animate-pulse"></div>
+        </div>
+      </div>
+      <div class="space-y-4">
+        <div class="h-7 w-3/4 bg-surface-3 rounded animate-pulse"></div>
+        <div class="h-4 w-1/4 bg-surface-3 rounded animate-pulse"></div>
+        <div class="h-24 bg-surface-3 rounded animate-pulse"></div>
+        <div class="h-9 w-1/3 bg-surface-3 rounded animate-pulse"></div>
+        <div class="h-12 w-full sm:w-64 bg-surface-3 rounded animate-pulse"></div>
+      </div>
     </div>
 
     <!-- Product -->
     <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-8">
       <!-- Images -->
       <div>
-        <div class="bg-surface-2 rounded-lg overflow-hidden aspect-square">
+        <div class="bg-surface-2 rounded-xl overflow-hidden aspect-square border border-line">
           <img
             v-if="product.images?.length"
             :src="product.images[currentImageIndex]"
@@ -194,7 +220,7 @@ onMounted(() => {
             decoding="async"
             @click="currentImageIndex = idx"
             :class="[
-              'w-16 h-16 object-cover rounded border-2 cursor-pointer transition',
+              'w-16 h-16 object-cover rounded-lg border-2 cursor-pointer transition',
               currentImageIndex === idx
                 ? 'border-indigo-600'
                 : 'border-transparent hover:border-indigo-400'
@@ -205,7 +231,7 @@ onMounted(() => {
 
       <!-- Info -->
       <div>
-        <h1 class="text-2xl font-bold">{{ product.name }}</h1>
+        <h1 class="text-2xl font-bold text-ink">{{ product.name }}</h1>
         <div v-if="product.sku" class="text-sm text-ink-3 mt-1">SKU: {{ product.sku }}</div>
         <div v-if="product.description" class="mt-4 text-ink-2 whitespace-pre-line text-sm">
           {{ product.description }}
@@ -213,10 +239,14 @@ onMounted(() => {
 
         <!-- Price & stock -->
         <div class="mt-6 flex items-center gap-4 flex-wrap">
-          <span class="text-3xl font-bold text-indigo-600">{{ formatPrice(product.price) }}</span>
+          <span class="text-3xl font-bold text-accent">{{ formatPrice(product.price) }}</span>
           <span :class="isInStock() ? 'text-green-600' : 'text-red-600'" class="text-sm">
             {{ isInStock() ? t('catalog.in_stock') : t('catalog.out_of_stock') }}
           </span>
+          <!-- Mini price trend (from min/max offers) -->
+          <div v-if="priceTrend.length >= 2" class="flex items-center gap-2 text-accent">
+            <PriceSparkline :values="priceTrend" :width="80" :height="28" />
+          </div>
         </div>
 
         <!-- Rating -->
@@ -238,7 +268,7 @@ onMounted(() => {
         </button>
 
         <!-- Attributes -->
-        <div v-if="product.attrs && Object.keys(product.attrs).length" class="mt-6">
+        <div v-if="product.attrs && Object.keys(product.attrs).length" class="mt-6 bg-surface rounded-xl border border-line p-4">
           <h3 class="font-medium text-ink-2">{{ t('catalog.characteristics') }}</h3>
           <dl class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
             <div v-for="(value, key) in product.attrs" :key="key" class="flex flex-col sm:flex-row sm:items-center">

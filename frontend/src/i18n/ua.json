@@ -51,7 +51,10 @@
     "theme_light": "Світла",
     "theme_dark": "Темна",
     "theme_auto": "Авто",
-    "undo": "Скасувати"
+    "undo": "Скасувати",
+    "back_to_top": "Догори",
+    "view_grid": "Сітка",
+    "view_list": "Список"
   },
   "tables": {
     "orders": "Ваші замовлення",
@@ -106,7 +109,8 @@
     "login_error": "Помилка входу",
     "register_error": "Помилка реєстрації",
     "logging_in": "Вхід...",
-    "registering": "Реєстрація..."
+    "registering": "Реєстрація...",
+    "email": "Email"
   },
   "catalog": {
     "all_products": "Усі товари",
@@ -159,7 +163,12 @@
     "virtual_product_notice": "Ціни та наявність оновлюються. Завантажте прайс-листи для додавання в кошик.",
     "from_price_sellers": "{count} продавців",
     "search_time": "Пошук: {ms}ms",
-    "filters": "Фільтри"
+    "filters": "Фільтри",
+    "no_results_title": "Нічого не знайдено",
+    "no_results_message": "Спробуйте змінити запит або скинути фільтри",
+    "loading_products": "Завантажуємо товари...",
+    "view_grid": "Сітка",
+    "view_list": "Список"
   },
   "cart": {
     "title": "Кошик",
@@ -170,7 +179,8 @@
     "added_to_cart": "Товар додано до кошика",
     "add_to_cart_error": "Помилка додавання в кошик",
     "remove_item": "Видалити товар",
-    "item_removed": "Товар видалено"
+    "item_removed": "Товар видалено",
+    "loading": "Завантажуємо кошик..."
   },
   "checkout": {
     "title": "Оформлення замовлення",
@@ -220,7 +230,8 @@
       "delivered": "Доставлено",
       "cancelled": "Скасовано",
       "refunded": "Повернення"
-    }
+    },
+    "loading": "Завантажуємо замовлення..."
   },
   "order_detail": {
     "back_to_orders": "← Назад до замовлень",
@@ -232,13 +243,15 @@
     "zip": "Індекс: {zip}",
     "payment": "Оплата",
     "status": "Статус: {status}",
-    "total": "Всього:"
+    "total": "Всього:",
+    "loading": "Завантажуємо замовлення..."
   },
   "reviews": {
     "title": "Мої відгуки",
     "no_reviews": "Ви ще не залишали відгуків",
     "load_error": "Помилка завантаження відгуків",
-    "product": "Товар #{id}"
+    "product": "Товар #{id}",
+    "loading": "Завантажуємо відгуки..."
   },
   "seller": {
     "dashboard_title": "Кабінет продавця",
@@ -266,7 +279,42 @@
     "status": "Статус",
     "actions": "Дії",
     "edit": "Змінити",
-    "delete": "Видалити"
+    "delete": "Видалити",
+    "product_not_found": "Товар не знайдено",
+    "fill_required_fields": "Заповніть усі обов’язкові поля",
+    "save_error": "Помилка збереження",
+    "edit_product": "Редагувати товар",
+    "new_product": "Новий товар",
+    "product_name": "Назва товару",
+    "description": "Опис",
+    "category_id": "ID категорії",
+    "stock": "Склад",
+    "status_active": "Активний",
+    "status_draft": "Чернетка",
+    "status_hidden": "Прихований",
+    "saving": "Збереження...",
+    "save": "Зберегти",
+    "cancel": "Скасувати",
+    "orders_load_error": "Помилка завантаження замовлень",
+    "no_orders": "Немає замовлень",
+    "date": "Дата",
+    "buyer": "Купівельник",
+    "items_count": "{count} шт.",
+    "amount": "Сума",
+    "details": "Деталі",
+    "campaigns_load_error": "Помилка завантаження кампаній",
+    "create_campaign_error": "Помилка створення кампанії",
+    "promotion": "Промоція",
+    "new_campaign": "Нова кампанія",
+    "new_campaign_form": "Форма нової кампанії",
+    "plan": "План",
+    "select_plan": "Оберіть план",
+    "budget": "Бюджет",
+    "position": "Позиція",
+    "create": "Створити",
+    "no_campaigns": "Немає кампаній",
+    "used": "Використано",
+    "period": "Період"
   },
   "product": {
     "not_found": "Товар не знайдено",
@@ -274,7 +322,8 @@
     "review_saved": "Відгук надіслано",
     "review_error": "Помилка надсилання відгуку",
     "no_description": "Опис відсутній",
-    "supplier": "Постачальник #{id}"
+    "supplier": "Постачальник #{id}",
+    "loading": "Завантажуємо товар..."
   },
   "scupage": {
     "where_to_buy_base": "Де купити",
@@ -298,7 +347,11 @@
     "filter_by_company": "Компанії",
     "filter_by_payment": "Оплата",
     "filter_by_delivery": "Доставка",
-    "filter_by_installment": "Розстрочка"
+    "filter_by_installment": "Розстрочка",
+    "loading": "Завантажуємо сторінку...",
+    "best_price": "Найкраща ціна",
+    "best_price_note": "Серед пропозицій: ",
+    "offers_count": "{count} пропозицій"
   },
   "errors": {
     "unknown": "Сталася помилка",
@@ -558,7 +611,14 @@
     "coverage_load_error": "Не вдалося завантажити покриття",
     "user_status_active": "Активний",
     "user_status_pending": "Очікує",
-    "user_status_blocked": "Заблокований"
+    "user_status_blocked": "Заблокований",
+    "anchor_keywords": "Якірні ключові слова",
+    "anchor_keywords_hint": "Розділені комою",
+    "anchor_keywords_empty": "Немає ключових слів",
+    "anchor_keywords_placeholder": "напр., ноутбук, телефон...",
+    "catalogizer_desc_title": "Опис каталогізатора",
+    "catalogizer_desc": "Опис каталогізатора",
+    "back_to_dashboard": "← Повернутися на панель"
   },
   "privacy": {
     "title": "Політика конфіденційності",
@@ -673,8 +733,8 @@
       "20": "20 дюймів",
       "24": "24 дюйма",
       "26": "26 дюймів",
-      "27.5": "27.5 дюймів",
-      "28": "28 дюймів"
+      "28": "28 дюймів",
+      "27.5": "27.5 дюймів"
     },
     "bike_type": {
       "Mountain": "Гірський",

@@ -48,22 +48,22 @@ onMounted(loadProfile);
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <h1 class="text-2xl font-bold mb-6">{{ t('profile.title') }}</h1>
+  <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <h1 class="text-2xl font-bold mb-6 text-ink">{{ t('profile.title') }}</h1>
 
     <div v-if="!auth.user" class="text-ink-3">
       {{ t('profile.load_error') }}
     </div>
 
-    <div v-else class="bg-surface rounded-lg shadow-sm p-6">
+    <div v-else class="bg-surface rounded-xl border border-line p-6">
       <!-- Messages -->
-      <div v-if="error" class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{{ error }}</div>
-      <div v-if="success" class="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-sm">{{ success }}</div>
+      <div v-if="error" class="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm theme-dark:bg-red-900/30 theme-dark:text-red-300">{{ error }}</div>
+      <div v-if="success" class="mb-4 p-3 bg-green-50 text-green-700 rounded-lg text-sm theme-dark:bg-green-900/30 theme-dark:text-green-300">{{ success }}</div>
 
       <!-- Profile info -->
       <div class="space-y-4">
         <div>
-          <label class="block text-sm text-ink-3">Email</label>
+          <label class="block text-sm text-ink-3">{{ t('auth.email') }}</label>
           <div class="font-medium">{{ auth.user.email }}</div>
         </div>
         <div>
@@ -75,7 +75,7 @@ onMounted(loadProfile);
         <div>
           <label class="block text-sm text-ink-3">{{ t('common.name') }}</label>
           <template v-if="editing">
-            <input v-model="form.name" type="text" class="w-full px-3 py-2 border border-line rounded-lg mt-1" />
+            <input v-model="form.name" type="text" class="w-full px-3 py-2 border border-line rounded-lg mt-1 bg-surface-2/50 focus:outline-none focus:ring-2 focus:ring-accent transition" />
           </template>
           <div v-else class="font-medium">{{ auth.user.name || '—' }}</div>
         </div>
@@ -83,7 +83,7 @@ onMounted(loadProfile);
         <div>
           <label class="block text-sm text-ink-3">{{ t('common.phone') }}</label>
           <template v-if="editing">
-            <input v-model="form.phone" type="tel" class="w-full px-3 py-2 border border-line rounded-lg mt-1" />
+            <input v-model="form.phone" type="tel" class="w-full px-3 py-2 border border-line rounded-lg mt-1 bg-surface-2/50 focus:outline-none focus:ring-2 focus:ring-accent transition" />
           </template>
           <div v-else class="font-medium">{{ auth.user.phone || '—' }}</div>
         </div>

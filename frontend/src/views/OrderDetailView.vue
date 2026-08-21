@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
 import { useFormat } from '../composables/useFormat';
+import SkeletonList from '../components/SkeletonList.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -50,24 +51,25 @@ onMounted(fetchOrder);
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <!-- Back -->
-    <router-link to="/orders" class="text-sm text-indigo-600 hover:underline mb-4 inline-block">
+    <router-link to="/orders" class="text-sm text-accent hover:underline mb-4 inline-block transition-colors">
       {{ t('order_detail.back_to_orders') }}
     </router-link>
 
     <!-- Loading -->
-    <div v-if="loading" class="flex justify-center py-12">
-      <div class="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div>
+    <div v-if="loading">
+      <p class="text-sm text-ink-3 mb-4">{{ t('order_detail.loading') }}</p>
+      <SkeletonList :count="3" />
     </div>
 
     <!-- Error -->
-    <div v-else-if="error" class="p-4 bg-red-100 text-red-700 rounded-lg">
+    <div v-else-if="error" class="p-4 bg-red-50 text-red-700 rounded-lg theme-dark:bg-red-900/30 theme-dark:text-red-300">
       {{ error }}
     </div>
 
     <!-- Order detail -->
-    <div v-else-if="order" class="bg-surface rounded-lg shadow-sm overflow-hidden">
+    <div v-else-if="order" class="bg-surface rounded-xl border border-line overflow-hidden">
       <!-- Header -->
       <div class="p-4 border-b flex items-center justify-between">
         <div>

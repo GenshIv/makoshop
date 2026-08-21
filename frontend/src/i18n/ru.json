@@ -51,7 +51,10 @@
     "theme_light": "Светлая",
     "theme_dark": "Тёмная",
     "theme_auto": "Авто",
-    "undo": "Отменить"
+    "undo": "Отменить",
+    "back_to_top": "Наверх",
+    "view_grid": "Сетка",
+    "view_list": "Список"
   },
   "tables": {
     "orders": "Ваши заказы",
@@ -106,7 +109,8 @@
     "login_error": "Ошибка входа",
     "register_error": "Ошибка регистрации",
     "logging_in": "Вход...",
-    "registering": "Регистрация..."
+    "registering": "Регистрация...",
+    "email": "Email"
   },
   "catalog": {
     "back_to_catalog": "← Вернуться в каталог",
@@ -159,7 +163,12 @@
     "virtual_product_notice": "Цены и наличие обновляются. Загрузите прайсы для добавления в корзину.",
     "from_price_sellers": "{count} продавца",
     "search_time": "Поиск: {ms}ms",
-    "filters": "Фильтры"
+    "filters": "Фильтры",
+    "no_results_title": "Ничего не найдено",
+    "no_results_message": "Попробуйте изменить запрос или сбросить фильтры",
+    "loading_products": "Загружаем товары...",
+    "view_grid": "Сетка",
+    "view_list": "Список"
   },
   "cart": {
     "title": "Корзина",
@@ -170,7 +179,8 @@
     "added_to_cart": "Товар добавлен в корзину",
     "add_to_cart_error": "Ошибка добавления в корзину",
     "remove_item": "Удалить товар",
-    "item_removed": "Товар удалён"
+    "item_removed": "Товар удалён",
+    "loading": "Загружаем корзину..."
   },
   "checkout": {
     "title": "Оформление заказа",
@@ -220,7 +230,8 @@
       "delivered": "Доставлен",
       "cancelled": "Отменён",
       "refunded": "Возврат"
-    }
+    },
+    "loading": "Загружаем заказы..."
   },
   "order_detail": {
     "back_to_orders": "← Назад к заказам",
@@ -232,13 +243,15 @@
     "zip": "Индекс: {zip}",
     "payment": "Оплата",
     "status": "Статус: {status}",
-    "total": "Итого:"
+    "total": "Итого:",
+    "loading": "Загружаем заказ..."
   },
   "reviews": {
     "title": "Мои отзывы",
     "no_reviews": "Вы ещё не оставляли отзывов",
     "load_error": "Ошибка загрузки отзывов",
-    "product": "Товар #{id}"
+    "product": "Товар #{id}",
+    "loading": "Загружаем отзывы..."
   },
   "seller": {
     "dashboard_title": "Кабинет продавца",
@@ -309,7 +322,8 @@
     "review_saved": "Отзыв отправлен",
     "review_error": "Ошибка отправки отзыва",
     "no_description": "Описание отсутствует",
-    "supplier": "Поставщик #{id}"
+    "supplier": "Поставщик #{id}",
+    "loading": "Загружаем товар..."
   },
   "scupage": {
     "where_to_buy_base": "Где купить",
@@ -333,7 +347,11 @@
     "filter_by_company": "Компании",
     "filter_by_payment": "Оплата",
     "filter_by_delivery": "Доставка",
-    "filter_by_installment": "Рассрочка"
+    "filter_by_installment": "Рассрочка",
+    "loading": "Загружаем страницу...",
+    "best_price": "Лучшая цена",
+    "best_price_note": "Среди предложений: ",
+    "offers_count": "{count} предложений"
   },
   "errors": {
     "unknown": "Произошла ошибка",
@@ -715,8 +733,8 @@
       "20": "20 дюймов",
       "24": "24 дюйма",
       "26": "26 дюймов",
-      "27.5": "27.5 дюймов",
-      "28": "28 дюймов"
+      "28": "28 дюймов",
+      "27.5": "27.5 дюймов"
     },
     "bike_type": {
       "Mountain": "Горный",

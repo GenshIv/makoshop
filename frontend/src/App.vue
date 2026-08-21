@@ -7,6 +7,7 @@ import { useCartStore } from './stores/cart';
 import CategoryTree from './components/CategoryTree.vue';
 import CookieConsentBanner from './components/CookieConsentBanner.vue';
 import ShardUsageBar from './components/ShardUsageBar.vue';
+import BackToTop from './components/BackToTop.vue';
 import { useCookieConsent } from './composables/useCookieConsent';
 import { useTheme } from './composables/useTheme';
 import { useSeo } from './composables/useSeo';
@@ -129,7 +130,7 @@ onBeforeUnmount(() => {
   <div class="min-h-screen flex flex-col bg-surface-2/40">
     <!-- Header -->
     <header class="bg-surface shadow-sm border-b border-line sticky top-0 z-30">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between h-16 gap-4">
           <!-- Left: Logo + mobile buttons -->
           <div class="flex items-center gap-3">
@@ -157,13 +158,13 @@ onBeforeUnmount(() => {
             </button>
 
             <!-- Logo -->
-            <router-link to="/" class="flex items-center gap-2">
+            <router-link to="/" class="flex items-center gap-2 transition-opacity hover:opacity-80">
               <img
                 src="/koshik.png"
                 alt="MakoShop"
                 class="h-8 w-auto"
               />
-              <span class="text-xl font-bold text-indigo-600 hover:text-indigo-700 whitespace-nowrap">
+              <span class="text-xl font-bold text-accent whitespace-nowrap">
                 MakoShop
               </span>
             </router-link>
@@ -178,44 +179,45 @@ onBeforeUnmount(() => {
               ref="search"
               type="text"
               :placeholder="t('common.search_placeholder')"
-              class="w-full px-4 py-2 border border-line rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+              class="w-full px-4 py-2 border border-line rounded-lg bg-surface-2/50 text-sm placeholder:text-ink-3
+                     focus:outline-none focus:ring-2 focus:ring-accent focus:bg-surface transition"
             />
           </form>
 
           <!-- Right: Nav links -->
           <nav class="flex items-center gap-2 sm:gap-3">
             <!-- Cart -->
-            <button @click="goToCart" class="relative p-2 text-ink-2 hover:text-indigo-600 hover:bg-surface-2 rounded-lg" :aria-label="t('common.cart')">
+            <button @click="goToCart" class="relative p-2 text-ink-2 hover:text-accent hover:bg-surface-2 rounded-lg transition-colors" :aria-label="t('common.cart')">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
-              <span v-if="cart.totalCount > 0" class="absolute -top-1 -right-1 bg-indigo-600 text-white text-[11px] rounded-full w-4 h-4 flex items-center justify-center">
+              <span v-if="cart.totalCount > 0" class="absolute -top-1 -right-1 bg-accent text-white text-[11px] rounded-full w-4 h-4 flex items-center justify-center font-medium">
                 {{ cart.totalCount }}
               </span>
             </button>
 
             <!-- Desktop auth links -->
             <template v-if="!isAuthenticated" class="hidden sm:flex items-center gap-2">
-              <router-link to="/login" class="text-sm text-ink-2 hover:text-indigo-600 px-2 py-1">{{ t('common.login') }}</router-link>
-              <router-link to="/register" class="text-sm px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">{{ t('common.register') }}</router-link>
+              <router-link to="/login" class="text-sm text-ink-2 hover:text-accent px-2 py-1 transition-colors">{{ t('common.login') }}</router-link>
+              <router-link to="/register" class="btn btn-primary btn-sm">{{ t('common.register') }}</router-link>
             </template>
 
             <template v-else class="hidden sm:flex items-center gap-2">
               <div class="flex items-center gap-1">
-                <router-link to="/profile" class="text-sm text-ink-2 hover:text-indigo-600">
+                <router-link to="/profile" class="text-sm text-ink-2 hover:text-accent transition-colors">
                   {{ auth.user?.name || auth.user?.email }}
                 </router-link>
                 <span v-if="userRole" class="text-[11px] px-1.5 py-0.5 rounded-full bg-surface-2 text-ink-3">
                   {{ userRole }}
                 </span>
               </div>
-              <router-link v-if="isAuthenticated" to="/seller" class="text-xs text-indigo-600 hover:underline px-1">
+              <router-link v-if="isAuthenticated" to="/seller" class="text-xs text-accent hover:underline px-1">
                 {{ t('common.seller_cabinet') }}
               </router-link>
               <router-link v-if="isAuthenticated" to="/admin" class="text-xs text-purple-600 hover:underline px-1">
                 {{ t('common.admin_panel') }}
               </router-link>
-              <button @click="handleLogout" class="text-xs text-ink-3 hover:text-red-600 px-1">{{ t('common.logout') }}</button>
+              <button @click="handleLogout" class="text-xs text-ink-3 hover:text-red-600 px-1 transition-colors">{{ t('common.logout') }}</button>
             </template>
 
             <!-- Mobile auth dropdown trigger -->
@@ -322,19 +324,19 @@ onBeforeUnmount(() => {
         </form>
 
         <nav class="space-y-1">
-          <router-link to="/" class="block px-3 py-2 rounded-lg text-sm hover:bg-surface-2" @click="mobileMenuOpen = false">{{ t('common.catalog') }}</router-link>
-          <router-link to="/cart" class="block px-3 py-2 rounded-lg text-sm hover:bg-surface-2" @click="mobileMenuOpen = false">{{ t('common.cart') }}</router-link>
+          <router-link to="/" class="block px-3 py-2 rounded-lg text-sm hover:bg-surface-2 transition-colors" @click="mobileMenuOpen = false">{{ t('common.catalog') }}</router-link>
+          <router-link to="/cart" class="block px-3 py-2 rounded-lg text-sm hover:bg-surface-2 transition-colors" @click="mobileMenuOpen = false">{{ t('common.cart') }}</router-link>
 
           <template v-if="!isAuthenticated">
-            <router-link to="/login" class="block px-3 py-2 rounded-lg text-sm hover:bg-surface-2" @click="mobileMenuOpen = false">{{ t('common.login') }}</router-link>
-            <router-link to="/register" class="block px-3 py-2 rounded-lg text-sm hover:bg-surface-2" @click="mobileMenuOpen = false">{{ t('common.register') }}</router-link>
+            <router-link to="/login" class="block px-3 py-2 rounded-lg text-sm hover:bg-surface-2 transition-colors" @click="mobileMenuOpen = false">{{ t('common.login') }}</router-link>
+            <router-link to="/register" class="block px-3 py-2 rounded-lg text-sm hover:bg-surface-2 transition-colors" @click="mobileMenuOpen = false">{{ t('common.register') }}</router-link>
           </template>
           <template v-else>
-            <router-link to="/profile" class="block px-3 py-2 rounded-lg text-sm hover:bg-surface-2" @click="mobileMenuOpen = false">{{ t('common.profile') }}</router-link>
-            <router-link to="/orders" class="block px-3 py-2 rounded-lg text-sm hover:bg-surface-2" @click="mobileMenuOpen = false">{{ t('common.my_orders') }}</router-link>
-            <router-link v-if="isAuthenticated" to="/seller" class="block px-3 py-2 rounded-lg text-sm text-indigo-600 hover:bg-surface-2" @click="mobileMenuOpen = false">{{ t('common.seller_cabinet') }}</router-link>
-            <router-link v-if="isAuthenticated" to="/admin" class="block px-3 py-2 rounded-lg text-sm text-purple-600 hover:bg-surface-2" @click="mobileMenuOpen = false">{{ t('common.admin_panel') }}</router-link>
-            <button @click="handleLogout; mobileMenuOpen = false" class="w-full text-left px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-surface-2">{{ t('common.logout') }}</button>
+            <router-link to="/profile" class="block px-3 py-2 rounded-lg text-sm hover:bg-surface-2 transition-colors" @click="mobileMenuOpen = false">{{ t('common.profile') }}</router-link>
+            <router-link to="/orders" class="block px-3 py-2 rounded-lg text-sm hover:bg-surface-2 transition-colors" @click="mobileMenuOpen = false">{{ t('common.my_orders') }}</router-link>
+            <router-link v-if="isAuthenticated" to="/seller" class="block px-3 py-2 rounded-lg text-sm text-accent hover:bg-surface-2 transition-colors" @click="mobileMenuOpen = false">{{ t('common.seller_cabinet') }}</router-link>
+            <router-link v-if="isAuthenticated" to="/admin" class="block px-3 py-2 rounded-lg text-sm text-purple-600 hover:bg-surface-2 transition-colors" @click="mobileMenuOpen = false">{{ t('common.admin_panel') }}</router-link>
+            <button @click="handleLogout; mobileMenuOpen = false" class="w-full text-left px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-surface-2 transition-colors">{{ t('common.logout') }}</button>
           </template>
         </nav>
       </div>
@@ -376,12 +378,12 @@ onBeforeUnmount(() => {
 
     <!-- Footer -->
     <footer class="bg-surface border-t border-line py-4">
-      <div class="max-w-7xl mx-auto px-4">
+      <div class="max-w-app mx-auto px-4">
         <div class="flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-ink-3">
           <span>© {{ new Date().getFullYear() }} {{ t('common.app_name') }} — {{ t('common.app_tagline') }}</span>
           <div class="flex items-center gap-4">
-            <a href="/privacy-policy" class="hover:text-indigo-600">{{ t('common.privacy_policy') }}</a>
-            <button @click="showSettings" class="hover:text-indigo-600">{{ t('common.cookie_settings') }}</button>
+            <a href="/privacy-policy" class="hover:text-accent transition-colors">{{ t('common.privacy_policy') }}</a>
+            <button @click="showSettings" class="hover:text-accent transition-colors">{{ t('common.cookie_settings') }}</button>
           </div>
         </div>
       </div>
@@ -389,5 +391,8 @@ onBeforeUnmount(() => {
 
     <!-- Cookie Consent Banner -->
     <CookieConsentBanner />
+
+    <!-- Back to top -->
+    <BackToTop />
   </div>
 </template>

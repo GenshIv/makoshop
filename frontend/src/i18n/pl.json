@@ -51,7 +51,10 @@
     "theme_light": "Jasny",
     "theme_dark": "Ciemny",
     "theme_auto": "Auto",
-    "undo": "Cofnij"
+    "undo": "Cofnij",
+    "back_to_top": "Do góry",
+    "view_grid": "Siatka",
+    "view_list": "Lista"
   },
   "tables": {
     "orders": "Twoje zamówienia",
@@ -106,7 +109,8 @@
     "login_error": "Błąd logowania",
     "register_error": "Błąd rejestracji",
     "logging_in": "Logowanie...",
-    "registering": "Rejestracja..."
+    "registering": "Rejestracja...",
+    "email": "Email"
   },
   "catalog": {
     "all_products": "Wszystkie produkty",
@@ -156,7 +160,15 @@
     "sending_review": "Wysyłanie...",
     "no_reviews_yet": "Brak opinii",
     "user": "Użytkownik",
-    "virtual_product_notice": "Ceny i dostępność są aktualizowane. Załaduj listy cen, aby dodać do koszyka."
+    "virtual_product_notice": "Ceny i dostępność są aktualizowane. Załaduj listy cen, aby dodać do koszyka.",
+    "no_results_title": "Nie znaleziono",
+    "no_results_message": "Zmień zapytanie lub zresetuj filtry",
+    "loading_products": "Ładowanie produktów...",
+    "view_grid": "Siatka",
+    "view_list": "Lista",
+    "from_price_sellers": "{count} sprzedawców",
+    "search_time": "Wyszukiwanie: {ms}ms",
+    "filters": "Filtry"
   },
   "cart": {
     "title": "Koszyk",
@@ -167,7 +179,8 @@
     "added_to_cart": "Produkt dodany do koszyka",
     "add_to_cart_error": "Błąd dodawania do koszyka",
     "remove_item": "Usuń produkt",
-    "item_removed": "Usunięto produkt"
+    "item_removed": "Usunięto produkt",
+    "loading": "Ładowanie koszyka..."
   },
   "checkout": {
     "title": "Realizacja zamówienia",
@@ -217,7 +230,8 @@
       "delivered": "Dostarczone",
       "cancelled": "Anulowane",
       "refunded": "Zwrot"
-    }
+    },
+    "loading": "Ładowanie zamówień..."
   },
   "order_detail": {
     "back_to_orders": "← Wróć do zamówień",
@@ -229,13 +243,15 @@
     "zip": "Kod pocztowy: {zip}",
     "payment": "Płatność",
     "status": "Status: {status}",
-    "total": "Razem:"
+    "total": "Razem:",
+    "loading": "Ładowanie zamówienia..."
   },
   "reviews": {
     "title": "Moje opinie",
     "no_reviews": "Nie napisałeś jeszcze żadnych opinii",
     "load_error": "Błąd ładowania opinii",
-    "product": "Produkt #{id}"
+    "product": "Produkt #{id}",
+    "loading": "Ładowanie opinii..."
   },
   "seller": {
     "dashboard_title": "Panel sprzedawcy",
@@ -263,7 +279,42 @@
     "status": "Status",
     "actions": "Akcje",
     "edit": "Edytuj",
-    "delete": "Usuń"
+    "delete": "Usuń",
+    "product_not_found": "Nie znaleziono produktu",
+    "fill_required_fields": "Wypełnij wszystkie wymagane pola",
+    "save_error": "Błąd zapisu",
+    "edit_product": "Edytuj produkt",
+    "new_product": "Nowy produkt",
+    "product_name": "Nazwa produktu",
+    "description": "Opis",
+    "category_id": "ID kategorii",
+    "stock": "Stan magazynowy",
+    "status_active": "Aktywny",
+    "status_draft": "Szkic",
+    "status_hidden": "Ukryty",
+    "saving": "Zapisywanie...",
+    "save": "Zapisz",
+    "cancel": "Anuluj",
+    "orders_load_error": "Błąd ładowania zamówień",
+    "no_orders": "Brak zamówień",
+    "date": "Data",
+    "buyer": "Kupujący",
+    "items_count": "{count} szt.",
+    "amount": "Kwota",
+    "details": "Szczegóły",
+    "campaigns_load_error": "Błąd ładowania kampanii",
+    "create_campaign_error": "Błąd tworzenia kampanii",
+    "promotion": "Promocja",
+    "new_campaign": "Nowa kampania",
+    "new_campaign_form": "Formularz nowej kampanii",
+    "plan": "Plan",
+    "select_plan": "Wybierz plan",
+    "budget": "Budżet",
+    "position": "Pozycja",
+    "create": "Utwórz",
+    "no_campaigns": "Brak kampanii",
+    "used": "Wykorzystano",
+    "period": "Okres"
   },
   "product": {
     "not_found": "Nie znaleziono produktu",
@@ -271,7 +322,8 @@
     "review_saved": "Opinia została wysłana",
     "review_error": "Błąd wysyłania opinii",
     "no_description": "Brak opisu",
-    "supplier": "Dostawca #{id}"
+    "supplier": "Dostawca #{id}",
+    "loading": "Ładowanie produktu..."
   },
   "scupage": {
     "where_to_buy_base": "Gdzie kupić",
@@ -295,7 +347,11 @@
     "filter_by_company": "Firmy",
     "filter_by_payment": "Płatność",
     "filter_by_delivery": "Dostawa",
-    "filter_by_installment": "Raty"
+    "filter_by_installment": "Raty",
+    "loading": "Ładowanie strony...",
+    "best_price": "Najlepsza cena",
+    "best_price_note": "Wśród ofert: ",
+    "offers_count": "{count} ofert"
   },
   "errors": {
     "unknown": "Wystąpił błąd",
@@ -555,7 +611,14 @@
     "coverage_load_error": "Nie udało się załadować zasięgu",
     "user_status_active": "Aktywny",
     "user_status_pending": "Oczekuje",
-    "user_status_blocked": "Zablokowany"
+    "user_status_blocked": "Zablokowany",
+    "anchor_keywords": "Słowa kluczowe kotwiczne",
+    "anchor_keywords_hint": "Oddzielone przecinkami",
+    "anchor_keywords_empty": "Brak słów kluczowych",
+    "anchor_keywords_placeholder": "np. laptop, telefon...",
+    "catalogizer_desc_title": "Opis katalogizatora",
+    "catalogizer_desc": "Opis katalogizatora",
+    "back_to_dashboard": "← Wróć do panelu"
   },
   "privacy": {
     "title": "Polityka prywatności",
@@ -586,26 +649,7 @@
     "marketing": "Marketing",
     "marketing_desc": "Używane do wyświetlania relevantnych reklam.",
     "save": "Zapisz ustawienia",
-    "close": "Zamknij",
-    "scupage_title": "SCU Pages",
-    "scupage_manage_desc": "Zarządzanie stronami SEO produktów",
-    "scupage_search_placeholder": "Szukaj po SCU, tytule...",
-    "scupage_id": "ID",
-    "scupage_scu": "SCU",
-    "scupage_slug": "Slug",
-    "scupage_products": "Produktów",
-    "scupage_active": "Aktywna",
-    "scupage_actions": "Akcje",
-    "scupage_no_results": "Nie znaleziono SCU Pages",
-    "scupage_showing": "Razem",
-    "scupage_edit_title": "Edycja SCU Page",
-    "scupage_description": "Opis",
-    "scupage_category_id": "ID kategorii",
-    "scupage_content": "Treść (HTML)",
-    "scupage_delete_confirm_title": "Usunąć SCU Page?",
-    "scupage_delete_confirm_msg": "Czy na pewno chcesz usunąć tę SCU Page?",
-    "scupage_save_error": "Błąd zapisu",
-    "scupage_delete_error": "Błąd usuwania"
+    "close": "Zamknij"
   },
   "db_monitor": {
     "usage_title": "Wykorzystanie: {percent}% ({used}/{max}). Kliknij, aby zobaczyć szczegóły.",
@@ -689,8 +733,8 @@
       "20": "20 cali",
       "24": "24 cale",
       "26": "26 cali",
-      "27.5": "27.5 cali",
-      "28": "28 cali"
+      "28": "28 cali",
+      "27.5": "27.5 cali"
     },
     "bike_type": {
       "Mountain": "Górski",

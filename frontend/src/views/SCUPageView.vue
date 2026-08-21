@@ -7,6 +7,7 @@ import { useCartStore } from '../stores/cart';
 import { useToast } from '../composables/useToast';
 import { useSeo } from '../composables/useSeo';
 import Breadcrumbs from '../components/Breadcrumbs.vue';
+import PriceSparkline from '../components/PriceSparkline.vue';
 
 const { toast } = useToast();
 
@@ -531,15 +532,26 @@ watch(
 </script>
 
 <template>
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <!-- Error -->
-    <div v-if="error" class="p-4 bg-red-100 text-red-700 rounded-lg">
+    <div v-if="error" class="p-4 bg-red-50 text-red-700 rounded-lg theme-dark:bg-red-900/30 theme-dark:text-red-300">
       {{ error }}
     </div>
 
     <!-- Loading -->
-    <div v-else-if="loading" class="flex justify-center py-12">
-      <div class="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div>
+    <div v-else-if="loading" class="grid grid-cols-1 lg:grid-cols-12 gap-6" aria-hidden="true">
+      <div class="lg:col-span-5">
+        <div class="bg-surface-3 rounded-2xl aspect-square animate-pulse"></div>
+        <div class="flex gap-2 mt-2">
+          <div v-for="i in 4" :key="i" class="w-14 h-14 bg-surface-3 rounded-xl animate-pulse"></div>
+        </div>
+      </div>
+      <div class="lg:col-span-7 space-y-4">
+        <div class="h-8 w-2/3 bg-surface-3 rounded animate-pulse"></div>
+        <div class="h-4 w-1/3 bg-surface-3 rounded animate-pulse"></div>
+        <div class="h-40 bg-surface-3 rounded-2xl animate-pulse"></div>
+        <div class="h-24 bg-surface-3 rounded-2xl animate-pulse"></div>
+      </div>
     </div>
 
     <!-- SCU Page -->
@@ -688,10 +700,18 @@ watch(
           >
             <div class="flex items-end justify-between gap-4">
               <div>
-                <div class="text-sm text-indigo-200">{{ t('scupage.price') }}</div>
+                <div class="text-sm text-indigo-200">{{ t('scupage.best_price') }}</div>
                 <div class="text-3xl font-bold mt-0.5">{{ formatPrice(currentPrice) }}</div>
                 <div class="text-xs text-indigo-200 mt-1">
                   {{ isInStock(selectedProduct) ? t('scupage.in_stock') : t('scupage.out_of_stock') }}
+                </div>
+                <!-- Mini price trend across offers -->
+                <div v-if="modifications.length > 0" class="mt-2 text-indigo-200">
+                  <PriceSparkline
+                    :values="modifications.map(m => m.suppliers[0]?.price).filter(p => Number.isFinite(p))"
+                    :width="120"
+                    :height="28"
+                  />
                 </div>
               </div>
               <button
@@ -734,7 +754,7 @@ watch(
                 v-for="product in mod.suppliers"
                 :key="product.id"
                 :class="[
-                  'flex items-center gap-3 px-4 py-3 cursor-pointer transition',
+                  'flex items-start gap-4 px-4 py-3 cursor-pointer transition',
                   selectedProduct?.id === product.id
                     ? 'bg-indigo-50 border-l-4 border-indigo-600 pl-3'
                     : 'hover:bg-surface-2 border-l-4 border-transparent'
@@ -746,9 +766,10 @@ watch(
                   :value="product.id"
                   :checked="selectedProduct?.id === product.id"
                   @change="selectProduct(product)"
-                  class="w-4 h-4 text-indigo-600 border-line focus:ring-indigo-500 flex-shrink-0 cursor-pointer"
+                  class="w-4 h-4 text-indigo-600 border-line focus:ring-indigo-500 flex-shrink-0 cursor-pointer mt-1"
                 />
-                <div class="flex-1 min-w-0">
+                <!-- Left: seller info -->
+                <div class="flex-shrink-0 w-36">
                   <div class="text-xs font-medium text-ink">
                     {{ getCompanyName(product) }}
                   </div>
@@ -756,7 +777,20 @@ watch(
                     {{ isInStock(product) ? t('catalog.in_stock') : t('catalog.out_of_stock') }}
                   </span>
                 </div>
-                <div class="font-semibold text-indigo-600 whitespace-nowrap text-sm">
+                <!-- Middle: attributes -->
+                <div class="flex-shrink-0 w-32 text-xs text-ink-3">
+                  <template v-if="product.attributes && product.attributes.length">
+                    <div v-for="attr in product.attributes.slice(0, 3)" :key="attr.key" class="truncate">
+                      {{ attr.value }}
+                    </div>
+                  </template>
+                </div>
+                <!-- Right: description (wide, multi-line) -->
+                <div v-if="product.description" class="flex-1 min-w-0 text-xs text-ink-3 leading-relaxed line-clamp-2 break-words">
+                  {{ product.description }}
+                </div>
+                <!-- Far right: price -->
+                <div class="font-semibold text-indigo-600 whitespace-nowrap text-sm flex-shrink-0 mt-1">
                   {{ formatPrice(product.price) }}
                 </div>
               </label>

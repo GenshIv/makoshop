@@ -6,6 +6,7 @@ import api from '../api';
 import { useAuthStore } from '../stores/auth';
 import { useFormat } from '../composables/useFormat';
 import EmptyState from '../components/EmptyState.vue';
+import SkeletonList from '../components/SkeletonList.vue';
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -34,31 +35,32 @@ onMounted(fetchReviews);
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <h1 class="text-2xl font-bold mb-6">{{ t('reviews.title') }}</h1>
+  <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <h1 class="text-2xl font-bold mb-6 text-ink">{{ t('reviews.title') }}</h1>
 
     <!-- Loading -->
-    <div v-if="loading" class="flex justify-center py-12">
-      <div class="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div>
+    <div v-if="loading">
+      <p class="text-sm text-ink-3 mb-4">{{ t('reviews.loading') }}</p>
+      <SkeletonList :count="3" />
     </div>
 
     <!-- Error -->
-    <div v-else-if="error" class="p-4 bg-red-100 text-red-700 rounded-lg">
+    <div v-else-if="error" class="p-4 bg-red-50 text-red-700 rounded-lg theme-dark:bg-red-900/30 theme-dark:text-red-300">
       {{ error }}
     </div>
 
     <!-- Empty -->
-    <div v-else-if="reviews.length === 0" class="bg-surface rounded-lg shadow-sm">
+    <div v-else-if="reviews.length === 0" class="bg-surface rounded-lg border border-line">
       <EmptyState icon="star" :title="t('reviews.no_reviews')" />
     </div>
 
     <!-- Reviews list -->
     <div v-else class="space-y-4">
-      <div v-for="review in reviews" :key="review.id" class="bg-surface rounded-lg shadow-sm p-4">
+      <div v-for="review in reviews" :key="review.id" class="bg-surface rounded-lg border border-line p-4 hover:shadow-md transition-shadow">
         <div class="flex items-center justify-between mb-2">
           <router-link
             :to="{ name: 'product', params: { id: review.product_id } }"
-            class="font-medium hover:text-indigo-600"
+            class="font-medium hover:text-accent transition-colors"
           >
             {{ review.product_name || t('reviews.product', { id: review.product_id }) }}
           </router-link>

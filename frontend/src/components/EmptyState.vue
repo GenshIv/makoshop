@@ -9,8 +9,8 @@
 </script>
 
 <template>
-  <div class="flex flex-col items-center justify-center text-center py-12 px-4">
-    <div class="w-14 h-14 rounded-full bg-surface-2 flex items-center justify-center mb-4 text-ink-3">
+  <div class="flex flex-col items-center justify-center text-center py-14 px-4">
+    <div class="w-16 h-16 rounded-full bg-surface-2 border border-line flex items-center justify-center mb-4 text-ink-3 shadow-sm">
       <!-- box / product -->
       <svg v-if="icon === 'box'" xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
         <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -40,9 +40,9 @@
         <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
     </div>
-    <h3 class="text-base font-medium text-ink mb-1">{{ title }}</h3>
+    <h3 class="text-base font-semibold text-ink mb-1">{{ title }}</h3>
     <p v-if="message" class="text-sm text-ink-3 max-w-sm">{{ message }}</p>
-    <div v-if="$slots.default" class="mt-4">
+    <div v-if="$slots.default" class="mt-5">
       <slot />
     </div>
   </div>

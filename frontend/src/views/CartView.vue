@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n';
 import { useCartStore } from '../stores/cart';
 import { useFormat } from '../composables/useFormat';
 import { useToast } from '../composables/useToast';
+import EmptyState from '../components/EmptyState.vue';
+import SkeletonList from '../components/SkeletonList.vue';
 
 const router = useRouter();
 const cart = useCartStore();
@@ -38,29 +40,28 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <h1 class="text-2xl font-bold mb-6">{{ t('cart.title') }}</h1>
 
     <!-- Loading -->
-    <div v-if="cart.loading" class="flex justify-center py-12">
-      <div class="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div>
+    <div v-if="cart.loading">
+      <p class="text-sm text-ink-3 mb-4">{{ t('cart.loading') }}</p>
+      <SkeletonList :count="3" />
     </div>
 
     <!-- Empty -->
-    <div v-else-if="cart.items.length === 0" class="text-center py-12 bg-surface rounded-lg shadow-sm">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-ink-3 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-      </svg>
-      <p class="text-ink-3 mb-4">{{ t('cart.empty') }}</p>
-      <router-link to="/" class="btn btn-primary">
-        {{ t('cart.go_to_catalog') }}
-      </router-link>
+    <div v-else-if="cart.items.length === 0" class="bg-surface rounded-lg border border-line">
+      <EmptyState icon="cart" :title="t('cart.empty')">
+        <router-link to="/" class="btn btn-primary">
+          {{ t('cart.go_to_catalog') }}
+        </router-link>
+      </EmptyState>
     </div>
 
     <!-- Cart items -->
     <div v-else>
-      <div class="bg-surface rounded-lg shadow-sm overflow-hidden">
-        <div v-for="item in cart.items" :key="item.product_id" class="flex flex-wrap items-center gap-3 sm:gap-4 p-4 border-b last:border-b-0">
+      <div class="bg-surface rounded-lg border border-line overflow-hidden">
+        <div v-for="item in cart.items" :key="item.product_id" class="flex flex-wrap items-center gap-3 sm:gap-4 p-4 border-b last:border-b-0 transition-colors hover:bg-surface-2/50">
           <!-- Image -->
           <div class="w-20 h-20 bg-surface-2 rounded-lg overflow-hidden flex-shrink-0">
             <img
@@ -80,7 +81,7 @@ onMounted(() => {
           <div class="flex-1 min-w-0">
             <router-link
               :to="{ name: 'product', params: { id: item.product_id } }"
-              class="font-medium hover:text-indigo-600 truncate block"
+              class="font-medium hover:text-accent truncate block transition-colors"
             >
               {{ item.product_name || item.name }}
             </router-link>
@@ -91,14 +92,14 @@ onMounted(() => {
           <div class="flex items-center gap-1">
             <button
               @click="cart.updateItem(item.product_id, item.qty - 1)"
-              class="w-8 h-8 flex items-center justify-center border rounded-lg hover:bg-surface-2 text-sm"
+              class="w-8 h-8 flex items-center justify-center border border-line rounded-lg hover:bg-surface-2 text-sm transition-colors"
             >
               −
             </button>
             <span class="w-8 text-center text-sm">{{ item.qty }}</span>
             <button
               @click="cart.updateItem(item.product_id, item.qty + 1)"
-              class="w-8 h-8 flex items-center justify-center border rounded-lg hover:bg-surface-2 text-sm"
+              class="w-8 h-8 flex items-center justify-center border border-line rounded-lg hover:bg-surface-2 text-sm transition-colors"
             >
               +
             </button>
@@ -112,7 +113,7 @@ onMounted(() => {
           <!-- Remove -->
           <button
             @click="handleRemoveItem(item)"
-            class="text-ink-3 hover:text-red-600 p-1 flex-shrink-0"
+            class="text-ink-3 hover:text-red-600 p-1 flex-shrink-0 transition-colors"
             :aria-label="t('cart.remove_item')"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -123,10 +124,10 @@ onMounted(() => {
       </div>
 
       <!-- Summary -->
-      <div class="mt-6 bg-surface rounded-lg shadow-sm p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div class="mt-6 bg-surface rounded-lg border border-line p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div class="text-sm text-ink-3">{{ t('cart.items_count', { count: cart.totalCount }) }}</div>
-          <div class="text-xl font-bold text-indigo-600">{{ formatPrice(cart.totalPrice) }}</div>
+          <div class="text-xl font-bold text-accent">{{ formatPrice(cart.totalPrice) }}</div>
         </div>
         <button @click="goToCheckout" class="btn btn-primary btn-lg">
           {{ t('cart.checkout') }}

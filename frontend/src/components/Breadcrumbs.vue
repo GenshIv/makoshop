@@ -50,22 +50,20 @@ const crumbs = computed(() => {
 </script>
 
 <template>
-  <nav v-if="crumbs.length > 1" class="flex items-center gap-1 text-sm text-ink-3 mb-4 overflow-hidden">
+  <nav v-if="crumbs.length > 1" class="flex items-center gap-1.5 text-sm text-ink-3 mb-4 flex-wrap" aria-label="Breadcrumb">
     <template v-for="(crumb, idx) in crumbs" :key="idx">
       <template v-if="idx > 0">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-ink-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-        </svg>
+        <span class="text-ink-3/60 flex-shrink-0" aria-hidden="true">/</span>
       </template>
       <router-link
         v-if="crumb.to"
         :to="crumb.to"
-        class="hover:text-indigo-600 transition min-w-0 truncate max-w-[10rem] sm:max-w-[16rem]"
+        class="hover:text-accent transition-colors min-w-0 truncate max-w-[10rem] sm:max-w-[16rem]"
         :title="crumb.name"
       >
         {{ crumb.name }}
       </router-link>
-      <span v-else class="text-ink-2 min-w-0 truncate max-w-[10rem] sm:max-w-[16rem]" :title="crumb.name">
+      <span v-else class="text-ink-2 font-medium min-w-0 truncate max-w-[10rem] sm:max-w-[16rem]" :title="crumb.name" aria-current="page">
         {{ crumb.name }}
       </span>
     </template>

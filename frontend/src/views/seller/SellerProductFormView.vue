@@ -75,7 +75,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <h1 class="text-2xl font-bold mb-6">{{ isEdit() ? t('seller.edit_product') : t('seller.new_product') }}</h1>
 
     <!-- Loading -->
