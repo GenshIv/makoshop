@@ -991,12 +991,6 @@ func main() {
 	mux.Handle("/admin/scupages/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
-		// POST /admin/scupages/relink
-		if path == "/admin/scupages/relink" && r.Method == http.MethodPost {
-			h.HandleAdminSCUPageRelink(w, r)
-			return
-		}
-
 		// POST /admin/scupages/catalogize-all
 		if path == "/admin/scupages/catalogize-all" && r.Method == http.MethodPost {
 			h.HandleAdminSCUPageCatalogizeAll(w, r)

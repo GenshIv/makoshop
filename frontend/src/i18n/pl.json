@@ -550,6 +550,7 @@
     "settings_saved": "Ustawienia zapisane",
     "name_required": "Podaj nazwę",
     "delete_item_confirm": "Usunąć \"{name}\"?",
+    "rebuild_indexes": "Przebuduj indeksy",
     "rebuild_indexes_confirm": "Przebudować indeksy kategorii z dokumentów?",
     "rebuild_indexes_done": "Przebudowanie zakończone: {result}",
     "rebuild_indexes_failed": "Błąd przebudowy",

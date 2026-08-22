@@ -4470,131 +4470,6 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 	})
 }
 
-// HandleAdminSCUPageRelink reassigns SCU pages to categories based on anchor keywords.
-// POST /api/admin/scupages/relink
-// Body: { "limit": 10000, "apply": true }
-func (h *Handlers) HandleAdminSCUPageRelink(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
-		return
-	}
-
-	type req struct {
-		Limit int  `json:"limit"`
-		Apply bool `json:"apply"`
-	}
-
-	var body req
-	_ = json.NewDecoder(r.Body).Decode(&body)
-	if body.Limit <= 0 {
-		body.Limit = 10000
-	}
-	if body.Limit > 50000 {
-		body.Limit = 50000
-	}
-
-	fmt.Printf("[SCUPAGE-RELINK] Relinking SCU pages (limit=%d, apply=%v)...\n", body.Limit, body.Apply)
-
-	// Get all SCU pages
-	all, err := h.scuPageRepo.List()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
-		return
-	}
-
-	if len(all) > body.Limit {
-		all = all[:body.Limit]
-	}
-
-	// Get all categories with anchor keywords
-	categories, err := h.categoryRepo.ListAll()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
-		return
-	}
-
-	relinked := 0
-	type RelinkResult struct {
-		SCUPageID     int64  `json:"scupage_id"`
-		SCU           string `json:"scu"`
-		OldCategoryID int64  `json:"old_category_id"`
-		NewCategoryID int64  `json:"new_category_id"`
-	}
-
-	var results []RelinkResult
-
-	for i := range all {
-		sp := &all[i]
-
-		// Build text from SCU page
-		text := strings.ToLower(sp.Title + " " + sp.Description + " " + sp.Content)
-		for _, kv := range sp.Attributes {
-			if len(kv.Value) > 0 {
-				text += " " + strings.ToLower(string(kv.Value))
-			}
-		}
-
-		var bestCatID int64
-		var bestScore float64
-
-		for _, cat := range categories {
-			if !cat.IsActive || len(cat.AnchorKeywords) == 0 {
-				continue
-			}
-
-			score := 0.0
-			for _, kw := range cat.AnchorKeywords {
-				kwLower := strings.ToLower(strings.TrimSpace(kw))
-				if kwLower == "" {
-					continue
-				}
-				if strings.Contains(text, " "+kwLower+" ") ||
-					strings.HasPrefix(text, kwLower+" ") ||
-					strings.HasSuffix(text, " "+kwLower) ||
-					text == kwLower {
-					score += 3.0
-				} else if strings.Contains(text, kwLower) {
-					score += 1.0
-				}
-			}
-
-			if score > bestScore {
-				bestScore = score
-				bestCatID = cat.ID
-			}
-		}
-
-		if bestScore > 0 && bestCatID != sp.CategoryID {
-			if body.Apply {
-				h.scuPageRepo.Update(sp.ID, func(s *model.SCUPage) {
-					s.CategoryID = bestCatID
-				})
-				// Reindex
-				if updated, err := h.scuPageRepo.Get(sp.ID); err == nil {
-					_ = h.scuPageSearch.UnindexSCUPage(updated)
-					_ = h.scuPageSearch.IndexSCUPage(updated)
-				}
-			}
-			relinked++
-			results = append(results, RelinkResult{
-				SCUPageID:     sp.ID,
-				SCU:           sp.SCU,
-				OldCategoryID: sp.CategoryID,
-				NewCategoryID: bestCatID,
-			})
-		}
-	}
-
-	fmt.Printf("[SCUPAGE-RELINK] Done. Relinked %d SCU pages.\n", relinked)
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"processed": len(all),
-		"relinked":  relinked,
-		"apply":     body.Apply,
-		"results":   results[:min(len(results), 100)],
-	})
-}
-
 // HandleAdminSCUPageCatalogizeAll re-catalogizes all SCU pages using TurboTopNByIntersection.
 // POST /admin/scupages/catalogize-all
 // Body: { "apply": true }
@@ -4630,6 +4505,7 @@ func (h *Handlers) HandleAdminSCUPageCatalogizeAll(w http.ResponseWriter, r *htt
 	catalogized := 0
 	var results []map[string]interface{}
 
+	catCache := map[int64][]string{}
 	for i := range all {
 		sp := &all[i]
 
@@ -4652,10 +4528,14 @@ func (h *Handlers) HandleAdminSCUPageCatalogizeAll(w http.ResponseWriter, r *htt
 			continue
 		}
 
-		if newCatID > 0 && newCatID != sp.CategoryID {
+		newUrl := h.scuPageRepo.ComputeSeoURL(sp.Slug, sp.CategoryID, catCache)
+
+		if (newCatID > 0 && newCatID != sp.CategoryID) || newUrl != sp.SeoURL {
+			sp.SeoURL = newUrl
 			if body.Apply {
 				if err := h.scuPageRepo.Update(sp.ID, func(s *model.SCUPage) {
 					s.CategoryID = newCatID
+					s.SeoURL = newUrl
 				}); err != nil {
 					fmt.Printf("WARN: update scupage %d: %v\n", sp.ID, err)
 					continue

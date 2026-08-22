@@ -550,6 +550,7 @@
     "settings_saved": "Налаштування збережено",
     "name_required": "Вкажіть назву",
     "delete_item_confirm": "Видалити \"{name}\"?",
+    "rebuild_indexes": "Перестроїти індекси",
     "rebuild_indexes_confirm": "Перестроїти індекси категорій із документів?",
     "rebuild_indexes_done": "Перестроєння завершено: {result}",
     "rebuild_indexes_failed": "Помилка перестроєння",

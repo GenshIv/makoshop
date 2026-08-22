@@ -576,6 +576,7 @@
     "settings_saved": "Settings saved",
     "name_required": "Name is required",
     "delete_item_confirm": "Delete \"{name}\"?",
+    "rebuild_indexes": "Rebuild Indexes",
     "rebuild_indexes_confirm": "Rebuild category indexes from documents?",
     "rebuild_indexes_done": "Rebuild complete: {result}",
     "rebuild_indexes_failed": "Rebuild failed",

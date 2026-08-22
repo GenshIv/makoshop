@@ -576,6 +576,7 @@
     "settings_saved": "Настройки сохранены",
     "name_required": "Укажите название",
     "delete_item_confirm": "Удалить \"{name}\"?",
+    "rebuild_indexes": "Перестроить индексы",
     "rebuild_indexes_confirm": "Перестроить индексы категорий из документов?",
     "rebuild_indexes_done": "Перестроение завершено: {result}",
     "rebuild_indexes_failed": "Ошибка перестроения",

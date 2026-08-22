@@ -975,8 +975,10 @@ func (r *SCUPageRepo) RecalculateMinPrices(productRepo *ProductRepo) error {
 		return fmt.Errorf("list scupages: %w", err)
 	}
 
+	// cacheSeo := map[int64][]string{}
 	updated := 0
-	for i, sp := range all {
+	for i := range all {
+		sp := &all[i]
 		if sp.SCU == "" {
 			continue
 		}
@@ -1008,11 +1010,13 @@ func (r *SCUPageRepo) RecalculateMinPrices(productRepo *ProductRepo) error {
 			}
 		}
 
+		//cacheSeo := map[int64][]string{}
+		// sp.SeoURL = r.ComputeSeoURL(sp.Slug, sp.CategoryID, cacheSeo)
 		// Update MinPrice if it changed
 		if found && minPrice != sp.MinPrice {
 			sp.MinPrice = minPrice
 			sp.UpdatedAt = time.Now().Unix()
-			data := MarshalSCUPage(sp)
+			data := MarshalSCUPage(*sp)
 			if err := r.Store.DocPut(KeySCUPage(sp.ID), data); err != nil {
 				fmt.Printf("WARN: update min_price for scupage %d: %v\n", sp.ID, err)
 				continue

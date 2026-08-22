@@ -91,31 +91,6 @@ const importCategories = async () => {
   input.click();
 };
 
-// SCU Page relink
-const relinkOpen = ref(false);
-
-const askRelink = () => {
-  relinkOpen.value = true;
-};
-
-const runRelink = async () => {
-  relinkOpen.value = false;
-  running.value = true;
-
-  try {
-    const res = await api.post('/admin/scupages/relink', {
-      apply: true,
-    });
-    addLog(`Relink complete: processed=${res.data.processed}, relinked=${res.data.relinked}`);
-    toast.success(t('admin.catalogizer_relink_done', { count: res.data.relinked }));
-  } catch (e) {
-    console.error('Relink error:', e);
-    toast.error(t('admin.catalogizer_relink_failed'));
-  } finally {
-    running.value = false;
-  }
-};
-
 // SCU Page catalogize all (TurboTopNByIntersection)
 const catalogizeAllOpen = ref(false);
 
@@ -325,13 +300,6 @@ onMounted(() => {
           class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700"
         >
           {{ t('admin.catalogizer_import_categories') || 'Import Categories' }}
-        </button>
-        <button
-          @click="askRelink"
-          :disabled="running"
-          class="px-4 py-2 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
-        >
-          {{ t('admin.catalogizer_relink_scupages') || 'Relink SCU Pages' }}
         </button>
         <button
           @click="askCatalogizeAll"
@@ -651,16 +619,6 @@ onMounted(() => {
         </div>
       </div>
     </div>
-
-    <ConfirmDialog
-      :open="relinkOpen"
-      :title="t('admin.catalogizer_relink_scupages')"
-      :message="t('admin.catalogizer_relink_confirm')"
-      :confirm-text="t('admin.save')"
-      :cancel-text="t('admin.cancel')"
-      @confirm="runRelink"
-      @cancel="relinkOpen = false"
-    />
 
     <ConfirmDialog
       :open="catalogizeAllOpen"
