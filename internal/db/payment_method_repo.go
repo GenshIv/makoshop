@@ -10,7 +10,6 @@ import (
 
 	"encoding/json"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -198,19 +197,26 @@ func (r *PaymentMethodRepo) Delete(id int64) error {
 }
 
 func (r *PaymentMethodRepo) List() ([]model.CompanyPaymentMethod, error) {
-	data, err := r.store.db.TurboRawRead(turboKeyPaymentMethods)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.db.TurboGetIndexTokens(turboKeyPaymentMethods)
+	if err != nil || len(tokens) == 0 {
 		return []model.CompanyPaymentMethod{}, nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
+	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "doc:payment_method:")
+	if err != nil {
+		return nil, fmt.Errorf("multi get payment methods: %w", err)
+	}
+
 	var result []model.CompanyPaymentMethod
-	for _, id := range ids {
-		pm, err := r.Get(int64(id))
-		if err != nil {
+	for _, doc := range docs {
+		if len(doc) == 0 {
 			continue
 		}
-		result = append(result, *pm)
+		var pm model.CompanyPaymentMethod
+		if err := json.Unmarshal(doc, &pm); err != nil {
+			continue
+		}
+		result = append(result, pm)
 	}
 
 	// Sort by SortOrder
@@ -222,12 +228,12 @@ func (r *PaymentMethodRepo) List() ([]model.CompanyPaymentMethod, error) {
 }
 
 func (r *PaymentMethodRepo) indexPaymentMethod(id int64) error {
-	_, err := r.store.db.TurboPutIndex(turboKeyPaymentMethods, uint64(id))
+	_, err := r.store.db.TurboPutIndex(turboKeyPaymentMethods, KeyPaymentMethodKey128(id))
 	return err
 }
 
 func (r *PaymentMethodRepo) unindexPaymentMethod(id int64) error {
-	_, err := r.store.db.TurboDeleteIndex(turboKeyPaymentMethods, uint64(id))
+	_, err := r.store.db.TurboDeleteIndex(turboKeyPaymentMethods, KeyPaymentMethodKey128(id))
 	return err
 }
 

@@ -10,7 +10,6 @@ import (
 
 	"encoding/json"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -185,19 +184,26 @@ func (r *InstallmentPlanRepo) Delete(id int64) error {
 }
 
 func (r *InstallmentPlanRepo) List() ([]model.InstallmentPlan, error) {
-	data, err := r.store.db.TurboRawRead(turboKeyInstallmentPlans)
-	if err != nil || len(data) == 0 {
+	// Get installment plan IDs as Key128
+	tokens, err := r.store.DB().TurboGetIndexTokens(turboKeyInstallmentPlans)
+	if err != nil || len(tokens) == 0 {
 		return []model.InstallmentPlan{}, nil
 	}
-
-	ids := makodb.TurboUnsafeReadTokens(data)
+	// Use MultiGetByDocIDs to retrieve all installment plans at once (tokens already contain full keys)
+	docs, err := r.store.DB().MultiGetByDocIDs(tokens)
+	if err != nil {
+		return nil, fmt.Errorf("multi get installment plans: %w", err)
+	}
 	var result []model.InstallmentPlan
-	for _, id := range ids {
-		ip, err := r.Get(int64(id))
-		if err != nil {
+	for _, doc := range docs {
+		if len(doc) == 0 {
 			continue
 		}
-		result = append(result, *ip)
+		var ip model.InstallmentPlan
+		if err := json.Unmarshal(doc, &ip); err != nil {
+			continue
+		}
+		result = append(result, ip)
 	}
 
 	sort.Slice(result, func(i, j int) bool {
@@ -208,12 +214,12 @@ func (r *InstallmentPlanRepo) List() ([]model.InstallmentPlan, error) {
 }
 
 func (r *InstallmentPlanRepo) indexInstallmentPlan(id int64) error {
-	_, err := r.store.db.TurboPutIndex(turboKeyInstallmentPlans, uint64(id))
+	_, err := r.store.db.TurboPutIndex(turboKeyInstallmentPlans, KeyInstallmentPlanKey128(id))
 	return err
 }
 
 func (r *InstallmentPlanRepo) unindexInstallmentPlan(id int64) error {
-	_, err := r.store.db.TurboDeleteIndex(turboKeyInstallmentPlans, uint64(id))
+	_, err := r.store.db.TurboDeleteIndex(turboKeyInstallmentPlans, KeyInstallmentPlanKey128(id))
 	return err
 }
 

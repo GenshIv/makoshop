@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -36,14 +35,14 @@ func (r *PromoCampaignRepo) Create(c *model.PromoCampaign) error {
 
 	// Index by company (turbo)
 	companyKey := fmt.Sprintf("promo_campaign_company:%d", c.CompanyID)
-	if _, err := r.store.db.TurboPutIndex(companyKey, uint64(c.ID)); err != nil {
+	if _, err := r.store.db.TurboPutIndex(companyKey, KeyPromoCampaignKey128(c.ID)); err != nil {
 		_ = r.store.DocDelete(KeyPromoCampaign(c.ID))
 		return fmt.Errorf("turbo index campaign by company: %w", err)
 	}
 
 	// Index in global list (turbo)
-	if _, err := r.store.db.TurboPutIndex(turboKeyAllPromoCampaigns, uint64(c.ID)); err != nil {
-		_, _ = r.store.db.TurboDeleteIndex(companyKey, uint64(c.ID))
+	if _, err := r.store.db.TurboPutIndex(turboKeyAllPromoCampaigns, KeyPromoCampaignKey128(c.ID)); err != nil {
+		_, _ = r.store.db.TurboDeleteIndex(companyKey, KeyPromoCampaignKey128(c.ID))
 		_ = r.store.DocDelete(KeyPromoCampaign(c.ID))
 		return fmt.Errorf("turbo index campaign global: %w", err)
 	}
@@ -64,15 +63,22 @@ func (r *PromoCampaignRepo) Get(id int64) (*model.PromoCampaign, error) {
 
 func (r *PromoCampaignRepo) ListByCompany(companyID int64) ([]model.PromoCampaign, error) {
 	key := fmt.Sprintf("promo_campaign_company:%d", companyID)
-	data, err := r.store.db.TurboRawRead(key)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.db.TurboGetIndexTokens(key)
+	if err != nil || len(tokens) == 0 {
 		return nil, nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
+	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "promo_campaign:")
+	if err != nil {
+		return nil, fmt.Errorf("multi get promo campaigns: %w", err)
+	}
+
 	var result []model.PromoCampaign
-	for _, id := range ids {
-		c, err := r.Get(int64(id))
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		c, err := UnmarshalPromoCampaign(doc)
 		if err != nil {
 			continue
 		}
@@ -113,8 +119,8 @@ func (r *PromoCampaignRepo) Delete(id int64) error {
 		return err
 	}
 	companyKey := fmt.Sprintf("promo_campaign_company:%d", c.CompanyID)
-	_, _ = r.store.db.TurboDeleteIndex(companyKey, uint64(id))
-	_, _ = r.store.db.TurboDeleteIndex(turboKeyAllPromoCampaigns, uint64(id))
+	_, _ = r.store.db.TurboDeleteIndex(companyKey, KeyPromoCampaignKey128(id))
+	_, _ = r.store.db.TurboDeleteIndex(turboKeyAllPromoCampaigns, KeyPromoCampaignKey128(id))
 	return r.store.DocDelete(KeyPromoCampaign(id))
 }
 
@@ -123,15 +129,22 @@ const turboKeyAllPromoCampaigns = "promo_campaign_list"
 
 // GetAllCampaigns returns all campaigns (for analytics/admin). Uses turbo index.
 func (r *PromoCampaignRepo) GetAllCampaigns() ([]model.PromoCampaign, error) {
-	data, err := r.store.db.TurboRawRead(turboKeyAllPromoCampaigns)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.db.TurboGetIndexTokens(turboKeyAllPromoCampaigns)
+	if err != nil || len(tokens) == 0 {
 		return nil, nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
+	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "promo_campaign:")
+	if err != nil {
+		return nil, fmt.Errorf("multi get promo campaigns: %w", err)
+	}
+
 	var result []model.PromoCampaign
-	for _, id := range ids {
-		c, err := r.Get(int64(id))
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		c, err := UnmarshalPromoCampaign(doc)
 		if err != nil {
 			continue
 		}
@@ -148,17 +161,24 @@ func (r *PromoCampaignRepo) ListAll() ([]model.PromoCampaign, error) {
 
 // GetActiveCampaigns returns all active campaigns. Uses turbo index.
 func (r *PromoCampaignRepo) GetActiveCampaigns() ([]model.PromoCampaign, error) {
-	data, err := r.store.db.TurboRawRead(turboKeyAllPromoCampaigns)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.db.TurboGetIndexTokens(turboKeyAllPromoCampaigns)
+	if err != nil || len(tokens) == 0 {
 		return nil, nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
+	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "promo_campaign:")
+	if err != nil {
+		return nil, fmt.Errorf("multi get promo campaigns: %w", err)
+	}
+
 	now := time.Now().Unix()
 	var result []model.PromoCampaign
 
-	for _, id := range ids {
-		c, err := r.Get(int64(id))
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		c, err := UnmarshalPromoCampaign(doc)
 		if err != nil {
 			continue
 		}

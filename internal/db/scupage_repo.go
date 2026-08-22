@@ -68,8 +68,8 @@ func (r *SCUPageRepo) LoadCatalogizerCache() error {
 			continue
 		}
 
-		tokens := makodb.TurboUnsafeReadTokens(data)
-		if len(tokens) == 0 {
+		tokens, err := r.Store.DB().TurboGetIndexTokens(turboKeyCatTokens + fmt.Sprintf("%d", cat.ID))
+		if err != nil || len(tokens) == 0 {
 			continue
 		}
 
@@ -149,7 +149,7 @@ func (r *SCUPageRepo) Create(s *model.SCUPage) error {
 	}
 
 	// Turbo index: scupage_list
-	if _, err := r.Store.db.TurboPutIndex(TurboKeySCUPageList, uint64(id)); err != nil {
+	if _, err := r.Store.db.TurboPutIndex(TurboKeySCUPageList, KeySCUPageKey128(id)); err != nil {
 		_ = r.Store.DocDelete(KeySCUPage(s.ID))
 		return fmt.Errorf("turbo index scupage_list: %w", err)
 	}
@@ -157,7 +157,7 @@ func (r *SCUPageRepo) Create(s *model.SCUPage) error {
 	// Turbo index: scupage_scu:<scu>
 	scuKey := turboKeySCUPageSCU + s.SCU
 	if err := r.Store.TurboWrite(scuKey, []byte(strconv.FormatInt(id, 10))); err != nil {
-		_, _ = r.Store.db.TurboDeleteIndex(TurboKeySCUPageList, uint64(id))
+		_, _ = r.Store.db.TurboDeleteIndex(TurboKeySCUPageList, KeySCUPageKey128(id))
 		_ = r.Store.DocDelete(KeySCUPage(s.ID))
 		return fmt.Errorf("turbo index scupage_scu: %w", err)
 	}
@@ -165,7 +165,7 @@ func (r *SCUPageRepo) Create(s *model.SCUPage) error {
 	// Turbo index: scupage_slug:<slug>
 	slugKey := turboKeySCUPageSlug + s.Slug
 	if err := r.Store.TurboWrite(slugKey, []byte(strconv.FormatInt(id, 10))); err != nil {
-		_, _ = r.Store.db.TurboDeleteIndex(TurboKeySCUPageList, uint64(id))
+		_, _ = r.Store.db.TurboDeleteIndex(TurboKeySCUPageList, KeySCUPageKey128(id))
 		_ = r.Store.TurboWrite(scuKey, []byte{})
 		_ = r.Store.DocDelete(KeySCUPage(s.ID))
 		return fmt.Errorf("turbo index scupage_slug: %w", err)
@@ -258,15 +258,22 @@ func (r *SCUPageRepo) Update(id int64, updater func(*model.SCUPage)) error {
 
 // List returns all SCU pages via turbo index.
 func (r *SCUPageRepo) List() ([]model.SCUPage, error) {
-	data, err := r.Store.db.TurboRawRead(TurboKeySCUPageList)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.Store.db.TurboGetIndexTokens(TurboKeySCUPageList)
+	if err != nil || len(tokens) == 0 {
 		return nil, nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
+	docs, err := r.Store.db.MultiGetByDocIDsWithPrefix(tokens, "scupage:")
+	if err != nil {
+		return nil, fmt.Errorf("multi get scupages: %w", err)
+	}
+
 	var result []model.SCUPage
-	for _, id := range ids {
-		s, err := r.Get(int64(id))
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		s, err := UnmarshalSCUPage(doc)
 		if err != nil {
 			continue
 		}
@@ -288,7 +295,7 @@ func (r *SCUPageRepo) Delete(id int64) error {
 	}
 
 	// Remove turbo indexes
-	_, _ = r.Store.db.TurboDeleteIndex(TurboKeySCUPageList, uint64(id))
+	_, _ = r.Store.db.TurboDeleteIndex(TurboKeySCUPageList, KeySCUPageKey128(id))
 	if s.SCU != "" {
 		_ = r.Store.TurboWrite(turboKeySCUPageSCU+s.SCU, []byte{})
 	}
@@ -522,20 +529,16 @@ func (r *SCUPageRepo) autoCatalogize(p *model.Product) (int64, error) {
 		}
 
 		// Read pre-built tokens from catalogizer index
-		data, err := r.Store.DB().TurboRawRead("cat_tokens:" + fmt.Sprintf("%d", cat.ID))
-		if err != nil || len(data) == 0 {
-			continue
-		}
-
-		catTokens := makodb.TurboUnsafeReadTokens(data)
-		if len(catTokens) == 0 {
+		tokens, err := r.Store.DB().TurboGetIndexTokens("cat_tokens:" + fmt.Sprintf("%d", cat.ID))
+		if err != nil || len(tokens) == 0 {
 			continue
 		}
 
 		// Count overlap using set
-		catSet := make(map[uint64]bool, len(catTokens))
-		for _, h := range catTokens {
-			catSet[h] = true
+		catSet := make(map[uint64]bool, len(tokens))
+		for _, token := range tokens {
+			// Convert Key128 back to uint64 hash (stored as [0, hash])
+			catSet[uint64(token[1])] = true
 		}
 
 		score := 0
@@ -835,14 +838,14 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 
 	// Create new pages
 	created := make(map[string]int64)
-	var newSCUPageIDs []uint64
+	var newSCUPageIDs []makodb.Key128
 	for scu, s := range newPages {
 		if err := r.CreateNoListIndex(s); err != nil {
 			fmt.Printf("WARN: create scupage for SCU %s: %v\n", scu, err)
 			continue
 		}
 		created[scu] = s.ID
-		newSCUPageIDs = append(newSCUPageIDs, uint64(s.ID))
+		newSCUPageIDs = append(newSCUPageIDs, KeySCUPageKey128(s.ID))
 	}
 
 	// Batch add all new SCU pages to scupage_list index (single write)
@@ -933,14 +936,13 @@ func (r *SCUPageRepo) RecalculateProductCounts() error {
 
 		// Count products with this SCU via turbo index
 		key := "scu:" + sp.SCU
-		data, err := r.Store.db.TurboRawRead(key)
-		if err != nil || len(data) == 0 {
+		tokens, err := r.Store.db.TurboGetIndexTokens(key)
+		if err != nil || len(tokens) == 0 {
 			// Index may not exist yet; skip
 			continue
 		}
 
-		products := makodb.TurboUnsafeReadTokens(data)
-		newCount := len(products)
+		newCount := len(tokens)
 		if newCount != sp.ProductCount {
 			sp.ProductCount = newCount
 			sp.UpdatedAt = time.Now().Unix()
@@ -985,22 +987,26 @@ func (r *SCUPageRepo) RecalculateMinPrices(productRepo *ProductRepo) error {
 
 		// Get products with this SCU via turbo index
 		key := "scu:" + sp.SCU
-		data, err := r.Store.db.TurboRawRead(key)
-		if err != nil || len(data) == 0 {
+		tokens, err := r.Store.db.TurboGetIndexTokens(key)
+		if err != nil || len(tokens) == 0 {
 			// Index may not exist yet; skip
 			continue
 		}
 
-		productIDs := makodb.TurboUnsafeReadTokens(data)
-		if len(productIDs) == 0 {
+		// Get all products at once
+		docs, err := r.Store.db.MultiGetByDocIDsWithPrefix(tokens, "product:")
+		if err != nil || len(docs) == 0 {
 			continue
 		}
 
 		// Find minimum price among all products
 		var minPrice float64
 		found := false
-		for _, pid := range productIDs {
-			p, err := productRepo.Get(int64(pid))
+		for _, doc := range docs {
+			if len(doc) == 0 {
+				continue
+			}
+			p, err := UnmarshalProduct(doc)
 			if err != nil {
 				continue
 			}

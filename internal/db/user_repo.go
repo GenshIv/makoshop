@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -214,15 +213,22 @@ func (r *UserRepo) List(params ListUsersParams) ([]model.User, int64, error) {
 
 // GetAllUsers returns all users (for analytics). Uses turbo index.
 func (r *UserRepo) GetAllUsers() ([]model.User, error) {
-	data, err := r.store.db.TurboRawRead(turboKeyAllUsers)
-	if err != nil || len(data) == 0 {
+	// Get user IDs as Key128
+	tokens, err := r.store.DB().TurboGetIndexTokens(turboKeyAllUsers)
+	if err != nil || len(tokens) == 0 {
 		return nil, nil
 	}
-
-	ids := makodb.TurboUnsafeReadTokens(data)
+	// Use MultiGetByDocIDs to retrieve all users at once (tokens already contain full keys)
+	docs, err := r.store.DB().MultiGetByDocIDs(tokens)
+	if err != nil {
+		return nil, fmt.Errorf("multi get users: %w", err)
+	}
 	var result []model.User
-	for _, id := range ids {
-		u, err := r.GetByID(int64(id))
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		u, err := UnmarshalUser(doc)
 		if err != nil {
 			continue
 		}
@@ -234,6 +240,6 @@ func (r *UserRepo) GetAllUsers() ([]model.User, error) {
 
 // indexUserID adds a user ID to the turbo user list.
 func (r *UserRepo) indexUserID(id int64) error {
-	_, err := r.store.db.TurboPutIndex(turboKeyAllUsers, uint64(id))
+	_, err := r.store.db.TurboPutIndex(turboKeyAllUsers, KeyUserKey128(id))
 	return err
 }

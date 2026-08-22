@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -32,7 +31,7 @@ func (r *PromoLogRepo) Create(l *model.PromoLog) error {
 
 	// Index by campaign (turbo)
 	campaignKey := fmt.Sprintf("promo_log_campaign:%d", l.CampaignID)
-	if _, err := r.store.db.TurboPutIndex(campaignKey, uint64(l.ID)); err != nil {
+	if _, err := r.store.db.TurboPutIndex(campaignKey, KeyPromoLogKey128(l.ID)); err != nil {
 		_ = r.store.DocDelete(KeyPromoLog(l.ID))
 		return fmt.Errorf("turbo index log by campaign: %w", err)
 	}
@@ -53,15 +52,22 @@ func (r *PromoLogRepo) Get(id int64) (*model.PromoLog, error) {
 
 func (r *PromoLogRepo) ListByCampaign(campaignID int64) ([]model.PromoLog, error) {
 	key := fmt.Sprintf("promo_log_campaign:%d", campaignID)
-	data, err := r.store.db.TurboRawRead(key)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.db.TurboGetIndexTokens(key)
+	if err != nil || len(tokens) == 0 {
 		return nil, nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
+	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "promo_log:")
+	if err != nil {
+		return nil, fmt.Errorf("multi get promo logs: %w", err)
+	}
+
 	var result []model.PromoLog
-	for _, id := range ids {
-		l, err := r.Get(int64(id))
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		l, err := UnmarshalPromoLog(doc)
 		if err != nil {
 			continue
 		}

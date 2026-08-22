@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -47,7 +46,7 @@ func (r *LandingRepo) Create(l *model.LandingPage) error {
 	}
 
 	// Turbo index: landing_list
-	if _, err := r.Store.db.TurboPutIndex(turboKeyLandingList, uint64(id)); err != nil {
+	if _, err := r.Store.db.TurboPutIndex(turboKeyLandingList, KeyLandingKey128(id)); err != nil {
 		_ = r.Store.DocDelete(KeyLandingPage(l.ID))
 		return fmt.Errorf("turbo index landing_list: %w", err)
 	}
@@ -55,7 +54,7 @@ func (r *LandingRepo) Create(l *model.LandingPage) error {
 	// Turbo index: landing_scu:<scu>
 	scuKey := turboKeyLandingSCU + l.SCU
 	if err := r.Store.TurboWrite(scuKey, []byte(strconv.FormatInt(id, 10))); err != nil {
-		_, _ = r.Store.db.TurboDeleteIndex(turboKeyLandingList, uint64(id))
+		_, _ = r.Store.db.TurboDeleteIndex(turboKeyLandingList, KeyLandingKey128(id))
 		_ = r.Store.DocDelete(KeyLandingPage(l.ID))
 		return fmt.Errorf("turbo index landing_scu: %w", err)
 	}
@@ -128,19 +127,25 @@ func (r *LandingRepo) Update(id int64, updater func(*model.LandingPage)) error {
 
 // List returns all landing pages via turbo index.
 func (r *LandingRepo) List() ([]model.LandingPage, error) {
-	data, err := r.Store.db.TurboRawRead(turboKeyLandingList)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.Store.db.TurboGetIndexTokens(turboKeyLandingList)
+	if err != nil || len(tokens) == 0 {
 		return nil, nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
+	docs, err := r.Store.db.MultiGetByDocIDsWithPrefix(tokens, "landing:")
+	if err != nil {
+		return nil, fmt.Errorf("multi get landing docs: %w", err)
+	}
+
 	var result []model.LandingPage
-	for _, id := range ids {
-		l, err := r.Get(int64(id))
-		if err != nil {
-			continue
+	for _, doc := range docs {
+		if len(doc) > 0 {
+			l, err := UnmarshalLandingPage(doc)
+			if err != nil {
+				continue
+			}
+			result = append(result, *l)
 		}
-		result = append(result, *l)
 	}
 	return result, nil
 }
@@ -153,7 +158,7 @@ func (r *LandingRepo) Delete(id int64) error {
 	}
 
 	// Remove turbo indexes
-	_, _ = r.Store.db.TurboDeleteIndex(turboKeyLandingList, uint64(id))
+	_, _ = r.Store.db.TurboDeleteIndex(turboKeyLandingList, KeyLandingKey128(id))
 	if l.SCU != "" {
 		_ = r.Store.TurboWrite(turboKeyLandingSCU+l.SCU, []byte{})
 	}

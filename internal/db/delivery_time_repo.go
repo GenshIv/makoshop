@@ -10,7 +10,6 @@ import (
 
 	"encoding/json"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -185,19 +184,26 @@ func (r *DeliveryTimeRepo) Delete(id int64) error {
 }
 
 func (r *DeliveryTimeRepo) List() ([]model.DeliveryTime, error) {
-	data, err := r.store.db.TurboRawRead(turboKeyDeliveryTimes)
-	if err != nil || len(data) == 0 {
+	// Get delivery time IDs as Key128
+	tokens, err := r.store.DB().TurboGetIndexTokens(turboKeyDeliveryTimes)
+	if err != nil || len(tokens) == 0 {
 		return []model.DeliveryTime{}, nil
 	}
-
-	ids := makodb.TurboUnsafeReadTokens(data)
+	// Use MultiGetByDocIDs to retrieve all delivery times at once (tokens already contain full keys)
+	docs, err := r.store.DB().MultiGetByDocIDs(tokens)
+	if err != nil {
+		return nil, fmt.Errorf("multi get delivery times: %w", err)
+	}
 	var result []model.DeliveryTime
-	for _, id := range ids {
-		dt, err := r.Get(int64(id))
-		if err != nil {
+	for _, doc := range docs {
+		if len(doc) == 0 {
 			continue
 		}
-		result = append(result, *dt)
+		var dt model.DeliveryTime
+		if err := json.Unmarshal(doc, &dt); err != nil {
+			continue
+		}
+		result = append(result, dt)
 	}
 
 	sort.Slice(result, func(i, j int) bool {
@@ -208,12 +214,12 @@ func (r *DeliveryTimeRepo) List() ([]model.DeliveryTime, error) {
 }
 
 func (r *DeliveryTimeRepo) indexDeliveryTime(id int64) error {
-	_, err := r.store.db.TurboPutIndex(turboKeyDeliveryTimes, uint64(id))
+	_, err := r.store.db.TurboPutIndex(turboKeyDeliveryTimes, KeyDeliveryTimeKey128(id))
 	return err
 }
 
 func (r *DeliveryTimeRepo) unindexDeliveryTime(id int64) error {
-	_, err := r.store.db.TurboDeleteIndex(turboKeyDeliveryTimes, uint64(id))
+	_, err := r.store.db.TurboDeleteIndex(turboKeyDeliveryTimes, KeyDeliveryTimeKey128(id))
 	return err
 }
 

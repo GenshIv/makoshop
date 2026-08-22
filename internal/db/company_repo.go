@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -49,15 +48,15 @@ func (r *CompanyRepo) Create(c *model.Company) error {
 	}
 
 	// Turbo index: company_list
-	if _, err := r.Store.db.TurboPutIndex(turboKeyCompanyList, uint64(id)); err != nil {
+	if _, err := r.Store.db.TurboPutIndex(turboKeyCompanyList, KeyCompanyKey128(id)); err != nil {
 		_ = r.Store.DocDelete(KeyCompany(c.ID))
 		return fmt.Errorf("turbo index company_list: %w", err)
 	}
 
 	// Turbo index: company_name:<slug>
 	nameKey := turboKeyCompanyName + c.Slug
-	if err := r.Store.TurboWrite(nameKey, []byte(strconv.FormatInt(id, 10))); err != nil {
-		_, _ = r.Store.db.TurboDeleteIndex(turboKeyCompanyList, uint64(id))
+	if err := r.Store.TurboWrite(nameKey, []byte(fmt.Sprintf("%d", id))); err != nil {
+		_, _ = r.Store.db.TurboDeleteIndex(turboKeyCompanyList, KeyCompanyKey128(id))
 		_ = r.Store.DocDelete(KeyCompany(c.ID))
 		return fmt.Errorf("turbo index company_name: %w", err)
 	}
@@ -144,15 +143,22 @@ func (r *CompanyRepo) Update(id int64, updater func(*model.Company)) error {
 
 // List returns all companies via turbo index.
 func (r *CompanyRepo) List() ([]model.Company, error) {
-	data, err := r.Store.db.TurboRawRead(turboKeyCompanyList)
-	if err != nil || len(data) == 0 {
+	// Get company IDs as Key128
+	tokens, err := r.Store.DB().TurboGetIndexTokens(turboKeyCompanyList)
+	if err != nil || len(tokens) == 0 {
 		return nil, nil
 	}
-
-	ids := makodb.TurboUnsafeReadTokens(data)
+	// Use MultiGetByDocIDs to retrieve all companies at once (tokens already contain full keys)
+	docs, err := r.Store.DB().MultiGetByDocIDs(tokens)
+	if err != nil {
+		return nil, fmt.Errorf("multi get companies: %w", err)
+	}
 	var result []model.Company
-	for _, id := range ids {
-		c, err := r.Get(int64(id))
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		c, err := UnmarshalCompany(doc)
 		if err != nil {
 			continue
 		}
@@ -169,7 +175,7 @@ func (r *CompanyRepo) Delete(id int64) error {
 	}
 
 	// Remove turbo indexes
-	_, _ = r.Store.db.TurboDeleteIndex(turboKeyCompanyList, uint64(id))
+	_, _ = r.Store.db.TurboDeleteIndex(turboKeyCompanyList, KeyCompanyKey128(id))
 	_ = r.Store.TurboWrite(turboKeyCompanyName+c.Slug, []byte{})
 
 	if err := r.Store.DocDelete(KeyCompany(id)); err != nil {

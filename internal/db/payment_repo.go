@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -39,13 +38,13 @@ func (r *PaymentRepo) Create(p *model.Payment) error {
 
 	// Index: payment by order (turbo)
 	orderKey := "payment_order:" + strconv.FormatInt(p.OrderID, 10)
-	if _, err := r.store.db.TurboPutIndex(orderKey, uint64(p.ID)); err != nil {
+	if _, err := r.store.db.TurboPutIndex(orderKey, KeyPaymentKey128(p.ID)); err != nil {
 		_ = r.store.DocDelete(KeyPayment(p.ID))
 		return fmt.Errorf("index payment by order: %w", err)
 	}
 
 	// Index: payment in global list (turbo)
-	if _, err := r.store.db.TurboPutIndex(turboKeyAllPayments, uint64(p.ID)); err != nil {
+	if _, err := r.store.db.TurboPutIndex(turboKeyAllPayments, KeyPaymentKey128(p.ID)); err != nil {
 		fmt.Printf("WARN: indexAllPayments error for payment %d: %v\n", p.ID, err)
 	}
 
@@ -67,16 +66,19 @@ func (r *PaymentRepo) Get(id int64) (*model.Payment, error) {
 // GetByOrderID returns the payment for an order.
 func (r *PaymentRepo) GetByOrderID(orderID int64) (*model.Payment, error) {
 	key := "payment_order:" + strconv.FormatInt(orderID, 10)
-	data, err := r.store.db.TurboRawRead(key)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.db.TurboGetIndexTokens(key)
+	if err != nil || len(tokens) == 0 {
 		return nil, fmt.Errorf("no payment found for order %d", orderID)
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
-	if len(ids) == 0 {
+	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "payment:")
+	if err != nil {
+		return nil, fmt.Errorf("multi get payment docs: %w", err)
+	}
+	if len(docs) == 0 {
 		return nil, fmt.Errorf("no payment found for order %d", orderID)
 	}
-	return r.Get(int64(ids[0]))
+	return UnmarshalPayment(docs[0])
 }
 
 // Update updates a payment.
@@ -112,9 +114,9 @@ func (r *PaymentRepo) Delete(id int64) error {
 
 	// Remove from order index (turbo)
 	orderKey := "payment_order:" + strconv.FormatInt(p.OrderID, 10)
-	_, _ = r.store.db.TurboDeleteIndex(orderKey, uint64(id))
+	_, _ = r.store.db.TurboDeleteIndex(orderKey, KeyPaymentKey128(id))
 	// Remove from global index (turbo)
-	_, _ = r.store.db.TurboDeleteIndex(turboKeyAllPayments, uint64(id))
+	_, _ = r.store.db.TurboDeleteIndex(turboKeyAllPayments, KeyPaymentKey128(id))
 	if err := r.store.DocDelete(KeyPayment(id)); err != nil {
 		return fmt.Errorf("delete payment: %w", err)
 	}
@@ -141,15 +143,21 @@ func (r *PaymentRepo) CleanupTimedOutPayments(maxPendingMinutes int) (*TimeoutCl
 	result := &TimeoutCleanupResult{}
 
 	// Get all payment IDs from turbo index
-	data, err := r.store.db.TurboRawRead(turboKeyAllPayments)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.db.TurboGetIndexTokens(turboKeyAllPayments)
+	if err != nil || len(tokens) == 0 {
 		return result, nil
 	}
 
-	paymentIDs := makodb.TurboUnsafeReadTokens(data)
+	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "payment:")
+	if err != nil {
+		return result, fmt.Errorf("multi get payments: %w", err)
+	}
 
-	for _, id := range paymentIDs {
-		p, err := r.Get(int64(id))
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		p, err := UnmarshalPayment(doc)
 		if err != nil {
 			continue
 		}

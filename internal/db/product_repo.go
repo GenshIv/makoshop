@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/silentjson/v2"
 )
@@ -394,7 +393,7 @@ func (r *ProductRepo) Delete(id int64) error {
 	}
 	// Remove from product_list index
 	if p.ID != 0 {
-		_, _ = r.store.db.TurboDeleteIndex(TurboKeyProductList, uint64(p.ID))
+		_, _ = r.store.db.TurboDeleteIndex(TurboKeyProductList, KeyProductKey128(p.ID))
 	}
 	if err := r.store.DocDelete(KeyProduct(id)); err != nil {
 		return fmt.Errorf("delete product: %w", err)
@@ -416,7 +415,7 @@ func (r *ProductRepo) DeleteProductByID(id int64) error {
 	}
 
 	// Remove from product_list
-	_, _ = r.store.db.TurboDeleteIndex(TurboKeyProductList, uint64(id))
+	_, _ = r.store.db.TurboDeleteIndex(TurboKeyProductList, KeyProductKey128(id))
 
 	// Remove from SCUPage if linked
 	if r.scuPageSearch != nil && p.SCU != "" {
@@ -442,21 +441,32 @@ func (r *ProductRepo) DeleteAllProducts() error {
 		return nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
-	if len(ids) == 0 {
+	tokens, err := r.store.db.TurboGetIndexTokens(TurboKeyProductList)
+	if err != nil {
+		return fmt.Errorf("get product list tokens: %w", err)
+	}
+	if len(tokens) == 0 {
 		return nil
 	}
 
-	fmt.Printf("[DELETE-ALL] Deleting %d products from product_list...\n", len(ids))
+	fmt.Printf("[DELETE-ALL] Deleting %d products from product_list...\n", len(tokens))
+
+	// Get all products at once
+	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "product:")
+	if err != nil {
+		return fmt.Errorf("multi get products: %w", err)
+	}
 
 	// Delete each product
-	for _, docID := range ids {
-		id := int64(docID)
-		p, err := r.Get(id)
-		if err != nil {
-			// Product doc already gone, try to clean indexes manually
+	for _, doc := range docs {
+		if len(doc) == 0 {
 			continue
 		}
+		p, err := UnmarshalProduct(doc)
+		if err != nil {
+			continue
+		}
+		id := p.ID
 		// Unindex from turbo search
 		if r.turboSearch != nil {
 			_ = r.turboSearch.UnindexProduct(p)
@@ -483,20 +493,28 @@ func (r *ProductRepo) deleteAllSCUPages() error {
 		return nil
 	}
 
-	data, err := r.store.db.TurboRawRead(TurboKeySCUPageList)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.db.TurboGetIndexTokens(TurboKeySCUPageList)
+	if err != nil || len(tokens) == 0 {
 		return nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
-	fmt.Printf("[DELETE-ALL] Deleting %d SCU pages...\n", len(ids))
+	fmt.Printf("[DELETE-ALL] Deleting %d SCU pages...\n", len(tokens))
 
-	for _, docID := range ids {
-		id := int64(docID)
-		sp, err := r.scuPageSearch.repo.Get(id)
+	// Get all SCU pages at once
+	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "scupage:")
+	if err != nil {
+		return fmt.Errorf("multi get scupages: %w", err)
+	}
+
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		sp, err := UnmarshalSCUPage(doc)
 		if err != nil {
 			continue
 		}
+		id := sp.ID
 		// Unindex from SCUPageSearch turbo indexes
 		if err := r.scuPageSearch.UnindexSCUPage(sp); err != nil {
 			fmt.Printf("[DELETE-ALL] WARN: unindex scupage %d: %v\n", id, err)

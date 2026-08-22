@@ -225,133 +225,59 @@ func (r *CategoryRepo) removeCategoryFromIndexes(cat *model.Category) {
 	r.removeFromActiveList(cat.ID)
 
 	// Remove ancestors cache
-	r.store.TurboWrite(turboKeyCategoryAncestors+fmt.Sprintf("%d", cat.ID), []byte{})
+	r.store.DB().TurboClearIndex(turboKeyCategoryAncestors + fmt.Sprintf("%d", cat.ID))
 
 	// Remove descendants cache
-	r.store.TurboWrite(turboKeyCategoryChildrenOf+fmt.Sprintf("%d", cat.ID), []byte{})
+	r.store.DB().TurboClearIndex(turboKeyCategoryChildrenOf + fmt.Sprintf("%d", cat.ID))
 }
 
 // ---------- Index helpers ----------
 
 func (r *CategoryRepo) addToCategoryList(catID int64) {
-	data, _ := r.store.DB().TurboRawRead(turboKeyCategoryList)
-	var ids []uint64
-	if data != nil && len(data) > 0 {
-		ids = makodb.TurboUnsafeReadTokens(data)
-	}
-	for _, id := range ids {
-		if id == uint64(catID) {
-			return
-		}
-	}
-	ids = append(ids, uint64(catID))
-	buf := makodb.TurboBinaryNew(ids)
-	r.store.TurboWrite(turboKeyCategoryList, buf)
+	// Add to category list using TurboPutIndex with Key128
+	_, _ = r.store.DB().TurboPutIndex(turboKeyCategoryList, KeyCategoryKey128(catID))
 }
 
 func (r *CategoryRepo) removeFromCategoryList(catID int64) {
-	data, _ := r.store.DB().TurboRawRead(turboKeyCategoryList)
-	if len(data) == 0 {
-		return
-	}
-	ids := makodb.TurboUnsafeReadTokens(data)
-	var newIDs []uint64
-	for _, id := range ids {
-		if id != uint64(catID) {
-			newIDs = append(newIDs, id)
-		}
-	}
-	if len(newIDs) > 0 {
-		buf := makodb.TurboBinaryNew(newIDs)
-		r.store.TurboWrite(turboKeyCategoryList, buf)
-	} else {
-		r.store.TurboWrite(turboKeyCategoryList, []byte{})
-	}
+	// Remove from category list using TurboDeleteIndex with Key128
+	r.store.DB().TurboDeleteIndex(turboKeyCategoryList, KeyCategoryKey128(catID))
 }
 
 func (r *CategoryRepo) addToActiveList(catID int64) {
-	data, _ := r.store.DB().TurboRawRead(turboKeyCategoryActive)
-	var ids []uint64
-	if data != nil && len(data) > 0 {
-		ids = makodb.TurboUnsafeReadTokens(data)
-	}
-	for _, id := range ids {
-		if id == uint64(catID) {
-			return
-		}
-	}
-	ids = append(ids, uint64(catID))
-	buf := makodb.TurboBinaryNew(ids)
-	r.store.TurboWrite(turboKeyCategoryActive, buf)
+	// Add to active list using TurboPutIndex with Key128
+	_, _ = r.store.DB().TurboPutIndex(turboKeyCategoryActive, KeyCategoryKey128(catID))
 }
 
 func (r *CategoryRepo) removeFromActiveList(catID int64) {
-	data, _ := r.store.DB().TurboRawRead(turboKeyCategoryActive)
-	if len(data) == 0 {
-		return
-	}
-	ids := makodb.TurboUnsafeReadTokens(data)
-	var newIDs []uint64
-	for _, id := range ids {
-		if id != uint64(catID) {
-			newIDs = append(newIDs, id)
-		}
-	}
-	if len(newIDs) > 0 {
-		buf := makodb.TurboBinaryNew(newIDs)
-		r.store.TurboWrite(turboKeyCategoryActive, buf)
-	} else {
-		r.store.TurboWrite(turboKeyCategoryActive, []byte{})
-	}
+	// Remove from active list using TurboDeleteIndex with Key128
+	r.store.DB().TurboDeleteIndex(turboKeyCategoryActive, KeyCategoryKey128(catID))
 }
 
 func (r *CategoryRepo) addToParentChildrenList(parentID, childID int64) {
 	key := turboKeyCategoryParent + fmt.Sprintf("%d", parentID)
-	data, _ := r.store.DB().TurboRawRead(key)
-	var ids []uint64
-	if data != nil && len(data) > 0 {
-		ids = makodb.TurboUnsafeReadTokens(data)
-	}
-	for _, id := range ids {
-		if id == uint64(childID) {
-			return
-		}
-	}
-	ids = append(ids, uint64(childID))
-	buf := makodb.TurboBinaryNew(ids)
-	r.store.TurboWrite(key, buf)
+	// Add to parent children list using TurboPutIndex with Key128
+	_, _ = r.store.DB().TurboPutIndex(key, KeyCategoryKey128(childID))
 }
 
 func (r *CategoryRepo) removeFromParentChildrenList(parentID, childID int64) {
 	key := turboKeyCategoryParent + fmt.Sprintf("%d", parentID)
-	data, _ := r.store.DB().TurboRawRead(key)
-	if len(data) == 0 {
-		return
-	}
-	ids := makodb.TurboUnsafeReadTokens(data)
-	var newIDs []uint64
-	for _, id := range ids {
-		if id != uint64(childID) {
-			newIDs = append(newIDs, id)
-		}
-	}
-	if len(newIDs) > 0 {
-		buf := makodb.TurboBinaryNew(newIDs)
-		r.store.TurboWrite(key, buf)
-	} else {
-		r.store.TurboWrite(key, []byte{})
-	}
+	// Remove from parent children list using TurboDeleteIndex with Key128
+	r.store.DB().TurboDeleteIndex(key, KeyCategoryKey128(childID))
 }
 
 // rebuildAncestorsCache rebuilds the ancestors cache for a category.
 func (r *CategoryRepo) rebuildAncestorsCache(catID int64) {
 	ancestors := r.computeAncestors(catID)
 	key := turboKeyCategoryAncestors + fmt.Sprintf("%d", catID)
+	// Clear existing index
+	r.store.DB().TurboClearIndex(key)
 	if len(ancestors) > 0 {
-		buf := makodb.TurboBinaryNew(Uint64SliceFromInt64(ancestors))
-		r.store.TurboWrite(key, buf)
-	} else {
-		r.store.TurboWrite(key, []byte{})
+		// Convert int64 to Key128 and add to index
+		ancestorKeys := make([]makodb.Key128, len(ancestors))
+		for i, id := range ancestors {
+			ancestorKeys[i] = KeyCategoryKey128(id)
+		}
+		_, _ = r.store.DB().TurboPutBatchIndex(key, ancestorKeys)
 	}
 	r.treePathCache.Delete(catID)
 }
@@ -379,11 +305,15 @@ func (r *CategoryRepo) computeAncestors(catID int64) []int64 {
 func (r *CategoryRepo) rebuildDescendantsCache(catID int64) {
 	descendants := r.computeDescendants(catID)
 	key := turboKeyCategoryChildrenOf + fmt.Sprintf("%d", catID)
+	// Clear existing index
+	r.store.DB().TurboClearIndex(key)
 	if len(descendants) > 0 {
-		buf := makodb.TurboBinaryNew(Uint64SliceFromInt64(descendants))
-		r.store.TurboWrite(key, buf)
-	} else {
-		r.store.TurboWrite(key, []byte{})
+		// Convert int64 to Key128 and add to index
+		descendantKeys := make([]makodb.Key128, len(descendants))
+		for i, id := range descendants {
+			descendantKeys[i] = KeyCategoryKey128(id)
+		}
+		_, _ = r.store.DB().TurboPutBatchIndex(key, descendantKeys)
 	}
 }
 
@@ -467,15 +397,26 @@ func (r *CategoryRepo) GetByPath(pathParts []string) (*model.Category, error) {
 // GetAncestors returns ancestors from root to parent (cached, O(1)).
 func (r *CategoryRepo) GetAncestors(catID int64) ([]int64, error) {
 	key := turboKeyCategoryAncestors + fmt.Sprintf("%d", catID)
-	data, err := r.store.DB().TurboRawRead(key)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.DB().TurboGetIndexTokens(key)
+	if err != nil || len(tokens) == 0 {
 		// Fallback: compute
 		return r.computeAncestors(catID), nil
 	}
-	hashes := makodb.TurboUnsafeReadTokens(data)
-	ids := make([]int64, len(hashes))
-	for i, h := range hashes {
-		ids[i] = int64(h)
+	// Use MultiGetByDocIDs to retrieve ancestor categories (tokens already contain full keys)
+	docs, err := r.store.DB().MultiGetByDocIDs(tokens)
+	if err != nil {
+		return nil, fmt.Errorf("get ancestor categories: %w", err)
+	}
+	var ids []int64
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		cat, err := UnmarshalCategory(doc)
+		if err != nil {
+			continue
+		}
+		ids = append(ids, cat.ID)
 	}
 	return ids, nil
 }
@@ -487,14 +428,26 @@ func (r *CategoryRepo) GetDirectChildren(catID int64) ([]int64, error) {
 
 func (r *CategoryRepo) getDirectChildrenFromIndex(catID int64) []int64 {
 	key := turboKeyCategoryParent + fmt.Sprintf("%d", catID)
-	data, _ := r.store.DB().TurboRawRead(key)
-	if len(data) == 0 {
+	tokens, err := r.store.DB().TurboGetIndexTokens(key)
+	if err != nil || len(tokens) == 0 {
 		return nil
 	}
-	hashes := makodb.TurboUnsafeReadTokens(data)
-	ids := make([]int64, len(hashes))
-	for i, h := range hashes {
-		ids[i] = int64(h)
+	// Use MultiGetByDocIDs to retrieve child categories (tokens already contain full keys)
+	docs, err := r.store.DB().MultiGetByDocIDs(tokens)
+	if err != nil {
+		fmt.Printf("WARN: getDirectChildrenFromIndex: %v\n", err)
+		return nil
+	}
+	var ids []int64
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		cat, err := UnmarshalCategory(doc)
+		if err != nil {
+			continue
+		}
+		ids = append(ids, cat.ID)
 	}
 	return ids
 }
@@ -502,54 +455,78 @@ func (r *CategoryRepo) getDirectChildrenFromIndex(catID int64) []int64 {
 // GetDescendants returns all descendants of a category (cached, O(1)).
 func (r *CategoryRepo) GetDescendants1(catID int64) ([]int64, error) {
 	key := turboKeyCategoryChildrenOf + fmt.Sprintf("%d", catID)
-	data, err := r.store.DB().TurboRawRead(key)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.DB().TurboGetIndexTokens(key)
+	if err != nil || len(tokens) == 0 {
 		// Fallback: compute
 		return r.computeDescendants(catID), nil
 	}
-	hashes := makodb.TurboUnsafeReadTokens(data)
-	ids := make([]int64, len(hashes))
-	for i, h := range hashes {
-		ids[i] = int64(h)
+	// Use MultiGetByDocIDs to retrieve descendant categories (tokens already contain full keys)
+	docs, err := r.store.DB().MultiGetByDocIDs(tokens)
+	if err != nil {
+		return nil, fmt.Errorf("get descendant categories: %w", err)
+	}
+	var ids []int64
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		cat, err := UnmarshalCategory(doc)
+		if err != nil {
+			continue
+		}
+		ids = append(ids, cat.ID)
 	}
 	return ids, nil
 }
 
 func (r *CategoryRepo) GetDescendants(catID int64) ([]int64, error) {
-	buf := make([]byte, 0, 32)
-	buf = append(buf, turboKeyCategoryChildrenOf...)
-	buf = strconv.AppendInt(buf, catID, 10)
-
-	data, err := r.store.DB().TurboRawRead(string(buf))
-	if err != nil || len(data) == 0 {
-		// computeDescendants тоже должен возвращать []uint64
+	key := turboKeyCategoryChildrenOf + fmt.Sprintf("%d", catID)
+	tokens, err := r.store.DB().TurboGetIndexTokens(key)
+	if err != nil || len(tokens) == 0 {
 		return r.computeDescendants(catID), nil
 	}
-
-	// Turbo хранит uint64, конвертируем в int64
-	tokens := makodb.TurboUnsafeReadTokens(data)
-	ids := make([]int64, len(tokens))
-	for i, t := range tokens {
-		ids[i] = int64(t)
+	// Use MultiGetByDocIDs to retrieve descendant categories (tokens already contain full keys)
+	docs, err := r.store.DB().MultiGetByDocIDs(tokens)
+	if err != nil {
+		return nil, fmt.Errorf("get descendant categories: %w", err)
+	}
+	var ids []int64
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		cat, err := UnmarshalCategory(doc)
+		if err != nil {
+			continue
+		}
+		ids = append(ids, cat.ID)
 	}
 	return ids, nil
 }
 
 // ListAll returns all categories using the cat_list turbo index.
 func (r *CategoryRepo) ListAll() ([]model.Category, error) {
-	data, err := r.store.DB().TurboRawRead(turboKeyCategoryList)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.DB().TurboGetIndexTokens(turboKeyCategoryList)
+	if err != nil || len(tokens) == 0 {
 		return nil, nil
 	}
-
-	ids := makodb.TurboUnsafeReadTokens(data)
+	// Use MultiGetByDocIDs to get all categories at once (tokens already contain full keys)
+	docs, err := r.store.DB().MultiGetByDocIDs(tokens)
+	if err != nil {
+		return nil, fmt.Errorf("multi get categories: %w", err)
+	}
 	var result []model.Category
-	for _, id := range ids {
-		cat, err := r.Get(int64(id))
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		cat, err := UnmarshalCategory(doc)
 		if err != nil {
 			continue
 		}
-		result = append(result, *cat)
+		if cat != nil {
+			result = append(result, *cat)
+		}
 	}
 	return result, nil
 }
@@ -563,16 +540,12 @@ func (r *CategoryRepo) RebuildTrees() {
 // rebuildFullTreeJSON rebuilds the full active category tree and stores it as JSON in turbo.
 // Called on category mutations and at startup.
 func (r *CategoryRepo) rebuildFullTreeJSON() {
-	// Try to get active category IDs from turbo index.
-	data, err := r.store.DB().TurboRawRead(turboKeyCategoryActive)
-	var ids []uint64
-	if err == nil && len(data) > 0 {
-		ids = makodb.TurboUnsafeReadTokens(data)
-	}
-
-	// If index is empty/missing, fall back to listing all categories.
+	// Try to get active category tokens from turbo index.
+	tokens, err := r.store.DB().TurboGetIndexTokens(turboKeyCategoryActive)
 	var cats []model.Category
-	if len(ids) == 0 {
+	
+	if err != nil || len(tokens) == 0 {
+		// If index is empty/missing, fall back to listing all categories.
 		all, err := r.ListAll()
 		if err == nil && all != nil {
 			cats = make([]model.Category, 0, len(all))
@@ -583,13 +556,18 @@ func (r *CategoryRepo) rebuildFullTreeJSON() {
 			}
 		}
 	} else {
-		catsCap := len(ids)
-		if catsCap == 0 {
-			catsCap = 64
+		// Use MultiGetByDocIDs to retrieve all active categories at once (tokens already contain full keys)
+		docs, err := r.store.DB().MultiGetByDocIDs(tokens)
+		if err != nil {
+			fmt.Printf("WARN: rebuildFullTreeJSON MultiGetByDocIDs: %v\n", err)
+			return
 		}
-		cats = make([]model.Category, 0, catsCap)
-		for _, id := range ids {
-			cat, err := r.Get(int64(id))
+		cats = make([]model.Category, 0, len(docs))
+		for _, doc := range docs {
+			if len(doc) == 0 {
+				continue
+			}
+			cat, err := UnmarshalCategory(doc)
 			if err != nil {
 				continue
 			}
@@ -615,16 +593,12 @@ func (r *CategoryRepo) rebuildFullTreeJSON() {
 
 // rebuildParentTreeJSON rebuilds the subtree for a given parentID and stores it as JSON.
 func (r *CategoryRepo) rebuildParentTreeJSON(parentID int64) {
-	// Try to get active category IDs from turbo index.
-	data, err := r.store.DB().TurboRawRead(turboKeyCategoryActive)
-	var ids []uint64
-	if err == nil && len(data) > 0 {
-		ids = makodb.TurboUnsafeReadTokens(data)
-	}
-
-	// If index is empty/missing, fall back to listing all categories.
+	// Try to get active category tokens from turbo index.
+	tokens, err := r.store.DB().TurboGetIndexTokens(turboKeyCategoryActive)
 	var cats []model.Category
-	if len(ids) == 0 {
+	
+	if err != nil || len(tokens) == 0 {
+		// If index is empty/missing, fall back to listing all categories.
 		all, err := r.ListAll()
 		if err == nil && all != nil {
 			cats = make([]model.Category, 0, len(all))
@@ -635,13 +609,18 @@ func (r *CategoryRepo) rebuildParentTreeJSON(parentID int64) {
 			}
 		}
 	} else {
-		catsCap := len(ids)
-		if catsCap == 0 {
-			catsCap = 64
+		// Use MultiGetByDocIDs to retrieve all active categories at once (tokens already contain full keys)
+		docs, err := r.store.DB().MultiGetByDocIDs(tokens)
+		if err != nil {
+			fmt.Printf("WARN: rebuildParentTreeJSON MultiGetByDocIDs: %v\n", err)
+			return
 		}
-		cats = make([]model.Category, 0, catsCap)
-		for _, id := range ids {
-			cat, err := r.Get(int64(id))
+		cats = make([]model.Category, 0, len(docs))
+		for _, doc := range docs {
+			if len(doc) == 0 {
+				continue
+			}
+			cat, err := UnmarshalCategory(doc)
 			if err != nil {
 				continue
 			}
@@ -1163,8 +1142,8 @@ func (r *CategoryRepo) RebuildIndexesFromDocs() error {
 	fmt.Printf("[CATEGORY] Found %d categories in docstore, rebuilding indexes...\n", len(cats))
 
 	// Clear all indexes
-	r.store.TurboWrite(turboKeyCategoryList, []byte{})
-	r.store.TurboWrite(turboKeyCategoryActive, []byte{})
+	r.store.DB().TurboClearIndex(turboKeyCategoryList)
+	r.store.DB().TurboClearIndex(turboKeyCategoryActive)
 
 	for _, cat := range cats {
 		// Slug index
@@ -1219,8 +1198,8 @@ func (r *CategoryRepo) RebuildAllIndexes() error {
 	}
 
 	// Clear all indexes
-	r.store.TurboWrite(turboKeyCategoryList, []byte{})
-	r.store.TurboWrite(turboKeyCategoryActive, []byte{})
+	r.store.DB().TurboClearIndex(turboKeyCategoryList)
+	r.store.DB().TurboClearIndex(turboKeyCategoryActive)
 
 	for _, cat := range cats {
 		// Slug index

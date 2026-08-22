@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -46,13 +45,13 @@ func (r *OrderRepo) Create(o *model.Order) error {
 
 	// Index: order by user (turbo)
 	userKey := "order_user:" + strconv.FormatInt(o.UserID, 10)
-	if _, err := r.store.db.TurboPutIndex(userKey, uint64(o.ID)); err != nil {
+	if _, err := r.store.db.TurboPutIndex(userKey, KeyOrderKey128(o.ID)); err != nil {
 		_ = r.store.DocDelete(KeyOrder(o.ID))
 		return fmt.Errorf("index order by user: %w", err)
 	}
 
 	// Index: order in global list (turbo)
-	if _, err := r.store.db.TurboPutIndex(turboKeyAllOrders, uint64(o.ID)); err != nil {
+	if _, err := r.store.db.TurboPutIndex(turboKeyAllOrders, KeyOrderKey128(o.ID)); err != nil {
 		fmt.Printf("WARN: indexAllOrders error for order %d: %v\n", o.ID, err)
 	}
 
@@ -74,15 +73,22 @@ func (r *OrderRepo) Get(id int64) (*model.Order, error) {
 // GetUserOrders returns all orders for a user.
 func (r *OrderRepo) GetUserOrders(userID int64) ([]model.Order, error) {
 	key := "order_user:" + strconv.FormatInt(userID, 10)
-	data, err := r.store.db.TurboRawRead(key)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.db.TurboGetIndexTokens(key)
+	if err != nil || len(tokens) == 0 {
 		return nil, nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
+	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "order:")
+	if err != nil {
+		return nil, fmt.Errorf("multi get orders: %w", err)
+	}
+
 	var orders []model.Order
-	for _, id := range ids {
-		o, err := r.Get(int64(id))
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		o, err := UnmarshalOrder(doc)
 		if err != nil {
 			continue
 		}
@@ -134,9 +140,9 @@ func (r *OrderRepo) Delete(id int64) error {
 
 	// Remove from user index (turbo)
 	userKey := "order_user:" + strconv.FormatInt(o.UserID, 10)
-	_, _ = r.store.db.TurboDeleteIndex(userKey, uint64(id))
+	_, _ = r.store.db.TurboDeleteIndex(userKey, KeyOrderKey128(id))
 	// Remove from global index (turbo)
-	_, _ = r.store.db.TurboDeleteIndex(turboKeyAllOrders, uint64(id))
+	_, _ = r.store.db.TurboDeleteIndex(turboKeyAllOrders, KeyOrderKey128(id))
 
 	if err := r.store.DocDelete(KeyOrder(id)); err != nil {
 		return fmt.Errorf("delete order: %w", err)
@@ -178,15 +184,22 @@ func (r *OrderRepo) GetOrdersByCompanyID(companyID int64) ([]model.Order, error)
 
 // GetAllOrders returns all orders (for analytics). Uses turbo index.
 func (r *OrderRepo) GetAllOrders() ([]model.Order, error) {
-	data, err := r.store.db.TurboRawRead(turboKeyAllOrders)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.db.TurboGetIndexTokens(turboKeyAllOrders)
+	if err != nil || len(tokens) == 0 {
 		return nil, nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
+	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "order:")
+	if err != nil {
+		return nil, fmt.Errorf("multi get orders: %w", err)
+	}
+
 	var result []model.Order
-	for _, id := range ids {
-		o, err := r.Get(int64(id))
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		o, err := UnmarshalOrder(doc)
 		if err != nil {
 			continue
 		}

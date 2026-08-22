@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -40,15 +39,15 @@ func (r *ReviewRepo) Create(review *model.Review) error {
 
 	// Index: review by product (turbo)
 	productKey := fmt.Sprintf("review_product:%d", review.ProductID)
-	if _, err := r.store.db.TurboPutIndex(productKey, uint64(review.ID)); err != nil {
+	if _, err := r.store.db.TurboPutIndex(productKey, KeyReviewKey128(review.ID)); err != nil {
 		_ = r.store.DocDelete(KeyReview(review.ID))
 		return fmt.Errorf("turbo index review by product: %w", err)
 	}
 
 	// Index: review by user (turbo)
 	userKey := fmt.Sprintf("review_user:%d", review.UserID)
-	if _, err := r.store.db.TurboPutIndex(userKey, uint64(review.ID)); err != nil {
-		_, _ = r.store.db.TurboDeleteIndex(productKey, uint64(review.ID))
+	if _, err := r.store.db.TurboPutIndex(userKey, KeyReviewKey128(review.ID)); err != nil {
+		_, _ = r.store.db.TurboDeleteIndex(productKey, KeyReviewKey128(review.ID))
 		_ = r.store.DocDelete(KeyReview(review.ID))
 		return fmt.Errorf("turbo index review by user: %w", err)
 	}
@@ -81,15 +80,22 @@ func (r *ReviewRepo) ListByProduct(productID int64, page, limit int) ([]model.Re
 	}
 
 	key := fmt.Sprintf("review_product:%d", productID)
-	data, err := r.store.db.TurboRawRead(key)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.db.TurboGetIndexTokens(key)
+	if err != nil || len(tokens) == 0 {
 		return nil, 0, nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
+	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "review:")
+	if err != nil {
+		return nil, 0, fmt.Errorf("multi get reviews: %w", err)
+	}
+
 	var reviews []model.Review
-	for _, id := range ids {
-		review, err := r.Get(int64(id))
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		review, err := UnmarshalReview(doc)
 		if err != nil {
 			continue
 		}
@@ -132,15 +138,22 @@ func (r *ReviewRepo) ListByUser(userID int64, page, limit int) ([]model.Review, 
 	}
 
 	key := fmt.Sprintf("review_user:%d", userID)
-	data, err := r.store.db.TurboRawRead(key)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.db.TurboGetIndexTokens(key)
+	if err != nil || len(tokens) == 0 {
 		return nil, 0, nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
+	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "review:")
+	if err != nil {
+		return nil, 0, fmt.Errorf("multi get reviews: %w", err)
+	}
+
 	var reviews []model.Review
-	for _, id := range ids {
-		review, err := r.Get(int64(id))
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		review, err := UnmarshalReview(doc)
 		if err != nil {
 			continue
 		}
@@ -175,19 +188,26 @@ func (r *ReviewRepo) ListByUser(userID int64, page, limit int) ([]model.Review, 
 func (r *ReviewRepo) getReviewByProductAndUser(productID, userID int64) (int64, error) {
 	// Get all reviews for this product and check user
 	key := fmt.Sprintf("review_product:%d", productID)
-	data, err := r.store.db.TurboRawRead(key)
-	if err != nil || len(data) == 0 {
+	tokens, err := r.store.db.TurboGetIndexTokens(key)
+	if err != nil || len(tokens) == 0 {
 		return 0, nil
 	}
 
-	ids := makodb.TurboUnsafeReadTokens(data)
-	for _, id := range ids {
-		review, err := r.Get(int64(id))
+	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "review:")
+	if err != nil {
+		return 0, fmt.Errorf("multi get reviews: %w", err)
+	}
+
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		review, err := UnmarshalReview(doc)
 		if err != nil {
 			continue
 		}
 		if review.UserID == userID {
-			return int64(id), nil
+			return review.ID, nil
 		}
 	}
 
@@ -203,8 +223,8 @@ func (r *ReviewRepo) Delete(id int64) error {
 
 	productKey := fmt.Sprintf("review_product:%d", review.ProductID)
 	userKey := fmt.Sprintf("review_user:%d", review.UserID)
-	_, _ = r.store.db.TurboDeleteIndex(productKey, uint64(id))
-	_, _ = r.store.db.TurboDeleteIndex(userKey, uint64(id))
+	_, _ = r.store.db.TurboDeleteIndex(productKey, KeyReviewKey128(id))
+	_, _ = r.store.db.TurboDeleteIndex(userKey, KeyReviewKey128(id))
 
 	if err := r.store.DocDelete(KeyReview(id)); err != nil {
 		return fmt.Errorf("delete review: %w", err)
