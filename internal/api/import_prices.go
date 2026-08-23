@@ -17,7 +17,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/attrs"
 	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/idxbuild"
@@ -273,6 +272,12 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 	}
 	fmt.Printf("[IMPORT-CSV] Phase 7: SCU page sort indexes rebuilt in %v\n", time.Since(phase7Start))
 
+	// Phase 8: Rebuild category tree (required for categories to appear in lists)
+	fmt.Println("[IMPORT-CSV] Phase 8: Rebuilding category trees...")
+	phase8Start := time.Now()
+	h.categoryRepo.RebuildTrees()
+	fmt.Printf("[IMPORT-CSV] Phase 8: Category trees rebuilt in %v\n", time.Since(phase8Start))
+
 	writeJSON(w, http.StatusOK, ImportPricesResult{
 		Status:           "completed",
 		Categories:       finalCategories,
@@ -483,6 +488,12 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	fmt.Printf("[IMPORT-NORMALIZED] Phase 6: SCU page sort indexes rebuilt in %v\n", time.Since(phase6Start))
+
+	// Phase 7: Rebuild category tree (required for categories to appear in lists)
+	fmt.Println("[IMPORT-NORMALIZED] Phase 7: Rebuilding category trees...")
+	phase7Start := time.Now()
+	h.categoryRepo.RebuildTrees()
+	fmt.Printf("[IMPORT-NORMALIZED] Phase 7: Category trees rebuilt in %v\n", time.Since(phase7Start))
 
 	elapsed := time.Since(startTime)
 	fmt.Printf("[IMPORT-NORMALIZED] Completed: created=%d skipped=%d time=%v (%.0f products/sec)\n",
@@ -943,12 +954,16 @@ func (h *Handlers) importNormalizedFileBatched(
 						(*batchAccum).AddIndex("vendor:"+strconv.FormatInt(prod.CompanyID, 10), docID)
 					}
 
+					// category
+					if prod.CategoryID != 0 {
+						(*batchAccum).AddIndex("cat:"+strconv.FormatInt(prod.CategoryID, 10), docID)
+					}
+
 					// attributes
 					for _, kv := range prod.Attributes {
 						valStr := kv.Value
 						if valStr != "" {
-							h := db.Fnv64(valStr)
-							(*batchAccum).AddIndex("attr:"+kv.Key+":"+strconv.FormatUint(h, 16), docID)
+							(*batchAccum).AddIndex("attr:"+kv.Key+":"+valStr, docID)
 						}
 					}
 
@@ -1089,10 +1104,10 @@ func (h *Handlers) batchWriteBrands(store *db.Store, brands map[int64]string) er
 	}
 
 	// Write brand_list
-	buf := makodb.TurboBinaryNew(brandIDs)
-	if err := store.TurboWrite("brand_list", buf); err != nil {
-		return fmt.Errorf("write brand_list: %w", err)
-	}
+	//buf := makodb.TurboBinaryNew(brandIDs)
+	//if err := store.TurboWrite("brand_list", buf); err != nil {
+	//	return fmt.Errorf("write brand_list: %w", err)
+	//}
 
 	// Write brand_name:<ID>
 	for id, name := range brands {
@@ -2080,6 +2095,12 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Printf("[IMPORT-MULTI] Phase 6: SCU page sort indexes rebuilt in %v\n", time.Since(phase6Start))
 
+	// Phase 7: Rebuild category tree (required for categories to appear in lists)
+	fmt.Println("[IMPORT-MULTI] Phase 7: Rebuilding category trees...")
+	phase7Start := time.Now()
+	h.categoryRepo.RebuildTrees()
+	fmt.Printf("[IMPORT-MULTI] Phase 7: Category trees rebuilt in %v\n", time.Since(phase7Start))
+
 	elapsed := time.Since(startTime)
 	fmt.Printf("[IMPORT-MULTI] Complete: total_imported=%d total_skipped=%d time=%v\n",
 		totalImported, totalSkipped, elapsed)
@@ -2247,11 +2268,11 @@ func (h *Handlers) HandleAdminRebuildSortIndexes(w http.ResponseWriter, r *http.
 
 	// Write sort indexes
 	writeSortIndex := func(name string, items []sortItem) error {
-		docIDs := make([]uint64, len(items))
+		docIDs := make([]string, len(items))
 		for i, item := range items {
-			docIDs[i] = item.DocID
+			docIDs[i] = strconv.Itoa(int(item.DocID))
 		}
-		return db.DB().TurboPutSortIndex(name, docIDs)
+		return db.DB().TurboPutSortIndexString(name, docIDs)
 	}
 
 	if err := writeSortIndex("sort:price_asc", priceAsc); err != nil {

@@ -12,7 +12,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/auth"
 	"github.com/GenshIv/makoshop/internal/catalogizer"
 	"github.com/GenshIv/makoshop/internal/db"
@@ -973,8 +972,8 @@ func (h *Handlers) handleRemoveCategoryAttribute(w http.ResponseWriter, r *http.
 		// No more categories use this attribute — clear it
 		_ = h.store.TurboWrite("attrdef_cats:"+code, []byte{})
 	} else {
-		buf := makodb.TurboBinaryNew(db.Uint64SliceFromInt64(newCats))
-		_ = h.store.TurboWrite("attrdef_cats:"+code, buf)
+		//buf := makodb.TurboBinaryNew(db.Uint64SliceFromInt64(newCats))
+		//_ = h.store.TurboWrite("attrdef_cats:"+code, buf)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

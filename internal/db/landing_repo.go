@@ -46,7 +46,7 @@ func (r *LandingRepo) Create(l *model.LandingPage) error {
 	}
 
 	// Turbo index: landing_list
-	if _, err := r.Store.db.TurboPutIndex(turboKeyLandingList, KeyLandingKey128(id)); err != nil {
+	if _, err := r.Store.db.TurboPutIndexString(turboKeyLandingList, strconv.Itoa(int(id))); err != nil {
 		_ = r.Store.DocDelete(KeyLandingPage(l.ID))
 		return fmt.Errorf("turbo index landing_list: %w", err)
 	}
@@ -54,7 +54,7 @@ func (r *LandingRepo) Create(l *model.LandingPage) error {
 	// Turbo index: landing_scu:<scu>
 	scuKey := turboKeyLandingSCU + l.SCU
 	if err := r.Store.TurboWrite(scuKey, []byte(strconv.FormatInt(id, 10))); err != nil {
-		_, _ = r.Store.db.TurboDeleteIndex(turboKeyLandingList, KeyLandingKey128(id))
+		_, _ = r.Store.db.TurboDeleteIndexString(turboKeyLandingList, strconv.Itoa(int(id)))
 		_ = r.Store.DocDelete(KeyLandingPage(l.ID))
 		return fmt.Errorf("turbo index landing_scu: %w", err)
 	}
@@ -158,7 +158,7 @@ func (r *LandingRepo) Delete(id int64) error {
 	}
 
 	// Remove turbo indexes
-	_, _ = r.Store.db.TurboDeleteIndex(turboKeyLandingList, KeyLandingKey128(id))
+	_, _ = r.Store.db.TurboDeleteIndexString(turboKeyLandingList, strconv.Itoa(int(id)))
 	if l.SCU != "" {
 		_ = r.Store.TurboWrite(turboKeyLandingSCU+l.SCU, []byte{})
 	}

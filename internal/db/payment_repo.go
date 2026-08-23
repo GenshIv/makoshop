@@ -38,13 +38,13 @@ func (r *PaymentRepo) Create(p *model.Payment) error {
 
 	// Index: payment by order (turbo)
 	orderKey := "payment_order:" + strconv.FormatInt(p.OrderID, 10)
-	if _, err := r.store.db.TurboPutIndex(orderKey, KeyPaymentKey128(p.ID)); err != nil {
+	if _, err := r.store.db.TurboPutIndexString(orderKey, strconv.Itoa(int(p.ID))); err != nil {
 		_ = r.store.DocDelete(KeyPayment(p.ID))
 		return fmt.Errorf("index payment by order: %w", err)
 	}
 
 	// Index: payment in global list (turbo)
-	if _, err := r.store.db.TurboPutIndex(turboKeyAllPayments, KeyPaymentKey128(p.ID)); err != nil {
+	if _, err := r.store.db.TurboPutIndexString(turboKeyAllPayments, strconv.Itoa(int(p.ID))); err != nil {
 		fmt.Printf("WARN: indexAllPayments error for payment %d: %v\n", p.ID, err)
 	}
 
@@ -114,9 +114,9 @@ func (r *PaymentRepo) Delete(id int64) error {
 
 	// Remove from order index (turbo)
 	orderKey := "payment_order:" + strconv.FormatInt(p.OrderID, 10)
-	_, _ = r.store.db.TurboDeleteIndex(orderKey, KeyPaymentKey128(id))
+	_, _ = r.store.db.TurboDeleteIndexString(orderKey, strconv.Itoa(int(id)))
 	// Remove from global index (turbo)
-	_, _ = r.store.db.TurboDeleteIndex(turboKeyAllPayments, KeyPaymentKey128(id))
+	_, _ = r.store.db.TurboDeleteIndexString(turboKeyAllPayments, strconv.Itoa(int(id)))
 	if err := r.store.DocDelete(KeyPayment(id)); err != nil {
 		return fmt.Errorf("delete payment: %w", err)
 	}

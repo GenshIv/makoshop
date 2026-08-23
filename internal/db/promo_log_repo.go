@@ -3,6 +3,7 @@ package db
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/GenshIv/makoshop/internal/model"
@@ -31,7 +32,7 @@ func (r *PromoLogRepo) Create(l *model.PromoLog) error {
 
 	// Index by campaign (turbo)
 	campaignKey := fmt.Sprintf("promo_log_campaign:%d", l.CampaignID)
-	if _, err := r.store.db.TurboPutIndex(campaignKey, KeyPromoLogKey128(l.ID)); err != nil {
+	if _, err := r.store.db.TurboPutIndexString(campaignKey, strconv.Itoa(int(l.ID))); err != nil {
 		_ = r.store.DocDelete(KeyPromoLog(l.ID))
 		return fmt.Errorf("turbo index log by campaign: %w", err)
 	}

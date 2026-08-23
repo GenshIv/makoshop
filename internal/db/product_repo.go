@@ -393,7 +393,7 @@ func (r *ProductRepo) Delete(id int64) error {
 	}
 	// Remove from product_list index
 	if p.ID != 0 {
-		_, _ = r.store.db.TurboDeleteIndex(TurboKeyProductList, KeyProductKey128(p.ID))
+		_, _ = r.store.db.TurboDeleteIndexString(TurboKeyProductList, strconv.Itoa(int(p.ID)))
 	}
 	if err := r.store.DocDelete(KeyProduct(id)); err != nil {
 		return fmt.Errorf("delete product: %w", err)
@@ -415,7 +415,7 @@ func (r *ProductRepo) DeleteProductByID(id int64) error {
 	}
 
 	// Remove from product_list
-	_, _ = r.store.db.TurboDeleteIndex(TurboKeyProductList, KeyProductKey128(id))
+	_, _ = r.store.db.TurboDeleteIndexString(TurboKeyProductList, strconv.Itoa(int(id)))
 
 	// Remove from SCUPage if linked
 	if r.scuPageSearch != nil && p.SCU != "" {

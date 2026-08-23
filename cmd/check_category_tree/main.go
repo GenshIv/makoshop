@@ -79,11 +79,10 @@ func main() {
 	})
 
 	for _, key := range catIndexKeys {
-		data, _ := storeDB.TurboRawRead(key)
-		if data == nil || len(data) == 0 {
+		tokens, err := storeDB.TurboGetIndexTokens(key)
+		if err != nil || len(tokens) == 0 {
 			continue
 		}
-		tokens := makodb.TurboUnsafeReadTokens(data)
 		catID := key[4:]
 		cat, ok := cats[mustParseInt64(catID)]
 		if !ok {
@@ -120,10 +119,9 @@ func printTree(storeDB *makodb.ShardedDB, cats map[int64]*CategoryData, root *Ca
 
 	// Count products in this category index
 	key := "cat:" + strconv.FormatInt(root.ID, 10)
-	data, _ := storeDB.TurboRawRead(key)
+	tokens, err := storeDB.TurboGetIndexTokens(key)
 	count := 0
-	if data != nil && len(data) > 0 {
-		tokens := makodb.TurboUnsafeReadTokens(data)
+	if err == nil && len(tokens) > 0 {
 		count = len(tokens)
 	}
 	fmt.Printf("%s%d: %s (%d products)\n", indent, root.ID, root.Name, count)

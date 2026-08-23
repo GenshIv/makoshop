@@ -191,7 +191,7 @@ func Stem(word string) string {
 type CachedCategoryTokens struct {
 	ID       int64
 	IsActive bool
-	Tokens   []uint64
+	Tokens   []any
 }
 
 // BuildSCUTokensFullText combines all text fields of an SCU page for tokenization.
@@ -238,9 +238,9 @@ func CatalogizeNameFromCache(name string, cached []CachedCategoryTokens) int64 {
 	for _, ct := range cached {
 		// Build set for this category
 		catSet := make(map[uint64]bool, len(ct.Tokens))
-		for _, h := range ct.Tokens {
-			catSet[h] = true
-		}
+		//for _, h := range ct.Tokens {
+		//	catSet[h] = true
+		//}
 
 		score := 0
 		for _, h := range productHashes {

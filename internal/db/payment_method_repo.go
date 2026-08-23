@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -228,12 +229,12 @@ func (r *PaymentMethodRepo) List() ([]model.CompanyPaymentMethod, error) {
 }
 
 func (r *PaymentMethodRepo) indexPaymentMethod(id int64) error {
-	_, err := r.store.db.TurboPutIndex(turboKeyPaymentMethods, KeyPaymentMethodKey128(id))
+	_, err := r.store.db.TurboPutIndexString(turboKeyPaymentMethods, strconv.Itoa(int(id)))
 	return err
 }
 
 func (r *PaymentMethodRepo) unindexPaymentMethod(id int64) error {
-	_, err := r.store.db.TurboDeleteIndex(turboKeyPaymentMethods, KeyPaymentMethodKey128(id))
+	_, err := r.store.db.TurboDeleteIndexString(turboKeyPaymentMethods, strconv.Itoa(int(id)))
 	return err
 }
 

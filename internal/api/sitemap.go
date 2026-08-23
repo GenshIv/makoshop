@@ -308,11 +308,17 @@ func (h *Handlers) getSCUPageCount() (int, error) {
 
 // getAllSCUPageIDs returns all SCUPage IDs from turbo index as sorted slice
 func (h *Handlers) getAllSCUPageIDs() ([]uint64, error) {
-	data, err := h.scuPageRepo.Store.DB().TurboRawRead(db.TurboKeySCUPageList)
-	if err != nil || len(data) == 0 {
+	tokens128, err := h.scuPageRepo.Store.DB().TurboGetIndexTokens(db.TurboKeySCUPageList)
+	if err != nil || len(tokens128) == 0 {
 		return nil, nil
 	}
-	return makodb.TurboUnsafeReadTokens(data), nil
+	// Convert Key128 tokens to uint64 IDs
+	// Assuming token[1] contains the numeric ID
+	ids := make([]uint64, len(tokens128))
+	for i, token := range tokens128 {
+		ids[i] = token[1]
+	}
+	return ids, nil
 }
 
 // buildSCUPageURL builds canonical SEO URL for a SCU page

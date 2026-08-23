@@ -48,7 +48,7 @@ func (r *CompanyRepo) Create(c *model.Company) error {
 	}
 
 	// Turbo index: company_list
-	if _, err := r.Store.db.TurboPutIndex(turboKeyCompanyList, KeyCompanyKey128(id)); err != nil {
+	if _, err := r.Store.db.TurboPutIndexString(turboKeyCompanyList, strconv.Itoa(int(id))); err != nil {
 		_ = r.Store.DocDelete(KeyCompany(c.ID))
 		return fmt.Errorf("turbo index company_list: %w", err)
 	}
@@ -56,7 +56,7 @@ func (r *CompanyRepo) Create(c *model.Company) error {
 	// Turbo index: company_name:<slug>
 	nameKey := turboKeyCompanyName + c.Slug
 	if err := r.Store.TurboWrite(nameKey, []byte(fmt.Sprintf("%d", id))); err != nil {
-		_, _ = r.Store.db.TurboDeleteIndex(turboKeyCompanyList, KeyCompanyKey128(id))
+		_, _ = r.Store.db.TurboDeleteIndexString(turboKeyCompanyList, strconv.Itoa(int(id)))
 		_ = r.Store.DocDelete(KeyCompany(c.ID))
 		return fmt.Errorf("turbo index company_name: %w", err)
 	}
@@ -175,7 +175,7 @@ func (r *CompanyRepo) Delete(id int64) error {
 	}
 
 	// Remove turbo indexes
-	_, _ = r.Store.db.TurboDeleteIndex(turboKeyCompanyList, KeyCompanyKey128(id))
+	_, _ = r.Store.db.TurboDeleteIndexString(turboKeyCompanyList, strconv.Itoa(int(id)))
 	_ = r.Store.TurboWrite(turboKeyCompanyName+c.Slug, []byte{})
 
 	if err := r.Store.DocDelete(KeyCompany(id)); err != nil {

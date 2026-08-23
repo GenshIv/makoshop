@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -236,10 +236,11 @@ func (r *AttrDefRepo) GetAttrValuesForCategory(code string, catID int64) ([]stri
 	if err != nil || len(tokens) == 0 {
 		return nil, nil
 	}
-	return r.hashesToStrings(code, tokens)
+	return nil, nil
+	// return r.hashesToStrings(code, tokens)
 }
 
-func (r *AttrDefRepo) hashesToStrings(code string, keys []makodb.Key128) ([]string, error) {
+func (r *AttrDefRepo) hashesToStrings(code string, keys []string) ([]string, error) {
 	values := make([]string, 0, len(keys))
 	for _, key := range keys {
 		// Convert Key128 to uint64 (assuming direct representation: Key128{0, hash})
@@ -374,11 +375,11 @@ func (r *AttrDefRepo) Create(code string, ad *model.AttrDef) error {
 	// Index: code -> categories
 	if len(ad.Categories) > 0 {
 		// Convert categories to Key128 IDs
-		catKeys := make([]makodb.Key128, len(ad.Categories))
+		catKeys := make([]string, len(ad.Categories))
 		for i, catID := range ad.Categories {
-			catKeys[i] = KeyCategoryKey128(catID)
+			catKeys[i] = KeyCategory(catID)
 		}
-		if _, err := r.store.DB().TurboPutBatchIndex(turboKeyAttrDefCats+code, catKeys); err != nil {
+		if _, err := r.store.DB().TurboPutBatchIndexString(turboKeyAttrDefCats+code, catKeys); err != nil {
 			return err
 		}
 	}
@@ -415,13 +416,13 @@ func (r *AttrDefRepo) Update(code string, updater func(*model.AttrDef)) error {
 	// Update code -> categories
 	if len(ad.Categories) > 0 {
 		// Convert categories to Key128 IDs
-		catKeys := make([]makodb.Key128, len(ad.Categories))
+		catKeys := make([]string, len(ad.Categories))
 		for i, catID := range ad.Categories {
-			catKeys[i] = KeyCategoryKey128(catID)
+			catKeys[i] = KeyCategory(catID)
 		}
-		_, _ = r.store.DB().TurboPutBatchIndex(turboKeyAttrDefCats+code, catKeys)
+		_, _ = r.store.DB().TurboPutBatchIndexString(turboKeyAttrDefCats+code, catKeys)
 	} else {
-		_, _ = r.store.DB().TurboPutBatchIndex(turboKeyAttrDefCats+code, []makodb.Key128{})
+		_, _ = r.store.DB().TurboPutBatchIndexString(turboKeyAttrDefCats+code, []string{})
 	}
 
 	// Update cat -> codes
@@ -485,11 +486,11 @@ func (r *AttrDefRepo) UpsertCode(code string, catID int64) error {
 		}
 		cats = append(cats, catID)
 		// Convert categories to Key128 IDs
-		catKeys := make([]makodb.Key128, len(cats))
+		catKeys := make([]string, len(cats))
 		for i, catID := range cats {
-			catKeys[i] = KeyCategoryKey128(catID)
+			catKeys[i] = KeyCategory(catID)
 		}
-		if _, err := r.store.DB().TurboPutBatchIndex(turboKeyAttrDefCats+code, catKeys); err != nil {
+		if _, err := r.store.DB().TurboPutBatchIndexString(turboKeyAttrDefCats+code, catKeys); err != nil {
 			return err
 		}
 		return r.addToCatCodes(catID, code)
@@ -517,7 +518,7 @@ func (r *AttrDefRepo) UpsertCode(code string, catID int64) error {
 	}
 
 	// Convert category ID to Key128
-	if _, err := r.store.DB().TurboPutIndex(turboKeyAttrDefCats+code, KeyCategoryKey128(catID)); err != nil {
+	if _, err := r.store.DB().TurboPutIndexString(turboKeyAttrDefCats+code, KeyCategory(catID)); err != nil {
 		return err
 	}
 
@@ -567,11 +568,11 @@ func (r *AttrDefRepo) BatchUpsertCodes(codeCats map[string]map[int64]struct{}) e
 		}
 
 		// Convert categories to Key128 IDs
-		catKeys := make([]makodb.Key128, len(cats))
+		catKeys := make([]string, len(cats))
 		for i, catID := range cats {
-			catKeys[i] = KeyCategoryKey128(catID)
+			catKeys[i] = KeyCategory(catID)
 		}
-		if _, err := r.store.DB().TurboPutBatchIndex(turboKeyAttrDefCats+code, catKeys); err != nil {
+		if _, err := r.store.DB().TurboPutBatchIndexString(turboKeyAttrDefCats+code, catKeys); err != nil {
 			fmt.Printf("WARN: write attrdef_cats %s: %v\n", code, err)
 		}
 
@@ -643,12 +644,12 @@ func (r *AttrDefRepo) BatchWriteAttrValues(codeValues map[string]map[string]stru
 					catHashes = append(catHashes, fnv64(val))
 				}
 				// Convert hashes to Key128 IDs
-				hashKeys := make([]makodb.Key128, len(catHashes))
+				hashKeys := make([]string, len(catHashes))
 				for i, h := range catHashes {
-					hashKeys[i] = Uint64ToKey128(h)
+					hashKeys[i] = strconv.Itoa(int(h))
 				}
 				catKey := turboKeyAttrValuesCat + code + ":" + fmt.Sprintf("%d", catID)
-				if _, err := r.store.DB().TurboPutBatchIndex(catKey, hashKeys); err != nil {
+				if _, err := r.store.DB().TurboPutBatchIndexString(catKey, hashKeys); err != nil {
 					fmt.Printf("WARN: write attr_values_cat %s: %v\n", catKey, err)
 				}
 			}

@@ -3,6 +3,7 @@ package db
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/GenshIv/makoshop/internal/model"
@@ -35,14 +36,14 @@ func (r *PromoCampaignRepo) Create(c *model.PromoCampaign) error {
 
 	// Index by company (turbo)
 	companyKey := fmt.Sprintf("promo_campaign_company:%d", c.CompanyID)
-	if _, err := r.store.db.TurboPutIndex(companyKey, KeyPromoCampaignKey128(c.ID)); err != nil {
+	if _, err := r.store.db.TurboPutIndexString(companyKey, strconv.Itoa(int(c.ID))); err != nil {
 		_ = r.store.DocDelete(KeyPromoCampaign(c.ID))
 		return fmt.Errorf("turbo index campaign by company: %w", err)
 	}
 
 	// Index in global list (turbo)
-	if _, err := r.store.db.TurboPutIndex(turboKeyAllPromoCampaigns, KeyPromoCampaignKey128(c.ID)); err != nil {
-		_, _ = r.store.db.TurboDeleteIndex(companyKey, KeyPromoCampaignKey128(c.ID))
+	if _, err := r.store.db.TurboPutIndexString(turboKeyAllPromoCampaigns, strconv.Itoa(int(c.ID))); err != nil {
+		_, _ = r.store.db.TurboDeleteIndexString(companyKey, strconv.Itoa(int(c.ID)))
 		_ = r.store.DocDelete(KeyPromoCampaign(c.ID))
 		return fmt.Errorf("turbo index campaign global: %w", err)
 	}
@@ -119,8 +120,8 @@ func (r *PromoCampaignRepo) Delete(id int64) error {
 		return err
 	}
 	companyKey := fmt.Sprintf("promo_campaign_company:%d", c.CompanyID)
-	_, _ = r.store.db.TurboDeleteIndex(companyKey, KeyPromoCampaignKey128(id))
-	_, _ = r.store.db.TurboDeleteIndex(turboKeyAllPromoCampaigns, KeyPromoCampaignKey128(id))
+	_, _ = r.store.db.TurboDeleteIndexString(companyKey, strconv.Itoa(int(id)))
+	_, _ = r.store.db.TurboDeleteIndexString(turboKeyAllPromoCampaigns, strconv.Itoa(int(id)))
 	return r.store.DocDelete(KeyPromoCampaign(id))
 }
 

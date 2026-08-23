@@ -3,6 +3,7 @@ package db
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/GenshIv/makoshop/internal/model"
@@ -39,15 +40,15 @@ func (r *ReviewRepo) Create(review *model.Review) error {
 
 	// Index: review by product (turbo)
 	productKey := fmt.Sprintf("review_product:%d", review.ProductID)
-	if _, err := r.store.db.TurboPutIndex(productKey, KeyReviewKey128(review.ID)); err != nil {
+	if _, err := r.store.db.TurboPutIndexString(productKey, strconv.Itoa(int(review.ID))); err != nil {
 		_ = r.store.DocDelete(KeyReview(review.ID))
 		return fmt.Errorf("turbo index review by product: %w", err)
 	}
 
 	// Index: review by user (turbo)
 	userKey := fmt.Sprintf("review_user:%d", review.UserID)
-	if _, err := r.store.db.TurboPutIndex(userKey, KeyReviewKey128(review.ID)); err != nil {
-		_, _ = r.store.db.TurboDeleteIndex(productKey, KeyReviewKey128(review.ID))
+	if _, err := r.store.db.TurboPutIndexString(userKey, strconv.Itoa(int(review.ID))); err != nil {
+		_, _ = r.store.db.TurboDeleteIndexString(productKey, strconv.Itoa(int(review.ID)))
 		_ = r.store.DocDelete(KeyReview(review.ID))
 		return fmt.Errorf("turbo index review by user: %w", err)
 	}
@@ -223,8 +224,8 @@ func (r *ReviewRepo) Delete(id int64) error {
 
 	productKey := fmt.Sprintf("review_product:%d", review.ProductID)
 	userKey := fmt.Sprintf("review_user:%d", review.UserID)
-	_, _ = r.store.db.TurboDeleteIndex(productKey, KeyReviewKey128(id))
-	_, _ = r.store.db.TurboDeleteIndex(userKey, KeyReviewKey128(id))
+	_, _ = r.store.db.TurboDeleteIndexString(productKey, strconv.Itoa(int(id)))
+	_, _ = r.store.db.TurboDeleteIndexString(userKey, strconv.Itoa(int(id)))
 
 	if err := r.store.DocDelete(KeyReview(id)); err != nil {
 		return fmt.Errorf("delete review: %w", err)

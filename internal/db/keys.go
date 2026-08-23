@@ -8,7 +8,6 @@ import (
 	"unsafe"
 
 	intHache "github.com/GenshIv/intHache"
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/silentjson/v2"
 )
@@ -32,134 +31,6 @@ func KeyPromoCampaign(id int64) string { return fmt.Sprintf("promo_campaign:%d",
 func KeyPromoLog(id int64) string      { return fmt.Sprintf("promo_log:%d", id) }
 func KeyLandingPage(id int64) string   { return fmt.Sprintf("landing:%d", id) }
 func KeySCUPage(id int64) string       { return fmt.Sprintf("scupage:%d", id) }
-
-// Key128 helpers for makodb/v2 compatibility
-
-// DocIDKey128 converts a document key string (e.g., "category:123") to makodb.Key128.
-func DocIDKey128(key string) makodb.Key128 {
-	return makodb.HashKey(key)
-}
-
-// Int64ToDocIDKey128 converts an entity type prefix and int64 ID to makodb.Key128.
-// For example: Int64ToDocIDKey128("category", 123) -> hash of "category:123"
-func Int64ToDocIDKey128(prefix string, id int64) makodb.Key128 {
-	return DocIDKey128(fmt.Sprintf("%s:%d", prefix, id))
-}
-
-// KeyCategoryKey128 converts a category ID to Key128 for turbo indexes.
-func KeyCategoryKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("category", id)
-}
-
-// KeyUserKey128 converts a user ID to Key128 for turbo indexes.
-func KeyUserKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("user", id)
-}
-
-// KeyProductKey128 converts a product ID to Key128 for turbo indexes.
-func KeyProductKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("product", id)
-}
-
-// KeyCompanyKey128 converts a company ID to Key128 for turbo indexes.
-func KeyCompanyKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("company", id)
-}
-
-// KeyBrandKey128 converts a brand ID to Key128 for turbo indexes.
-func KeyBrandKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("brand", id)
-}
-
-// KeyOrderKey128 converts an order ID to Key128 for turbo indexes.
-func KeyOrderKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("order", id)
-}
-
-// KeyPaymentKey128 converts a payment ID to Key128 for turbo indexes.
-func KeyPaymentKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("payment", id)
-}
-
-// KeyReviewKey128 converts a review ID to Key128 for turbo indexes.
-func KeyReviewKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("review", id)
-}
-
-// KeyPromoCampaignKey128 converts a promo campaign ID to Key128 for turbo indexes.
-func KeyPromoCampaignKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("promo_campaign", id)
-}
-
-// KeyPromoPlanKey128 converts a promo plan ID to Key128 for turbo indexes.
-func KeyPromoPlanKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("promo_plan", id)
-}
-
-// KeyPromoLogKey128 converts a promo log ID to Key128 for turbo indexes.
-func KeyPromoLogKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("promo_log", id)
-}
-
-// KeyAttrDefKey128 converts an attribute definition ID to Key128 for turbo indexes.
-func KeyAttrDefKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("attrdef", id)
-}
-
-// KeyCartKey128 converts a cart ID string to Key128 for turbo indexes.
-func KeyCartKey128(id string) makodb.Key128 {
-	return DocIDKey128(KeyCart(id))
-}
-
-// KeyLandingKey128 converts a landing page ID to Key128 for turbo indexes.
-func KeyLandingKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("landing", id)
-}
-
-// KeySCUPageKey128 converts an SCU page ID to Key128 for turbo indexes.
-func KeySCUPageKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("scupage", id)
-}
-
-// Uint64ToKey128 converts a uint64 value to Key128 for turbo indexes.
-// This is useful for storing hash values as docIDs in turbo indexes.
-func Uint64ToKey128(v uint64) makodb.Key128 {
-	return makodb.Key128{v, 0}
-}
-
-// CompareKey128 compares two Key128 values.
-// Returns -1 if a < b, 0 if a == b, 1 if a > b.
-// This is a copy of makodb.bytesCompareKey128 since it's not exported.
-func CompareKey128(a, b makodb.Key128) int {
-	if a[0] < b[0] {
-		return -1
-	}
-	if a[0] > b[0] {
-		return 1
-	}
-	if a[1] < b[1] {
-		return -1
-	}
-	if a[1] > b[1] {
-		return 1
-	}
-	return 0
-}
-
-// KeyDeliveryTimeKey128 converts a delivery time ID to Key128 for turbo indexes.
-func KeyDeliveryTimeKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("delivery_time", id)
-}
-
-// KeyInstallmentPlanKey128 converts an installment plan ID to Key128 for turbo indexes.
-func KeyInstallmentPlanKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("installment_plan", id)
-}
-
-// KeyPaymentMethodKey128 converts a payment method ID to Key128 for turbo indexes.
-func KeyPaymentMethodKey128(id int64) makodb.Key128 {
-	return Int64ToDocIDKey128("payment_method", id)
-}
 
 // Index keys — all turbo-based. Helpers for hashing used by turbo_search.go.
 
@@ -455,5 +326,3 @@ func UnmarshalSCUPage(data []byte) (*model.SCUPage, error) {
 	}
 	return &s, nil
 }
-
-

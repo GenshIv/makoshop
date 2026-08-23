@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/silentjson/v2"
 )
@@ -23,16 +22,16 @@ import (
 // turbo_cat_active     -> [activeCatIDs] (only active categories)
 
 const (
-	turboKeyCategoryList       = "cat_list"
+	turboKeyCategoryList       = "cat_list:"
 	turboKeyCategorySlug       = "cat_slug:"
 	turboKeyCategoryPath       = "cat_path:"
 	turboKeyCategoryParent     = "cat_parent:"
 	turboKeyCategoryChildrenOf = "cat_children_of:"
 	turboKeyCategoryAncestors  = "cat_ancestors:"
-	turboKeyCategoryActive     = "cat_active"
+	turboKeyCategoryActive     = "cat_active:"
 
 	// Precomputed category trees as JSON.
-	turboKeyCategoryTreeFull   = "cat_tree_full"
+	turboKeyCategoryTreeFull   = "cat_tree_full:"
 	turboKeyCategoryTreeParent = "cat_tree_parent:"
 )
 
@@ -235,34 +234,34 @@ func (r *CategoryRepo) removeCategoryFromIndexes(cat *model.Category) {
 
 func (r *CategoryRepo) addToCategoryList(catID int64) {
 	// Add to category list using TurboPutIndex with Key128
-	_, _ = r.store.DB().TurboPutIndex(turboKeyCategoryList, KeyCategoryKey128(catID))
+	_, _ = r.store.DB().TurboPutIndexString(turboKeyCategoryList, KeyCategory(catID))
 }
 
 func (r *CategoryRepo) removeFromCategoryList(catID int64) {
 	// Remove from category list using TurboDeleteIndex with Key128
-	r.store.DB().TurboDeleteIndex(turboKeyCategoryList, KeyCategoryKey128(catID))
+	r.store.DB().TurboDeleteIndexString(turboKeyCategoryList, KeyCategory(catID))
 }
 
 func (r *CategoryRepo) addToActiveList(catID int64) {
 	// Add to active list using TurboPutIndex with Key128
-	_, _ = r.store.DB().TurboPutIndex(turboKeyCategoryActive, KeyCategoryKey128(catID))
+	_, _ = r.store.DB().TurboPutIndexString(turboKeyCategoryActive, KeyCategory(catID))
 }
 
 func (r *CategoryRepo) removeFromActiveList(catID int64) {
 	// Remove from active list using TurboDeleteIndex with Key128
-	r.store.DB().TurboDeleteIndex(turboKeyCategoryActive, KeyCategoryKey128(catID))
+	r.store.DB().TurboDeleteIndexString(turboKeyCategoryActive, KeyCategory(catID))
 }
 
 func (r *CategoryRepo) addToParentChildrenList(parentID, childID int64) {
 	key := turboKeyCategoryParent + fmt.Sprintf("%d", parentID)
 	// Add to parent children list using TurboPutIndex with Key128
-	_, _ = r.store.DB().TurboPutIndex(key, KeyCategoryKey128(childID))
+	_, _ = r.store.DB().TurboPutIndexString(key, KeyCategory(childID))
 }
 
 func (r *CategoryRepo) removeFromParentChildrenList(parentID, childID int64) {
 	key := turboKeyCategoryParent + fmt.Sprintf("%d", parentID)
 	// Remove from parent children list using TurboDeleteIndex with Key128
-	r.store.DB().TurboDeleteIndex(key, KeyCategoryKey128(childID))
+	r.store.DB().TurboDeleteIndexString(key, KeyCategory(childID))
 }
 
 // rebuildAncestorsCache rebuilds the ancestors cache for a category.
@@ -273,11 +272,11 @@ func (r *CategoryRepo) rebuildAncestorsCache(catID int64) {
 	r.store.DB().TurboClearIndex(key)
 	if len(ancestors) > 0 {
 		// Convert int64 to Key128 and add to index
-		ancestorKeys := make([]makodb.Key128, len(ancestors))
+		ancestorKeys := make([]string, len(ancestors))
 		for i, id := range ancestors {
-			ancestorKeys[i] = KeyCategoryKey128(id)
+			ancestorKeys[i] = strconv.Itoa(int(id))
 		}
-		_, _ = r.store.DB().TurboPutBatchIndex(key, ancestorKeys)
+		_, _ = r.store.DB().TurboPutBatchIndexString(key, ancestorKeys)
 	}
 	r.treePathCache.Delete(catID)
 }
@@ -309,11 +308,11 @@ func (r *CategoryRepo) rebuildDescendantsCache(catID int64) {
 	r.store.DB().TurboClearIndex(key)
 	if len(descendants) > 0 {
 		// Convert int64 to Key128 and add to index
-		descendantKeys := make([]makodb.Key128, len(descendants))
+		descendantKeys := make([]string, len(descendants))
 		for i, id := range descendants {
-			descendantKeys[i] = KeyCategoryKey128(id)
+			descendantKeys[i] = strconv.Itoa(int(id))
 		}
-		_, _ = r.store.DB().TurboPutBatchIndex(key, descendantKeys)
+		_, _ = r.store.DB().TurboPutBatchIndexString(key, descendantKeys)
 	}
 }
 
@@ -543,7 +542,7 @@ func (r *CategoryRepo) rebuildFullTreeJSON() {
 	// Try to get active category tokens from turbo index.
 	tokens, err := r.store.DB().TurboGetIndexTokens(turboKeyCategoryActive)
 	var cats []model.Category
-	
+
 	if err != nil || len(tokens) == 0 {
 		// If index is empty/missing, fall back to listing all categories.
 		all, err := r.ListAll()
@@ -596,7 +595,7 @@ func (r *CategoryRepo) rebuildParentTreeJSON(parentID int64) {
 	// Try to get active category tokens from turbo index.
 	tokens, err := r.store.DB().TurboGetIndexTokens(turboKeyCategoryActive)
 	var cats []model.Category
-	
+
 	if err != nil || len(tokens) == 0 {
 		// If index is empty/missing, fall back to listing all categories.
 		all, err := r.ListAll()

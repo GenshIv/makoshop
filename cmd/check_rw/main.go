@@ -48,16 +48,21 @@ func main() {
 		}
 	}
 
-	// Check via MultiGetByDocIDsWithPrefix (uses TurboRawRead)
-	docs, err := db.MultiGetByDocIDsWithPrefix([]uint64{160867, 160897}, "product:")
+	// Check via MultiGetByDocIDsWithPrefix (uses Key128)
+	// Convert uint64 to Key128
+	key128s := []makodb.Key128{
+		makodb.Key128{0, 160867},
+		makodb.Key128{0, 160897},
+	}
+	docs, err := db.MultiGetByDocIDsWithPrefix(key128s, "product:")
 	if err != nil {
 		fmt.Printf("MultiGetByDocIDsWithPrefix: %v\n", err)
 	} else {
 		for i, d := range docs {
 			if d != nil {
-				fmt.Printf("MultiGetByDocIDsWithPrefix[%d] (product:%d): %d bytes\n", i, []uint64{160867, 160897}[i], len(d))
+				fmt.Printf("MultiGetByDocIDsWithPrefix[%d]: %d bytes\n", i, len(d))
 			} else {
-				fmt.Printf("MultiGetByDocIDsWithPrefix[%d] (product:%d): nil\n", i, []uint64{160867, 160897}[i])
+				fmt.Printf("MultiGetByDocIDsWithPrefix[%d]: nil\n", i)
 			}
 		}
 	}

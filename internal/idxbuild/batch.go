@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/GenshIv/makodb/v2"
@@ -119,7 +120,12 @@ func MergeIndexes(db *makodb.ShardedDB, tmpDir string) error {
 		}
 		RadixSortUint64(all)
 		key := decodeSafeKey(safeKey)
-		if _, err := db.TurboPutBatchIndex(key, all); err != nil {
+		// Convert uint64 docIDs to strings for TurboPutBatchIndexString
+		strAll := make([]string, len(all))
+		for i, id := range all {
+			strAll[i] = strconv.FormatUint(id, 10)
+		}
+		if _, err := db.TurboPutBatchIndexString(key, strAll); err != nil {
 			return fmt.Errorf("batch add to index %s: %w", key, err)
 		}
 	}
@@ -197,7 +203,12 @@ func MergeSortIndexes(db *makodb.ShardedDB, tmpDir string) error {
 		}
 
 		indexName := decodeSafeKey(safeKey)
-		if err := db.TurboPutSortIndex(indexName, docIDs); err != nil {
+		// Convert uint64 docIDs to strings for TurboPutSortIndexString
+		strDocIDs := make([]string, len(docIDs))
+		for i, id := range docIDs {
+			strDocIDs[i] = strconv.FormatUint(id, 10)
+		}
+		if err := db.TurboPutSortIndexString(indexName, strDocIDs); err != nil {
 			return fmt.Errorf("write sort index %s: %w", indexName, err)
 		}
 	}

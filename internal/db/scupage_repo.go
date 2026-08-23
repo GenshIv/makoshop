@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/makoshop/internal/tokenizer"
 )
@@ -73,11 +72,11 @@ func (r *SCUPageRepo) LoadCatalogizerCache() error {
 			continue
 		}
 
-		cached = append(cached, tokenizer.CachedCategoryTokens{
-			ID:       cat.ID,
-			IsActive: true,
-			Tokens:   tokens,
-		})
+		//cached = append(cached, tokenizer.CachedCategoryTokens{
+		//	ID:       cat.ID,
+		//	IsActive: true,
+		//	Tokens:   tokens,
+		//})
 	}
 
 	r.catalogizerCache = cached
@@ -149,7 +148,7 @@ func (r *SCUPageRepo) Create(s *model.SCUPage) error {
 	}
 
 	// Turbo index: scupage_list
-	if _, err := r.Store.db.TurboPutIndex(TurboKeySCUPageList, KeySCUPageKey128(id)); err != nil {
+	if _, err := r.Store.db.TurboPutIndexString(TurboKeySCUPageList, strconv.Itoa(int(id))); err != nil {
 		_ = r.Store.DocDelete(KeySCUPage(s.ID))
 		return fmt.Errorf("turbo index scupage_list: %w", err)
 	}
@@ -157,7 +156,7 @@ func (r *SCUPageRepo) Create(s *model.SCUPage) error {
 	// Turbo index: scupage_scu:<scu>
 	scuKey := turboKeySCUPageSCU + s.SCU
 	if err := r.Store.TurboWrite(scuKey, []byte(strconv.FormatInt(id, 10))); err != nil {
-		_, _ = r.Store.db.TurboDeleteIndex(TurboKeySCUPageList, KeySCUPageKey128(id))
+		_, _ = r.Store.db.TurboDeleteIndexString(TurboKeySCUPageList, strconv.Itoa(int(id)))
 		_ = r.Store.DocDelete(KeySCUPage(s.ID))
 		return fmt.Errorf("turbo index scupage_scu: %w", err)
 	}
@@ -165,7 +164,7 @@ func (r *SCUPageRepo) Create(s *model.SCUPage) error {
 	// Turbo index: scupage_slug:<slug>
 	slugKey := turboKeySCUPageSlug + s.Slug
 	if err := r.Store.TurboWrite(slugKey, []byte(strconv.FormatInt(id, 10))); err != nil {
-		_, _ = r.Store.db.TurboDeleteIndex(TurboKeySCUPageList, KeySCUPageKey128(id))
+		_, _ = r.Store.db.TurboDeleteIndexString(TurboKeySCUPageList, strconv.Itoa(int(id)))
 		_ = r.Store.TurboWrite(scuKey, []byte{})
 		_ = r.Store.DocDelete(KeySCUPage(s.ID))
 		return fmt.Errorf("turbo index scupage_slug: %w", err)
@@ -295,7 +294,7 @@ func (r *SCUPageRepo) Delete(id int64) error {
 	}
 
 	// Remove turbo indexes
-	_, _ = r.Store.db.TurboDeleteIndex(TurboKeySCUPageList, KeySCUPageKey128(id))
+	_, _ = r.Store.db.TurboDeleteIndexString(TurboKeySCUPageList, strconv.Itoa(int(id)))
 	if s.SCU != "" {
 		_ = r.Store.TurboWrite(turboKeySCUPageSCU+s.SCU, []byte{})
 	}
@@ -838,19 +837,19 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 
 	// Create new pages
 	created := make(map[string]int64)
-	var newSCUPageIDs []makodb.Key128
+	var newSCUPageIDs []string
 	for scu, s := range newPages {
 		if err := r.CreateNoListIndex(s); err != nil {
 			fmt.Printf("WARN: create scupage for SCU %s: %v\n", scu, err)
 			continue
 		}
 		created[scu] = s.ID
-		newSCUPageIDs = append(newSCUPageIDs, KeySCUPageKey128(s.ID))
+		newSCUPageIDs = append(newSCUPageIDs, strconv.Itoa(int(s.ID)))
 	}
 
 	// Batch add all new SCU pages to scupage_list index (single write)
 	if len(newSCUPageIDs) > 0 {
-		if _, err := r.Store.db.TurboPutBatchIndex(TurboKeySCUPageList, newSCUPageIDs); err != nil {
+		if _, err := r.Store.db.TurboPutBatchIndexString(TurboKeySCUPageList, newSCUPageIDs); err != nil {
 			fmt.Printf("WARN: batch add to scupage_list: %v\n", err)
 		}
 	}

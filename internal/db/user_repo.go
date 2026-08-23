@@ -3,6 +3,7 @@ package db
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -240,6 +241,6 @@ func (r *UserRepo) GetAllUsers() ([]model.User, error) {
 
 // indexUserID adds a user ID to the turbo user list.
 func (r *UserRepo) indexUserID(id int64) error {
-	_, err := r.store.db.TurboPutIndex(turboKeyAllUsers, KeyUserKey128(id))
+	_, err := r.store.db.TurboPutIndexString(turboKeyAllUsers, strconv.Itoa(int(id)))
 	return err
 }
