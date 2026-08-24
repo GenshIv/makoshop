@@ -393,7 +393,7 @@ func (r *ProductRepo) Delete(id int64) error {
 	}
 	// Remove from product_list index
 	if p.ID != 0 {
-		_, _ = r.store.db.TurboDeleteIndexString(TurboKeyProductList, strconv.Itoa(int(p.ID)))
+		_, _ = r.store.db.TurboDeleteIndexString(TurboKeyProductList, KeyProduct(p.ID))
 	}
 	if err := r.store.DocDelete(KeyProduct(id)); err != nil {
 		return fmt.Errorf("delete product: %w", err)
@@ -415,7 +415,7 @@ func (r *ProductRepo) DeleteProductByID(id int64) error {
 	}
 
 	// Remove from product_list
-	_, _ = r.store.db.TurboDeleteIndexString(TurboKeyProductList, strconv.Itoa(int(id)))
+	_, _ = r.store.db.TurboDeleteIndexString(TurboKeyProductList, KeyProduct(id))
 
 	// Remove from SCUPage if linked
 	if r.scuPageSearch != nil && p.SCU != "" {
@@ -452,7 +452,7 @@ func (r *ProductRepo) DeleteAllProducts() error {
 	fmt.Printf("[DELETE-ALL] Deleting %d products from product_list...\n", len(tokens))
 
 	// Get all products at once
-	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "product:")
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return fmt.Errorf("multi get products: %w", err)
 	}
@@ -501,7 +501,7 @@ func (r *ProductRepo) deleteAllSCUPages() error {
 	fmt.Printf("[DELETE-ALL] Deleting %d SCU pages...\n", len(tokens))
 
 	// Get all SCU pages at once
-	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "scupage:")
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return fmt.Errorf("multi get scupages: %w", err)
 	}

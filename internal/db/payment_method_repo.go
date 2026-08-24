@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -203,7 +202,7 @@ func (r *PaymentMethodRepo) List() ([]model.CompanyPaymentMethod, error) {
 		return []model.CompanyPaymentMethod{}, nil
 	}
 
-	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "doc:payment_method:")
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return nil, fmt.Errorf("multi get payment methods: %w", err)
 	}
@@ -229,12 +228,12 @@ func (r *PaymentMethodRepo) List() ([]model.CompanyPaymentMethod, error) {
 }
 
 func (r *PaymentMethodRepo) indexPaymentMethod(id int64) error {
-	_, err := r.store.db.TurboPutIndexString(turboKeyPaymentMethods, strconv.Itoa(int(id)))
+	_, err := r.store.db.TurboPutIndexString(turboKeyPaymentMethods, keyPaymentMethod(id))
 	return err
 }
 
 func (r *PaymentMethodRepo) unindexPaymentMethod(id int64) error {
-	_, err := r.store.db.TurboDeleteIndexString(turboKeyPaymentMethods, strconv.Itoa(int(id)))
+	_, err := r.store.db.TurboDeleteIndexString(turboKeyPaymentMethods, keyPaymentMethod(id))
 	return err
 }
 

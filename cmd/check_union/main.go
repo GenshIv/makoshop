@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	db, err := makodb.OpenSharded("makoshop_db", 16, 40*1024*1024*1024, 5_000_000)
+	db, err := makodb.OpenSharded("makoshop_db", 16, 40*1024*1024*1024, 5_000_000, false)
 	if err != nil {
 		fmt.Printf("Open: %v\n", err)
 		os.Exit(1)

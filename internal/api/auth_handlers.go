@@ -584,9 +584,7 @@ func (h *AuthHandlers) HandleCompaniesList(w http.ResponseWriter, r *http.Reques
 		companies = []model.Company{}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"items": companies,
-	})
+	writeJSON(w, http.StatusOK, companies)
 }
 
 // HandleCompanyGet returns a company by ID (public).

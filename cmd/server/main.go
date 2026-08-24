@@ -179,11 +179,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
 	}
-	defer store.Close()
+	defer func() {
+		store.DB().Sync()
+		store.Close()
+	}()
 
 	// Repositories (needed for superadmin bootstrap)
 	userRepo := db.NewUserRepo(store)
 
+	ticker := time.NewTicker(10 * time.Second)
+
+	go func() {
+		for range ticker.C {
+			store.DB().Sync()
+		}
+	}()
 	// Bootstrap superadmin if no admins exist
 	bootstrapSuperAdmin(userRepo)
 

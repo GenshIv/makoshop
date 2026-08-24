@@ -263,8 +263,10 @@ func (h *Handlers) HandleSitemapSCUPage(w http.ResponseWriter, r *http.Request) 
 	// Build URLs from SCUPage documents (streaming to avoid loading all into memory)
 	urls := make([]SitemapURL, 0, len(pageIDs))
 
-	for _, id := range pageIDs {
-		sp, err := h.scuPageRepo.Get(int64(id))
+	res, _ := h.store.DB().MultiGetByKey128(pageIDs)
+	for _, data := range res {
+		sp, err := db.UnmarshalSCUPage(data)
+		// sp, err := h.scuPageRepo.Get(id)
 		if err != nil || !sp.IsActive {
 			continue
 		}
@@ -307,16 +309,16 @@ func (h *Handlers) getSCUPageCount() (int, error) {
 }
 
 // getAllSCUPageIDs returns all SCUPage IDs from turbo index as sorted slice
-func (h *Handlers) getAllSCUPageIDs() ([]uint64, error) {
+func (h *Handlers) getAllSCUPageIDs() ([]any, error) {
 	tokens128, err := h.scuPageRepo.Store.DB().TurboGetIndexTokens(db.TurboKeySCUPageList)
 	if err != nil || len(tokens128) == 0 {
 		return nil, nil
 	}
 	// Convert Key128 tokens to uint64 IDs
 	// Assuming token[1] contains the numeric ID
-	ids := make([]uint64, len(tokens128))
+	ids := make([]any, len(tokens128))
 	for i, token := range tokens128 {
-		ids[i] = token[1]
+		ids[i] = token
 	}
 	return ids, nil
 }

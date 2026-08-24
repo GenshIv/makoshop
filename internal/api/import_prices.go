@@ -936,7 +936,7 @@ func (h *Handlers) importNormalizedFileBatched(
 				if prod, err := h.productRepo.Get(id); err == nil {
 					created = append(created, prod)
 					allCreated = append(allCreated, prod) // collect for batch SCU upsert
-					docID := uint64(prod.ID)
+					docID := "product:" + strconv.FormatInt(prod.ID, 10)
 
 					// product_list
 					(*batchAccum).AddIndex("product_list", docID)
@@ -970,6 +970,11 @@ func (h *Handlers) importNormalizedFileBatched(
 					// text
 					for _, tok := range tokenizeProduct(prod) {
 						(*batchAccum).AddIndex("text:"+tok, docID)
+					}
+
+					// SCU index
+					if prod.SCU != "" {
+						(*batchAccum).AddIndex("scu:"+prod.SCU, docID)
 					}
 				}
 				imported++
@@ -1121,7 +1126,7 @@ func (h *Handlers) batchWriteBrands(store *db.Store, brands map[int64]string) er
 }
 
 // indexPriceRanges adds docID to price range indexes in the accumulator.
-func indexPriceRanges(accum *idxbuild.BatchAccum, price float64, docID uint64) {
+func indexPriceRanges(accum *idxbuild.BatchAccum, price float64, docID string) {
 	ranges := []struct {
 		min, max float64
 		key      string

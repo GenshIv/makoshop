@@ -274,7 +274,7 @@ func (r *CategoryRepo) rebuildAncestorsCache(catID int64) {
 		// Convert int64 to Key128 and add to index
 		ancestorKeys := make([]string, len(ancestors))
 		for i, id := range ancestors {
-			ancestorKeys[i] = strconv.Itoa(int(id))
+			ancestorKeys[i] = KeyCategory(id)
 		}
 		_, _ = r.store.DB().TurboPutBatchIndexString(key, ancestorKeys)
 	}
@@ -310,7 +310,7 @@ func (r *CategoryRepo) rebuildDescendantsCache(catID int64) {
 		// Convert int64 to Key128 and add to index
 		descendantKeys := make([]string, len(descendants))
 		for i, id := range descendants {
-			descendantKeys[i] = strconv.Itoa(int(id))
+			descendantKeys[i] = KeyCategory(id)
 		}
 		_, _ = r.store.DB().TurboPutBatchIndexString(key, descendantKeys)
 	}
@@ -534,6 +534,8 @@ func (r *CategoryRepo) ListAll() ([]model.Category, error) {
 // Call this at startup or after bulk changes.
 func (r *CategoryRepo) RebuildTrees() {
 	r.rebuildFullTreeJSON()
+	// Rebuild ancestors and descendants caches for all categories
+	r.rebuildAllAncestorsAndDescendants()
 }
 
 // rebuildFullTreeJSON rebuilds the full active category tree and stores it as JSON in turbo.
@@ -588,6 +590,21 @@ func (r *CategoryRepo) rebuildFullTreeJSON() {
 		jsonData = []byte("[]")
 	}
 	r.store.TurboWrite(turboKeyCategoryTreeFull, jsonData)
+}
+
+// rebuildAllAncestorsAndDescendants rebuilds ancestors and descendants caches for all categories.
+// This ensures that GetAncestors and GetDescendants work correctly after bulk imports.
+func (r *CategoryRepo) rebuildAllAncestorsAndDescendants() {
+	all, err := r.ListAll()
+	if err != nil {
+		fmt.Printf("WARN: rebuildAllAncestorsAndDescendants: %v\n", err)
+		return
+	}
+	for _, cat := range all {
+		r.rebuildAncestorsCache(cat.ID)
+		r.rebuildDescendantsCache(cat.ID)
+	}
+	fmt.Printf("[DEBUG] rebuildAllAncestorsAndDescendants: rebuilt for %d categories\n", len(all))
 }
 
 // rebuildParentTreeJSON rebuilds the subtree for a given parentID and stores it as JSON.

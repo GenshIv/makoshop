@@ -14,8 +14,8 @@ import (
 
 // BatchAccum collects indexes and sorts for a single batch of products.
 type BatchAccum struct {
-	// index key -> docIDs
-	Indexes map[string][]uint64
+	// index key -> docIDs (as document keys, e.g. "product:123")
+	Indexes map[string][]string
 	// sort key -> items (docID + score)
 	Sorts map[string][]ItemWithScore
 }
@@ -28,12 +28,12 @@ type ItemWithScore struct {
 
 func NewBatchAccum() *BatchAccum {
 	return &BatchAccum{
-		Indexes: make(map[string][]uint64),
+		Indexes: make(map[string][]string),
 		Sorts:   make(map[string][]ItemWithScore),
 	}
 }
 
-func (a *BatchAccum) AddIndex(key string, docID uint64) {
+func (a *BatchAccum) AddIndex(key string, docID string) {
 	a.Indexes[key] = append(a.Indexes[key], docID)
 }
 
@@ -48,7 +48,7 @@ func (a *BatchAccum) WriteBatch(tmpDir string, batchID int) error {
 			continue
 		}
 		path := filepath.Join(tmpDir, fmt.Sprintf("idx_%s_%d.dat", safeKey(key), batchID))
-		if err := writeUint64Slice(path, docIDs); err != nil {
+		if err := writeStringSlice(path, docIDs); err != nil {
 			return fmt.Errorf("write index %s batch %d: %w", key, batchID, err)
 		}
 	}
@@ -94,7 +94,7 @@ func MergeIndexes(db *makodb.ShardedDB, tmpDir string) error {
 	// Pre-count elements for each key to avoid reallocations
 	for safeKey, kf := range keyFilesMap {
 		for _, f := range kf.files {
-			if count, err := countUint64Slice(f); err == nil {
+			if count, err := countStringSlice(f); err == nil {
 				kf.total += count
 			}
 		}
@@ -107,9 +107,9 @@ func MergeIndexes(db *makodb.ShardedDB, tmpDir string) error {
 		}
 
 		// Pre-allocate slice
-		all := make([]uint64, 0, kf.total)
+		all := make([]string, 0, kf.total)
 		for _, f := range kf.files {
-			data, err := readUint64Slice(f)
+			data, err := readStringSlice(f)
 			if err != nil {
 				return fmt.Errorf("read index file %s: %w", f, err)
 			}
@@ -118,14 +118,18 @@ func MergeIndexes(db *makodb.ShardedDB, tmpDir string) error {
 		if len(all) == 0 {
 			continue
 		}
-		RadixSortUint64(all)
+		// Sort string docIDs by numeric part (e.g. "product:123" -> sort by 123)
+		// Extract numeric suffix after last colon for proper numeric sorting
+		sort.Slice(all, func(i, j int) bool {
+			iNum := extractNumericSuffix(all[i])
+			jNum := extractNumericSuffix(all[j])
+			if iNum != jNum {
+				return iNum < jNum
+			}
+			return all[i] < all[j]
+		})
 		key := decodeSafeKey(safeKey)
-		// Convert uint64 docIDs to strings for TurboPutBatchIndexString
-		strAll := make([]string, len(all))
-		for i, id := range all {
-			strAll[i] = strconv.FormatUint(id, 10)
-		}
-		if _, err := db.TurboPutBatchIndexString(key, strAll); err != nil {
+		if _, err := db.TurboPutBatchIndexString(key, all); err != nil {
 			return fmt.Errorf("batch add to index %s: %w", key, err)
 		}
 	}
@@ -300,6 +304,93 @@ func readUint64Slice(path string) ([]uint64, error) {
 		}
 	}
 	return data, nil
+}
+
+// String slice I/O helpers (for document key-based indexing)
+
+func writeStringSlice(path string, data []string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	count := uint64(len(data))
+	if err := binary.Write(f, binary.LittleEndian, count); err != nil {
+		return err
+	}
+	for _, v := range data {
+		// Write string length first
+		lenBytes := uint64(len(v))
+		if err := binary.Write(f, binary.LittleEndian, lenBytes); err != nil {
+			return err
+		}
+		// Write string bytes
+		if _, err := f.Write([]byte(v)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// countStringSlice reads only the count header from a string slice file.
+func countStringSlice(path string) (int, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	var count uint64
+	if err := binary.Read(f, binary.LittleEndian, &count); err != nil {
+		return 0, err
+	}
+	return int(count), nil
+}
+
+// readStringSlice reads a string slice from a file.
+func readStringSlice(path string) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var count uint64
+	if err := binary.Read(f, binary.LittleEndian, &count); err != nil {
+		return nil, err
+	}
+	data := make([]string, count)
+	for i := uint64(0); i < count; i++ {
+		var lenBytes uint64
+		if err := binary.Read(f, binary.LittleEndian, &lenBytes); err != nil {
+			return nil, err
+		}
+		buf := make([]byte, lenBytes)
+		if _, err := f.Read(buf); err != nil {
+			return nil, err
+		}
+		data[i] = string(buf)
+	}
+	return data, nil
+}
+
+// extractNumericSuffix extracts the numeric part after the last colon in a string.
+// For example: "product:123" -> 123, "scu:456" -> 456, "123" -> 123.
+// Returns 0 if no numeric suffix is found.
+func extractNumericSuffix(s string) int64 {
+	lastColon := strings.LastIndex(s, ":")
+	var numStr string
+	if lastColon >= 0 && lastColon < len(s)-1 {
+		numStr = s[lastColon+1:]
+	} else {
+		numStr = s
+	}
+	num, err := strconv.ParseInt(numStr, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return num
 }
 
 func writeItemWithScoreSlice(path string, data []ItemWithScore) error {

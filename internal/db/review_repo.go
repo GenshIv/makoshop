@@ -3,7 +3,6 @@ package db
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/GenshIv/makoshop/internal/model"
@@ -40,15 +39,15 @@ func (r *ReviewRepo) Create(review *model.Review) error {
 
 	// Index: review by product (turbo)
 	productKey := fmt.Sprintf("review_product:%d", review.ProductID)
-	if _, err := r.store.db.TurboPutIndexString(productKey, strconv.Itoa(int(review.ID))); err != nil {
+	if _, err := r.store.db.TurboPutIndexString(productKey, KeyReview(review.ID)); err != nil {
 		_ = r.store.DocDelete(KeyReview(review.ID))
 		return fmt.Errorf("turbo index review by product: %w", err)
 	}
 
 	// Index: review by user (turbo)
 	userKey := fmt.Sprintf("review_user:%d", review.UserID)
-	if _, err := r.store.db.TurboPutIndexString(userKey, strconv.Itoa(int(review.ID))); err != nil {
-		_, _ = r.store.db.TurboDeleteIndexString(productKey, strconv.Itoa(int(review.ID)))
+	if _, err := r.store.db.TurboPutIndexString(userKey, KeyReview(review.ID)); err != nil {
+		_, _ = r.store.db.TurboDeleteIndexString(productKey, KeyReview(review.ID))
 		_ = r.store.DocDelete(KeyReview(review.ID))
 		return fmt.Errorf("turbo index review by user: %w", err)
 	}
@@ -86,7 +85,7 @@ func (r *ReviewRepo) ListByProduct(productID int64, page, limit int) ([]model.Re
 		return nil, 0, nil
 	}
 
-	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "review:")
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return nil, 0, fmt.Errorf("multi get reviews: %w", err)
 	}
@@ -144,7 +143,7 @@ func (r *ReviewRepo) ListByUser(userID int64, page, limit int) ([]model.Review, 
 		return nil, 0, nil
 	}
 
-	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "review:")
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return nil, 0, fmt.Errorf("multi get reviews: %w", err)
 	}
@@ -194,7 +193,7 @@ func (r *ReviewRepo) getReviewByProductAndUser(productID, userID int64) (int64, 
 		return 0, nil
 	}
 
-	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "review:")
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return 0, fmt.Errorf("multi get reviews: %w", err)
 	}
@@ -224,8 +223,8 @@ func (r *ReviewRepo) Delete(id int64) error {
 
 	productKey := fmt.Sprintf("review_product:%d", review.ProductID)
 	userKey := fmt.Sprintf("review_user:%d", review.UserID)
-	_, _ = r.store.db.TurboDeleteIndexString(productKey, strconv.Itoa(int(id)))
-	_, _ = r.store.db.TurboDeleteIndexString(userKey, strconv.Itoa(int(id)))
+	_, _ = r.store.db.TurboDeleteIndexString(productKey, KeyReview(id))
+	_, _ = r.store.db.TurboDeleteIndexString(userKey, KeyReview(id))
 
 	if err := r.store.DocDelete(KeyReview(id)); err != nil {
 		return fmt.Errorf("delete review: %w", err)

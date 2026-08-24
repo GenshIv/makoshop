@@ -148,23 +148,23 @@ func (r *SCUPageRepo) Create(s *model.SCUPage) error {
 	}
 
 	// Turbo index: scupage_list
-	if _, err := r.Store.db.TurboPutIndexString(TurboKeySCUPageList, strconv.Itoa(int(id))); err != nil {
+	if _, err := r.Store.db.TurboPutIndexString(TurboKeySCUPageList, KeySCUPage(id)); err != nil {
 		_ = r.Store.DocDelete(KeySCUPage(s.ID))
 		return fmt.Errorf("turbo index scupage_list: %w", err)
 	}
 
 	// Turbo index: scupage_scu:<scu>
 	scuKey := turboKeySCUPageSCU + s.SCU
-	if err := r.Store.TurboWrite(scuKey, []byte(strconv.FormatInt(id, 10))); err != nil {
-		_, _ = r.Store.db.TurboDeleteIndexString(TurboKeySCUPageList, strconv.Itoa(int(id)))
+	if err := r.Store.TurboWrite(scuKey, []byte(KeySCUPage(id))); err != nil {
+		_, _ = r.Store.db.TurboDeleteIndexString(TurboKeySCUPageList, KeySCUPage(id))
 		_ = r.Store.DocDelete(KeySCUPage(s.ID))
 		return fmt.Errorf("turbo index scupage_scu: %w", err)
 	}
 
 	// Turbo index: scupage_slug:<slug>
 	slugKey := turboKeySCUPageSlug + s.Slug
-	if err := r.Store.TurboWrite(slugKey, []byte(strconv.FormatInt(id, 10))); err != nil {
-		_, _ = r.Store.db.TurboDeleteIndexString(TurboKeySCUPageList, strconv.Itoa(int(id)))
+	if err := r.Store.TurboWrite(slugKey, []byte(KeySCUPage(id))); err != nil {
+		_, _ = r.Store.db.TurboDeleteIndexString(TurboKeySCUPageList, KeySCUPage(id))
 		_ = r.Store.TurboWrite(scuKey, []byte{})
 		_ = r.Store.DocDelete(KeySCUPage(s.ID))
 		return fmt.Errorf("turbo index scupage_slug: %w", err)
@@ -262,7 +262,7 @@ func (r *SCUPageRepo) List() ([]model.SCUPage, error) {
 		return nil, nil
 	}
 
-	docs, err := r.Store.db.MultiGetByDocIDsWithPrefix(tokens, "scupage:")
+	docs, err := r.Store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return nil, fmt.Errorf("multi get scupages: %w", err)
 	}
@@ -294,7 +294,7 @@ func (r *SCUPageRepo) Delete(id int64) error {
 	}
 
 	// Remove turbo indexes
-	_, _ = r.Store.db.TurboDeleteIndexString(TurboKeySCUPageList, strconv.Itoa(int(id)))
+	_, _ = r.Store.db.TurboDeleteIndexString(TurboKeySCUPageList, KeySCUPage(id))
 	if s.SCU != "" {
 		_ = r.Store.TurboWrite(turboKeySCUPageSCU+s.SCU, []byte{})
 	}
@@ -534,10 +534,10 @@ func (r *SCUPageRepo) autoCatalogize(p *model.Product) (int64, error) {
 		}
 
 		// Count overlap using set
-		catSet := make(map[uint64]bool, len(tokens))
+		catSet := make(map[any]bool, len(tokens))
 		for _, token := range tokens {
 			// Convert Key128 back to uint64 hash (stored as [0, hash])
-			catSet[uint64(token[1])] = true
+			catSet[token] = true
 		}
 
 		score := 0
@@ -844,7 +844,7 @@ func (r *SCUPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 			continue
 		}
 		created[scu] = s.ID
-		newSCUPageIDs = append(newSCUPageIDs, strconv.Itoa(int(s.ID)))
+		newSCUPageIDs = append(newSCUPageIDs, KeySCUPage(s.ID))
 	}
 
 	// Batch add all new SCU pages to scupage_list index (single write)
@@ -993,7 +993,7 @@ func (r *SCUPageRepo) RecalculateMinPrices(productRepo *ProductRepo) error {
 		}
 
 		// Get all products at once
-		docs, err := r.Store.db.MultiGetByDocIDsWithPrefix(tokens, "product:")
+		docs, err := r.Store.db.MultiGetByDocIDs(tokens)
 		if err != nil || len(docs) == 0 {
 			continue
 		}

@@ -3,7 +3,6 @@ package db
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -11,7 +10,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const turboKeyAllUsers = "user_list"
+const turboKeyAllUsers = "user_list:"
 
 type UserRepo struct {
 	store *Store
@@ -241,6 +240,6 @@ func (r *UserRepo) GetAllUsers() ([]model.User, error) {
 
 // indexUserID adds a user ID to the turbo user list.
 func (r *UserRepo) indexUserID(id int64) error {
-	_, err := r.store.db.TurboPutIndexString(turboKeyAllUsers, strconv.Itoa(int(id)))
+	_, err := r.store.db.TurboPutIndexString(turboKeyAllUsers, KeyUser(id))
 	return err
 }

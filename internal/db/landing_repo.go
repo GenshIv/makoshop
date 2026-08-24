@@ -46,15 +46,15 @@ func (r *LandingRepo) Create(l *model.LandingPage) error {
 	}
 
 	// Turbo index: landing_list
-	if _, err := r.Store.db.TurboPutIndexString(turboKeyLandingList, strconv.Itoa(int(id))); err != nil {
+	if _, err := r.Store.db.TurboPutIndexString(turboKeyLandingList, KeyLandingPage(l.ID)); err != nil {
 		_ = r.Store.DocDelete(KeyLandingPage(l.ID))
 		return fmt.Errorf("turbo index landing_list: %w", err)
 	}
 
 	// Turbo index: landing_scu:<scu>
 	scuKey := turboKeyLandingSCU + l.SCU
-	if err := r.Store.TurboWrite(scuKey, []byte(strconv.FormatInt(id, 10))); err != nil {
-		_, _ = r.Store.db.TurboDeleteIndexString(turboKeyLandingList, strconv.Itoa(int(id)))
+	if err := r.Store.TurboWrite(scuKey, []byte(KeyLandingPage(l.ID))); err != nil {
+		_, _ = r.Store.db.TurboDeleteIndexString(turboKeyLandingList, KeyLandingPage(l.ID))
 		_ = r.Store.DocDelete(KeyLandingPage(l.ID))
 		return fmt.Errorf("turbo index landing_scu: %w", err)
 	}
@@ -132,7 +132,7 @@ func (r *LandingRepo) List() ([]model.LandingPage, error) {
 		return nil, nil
 	}
 
-	docs, err := r.Store.db.MultiGetByDocIDsWithPrefix(tokens, "landing:")
+	docs, err := r.Store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return nil, fmt.Errorf("multi get landing docs: %w", err)
 	}
@@ -158,7 +158,7 @@ func (r *LandingRepo) Delete(id int64) error {
 	}
 
 	// Remove turbo indexes
-	_, _ = r.Store.db.TurboDeleteIndexString(turboKeyLandingList, strconv.Itoa(int(id)))
+	_, _ = r.Store.db.TurboDeleteIndexString(turboKeyLandingList, KeyLandingPage(id))
 	if l.SCU != "" {
 		_ = r.Store.TurboWrite(turboKeyLandingSCU+l.SCU, []byte{})
 	}

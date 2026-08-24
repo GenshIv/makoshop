@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -215,12 +214,12 @@ func (r *DeliveryTimeRepo) List() ([]model.DeliveryTime, error) {
 }
 
 func (r *DeliveryTimeRepo) indexDeliveryTime(id int64) error {
-	_, err := r.store.db.TurboPutIndexString(turboKeyDeliveryTimes, strconv.Itoa(int(id)))
+	_, err := r.store.db.TurboPutIndexString(turboKeyDeliveryTimes, keyDeliveryTime(id))
 	return err
 }
 
 func (r *DeliveryTimeRepo) unindexDeliveryTime(id int64) error {
-	_, err := r.store.db.TurboDeleteIndexString(turboKeyDeliveryTimes, strconv.Itoa(int(id)))
+	_, err := r.store.db.TurboDeleteIndexString(turboKeyDeliveryTimes, keyDeliveryTime(id))
 	return err
 }
 

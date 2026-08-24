@@ -65,6 +65,12 @@ func scupageSortKey(catID int64, sortType string) string {
 	return "scupage_sort:" + strconv.FormatInt(catID, 10) + ":" + sortType
 }
 
+// Sort index keys per category: scupage_sort:{catID}:{type}
+// Global sort indexes (catID=0): scupage_sort:0:{type}
+func scupageDocKey(docID int64) string {
+	return "scupage:" + strconv.FormatInt(docID, 10)
+}
+
 // NumSort price index per category: scupage_price:{catID}
 func scupageNumSortPriceKey(catID int64) string {
 	return "scupage_price:" + strconv.FormatInt(catID, 10)
@@ -84,7 +90,7 @@ func (s *SCUPageSearch) IndexSCUPage(sp *model.SCUPage) error {
 	if !s.enabled {
 		return nil
 	}
-	docID := strconv.Itoa(int(sp.ID))
+	docID := KeySCUPage(sp.ID)
 
 	// Collect all indexes in memory
 	indexes := make(map[string][]string)
@@ -186,7 +192,7 @@ func (s *SCUPageSearch) IndexSCUPageBatch(pages []*model.SCUPage) error {
 	catCodes := make(map[int64]map[string]struct{})
 
 	for _, sp := range pages {
-		docID := strconv.Itoa(int(sp.ID))
+		docID := KeySCUPage(sp.ID)
 
 		// Category union index for all ancestors.
 		if sp.CategoryID != 0 {
@@ -296,7 +302,7 @@ func (s *SCUPageSearch) UnindexSCUPage(sp *model.SCUPage) error {
 	if !s.enabled {
 		return nil
 	}
-	docID := strconv.Itoa(int(sp.ID))
+	docID := KeySCUPage(sp.ID)
 
 	if sp.CategoryID != 0 {
 		ancestors, err := s.getCategoryAncestors(sp.CategoryID)
@@ -359,8 +365,7 @@ func (s *SCUPageSearch) BuildSortIndexes() error {
 	catPricePairs := make(map[int64][]makodb.TurboNumSortPair)
 
 	for _, sp := range all {
-		docIDKey := strconv.Itoa(int(sp.ID))
-		docIDUint := uint64(sp.ID)
+		docIDKey := KeySCUPage(sp.ID)
 		priceVal := uint64(sp.MinPrice * 100)
 
 		scCreated := sp.CreatedAt
@@ -368,7 +373,7 @@ func (s *SCUPageSearch) BuildSortIndexes() error {
 		catPricesAsc[0] = append(catPricesAsc[0], priced{docID: docIDKey, price: sp.MinPrice})
 		catPricesDesc[0] = append(catPricesDesc[0], priced{docID: docIDKey, price: sp.MinPrice})
 		catCreatedDesc[0] = append(catCreatedDesc[0], timed{docID: docIDKey, ts: int64(scCreated)})
-		catPricePairs[0] = append(catPricePairs[0], makodb.TurboNumSortPair{Value: priceVal, DocID: docIDUint})
+		catPricePairs[0] = append(catPricePairs[0], makodb.TurboNumSortPair{Value: priceVal, DocID: docIDKey})
 
 		// Add to all ancestor categories
 		if sp.CategoryID != 0 {
@@ -380,7 +385,7 @@ func (s *SCUPageSearch) BuildSortIndexes() error {
 				catPricesAsc[cid] = append(catPricesAsc[cid], priced{docID: docIDKey, price: sp.MinPrice})
 				catPricesDesc[cid] = append(catPricesDesc[cid], priced{docID: docIDKey, price: sp.MinPrice})
 				catCreatedDesc[cid] = append(catCreatedDesc[cid], timed{docID: docIDKey, ts: int64(scCreated)})
-				catPricePairs[cid] = append(catPricePairs[cid], makodb.TurboNumSortPair{Value: priceVal, DocID: docIDUint})
+				catPricePairs[cid] = append(catPricePairs[cid], makodb.TurboNumSortPair{Value: priceVal, DocID: docIDKey})
 			}
 		}
 	}
@@ -514,7 +519,6 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 			Page:       params.Page - 1,
 			PageSize:   params.Limit,
 			Desc:       false,
-			DocPrefix:  "scupage:",
 		})
 		if err != nil {
 			return nil, fmt.Errorf("turbo sort page with docs: %w", err)
@@ -830,7 +834,7 @@ func (s *SCUPageSearch) RebuildAllIndexes() error {
 	}
 
 	for i, sp := range all {
-		docID := sp.ID
+		docIDKey := KeySCUPage(sp.ID)
 
 		// Category union index for all ancestors.
 		if sp.CategoryID != 0 {
@@ -839,13 +843,13 @@ func (s *SCUPageSearch) RebuildAllIndexes() error {
 				ancestors = []int64{sp.CategoryID}
 			}
 			for _, cid := range ancestors {
-				indexes[scupageKeyCategoryUnion(cid)] = append(indexes[scupageKeyCategoryUnion(cid)], strconv.Itoa(int(docID)))
+				indexes[scupageKeyCategoryUnion(cid)] = append(indexes[scupageKeyCategoryUnion(cid)], docIDKey)
 			}
 		}
 
 		// Brand index
 		if sp.BrandID != 0 {
-			indexes[scupageKeyBrand(sp.BrandID)] = append(indexes[scupageKeyBrand(sp.BrandID)], strconv.Itoa(int(docID)))
+			indexes[scupageKeyBrand(sp.BrandID)] = append(indexes[scupageKeyBrand(sp.BrandID)], docIDKey)
 		}
 
 		// Vendor index (min company ID among products with this SCU)
@@ -858,13 +862,13 @@ func (s *SCUPageSearch) RebuildAllIndexes() error {
 		for _, kv := range sp.Attributes {
 			valStr := kv.Value
 			if valStr != "" {
-				indexes[scupageKeyAttr(kv.Key, valStr)] = append(indexes[scupageKeyAttr(kv.Key, valStr)], strconv.Itoa(int(docID)))
+				indexes[scupageKeyAttr(kv.Key, valStr)] = append(indexes[scupageKeyAttr(kv.Key, valStr)], docIDKey)
 			}
 		}
 
 		// Text index
 		for _, tok := range tokenizeSCUPage(&sp) {
-			indexes[scupageKeyText(tok)] = append(indexes[scupageKeyText(tok)], strconv.Itoa(int(docID)))
+			indexes[scupageKeyText(tok)] = append(indexes[scupageKeyText(tok)], docIDKey)
 		}
 
 		if (i+1)%batchSize == 0 {

@@ -13,7 +13,7 @@ func main() {
 		dbPath = os.Args[1]
 	}
 
-	db, err := makodb.OpenSharded(dbPath, 16, 6710886400, 1000)
+	db, err := makodb.OpenSharded(dbPath, 16, 6710886400, 1000, false)
 	if err != nil {
 		fmt.Printf("Error opening DB: %v\n", err)
 		return
@@ -54,7 +54,7 @@ func main() {
 		makodb.Key128{0, 160867},
 		makodb.Key128{0, 160897},
 	}
-	docs, err := db.MultiGetByDocIDsWithPrefix(key128s, "product:")
+	docs, err := db.MultiGetByDocIDs(key128s)
 	if err != nil {
 		fmt.Printf("MultiGetByDocIDsWithPrefix: %v\n", err)
 	} else {

@@ -5,13 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
 const (
-	turboKeyCompanyList = "company_list"
+	turboKeyCompanyList = "company_list:"
 	turboKeyCompanyName = "company_name:" // prefix for name lookup
 )
 
@@ -48,15 +49,16 @@ func (r *CompanyRepo) Create(c *model.Company) error {
 	}
 
 	// Turbo index: company_list
-	if _, err := r.Store.db.TurboPutIndexString(turboKeyCompanyList, strconv.Itoa(int(id))); err != nil {
+	// Store full document keys (e.g. "company:123") instead of just IDs
+	if _, err := r.Store.db.TurboPutIndexString(turboKeyCompanyList, KeyCompany(id)); err != nil {
 		_ = r.Store.DocDelete(KeyCompany(c.ID))
 		return fmt.Errorf("turbo index company_list: %w", err)
 	}
 
 	// Turbo index: company_name:<slug>
 	nameKey := turboKeyCompanyName + c.Slug
-	if err := r.Store.TurboWrite(nameKey, []byte(fmt.Sprintf("%d", id))); err != nil {
-		_, _ = r.Store.db.TurboDeleteIndexString(turboKeyCompanyList, strconv.Itoa(int(id)))
+	if err := r.Store.TurboWrite(nameKey, []byte(KeyCompany(id))); err != nil {
+		_, _ = r.Store.db.TurboDeleteIndexString(turboKeyCompanyList, KeyCompany(id))
 		_ = r.Store.DocDelete(KeyCompany(c.ID))
 		return fmt.Errorf("turbo index company_name: %w", err)
 	}
@@ -83,8 +85,17 @@ func (r *CompanyRepo) GetBySlug(slug string) (*model.Company, error) {
 	if err != nil || len(data) == 0 {
 		return nil, fmt.Errorf("company with slug %q not found", slug)
 	}
-	var id int64
-	_, _ = fmt.Sscanf(string(data), "%d", &id)
+	// data contains the full key like "company:123"
+	key := string(data)
+	// Extract ID from key "company:{id}"
+	parts := strings.Split(key, ":")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid company key format: %s", key)
+	}
+	id, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid company ID in key: %s", key)
+	}
 	return r.Get(id)
 }
 
@@ -123,7 +134,7 @@ func (r *CompanyRepo) Update(id int64, updater func(*model.Company)) error {
 	// Update company_name index if slug changed
 	if oldSlug != c.Slug {
 		_ = r.Store.TurboWrite(turboKeyCompanyName+oldSlug, []byte{}) // clear old
-		if err := r.Store.TurboWrite(turboKeyCompanyName+c.Slug, []byte(strconv.FormatInt(id, 10))); err != nil {
+		if err := r.Store.TurboWrite(turboKeyCompanyName+c.Slug, []byte(KeyCompany(id))); err != nil {
 			return fmt.Errorf("update company_name index: %w", err)
 		}
 	}
@@ -175,7 +186,7 @@ func (r *CompanyRepo) Delete(id int64) error {
 	}
 
 	// Remove turbo indexes
-	_, _ = r.Store.db.TurboDeleteIndexString(turboKeyCompanyList, strconv.Itoa(int(id)))
+	_, _ = r.Store.db.TurboDeleteIndexString(turboKeyCompanyList, KeyCompany(id))
 	_ = r.Store.TurboWrite(turboKeyCompanyName+c.Slug, []byte{})
 
 	if err := r.Store.DocDelete(KeyCompany(id)); err != nil {

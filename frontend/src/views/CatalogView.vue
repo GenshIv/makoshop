@@ -123,12 +123,19 @@ const scuPageCache = ref(loadScuPageCacheFromStorage());
 // Companies cache: company_id -> { id, name }
 // Uses sessionStorage so it survives SPA navigation but is cleared on page reload
 const COMPANIES_CACHE_KEY = 'makoshop_companies_cache';
+const COMPANIES_CACHE_TTL = 60 * 60 * 1000; // 1 hour in milliseconds
 
 const loadCompaniesCacheFromStorage = () => {
   try {
     const raw = sessionStorage.getItem(COMPANIES_CACHE_KEY);
     if (!raw) return new Map();
-    const arr = JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    // Check if cache has timestamp and is still valid
+    if (parsed._ts && Date.now() - parsed._ts > COMPANIES_CACHE_TTL) {
+      sessionStorage.removeItem(COMPANIES_CACHE_KEY);
+      return new Map();
+    }
+    const arr = parsed.data || parsed;
     if (!Array.isArray(arr)) return new Map();
     const map = new Map();
     for (const [k, v] of arr) {
@@ -143,7 +150,10 @@ const loadCompaniesCacheFromStorage = () => {
 const persistCompaniesCache = () => {
   try {
     const arr = Array.from(companiesCache.value.entries());
-    sessionStorage.setItem(COMPANIES_CACHE_KEY, JSON.stringify(arr));
+    sessionStorage.setItem(COMPANIES_CACHE_KEY, JSON.stringify({
+      _ts: Date.now(),
+      data: arr
+    }));
   } catch {
     // ignore
   }
@@ -157,7 +167,8 @@ const fetchCompanies = async () => {
   companiesLoading.value = true;
   try {
     const response = await api.get('/admin/companies');
-    const companies = response.data || [];
+    const data = response.data || {};
+    const companies = (Array.isArray(data) ? data : data.items || []);
     for (const c of companies) {
       companiesCache.value.set(c.id, { id: c.id, name: c.name });
     }

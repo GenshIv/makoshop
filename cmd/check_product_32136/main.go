@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	dbConn, err := makodb.OpenSharded("/home/ihar/IdeaProjects/makoshop/makoshop_db", 16, 6710886400, 1000)
+	dbConn, err := makodb.OpenSharded("/home/ihar/IdeaProjects/makoshop/makoshop_db", 16, 6710886400, 1000, false)
 	if err != nil {
 		fmt.Printf("OpenSharded: %v\n", err)
 		return

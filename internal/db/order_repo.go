@@ -45,13 +45,13 @@ func (r *OrderRepo) Create(o *model.Order) error {
 
 	// Index: order by user (turbo)
 	userKey := "order_user:" + strconv.FormatInt(o.UserID, 10)
-	if _, err := r.store.db.TurboPutIndexString(userKey, strconv.Itoa(int(o.ID))); err != nil {
+	if _, err := r.store.db.TurboPutIndexString(userKey, KeyOrder(o.ID)); err != nil {
 		_ = r.store.DocDelete(KeyOrder(o.ID))
 		return fmt.Errorf("index order by user: %w", err)
 	}
 
 	// Index: order in global list (turbo)
-	if _, err := r.store.db.TurboPutIndexString(turboKeyAllOrders, strconv.Itoa(int(o.ID))); err != nil {
+	if _, err := r.store.db.TurboPutIndexString(turboKeyAllOrders, KeyOrder(o.ID)); err != nil {
 		fmt.Printf("WARN: indexAllOrders error for order %d: %v\n", o.ID, err)
 	}
 
@@ -78,7 +78,7 @@ func (r *OrderRepo) GetUserOrders(userID int64) ([]model.Order, error) {
 		return nil, nil
 	}
 
-	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "order:")
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return nil, fmt.Errorf("multi get orders: %w", err)
 	}
@@ -140,9 +140,9 @@ func (r *OrderRepo) Delete(id int64) error {
 
 	// Remove from user index (turbo)
 	userKey := "order_user:" + strconv.FormatInt(o.UserID, 10)
-	_, _ = r.store.db.TurboDeleteIndexString(userKey, strconv.Itoa(int(id)))
+	_, _ = r.store.db.TurboDeleteIndexString(userKey, KeyOrder(id))
 	// Remove from global index (turbo)
-	_, _ = r.store.db.TurboDeleteIndexString(turboKeyAllOrders, strconv.Itoa(int(id)))
+	_, _ = r.store.db.TurboDeleteIndexString(turboKeyAllOrders, KeyOrder(id))
 
 	if err := r.store.DocDelete(KeyOrder(id)); err != nil {
 		return fmt.Errorf("delete order: %w", err)
@@ -189,7 +189,7 @@ func (r *OrderRepo) GetAllOrders() ([]model.Order, error) {
 		return nil, nil
 	}
 
-	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "order:")
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return nil, fmt.Errorf("multi get orders: %w", err)
 	}

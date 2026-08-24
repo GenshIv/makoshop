@@ -63,7 +63,7 @@ func turboKeyAttrLabel(code string, value string) string {
 func turboKeyText(token string) string { return "text:" + token }
 
 // Справочники
-var turboKeyBrandList = "brand_list"
+var turboKeyBrandList = "brand_list:"
 var turboKeyBrandNamePrefix = "brand_name:"
 
 const (
@@ -81,7 +81,7 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 	if !t.enabled {
 		return nil
 	}
-	docID := strconv.Itoa(int(p.ID))
+	docID := KeyProduct(p.ID)
 
 	// product_list index
 	if _, err := t.store.db.TurboPutIndexString(TurboKeyProductList, docID); err != nil {
@@ -230,11 +230,12 @@ func (t *TurboProductSearch) ensureBrandInRef(brandID int64, name string) {
 	defer t.mu.Unlock()
 
 	// Проверяем, есть ли уже
-	if ok, _ := t.store.db.TurboContainsIndexString(turboKeyBrandList, strconv.Itoa(int(brandID))); ok {
+	brandKey := KeyBrand(brandID)
+	if ok, _ := t.store.db.TurboContainsIndexString(turboKeyBrandList, brandKey); ok {
 		return
 	}
 	// Добавляем в список брендов
-	_, _ = t.store.db.TurboPutIndexString(turboKeyBrandList, strconv.Itoa(int(brandID)))
+	_, _ = t.store.db.TurboPutIndexString(turboKeyBrandList, brandKey)
 
 	// Записываем имя бренда
 	key := turboKeyBrandNamePrefix + strconv.FormatInt(brandID, 10)
@@ -275,7 +276,7 @@ func (t *TurboProductSearch) UnindexProduct(p *model.Product) error {
 	if !t.enabled {
 		return nil
 	}
-	docID := strconv.Itoa(int(p.ID))
+	docID := KeyProduct(p.ID)
 
 	// Remove from product_list
 	t.store.db.TurboDeleteIndexString(TurboKeyProductList, docID)
@@ -339,7 +340,7 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 	attrCatRef := make(map[string]map[int64]map[string]string) // code -> {catID -> {value -> value}}
 
 	for _, p := range products {
-		docID := strconv.Itoa(int(p.ID))
+		docID := KeyProduct(p.ID)
 
 		// product_list index — global index of all product IDs
 		indexes[TurboKeyProductList] = append(indexes[TurboKeyProductList], docID)
@@ -416,7 +417,7 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 	var priceEntries []priceEntry
 	var createdEntries []createdEntry
 	for _, p := range products {
-		docID := strconv.Itoa(int(p.ID))
+		docID := KeyProduct(p.ID)
 		priceEntries = append(priceEntries, priceEntry{docID: docID, price: uint64(p.Price * 100)})
 		createdEntries = append(createdEntries, createdEntry{docID: docID, ts: uint64(p.CreatedAt * 1e9)})
 	}
@@ -429,9 +430,9 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 			fmt.Printf("WARN: turbo batch price index: %v\n", err)
 		}
 		// Also store in numeric sort index
+		// Note: for Key128 docID, we use the full key for numSort as well
 		pairs := make([]makodb.TurboNumSortPair, len(priceEntries))
 		for i, e := range priceEntries {
-			// Convert Key128 docID to uint64 for numSort - use first part of the hash
 			pairs[i] = makodb.TurboNumSortPair{Value: e.price, DocID: uint64(e.docID[0])}
 		}
 		_, _ = t.store.db.TurboPutNumSortBatch("price_num", pairs)
@@ -456,16 +457,16 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 	// Записываем справочник брендов через TurboPutBatchIndex
 	t.mu.Lock()
 	if len(brandRef) > 0 {
-		brandIDs := make([]string, 0, len(brandRef))
+		brandKeys := make([]string, 0, len(brandRef))
 		for bid := range brandRef {
-			brandIDKey := strconv.Itoa(int(int64(bid)))
+			brandKey := KeyBrand(int64(bid))
 			// Check if already exists
-			if ok, _ := t.store.db.TurboContainsIndexString(turboKeyBrandList, brandIDKey); !ok {
-				brandIDs = append(brandIDs, brandIDKey)
+			if ok, _ := t.store.db.TurboContainsIndexString(turboKeyBrandList, brandKey); !ok {
+				brandKeys = append(brandKeys, brandKey)
 			}
 		}
-		if len(brandIDs) > 0 {
-			_, _ = t.store.db.TurboPutBatchIndexString(turboKeyBrandList, brandIDs)
+		if len(brandKeys) > 0 {
+			_, _ = t.store.db.TurboPutBatchIndexString(turboKeyBrandList, brandKeys)
 		}
 	}
 	// Записываем имена брендов
@@ -523,7 +524,7 @@ func (t *TurboProductSearch) BuildSortIndexes() error {
 	}
 
 	// Get all product data
-	docs, err := t.store.db.MultiGetByDocIDsWithPrefix(tokens, "product:")
+	docs, err := t.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return fmt.Errorf("multi get products: %w", err)
 	}
@@ -545,7 +546,7 @@ func (t *TurboProductSearch) BuildSortIndexes() error {
 			continue
 		}
 		products = append(products, productSort{
-			key:     strconv.Itoa(int(p.ID)),
+			key:     KeyProduct(p.ID),
 			price:   p.Price,
 			created: uint64(p.CreatedAt),
 		})
@@ -731,8 +732,7 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 		if len(attrIDs) == 0 {
 			return &TurboListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
-		// TurboBulkUnion returns unsorted result; sort for intersectSortedKey128.
-		makodb.RadixSortKey128(attrIDs)
+
 		if candidates == nil {
 			candidates = append(candidates, attrIDs)
 		}
@@ -980,7 +980,7 @@ func (t *TurboProductSearch) GetAllProducts() ([]model.Product, error) {
 	}
 
 	// Use MultiGetByDocIDsWithPrefix to get all products at once
-	docs, err := t.store.db.MultiGetByDocIDsWithPrefix(tokens, "product:")
+	docs, err := t.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return nil, fmt.Errorf("multi get products: %w", err)
 	}
@@ -1016,7 +1016,7 @@ func (t *TurboProductSearch) GetProductsBySCU(scu string) ([]model.Product, erro
 	}
 
 	// Use MultiGetByDocIDsWithPrefix to get all products at once
-	docs, err := t.store.db.MultiGetByDocIDsWithPrefix(tokens, "product:")
+	docs, err := t.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return nil, fmt.Errorf("multi get products by SCU: %w", err)
 	}

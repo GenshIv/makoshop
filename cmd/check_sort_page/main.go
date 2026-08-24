@@ -13,7 +13,7 @@ func main() {
 		dbPath = os.Args[1]
 	}
 
-	db, err := makodb.OpenSharded(dbPath, 16, 6710886400, 1000)
+	db, err := makodb.OpenSharded(dbPath, 16, 6710886400, 1000, false)
 	if err != nil {
 		fmt.Printf("Error opening DB: %v\n", err)
 		return

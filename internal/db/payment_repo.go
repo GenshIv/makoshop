@@ -9,7 +9,7 @@ import (
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
-const turboKeyAllPayments = "payment_list"
+const turboKeyAllPayments = "payment_list:"
 
 type PaymentRepo struct {
 	store *Store
@@ -38,13 +38,13 @@ func (r *PaymentRepo) Create(p *model.Payment) error {
 
 	// Index: payment by order (turbo)
 	orderKey := "payment_order:" + strconv.FormatInt(p.OrderID, 10)
-	if _, err := r.store.db.TurboPutIndexString(orderKey, strconv.Itoa(int(p.ID))); err != nil {
+	if _, err := r.store.db.TurboPutIndexString(orderKey, KeyPayment(p.ID)); err != nil {
 		_ = r.store.DocDelete(KeyPayment(p.ID))
 		return fmt.Errorf("index payment by order: %w", err)
 	}
 
 	// Index: payment in global list (turbo)
-	if _, err := r.store.db.TurboPutIndexString(turboKeyAllPayments, strconv.Itoa(int(p.ID))); err != nil {
+	if _, err := r.store.db.TurboPutIndexString(turboKeyAllPayments, KeyPayment(p.ID)); err != nil {
 		fmt.Printf("WARN: indexAllPayments error for payment %d: %v\n", p.ID, err)
 	}
 
@@ -71,7 +71,7 @@ func (r *PaymentRepo) GetByOrderID(orderID int64) (*model.Payment, error) {
 		return nil, fmt.Errorf("no payment found for order %d", orderID)
 	}
 
-	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "payment:")
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return nil, fmt.Errorf("multi get payment docs: %w", err)
 	}
@@ -114,9 +114,9 @@ func (r *PaymentRepo) Delete(id int64) error {
 
 	// Remove from order index (turbo)
 	orderKey := "payment_order:" + strconv.FormatInt(p.OrderID, 10)
-	_, _ = r.store.db.TurboDeleteIndexString(orderKey, strconv.Itoa(int(id)))
+	_, _ = r.store.db.TurboDeleteIndexString(orderKey, KeyPayment(id))
 	// Remove from global index (turbo)
-	_, _ = r.store.db.TurboDeleteIndexString(turboKeyAllPayments, strconv.Itoa(int(id)))
+	_, _ = r.store.db.TurboDeleteIndexString(turboKeyAllPayments, KeyPayment(id))
 	if err := r.store.DocDelete(KeyPayment(id)); err != nil {
 		return fmt.Errorf("delete payment: %w", err)
 	}
@@ -148,7 +148,7 @@ func (r *PaymentRepo) CleanupTimedOutPayments(maxPendingMinutes int) (*TimeoutCl
 		return result, nil
 	}
 
-	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "payment:")
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return result, fmt.Errorf("multi get payments: %w", err)
 	}

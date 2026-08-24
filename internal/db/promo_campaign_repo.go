@@ -3,7 +3,6 @@ package db
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/GenshIv/makoshop/internal/model"
@@ -36,14 +35,14 @@ func (r *PromoCampaignRepo) Create(c *model.PromoCampaign) error {
 
 	// Index by company (turbo)
 	companyKey := fmt.Sprintf("promo_campaign_company:%d", c.CompanyID)
-	if _, err := r.store.db.TurboPutIndexString(companyKey, strconv.Itoa(int(c.ID))); err != nil {
+	if _, err := r.store.db.TurboPutIndexString(companyKey, KeyPromoCampaign(c.ID)); err != nil {
 		_ = r.store.DocDelete(KeyPromoCampaign(c.ID))
 		return fmt.Errorf("turbo index campaign by company: %w", err)
 	}
 
 	// Index in global list (turbo)
-	if _, err := r.store.db.TurboPutIndexString(turboKeyAllPromoCampaigns, strconv.Itoa(int(c.ID))); err != nil {
-		_, _ = r.store.db.TurboDeleteIndexString(companyKey, strconv.Itoa(int(c.ID)))
+	if _, err := r.store.db.TurboPutIndexString(turboKeyAllPromoCampaigns, KeyPromoCampaign(c.ID)); err != nil {
+		_, _ = r.store.db.TurboDeleteIndexString(companyKey, KeyPromoCampaign(c.ID))
 		_ = r.store.DocDelete(KeyPromoCampaign(c.ID))
 		return fmt.Errorf("turbo index campaign global: %w", err)
 	}
@@ -69,7 +68,7 @@ func (r *PromoCampaignRepo) ListByCompany(companyID int64) ([]model.PromoCampaig
 		return nil, nil
 	}
 
-	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "promo_campaign:")
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return nil, fmt.Errorf("multi get promo campaigns: %w", err)
 	}
@@ -120,13 +119,13 @@ func (r *PromoCampaignRepo) Delete(id int64) error {
 		return err
 	}
 	companyKey := fmt.Sprintf("promo_campaign_company:%d", c.CompanyID)
-	_, _ = r.store.db.TurboDeleteIndexString(companyKey, strconv.Itoa(int(id)))
-	_, _ = r.store.db.TurboDeleteIndexString(turboKeyAllPromoCampaigns, strconv.Itoa(int(id)))
+	_, _ = r.store.db.TurboDeleteIndexString(companyKey, KeyPromoCampaign(id))
+	_, _ = r.store.db.TurboDeleteIndexString(turboKeyAllPromoCampaigns, KeyPromoCampaign(id))
 	return r.store.DocDelete(KeyPromoCampaign(id))
 }
 
 // turboKeyAllPromoCampaigns is the turbo index key for all promo campaigns.
-const turboKeyAllPromoCampaigns = "promo_campaign_list"
+const turboKeyAllPromoCampaigns = "promo_campaign_list:"
 
 // GetAllCampaigns returns all campaigns (for analytics/admin). Uses turbo index.
 func (r *PromoCampaignRepo) GetAllCampaigns() ([]model.PromoCampaign, error) {
@@ -135,7 +134,7 @@ func (r *PromoCampaignRepo) GetAllCampaigns() ([]model.PromoCampaign, error) {
 		return nil, nil
 	}
 
-	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "promo_campaign:")
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return nil, fmt.Errorf("multi get promo campaigns: %w", err)
 	}
@@ -167,7 +166,7 @@ func (r *PromoCampaignRepo) GetActiveCampaigns() ([]model.PromoCampaign, error) 
 		return nil, nil
 	}
 
-	docs, err := r.store.db.MultiGetByDocIDsWithPrefix(tokens, "promo_campaign:")
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return nil, fmt.Errorf("multi get promo campaigns: %w", err)
 	}
