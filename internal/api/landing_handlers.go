@@ -1656,7 +1656,7 @@ func (h *Handlers) HandleAdminRebuildCategoryIndexes(w http.ResponseWriter, r *h
 	})
 }
 
-// HandleAdminRebuildAttrDefIndexes rebuilds attrdef cat_codes indexes.
+// HandleAdminRebuildAttrDefIndexes rebuilds attrdef cat_codes and attr_values indexes.
 func (h *Handlers) HandleAdminRebuildAttrDefIndexes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
@@ -1666,9 +1666,27 @@ func (h *Handlers) HandleAdminRebuildAttrDefIndexes(w http.ResponseWriter, r *ht
 	fmt.Println("[REBUILD-ATTRDEF-INDEXES] Starting...")
 	startTime := time.Now()
 
+	// Rebuild cat_codes index
 	if err := h.attrDefRepo.RebuildCatCodesIndex(); err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
+	}
+
+	// Rebuild attr_values from SCU pages
+	if h.scuPageRepo != nil {
+		if err := h.attrDefRepo.RebuildAttrValuesFromSCUPages(h.scuPageRepo); err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+			return
+		}
+	}
+
+	// Invalidate cache
+	if h.catAttrs != nil {
+		h.catAttrsMu.Lock()
+		for k := range h.catAttrs {
+			delete(h.catAttrs, k)
+		}
+		h.catAttrsMu.Unlock()
 	}
 
 	elapsed := time.Since(startTime)

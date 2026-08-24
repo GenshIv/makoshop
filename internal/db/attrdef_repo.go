@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -227,17 +226,32 @@ func minLen(a, b int) int {
 }
 
 // GetAttrValuesForCategory returns all values for an attribute code in a specific category.
+// Reads attr_values_cat:{code}:{catID} as a JSON map {value: true} (written by IndexSCUPageBatch).
 func (r *AttrDefRepo) GetAttrValuesForCategory(code string, catID int64) ([]string, error) {
 	if catID == 0 {
 		return nil, nil
 	}
 	key := turboKeyAttrValuesCat + code + ":" + fmt.Sprintf("%d", catID)
-	tokens, err := r.store.DB().TurboGetIndexTokens(key)
-	if err != nil || len(tokens) == 0 {
+	data, err := r.store.DB().TurboRawRead(key)
+	if err != nil || len(data) == 0 {
 		return nil, nil
 	}
-	return nil, nil
-	// return r.hashesToStrings(code, tokens)
+
+	// Parse as JSON map {value: true}
+	var valuesMap map[string]interface{}
+	if err := json.Unmarshal(data, &valuesMap); err != nil {
+		return nil, nil
+	}
+	if len(valuesMap) == 0 {
+		return nil, nil
+	}
+
+	values := make([]string, 0, len(valuesMap))
+	for val := range valuesMap {
+		values = append(values, val)
+	}
+	sort.Strings(values)
+	return values, nil
 }
 
 func (r *AttrDefRepo) hashesToStrings(code string, keys []string) ([]string, error) {
@@ -543,6 +557,7 @@ func (r *AttrDefRepo) addToAttrDefList(code string) error {
 }
 
 // BatchUpsertCodes batch-inserts all attr codes with their category links.
+// Uses real numeric IDs for attrdef_code:{code} (not hashes).
 func (r *AttrDefRepo) BatchUpsertCodes(codeCats map[string]map[int64]struct{}) error {
 	if len(codeCats) == 0 {
 		return nil
@@ -557,9 +572,6 @@ func (r *AttrDefRepo) BatchUpsertCodes(codeCats map[string]map[int64]struct{}) e
 	if err := r.store.TurboWrite(turboKeyAttrDefList, listBuf); err != nil {
 		return fmt.Errorf("write attrdef_list: %w", err)
 	}
-
-	// Clear old cat->codes indexes
-	r.store.TurboWrite(turboKeyAttrDefCatCodes+"_", []byte{}) // marker
 
 	for code, catSet := range codeCats {
 		cats := make([]int64, 0, len(catSet))
@@ -576,12 +588,34 @@ func (r *AttrDefRepo) BatchUpsertCodes(codeCats map[string]map[int64]struct{}) e
 			fmt.Printf("WARN: write attrdef_cats %s: %v\n", code, err)
 		}
 
-		h := uint64(0)
-		for i := 0; i < len(code); i++ {
-			h ^= uint64(code[i])
-			h *= 1099511628211
+		// Get or create real ID for this code
+		id, err := r.store.NextID("attrdef")
+		if err != nil {
+			fmt.Printf("WARN: get next ID for attrdef %s: %v\n", code, err)
+			continue
 		}
-		if err := r.store.TurboWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", h))); err != nil {
+
+		// Check if doc already exists, if not create default
+		docKey := fmt.Sprintf("attrdef:%d", id)
+		existingData, _ := r.store.DB().TurboRawRead(docKey)
+		if len(existingData) == 0 {
+			ad := &model.AttrDef{
+				ID:           id,
+				Code:         code,
+				Categories:   cats,
+				Type:         "string",
+				IsActive:     true,
+				IsFilterable: true,
+				CreatedAt:    time.Now().Unix(),
+			}
+			data, _ := json.Marshal(ad)
+			if err := r.store.DocPut(docKey, data); err != nil {
+				fmt.Printf("WARN: write attrdef doc %s: %v\n", docKey, err)
+			}
+		}
+
+		// Write real ID (not hash)
+		if err := r.store.TurboWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", id))); err != nil {
 			fmt.Printf("WARN: write attrdef_code %s: %v\n", code, err)
 		}
 
@@ -612,6 +646,8 @@ func (r *AttrDefRepo) BatchUpsertCodes(codeCats map[string]map[int64]struct{}) e
 }
 
 // BatchWriteAttrValues batch-writes attr value references.
+// Writes attr_values_cat:{code}:{catID} as JSON map {value: true} (consistent with IndexSCUPageBatch).
+// Writes attr_label:{code}:{value} with raw value (consistent with IndexSCUPageBatch).
 func (r *AttrDefRepo) BatchWriteAttrValues(codeValues map[string]map[string]struct{}, codeCatValues map[string]map[int64]map[string]struct{}) error {
 	if len(codeValues) == 0 {
 		return nil
@@ -622,13 +658,9 @@ func (r *AttrDefRepo) BatchWriteAttrValues(codeValues map[string]map[string]stru
 			continue
 		}
 
-		var hashes []uint64
+		// Write labels with raw values
 		for val := range valSet {
-			h := fnv64(val)
-			hashes = append(hashes, h)
-
-			hexH := fmt.Sprintf("%x", h)
-			labelKey := "attr_label:" + code + ":" + hexH
+			labelKey := "attr_label:" + code + ":" + val
 			if err := r.store.TurboWrite(labelKey, []byte(val)); err != nil {
 				fmt.Printf("WARN: write attr_label %s: %v\n", labelKey, err)
 			}
@@ -639,17 +671,18 @@ func (r *AttrDefRepo) BatchWriteAttrValues(codeValues map[string]map[string]stru
 				if len(catValSet) == 0 {
 					continue
 				}
-				var catHashes []uint64
-				for val := range catValSet {
-					catHashes = append(catHashes, fnv64(val))
-				}
-				// Convert hashes to Key128 IDs
-				hashKeys := make([]string, len(catHashes))
-				for i, h := range catHashes {
-					hashKeys[i] = strconv.Itoa(int(h))
-				}
+				// Write as JSON map {value: true} (consistent with IndexSCUPageBatch)
 				catKey := turboKeyAttrValuesCat + code + ":" + fmt.Sprintf("%d", catID)
-				if _, err := r.store.DB().TurboPutBatchIndexString(catKey, hashKeys); err != nil {
+				valuesMap := make(map[string]bool, len(catValSet))
+				for val := range catValSet {
+					valuesMap[val] = true
+				}
+				buf, err := json.Marshal(valuesMap)
+				if err != nil {
+					fmt.Printf("WARN: marshal attr_values_cat %s: %v\n", catKey, err)
+					continue
+				}
+				if err := r.store.TurboWrite(catKey, buf); err != nil {
 					fmt.Printf("WARN: write attr_values_cat %s: %v\n", catKey, err)
 				}
 			}
@@ -657,15 +690,6 @@ func (r *AttrDefRepo) BatchWriteAttrValues(codeValues map[string]map[string]stru
 	}
 
 	return nil
-}
-
-func fnv64(s string) uint64 {
-	h := uint64(14695981039346656037)
-	for i := 0; i < len(s); i++ {
-		h ^= uint64(s[i])
-		h *= 1099511628211
-	}
-	return h
 }
 
 func Uint64SliceFromInt64(in []int64) []uint64 {
@@ -804,6 +828,87 @@ func (r *AttrDefRepo) AddCodeToCategory(code string, catID int64) error {
 	return r.Update(code, func(a *model.AttrDef) {
 		a.Categories = cats
 	})
+}
+
+// RebuildAttrValuesFromSCUPages rebuilds attr_values_cat and attr_label indexes
+// from all SCU pages in the database.
+func (r *AttrDefRepo) RebuildAttrValuesFromSCUPages(scuPageRepo *SCUPageRepo) error {
+	fmt.Println("[ATTRDEF] RebuildAttrValuesFromSCUPages: starting...")
+	startTime := time.Now()
+
+	// Get all SCU pages
+	pages, err := scuPageRepo.List()
+	if err != nil {
+		return fmt.Errorf("list scupages: %w", err)
+	}
+
+	// Accumulate attr values per code and category
+	// code -> catID -> {value -> true}
+	attrValues := make(map[string]map[int64]map[string]bool)
+
+	for _, sp := range pages {
+		if sp.CategoryID == 0 {
+			continue
+		}
+		for _, kv := range sp.Attributes {
+			valStr := kv.Value
+			if valStr == "" {
+				continue
+			}
+			code := kv.Key
+			if attrValues[code] == nil {
+				attrValues[code] = make(map[int64]map[string]bool)
+			}
+			if attrValues[code][sp.CategoryID] == nil {
+				attrValues[code][sp.CategoryID] = make(map[string]bool)
+			}
+			attrValues[code][sp.CategoryID][valStr] = true
+		}
+	}
+
+	// Write attr_values_cat and attr_label indexes
+	for code, catMap := range attrValues {
+		// Collect all unique values for this code
+		allValues := make(map[string]struct{})
+		for _, valMap := range catMap {
+			for val := range valMap {
+				allValues[val] = struct{}{}
+			}
+		}
+
+		// Write labels
+		for val := range allValues {
+			labelKey := "attr_label:" + code + ":" + val
+			if err := r.store.TurboWrite(labelKey, []byte(val)); err != nil {
+				fmt.Printf("WARN: write attr_label %s: %v\n", labelKey, err)
+			}
+		}
+
+		// Write attr_values_cat per category
+		for catID, valMap := range catMap {
+			key := turboKeyAttrValuesCat + code + ":" + fmt.Sprintf("%d", catID)
+			buf, err := json.Marshal(valMap)
+			if err != nil {
+				fmt.Printf("WARN: marshal attr_values_cat %s: %v\n", key, err)
+				continue
+			}
+			if err := r.store.TurboWrite(key, buf); err != nil {
+				fmt.Printf("WARN: write attr_values_cat %s: %v\n", key, err)
+			}
+		}
+
+		// Update attrdef_cat_codes for each category
+		for catID := range catMap {
+			r.addToCatCodes(catID, code)
+		}
+
+		// Ensure code is in attrdef_list
+		_ = r.addToAttrDefList(code)
+	}
+
+	fmt.Printf("[ATTRDEF] RebuildAttrValuesFromSCUPages: done in %v (%d pages, %d codes)\n",
+		time.Since(startTime), len(pages), len(attrValues))
+	return nil
 }
 
 // toHumanAttrName converts a code like "diagonal-ekrana" to "Diagonal Ekrana".
