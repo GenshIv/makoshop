@@ -152,6 +152,14 @@ body {
   color: var(--text-primary);
 }
 
+/* Product image fade / wake-on-hover effect (used in catalog cards) */
+.image-fade {
+  filter: brightness(0.7) saturate(0.6) contrast(0.95);
+}
+.image-fade-active {
+  filter: brightness(1) saturate(1) contrast(1);
+}
+
 /* Respect users who prefer less motion */
 @media (prefers-reduced-motion: reduce) {
   *,

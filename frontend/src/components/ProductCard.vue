@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, onBeforeUnmount } from 'vue';
 import { useI18n } from 'vue-i18n';
 import PriceSparkline from './PriceSparkline.vue';
 
@@ -11,9 +11,46 @@ const props = defineProps({
   view: { type: String, default: 'grid', validator: (v) => ['grid', 'list'].includes(v) },
   // Optional: array of recent prices for sparkline (e.g. [old, ..., current])
   priceHistory: { type: Array, default: () => [] },
+  // Enable the "image fade / wake on hover" effect for this card
+  enableImageFade: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['click']);
+
+// Image fade / wake-on-hover logic (purely visual)
+const isImageActive = ref(false);
+let hoverTimer = null;
+let fadeTimer = null;
+
+const HOVER_WAKE_MS = 300;   // must keep mouse on card for 300ms to wake image
+const FADE_AFTER_MS = 30000; // image fades 30 seconds after last wake
+
+const wakeImage = () => {
+  isImageActive.value = true;
+  clearTimeout(fadeTimer);
+  fadeTimer = setTimeout(() => {
+    isImageActive.value = false;
+  }, FADE_AFTER_MS);
+};
+
+const onImageMouseEnter = () => {
+  if (!props.enableImageFade) return;
+  clearTimeout(hoverTimer);
+  hoverTimer = setTimeout(wakeImage, HOVER_WAKE_MS);
+};
+
+const onImageMouseLeave = () => {
+  if (!props.enableImageFade) return;
+  clearTimeout(hoverTimer);
+  // Keep isImageActive and fadeTimer as is:
+  // once image is "awake", it stays bright for FADE_AFTER_MS
+  // regardless of mouse leaving before that time.
+};
+
+onBeforeUnmount(() => {
+  clearTimeout(hoverTimer);
+  clearTimeout(fadeTimer);
+});
 
 const title = computed(() => props.product.title || props.product.name || '');
 const price = computed(() => props.product.price ?? props.product.min_price ?? 0);
@@ -78,14 +115,22 @@ const attrsString = computed(() => {
     </span>
 
     <!-- Image -->
-    <div class="aspect-[4/3] bg-surface-2 flex items-center justify-center overflow-hidden">
+    <div
+      class="aspect-[4/3] bg-surface-2 flex items-center justify-center overflow-hidden"
+      @mouseenter="onImageMouseEnter"
+      @mouseleave="onImageMouseLeave"
+    >
       <img
         v-if="product.images?.length"
         :src="product.images[0]"
         :alt="title"
         loading="lazy"
         decoding="async"
-        class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+        class="w-full h-full object-cover transition-all duration-500 ease-out group-hover:scale-[1.03]"
+        :class="{
+          'image-fade': enableImageFade,
+          'image-fade-active': enableImageFade && isImageActive
+        }"
       />
       <span v-else class="text-ink-3 text-xs">{{ t('catalog.no_photo') }}</span>
 
@@ -150,14 +195,22 @@ const attrsString = computed(() => {
   >
     <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 p-3">
       <!-- Image -->
-      <div class="relative w-full sm:w-32 h-32 sm:h-32 flex-shrink-0 bg-surface-2 rounded-lg overflow-hidden">
+      <div
+        class="relative w-full sm:w-32 h-32 sm:h-32 flex-shrink-0 bg-surface-2 rounded-lg overflow-hidden"
+        @mouseenter="onImageMouseEnter"
+        @mouseleave="onImageMouseLeave"
+      >
         <img
           v-if="product.images?.length"
           :src="product.images[0]"
           :alt="title"
           loading="lazy"
           decoding="async"
-          class="w-full h-full object-cover"
+          class="w-full h-full object-cover transition-all duration-500 ease-out"
+          :class="{
+            'image-fade': enableImageFade,
+            'image-fade-active': enableImageFade && isImageActive
+          }"
         />
         <span v-else class="w-full h-full flex items-center justify-center text-ink-3 text-xs">
           {{ t('catalog.no_photo') }}

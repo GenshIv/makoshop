@@ -1595,6 +1595,7 @@ defineOptions({ name: 'CatalogView' });
               :product="product"
               :format-price="formatPrice"
               :view="'grid'"
+              :enable-image-fade="animationEnabled"
               @click="goToSCUPage(product)"
             />
             <!-- SCU Preview Popup (only when animations enabled) -->
@@ -1665,6 +1666,7 @@ defineOptions({ name: 'CatalogView' });
               :product="product"
               :format-price="formatPrice"
               :view="'list'"
+              :enable-image-fade="animationEnabled"
               @click="goToSCUPage(product)"
             />
             <!-- SCU Preview Popup (List view, only when animations enabled) -->
