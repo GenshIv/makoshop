@@ -30,7 +30,7 @@ func NewStore(cfg config.DatabaseConfig) (*Store, error) {
 		cfg.NumShards,
 		cfg.MaxTotalSize,
 		cfg.NumBucketsPerShard,
-		true,
+		false,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("open makodb: %w", err)
