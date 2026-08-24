@@ -92,10 +92,16 @@ function showToast(message, type = 'success', duration = 2500, options = {}) {
 }
 
 export function useToast() {
+  const toast = (message, type = 'success', duration = 2500, options = {}) => {
+    showToast(message, type, duration, options);
+  };
+
+  // Add methods to toast function
+  toast.success = (msg, duration, options) => showToast(msg, 'success', duration, options);
+  toast.error = (msg, duration, options) => showToast(msg, 'error', duration, options);
+  toast.info = (msg, duration, options) => showToast(msg, 'info', duration, options);
+
   return {
-    toast: showToast,
-    success: (msg, duration, options) => showToast(msg, 'success', duration, options),
-    error: (msg, duration, options) => showToast(msg, 'error', duration, options),
-    info: (msg, duration, options) => showToast(msg, 'info', duration, options),
+    toast,
   };
 }
