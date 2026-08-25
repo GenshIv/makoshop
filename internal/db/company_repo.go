@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/GenshIv/makoshop/internal/model"
+	"github.com/GenshIv/makoshop/internal/slug"
 )
 
 const (
@@ -40,7 +41,7 @@ func (r *CompanyRepo) Create(c *model.Company) error {
 		c.Settings.Currency = "RUB"
 	}
 	if c.Slug == "" {
-		c.Slug = toSlug(c.Name)
+		c.Slug = slug.SlugKeepCase(c.Name)
 	}
 
 	data := MarshalCompany(*c)
@@ -263,34 +264,4 @@ func (r *CompanyRepo) DeleteCompanySettings(companyID int64) error {
 	_ = r.Store.DocDelete(keyCompanyDeliveryTimes + idStr)
 	_ = r.Store.DocDelete(keyCompanyInstallmentPlans + idStr)
 	return nil
-}
-
-// toSlug creates a URL-friendly slug from a string.
-func toSlug(s string) string {
-	// Simple slug: lowercase, replace spaces with hyphens, remove special chars
-	result := []rune{}
-	for _, r := range s {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-			result = append(result, r)
-		} else if r == ' ' || r == '-' {
-			result = append(result, '-')
-		}
-	}
-	// Collapse multiple hyphens
-	collapsed := []rune{}
-	for i, r := range result {
-		if r == '-' && i > 0 && result[i-1] == '-' {
-			continue
-		}
-		collapsed = append(collapsed, r)
-	}
-	// Trim leading/trailing hyphens
-	start, end := 0, len(collapsed)
-	for start < end && collapsed[start] == '-' {
-		start++
-	}
-	for end > start && collapsed[end-1] == '-' {
-		end--
-	}
-	return string(collapsed[start:end])
 }

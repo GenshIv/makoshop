@@ -19,8 +19,10 @@ import (
 
 	"github.com/GenshIv/makoshop/internal/attrs"
 	"github.com/GenshIv/makoshop/internal/db"
+	"github.com/GenshIv/makoshop/internal/httpres"
 	"github.com/GenshIv/makoshop/internal/idxbuild"
 	"github.com/GenshIv/makoshop/internal/model"
+	"github.com/GenshIv/makoshop/internal/slug"
 )
 
 // ImagePlaceholder is a placeholder image used when product has no images.
@@ -51,7 +53,7 @@ type ImportPricesResult struct {
 func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("[IMPORT] HandleAdminImportPrices called, method=", r.Method)
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -100,7 +102,7 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 
 	company, err := ensureCompany(h.companyRepo, h.userRepo, companyName)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("ensure company: %v", err))
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("ensure company: %v", err))
 		return
 	}
 
@@ -111,7 +113,7 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 	sort.Strings(csvFiles)
 
 	if len(csvFiles) == 0 {
-		writeJSON(w, http.StatusOK, ImportPricesResult{Status: "no_files"})
+		httpres.WriteJSON(w, http.StatusOK, ImportPricesResult{Status: "no_files"})
 		return
 	}
 
@@ -121,7 +123,7 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 		fmt.Println("[IMPORT-CSV] no_cats=1: building category path map from existing categories...")
 		pathToID, err = h.categoryRepo.BuildPathMap()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("build path map: %v", err))
+			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("build path map: %v", err))
 			return
 		}
 		fmt.Printf("[IMPORT-CSV] Found %d existing category paths\n", len(pathToID))
@@ -193,7 +195,7 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 	}
 
 	if finalImported == 0 && finalSkipped == 0 {
-		writeJSON(w, http.StatusOK, ImportPricesResult{Status: "no_products"})
+		httpres.WriteJSON(w, http.StatusOK, ImportPricesResult{Status: "no_products"})
 		return
 	}
 
@@ -278,7 +280,7 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 	h.categoryRepo.RebuildTrees()
 	fmt.Printf("[IMPORT-CSV] Phase 8: Category trees rebuilt in %v\n", time.Since(phase8Start))
 
-	writeJSON(w, http.StatusOK, ImportPricesResult{
+	httpres.WriteJSON(w, http.StatusOK, ImportPricesResult{
 		Status:           "completed",
 		Categories:       finalCategories,
 		ProductsImported: int(finalImported),
@@ -322,7 +324,7 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 	// Ensure company
 	company, err := ensureCompany(h.companyRepo, h.userRepo, companyName)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("ensure company: %v", err))
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("ensure company: %v", err))
 		return
 	}
 	fmt.Printf("[IMPORT-NORMALIZED] Using company: %s (ID=%d)\n", company.Name, company.ID)
@@ -336,12 +338,12 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 	// Find product files
 	productFiles, err := filepath.Glob(filepath.Join(inputDir, "products-*.jsonl"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("glob: %v", err))
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("glob: %v", err))
 		return
 	}
 	sort.Strings(productFiles)
 	if len(productFiles) == 0 {
-		writeJSON(w, http.StatusOK, ImportPricesResult{Status: "no_files"})
+		httpres.WriteJSON(w, http.StatusOK, ImportPricesResult{Status: "no_files"})
 		return
 	}
 	fmt.Printf("[IMPORT-NORMALIZED] Found %d product files\n", len(productFiles))
@@ -403,7 +405,7 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("[IMPORT-NORMALIZED] Phase 1: parsed %d products in %v\n", len(allProducts), time.Since(phase1Start))
 
 	if len(allProducts) == 0 {
-		writeJSON(w, http.StatusOK, ImportPricesResult{Status: "no_products"})
+		httpres.WriteJSON(w, http.StatusOK, ImportPricesResult{Status: "no_products"})
 		return
 	}
 
@@ -414,7 +416,7 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("[IMPORT-NORMALIZED] Created %d products in %v\n", createdCount, time.Since(createStart))
 
 	if createdCount == 0 {
-		writeJSON(w, http.StatusOK, ImportPricesResult{Status: "no_products_created"})
+		httpres.WriteJSON(w, http.StatusOK, ImportPricesResult{Status: "no_products_created"})
 		return
 	}
 
@@ -499,7 +501,7 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("[IMPORT-NORMALIZED] Completed: created=%d skipped=%d time=%v (%.0f products/sec)\n",
 		createdCount, skipped, elapsed, float64(createdCount)/elapsed.Seconds())
 
-	writeJSON(w, http.StatusOK, ImportPricesResult{
+	httpres.WriteJSON(w, http.StatusOK, ImportPricesResult{
 		Status:           "completed",
 		ProductsImported: createdCount,
 		ProductsSkipped:  skipped,
@@ -734,7 +736,7 @@ func (h *Handlers) importCategories(file string, createCats bool) (map[string]in
 			c := &model.Category{
 				NameRu:   nameRu,
 				NameEn:   nameEn,
-				Slug:     toSlugTranslit(nameEn),
+				Slug:     slug.Slug(nameEn),
 				ParentID: dbParentID,
 				IsActive: true,
 			}
@@ -1438,7 +1440,7 @@ func streamImportCSVFile(
 					cat := &model.Category{
 						NameRu:   nameRu,
 						NameEn:   nameEn,
-						Slug:     toSlugTranslit(nameEn),
+						Slug:     slug.Slug(nameEn),
 						ParentID: parentID,
 						IsActive: true,
 					}
@@ -1868,7 +1870,7 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 		var err error
 		pathToID, err = h.categoryRepo.BuildPathMap()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("build path map: %v", err))
+			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("build path map: %v", err))
 			return
 		}
 		fmt.Printf("[IMPORT-MULTI] Found %d existing category paths\n", len(pathToID))
@@ -1877,7 +1879,7 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 	// List subdirectories (each is a company)
 	entries, err := os.ReadDir(inputDir)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("read dir: %v", err))
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("read dir: %v", err))
 		return
 	}
 
@@ -1890,7 +1892,7 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(companyDirs)
 
 	if len(companyDirs) == 0 {
-		writeJSON(w, http.StatusOK, map[string]string{
+		httpres.WriteJSON(w, http.StatusOK, map[string]string{
 			"status":  "no_company_dirs",
 			"message": "No company subdirectories found in _tmp/prices/. Create directories like _tmp/prices/{company_name}/",
 		})
@@ -2110,7 +2112,7 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("[IMPORT-MULTI] Complete: total_imported=%d total_skipped=%d time=%v\n",
 		totalImported, totalSkipped, elapsed)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":         "ok",
 		"total_imported": totalImported,
 		"total_skipped":  totalSkipped,
@@ -2169,7 +2171,7 @@ func formatOption(option string) string {
 // This is an emergency operation that reads all products directly (allowed by rules).
 func (h *Handlers) HandleAdminRebuildSortIndexes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -2178,7 +2180,7 @@ func (h *Handlers) HandleAdminRebuildSortIndexes(w http.ResponseWriter, r *http.
 
 	db := h.productRepo.TurboSearch()
 	if db == nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "turbo search not initialized")
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "turbo search not initialized")
 		return
 	}
 
@@ -2204,7 +2206,7 @@ func (h *Handlers) HandleAdminRebuildSortIndexes(w http.ResponseWriter, r *http.
 	fmt.Printf("[REBUILD-SORT] Total products: %d\n", len(allIDs))
 
 	if len(allIDs) == 0 {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "no_products"})
+		httpres.WriteJSON(w, http.StatusOK, map[string]string{"status": "no_products"})
 		return
 	}
 
@@ -2293,44 +2295,9 @@ func (h *Handlers) HandleAdminRebuildSortIndexes(w http.ResponseWriter, r *http.
 	elapsed := time.Since(startTime)
 	fmt.Printf("[REBUILD-SORT] Completed in %v\n", elapsed)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":   "ok",
 		"products": len(allIDs),
 		"time":     elapsed.String(),
 	})
-}
-
-// toSlugTranslit creates a URL-friendly slug from a string with Cyrillic transliteration.
-func toSlugTranslit(s string) string {
-	// Transliterate Cyrillic to Latin using map
-	translitMap := map[rune]string{
-		'А': "a", 'Б': "b", 'В': "v", 'Г': "g", 'Д': "d", 'Е': "e", 'Ё': "e", 'Ж': "zh",
-		'З': "z", 'И': "i", 'Й': "y", 'К': "k", 'Л': "l", 'М': "m", 'Н': "n", 'О': "o",
-		'П': "p", 'Р': "r", 'С': "s", 'Т': "t", 'У': "u", 'Ф': "f", 'Х': "kh", 'Ц': "ts",
-		'Ч': "ch", 'Ш': "sh", 'Щ': "shch", 'Ъ': "", 'Ы': "y", 'Ь': "", 'Э': "e", 'Ю': "yu", 'Я': "ya",
-		'а': "a", 'б': "b", 'в': "v", 'г': "g", 'д': "d", 'е': "e", 'ё': "e", 'ж': "zh",
-		'з': "z", 'и': "i", 'й': "y", 'к': "k", 'л': "l", 'м': "m", 'н': "n", 'о': "o",
-		'п': "p", 'р': "r", 'с': "s", 'т': "t", 'у': "u", 'ф': "f", 'х': "kh", 'ц': "ts",
-		'ч': "ch", 'ш': "sh", 'щ': "shch", 'ъ': "", 'ы': "y", 'ь': "", 'э': "e", 'ю': "yu", 'я': "ya",
-	}
-
-	var result strings.Builder
-	for _, r := range s {
-		if t, ok := translitMap[r]; ok {
-			result.WriteString(t)
-		} else if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-			result.WriteRune(r)
-		} else if r == ' ' || r == '-' || r == '_' {
-			result.WriteString("-")
-		}
-	}
-
-	// Collapse multiple hyphens
-	slug := result.String()
-	for strings.Contains(slug, "--") {
-		slug = strings.ReplaceAll(slug, "--", "-")
-	}
-	slug = strings.Trim(slug, "-")
-
-	return strings.ToLower(slug)
 }

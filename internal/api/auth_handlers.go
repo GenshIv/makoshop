@@ -8,6 +8,7 @@ import (
 
 	"github.com/GenshIv/makoshop/internal/auth"
 	"github.com/GenshIv/makoshop/internal/db"
+	"github.com/GenshIv/makoshop/internal/httpres"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -84,17 +85,17 @@ type ChangePasswordRequest struct {
 
 func (h *AuthHandlers) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
 	var req RegisterRequest
-	if !readJSON(w, r, &req) {
+	if !httpres.ReadJSON(w, r, &req) {
 		return
 	}
 
 	if req.Email == "" || req.Password == "" {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "email and password are required")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "email and password are required")
 		return
 	}
 
@@ -111,20 +112,20 @@ func (h *AuthHandlers) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.userRepo.Create(user, req.Password); err != nil {
 		if err.Error() == "email already registered" {
-			writeError(w, http.StatusConflict, "EMAIL_EXISTS", err.Error())
+			httpres.WriteError(w, http.StatusConflict, "EMAIL_EXISTS", err.Error())
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	token, err := auth.GenerateToken(user, h.secret)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "TOKEN_ERROR", "failed to generate token")
+		httpres.WriteError(w, http.StatusInternalServerError, "TOKEN_ERROR", "failed to generate token")
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, AuthResponse{
+	httpres.WriteJSON(w, http.StatusCreated, AuthResponse{
 		UserID: user.ID,
 		Email:  user.Email,
 		Role:   user.Role,
@@ -134,39 +135,39 @@ func (h *AuthHandlers) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandlers) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
 	var req LoginRequest
-	if !readJSON(w, r, &req) {
+	if !httpres.ReadJSON(w, r, &req) {
 		return
 	}
 
 	if req.Email == "" || req.Password == "" {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "email and password are required")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "email and password are required")
 		return
 	}
 
 	user, err := h.userRepo.GetByEmail(req.Email)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "invalid email or password")
+		httpres.WriteError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "invalid email or password")
 		return
 	}
 
 	if user.Status == model.UserStatusBlocked {
-		writeError(w, http.StatusForbidden, "ACCOUNT_BLOCKED", "account is blocked")
+		httpres.WriteError(w, http.StatusForbidden, "ACCOUNT_BLOCKED", "account is blocked")
 		return
 	}
 
 	if !h.userRepo.VerifyPassword(user, req.Password) {
-		writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "invalid email or password")
+		httpres.WriteError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "invalid email or password")
 		return
 	}
 
 	token, err := auth.GenerateToken(user, h.secret)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "TOKEN_ERROR", "failed to generate token")
+		httpres.WriteError(w, http.StatusInternalServerError, "TOKEN_ERROR", "failed to generate token")
 		return
 	}
 
@@ -187,7 +188,7 @@ func (h *AuthHandlers) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, AuthResponse{
+	httpres.WriteJSON(w, http.StatusOK, AuthResponse{
 		UserID:     user.ID,
 		Email:      user.Email,
 		Role:       user.Role,
@@ -198,23 +199,23 @@ func (h *AuthHandlers) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandlers) HandleMe(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
 	ctxUser, ok := auth.ContextUserFrom(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user context")
+		httpres.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user context")
 		return
 	}
 
 	user, err := h.userRepo.GetByID(ctxUser.ID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"id":             user.ID,
 		"email":          user.Email,
 		"role":           user.Role,
@@ -226,18 +227,18 @@ func (h *AuthHandlers) HandleMe(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandlers) HandleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPatch {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
 	ctxUser, ok := auth.ContextUserFrom(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user context")
+		httpres.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user context")
 		return
 	}
 
 	var req UpdateProfileRequest
-	if !readJSON(w, r, &req) {
+	if !httpres.ReadJSON(w, r, &req) {
 		return
 	}
 
@@ -255,19 +256,19 @@ func (h *AuthHandlers) HandleUpdateMe(w http.ResponseWriter, r *http.Request) {
 			u.Profile.Address = req.Address
 		}
 	}); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	user, _ := h.userRepo.GetByID(ctxUser.ID)
-	writeJSON(w, http.StatusOK, user)
+	httpres.WriteJSON(w, http.StatusOK, user)
 }
 
 // --- Admin user handlers ---
 
 func (h *AuthHandlers) HandleAdminUsersList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -285,7 +286,7 @@ func (h *AuthHandlers) HandleAdminUsersList(w http.ResponseWriter, r *http.Reque
 
 	users, total, err := h.userRepo.List(params)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
@@ -293,7 +294,7 @@ func (h *AuthHandlers) HandleAdminUsersList(w http.ResponseWriter, r *http.Reque
 		users = []model.User{}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"page":  page,
 		"limit": limit,
 		"total": total,
@@ -303,7 +304,7 @@ func (h *AuthHandlers) HandleAdminUsersList(w http.ResponseWriter, r *http.Reque
 
 func (h *AuthHandlers) HandleAdminUserGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -314,16 +315,16 @@ func (h *AuthHandlers) HandleAdminUserGet(w http.ResponseWriter, r *http.Request
 
 	user, err := h.userRepo.GetByID(id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, user)
+	httpres.WriteJSON(w, http.StatusOK, user)
 }
 
 func (h *AuthHandlers) HandleAdminUserUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPatch {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -333,7 +334,7 @@ func (h *AuthHandlers) HandleAdminUserUpdate(w http.ResponseWriter, r *http.Requ
 	}
 
 	var req AdminUpdateUserRequest
-	if !readJSON(w, r, &req) {
+	if !httpres.ReadJSON(w, r, &req) {
 		return
 	}
 
@@ -359,12 +360,12 @@ func (h *AuthHandlers) HandleAdminUserUpdate(w http.ResponseWriter, r *http.Requ
 			}
 		}
 	}); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	user, _ := h.userRepo.GetByID(id)
-	writeJSON(w, http.StatusOK, user)
+	httpres.WriteJSON(w, http.StatusOK, user)
 }
 
 // --- Company handlers (admin + public read) ---
@@ -382,13 +383,13 @@ type CreateCompanyRequest struct {
 
 func (h *AuthHandlers) HandleAdminCompaniesList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
 	companies, err := h.companyRepo.List()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
@@ -396,7 +397,7 @@ func (h *AuthHandlers) HandleAdminCompaniesList(w http.ResponseWriter, r *http.R
 		companies = []model.Company{}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"items": companies,
 		"total": len(companies),
 	})
@@ -404,17 +405,17 @@ func (h *AuthHandlers) HandleAdminCompaniesList(w http.ResponseWriter, r *http.R
 
 func (h *AuthHandlers) HandleAdminCompanyCreate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
 	var req CreateCompanyRequest
-	if !readJSON(w, r, &req) {
+	if !httpres.ReadJSON(w, r, &req) {
 		return
 	}
 
 	if req.Name == "" || req.OwnerUserID == 0 {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "name and owner_user_id are required")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "name and owner_user_id are required")
 		return
 	}
 
@@ -430,16 +431,16 @@ func (h *AuthHandlers) HandleAdminCompanyCreate(w http.ResponseWriter, r *http.R
 	}
 
 	if err := h.companyRepo.Create(c); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, c)
+	httpres.WriteJSON(w, http.StatusCreated, c)
 }
 
 func (h *AuthHandlers) HandleAdminCompanyGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -450,16 +451,16 @@ func (h *AuthHandlers) HandleAdminCompanyGet(w http.ResponseWriter, r *http.Requ
 
 	c, err := h.companyRepo.Get(id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "company not found")
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "company not found")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, c)
+	httpres.WriteJSON(w, http.StatusOK, c)
 }
 
 func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPatch {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -477,7 +478,7 @@ func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.R
 		DeliveryTimeIds    []int64                 `json:"delivery_time_ids,omitempty"`
 		InstallmentPlanIds []int64                 `json:"installment_plan_ids,omitempty"`
 	}
-	if !readJSON(w, r, &req) {
+	if !httpres.ReadJSON(w, r, &req) {
 		return
 	}
 
@@ -505,12 +506,12 @@ func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.R
 			c.InstallmentPlanIds = req.InstallmentPlanIds
 		}
 	}); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	c, _ := h.companyRepo.Get(id)
-	writeJSON(w, http.StatusOK, c)
+	httpres.WriteJSON(w, http.StatusOK, c)
 }
 
 // HandleAdminCompanyVerify verifies or blocks a company.
@@ -518,7 +519,7 @@ func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.R
 // Body: {"status": "verified" | "blocked"}
 func (h *AuthHandlers) HandleAdminCompanyVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPatch {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -526,19 +527,19 @@ func (h *AuthHandlers) HandleAdminCompanyVerify(w http.ResponseWriter, r *http.R
 	parts := strings.Split(r.URL.Path, "/")
 	// Expected: ["", "admin", "companies", "{id}", "verify"]
 	if len(parts) < 5 || parts[4] != "verify" {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
 		return
 	}
 	id, err := strconv.ParseInt(parts[3], 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid company id")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid company id")
 		return
 	}
 
 	var req struct {
 		Status string `json:"status"`
 	}
-	if !readJSON(w, r, &req) {
+	if !httpres.ReadJSON(w, r, &req) {
 		return
 	}
 
@@ -549,19 +550,19 @@ func (h *AuthHandlers) HandleAdminCompanyVerify(w http.ResponseWriter, r *http.R
 	case "blocked":
 		newStatus = model.CompanyStatusBlocked
 	default:
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "status must be 'verified' or 'blocked'")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "status must be 'verified' or 'blocked'")
 		return
 	}
 
 	if err := h.companyRepo.Update(id, func(c *model.Company) {
 		c.Status = newStatus
 	}); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	c, _ := h.companyRepo.Get(id)
-	writeJSON(w, http.StatusOK, c)
+	httpres.WriteJSON(w, http.StatusOK, c)
 }
 
 // --- Public company endpoints ---
@@ -570,13 +571,13 @@ func (h *AuthHandlers) HandleAdminCompanyVerify(w http.ResponseWriter, r *http.R
 // GET /companies
 func (h *AuthHandlers) HandleCompaniesList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
 	companies, err := h.companyRepo.List()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
@@ -584,14 +585,14 @@ func (h *AuthHandlers) HandleCompaniesList(w http.ResponseWriter, r *http.Reques
 		companies = []model.Company{}
 	}
 
-	writeJSON(w, http.StatusOK, companies)
+	httpres.WriteJSON(w, http.StatusOK, companies)
 }
 
 // HandleCompanyGet returns a company by ID (public).
 // GET /companies/{id}
 func (h *AuthHandlers) HandleCompanyGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -602,18 +603,18 @@ func (h *AuthHandlers) HandleCompanyGet(w http.ResponseWriter, r *http.Request) 
 
 	c, err := h.companyRepo.Get(id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "company not found")
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "company not found")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, c)
+	httpres.WriteJSON(w, http.StatusOK, c)
 }
 
 // HandleCompanyGetBySlug returns a company by slug (public).
 // GET /companies/slug/{slug}
 func (h *AuthHandlers) HandleCompanyGetBySlug(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -621,29 +622,29 @@ func (h *AuthHandlers) HandleCompanyGetBySlug(w http.ResponseWriter, r *http.Req
 	path := r.URL.Path
 	prefix := "/companies/slug/"
 	if !strings.HasPrefix(path, prefix) {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
 		return
 	}
 	slug := strings.TrimPrefix(path, prefix)
 	if slug == "" {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "missing slug")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "missing slug")
 		return
 	}
 
 	c, err := h.companyRepo.GetBySlug(slug)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "company not found")
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "company not found")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, c)
+	httpres.WriteJSON(w, http.StatusOK, c)
 }
 
 // HandleCompanyProducts returns products for a company (public).
 // GET /companies/{id}/products
 func (h *AuthHandlers) HandleCompanyProducts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -654,7 +655,7 @@ func (h *AuthHandlers) HandleCompanyProducts(w http.ResponseWriter, r *http.Requ
 
 	// Verify company exists
 	if _, err := h.companyRepo.Get(id); err != nil {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "company not found")
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "company not found")
 		return
 	}
 
@@ -687,7 +688,7 @@ func (h *AuthHandlers) HandleCompanyProducts(w http.ResponseWriter, r *http.Requ
 	// Use turbo search with company filter
 	turboSearch := h.getTurboSearch()
 	if turboSearch == nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "turbo search not initialized")
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "turbo search not initialized")
 		return
 	}
 
@@ -699,11 +700,11 @@ func (h *AuthHandlers) HandleCompanyProducts(w http.ResponseWriter, r *http.Requ
 		Limit:     limit,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"items": result.Items,
 		"total": result.Total,
 		"page":  result.Page,
@@ -715,7 +716,7 @@ func (h *AuthHandlers) HandleCompanyProducts(w http.ResponseWriter, r *http.Requ
 // POST /admin/companies/create-test
 func (h *AuthHandlers) HandleAdminCreateTestCompanies(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -727,7 +728,7 @@ func (h *AuthHandlers) HandleAdminCreateTestCompanies(w http.ResponseWriter, r *
 			Role:  model.RoleAdmin,
 		}
 		if err := h.userRepo.Create(adminUser, "admin123"); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 			return
 		}
 	}
@@ -789,7 +790,7 @@ func (h *AuthHandlers) HandleAdminCreateTestCompanies(w http.ResponseWriter, r *
 		created = append(created, *c)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":   "ok",
 		"created":  created,
 		"existing": existing,
@@ -803,46 +804,46 @@ func (h *AuthHandlers) HandleAdminCreateTestCompanies(w http.ResponseWriter, r *
 // Available to any authenticated user (changes their own password).
 func (h *AuthHandlers) HandleChangePassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
 	ctxUser, ok := auth.ContextUserFrom(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user context")
+		httpres.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user context")
 		return
 	}
 
 	var req ChangePasswordRequest
-	if !readJSON(w, r, &req) {
+	if !httpres.ReadJSON(w, r, &req) {
 		return
 	}
 
 	if req.OldPassword == "" || req.NewPassword == "" {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "oldPassword and newPassword are required")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "oldPassword and newPassword are required")
 		return
 	}
 
 	if len(req.NewPassword) < 6 {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "new password must be at least 6 characters")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "new password must be at least 6 characters")
 		return
 	}
 
 	user, err := h.userRepo.GetByID(ctxUser.ID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
 		return
 	}
 
 	// Verify old password
 	if !h.userRepo.VerifyPassword(user, req.OldPassword) {
-		writeError(w, http.StatusUnauthorized, "INVALID_PASSWORD", "current password is incorrect")
+		httpres.WriteError(w, http.StatusUnauthorized, "INVALID_PASSWORD", "current password is incorrect")
 		return
 	}
 
 	// Update password
 	if err := h.userRepo.UpdatePassword(user, req.NewPassword); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
@@ -853,7 +854,7 @@ func (h *AuthHandlers) HandleChangePassword(w http.ResponseWriter, r *http.Reque
 		fmt.Printf("WARN: failed to clear is_first_login: %v\n", err)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "password changed successfully"})
+	httpres.WriteJSON(w, http.StatusOK, map[string]string{"message": "password changed successfully"})
 }
 
 // turboSearch field and helpers

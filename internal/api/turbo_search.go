@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/GenshIv/makoshop/internal/db"
+	"github.com/GenshIv/makoshop/internal/httpres"
 )
 
 // TurboSearchParams holds parsed turbo search parameters.
@@ -87,7 +88,7 @@ func HandleTurboProducts(turboSearch *db.TurboProductSearch, writeJSON func(http
 			return
 		}
 
-		writeJSON(w, http.StatusOK, map[string]interface{}{
+		httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"items": result.Items,
 			"total": result.Total,
 			"page":  result.Page,

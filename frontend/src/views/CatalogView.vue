@@ -996,21 +996,7 @@ watch(
 );
 onBeforeUnmount(() => {
   if (typeof document !== 'undefined') document.body.style.overflow = '';
-  stopFlyingCartLoop();
-  window.removeEventListener('flying-cart-start', handleFlyingCartStart);
 });
-
-// Handle flying cart animation start
-const handleFlyingCartStart = (event) => {
-  flyingCartData.value = event.detail;
-  flyingCartVisible.value = true;
-};
-
-// Handle flying cart animation complete
-const handleFlyingCartComplete = () => {
-  flyingCartVisible.value = false;
-  flyingCartData.value = null;
-};
 
 const goToPage = (page) => {
   if (page < 1 || page > pagination.total_pages) return;

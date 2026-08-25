@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/GenshIv/makoshop/internal/model"
+	"github.com/GenshIv/makoshop/internal/slug"
 	"github.com/GenshIv/makoshop/internal/tokenizer"
 )
 
@@ -565,7 +566,7 @@ func toSCUPageSlug(scu, title string) string {
 	if base == "" {
 		base = scu
 	}
-	return toSlug(base)
+	return slug.SlugKeepCase(base)
 }
 
 // parseTitleFromProductName extracts a clean title from product name.

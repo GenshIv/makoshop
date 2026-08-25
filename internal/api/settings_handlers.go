@@ -1,0 +1,383 @@
+package api
+
+import (
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/GenshIv/makoshop/internal/httpres"
+	"github.com/GenshIv/makoshop/internal/model"
+)
+
+func (h *Handlers) HandlePaymentMethodsList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	items, err := h.paymentMethodRepo.List()
+	if err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+	if items == nil {
+		items = []model.CompanyPaymentMethod{}
+	}
+	httpres.WriteJSON(w, http.StatusOK, items)
+}
+
+func (h *Handlers) HandlePaymentMethodCreate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	var pm model.CompanyPaymentMethod
+	if !httpres.ReadJSON(w, r, &pm) {
+		return
+	}
+	if err := h.paymentMethodRepo.Create(&pm); err != nil {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	httpres.WriteJSON(w, http.StatusCreated, pm)
+}
+
+func (h *Handlers) HandlePaymentMethodGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	id, ok := parseID(w, r, "payment_method_id")
+	if !ok {
+		return
+	}
+	pm, err := h.paymentMethodRepo.Get(id)
+	if err != nil {
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
+		return
+	}
+	httpres.WriteJSON(w, http.StatusOK, pm)
+}
+
+func (h *Handlers) HandlePaymentMethodUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	id, ok := parseID(w, r, "payment_method_id")
+	if !ok {
+		return
+	}
+	var pm model.CompanyPaymentMethod
+	if !httpres.ReadJSON(w, r, &pm) {
+		return
+	}
+	if err := h.paymentMethodRepo.Update(id, func(p *model.CompanyPaymentMethod) {
+		if pm.Name != "" {
+			p.Name = pm.Name
+		}
+		if pm.Slug != "" {
+			p.Slug = pm.Slug
+		}
+		p.IsActive = pm.IsActive
+		if pm.SortOrder != 0 {
+			p.SortOrder = pm.SortOrder
+		}
+	}); err != nil {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	updated, _ := h.paymentMethodRepo.Get(id)
+	httpres.WriteJSON(w, http.StatusOK, updated)
+}
+
+func (h *Handlers) HandlePaymentMethodDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	id, ok := parseID(w, r, "payment_method_id")
+	if !ok {
+		return
+	}
+	if err := h.paymentMethodRepo.Delete(id); err != nil {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	httpres.WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// --- Delivery Times CRUD ---
+
+func (h *Handlers) HandleDeliveryTimesList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	items, err := h.deliveryTimeRepo.List()
+	if err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+	if items == nil {
+		items = []model.DeliveryTime{}
+	}
+	httpres.WriteJSON(w, http.StatusOK, items)
+}
+
+func (h *Handlers) HandleDeliveryTimeCreate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	var dt model.DeliveryTime
+	if !httpres.ReadJSON(w, r, &dt) {
+		return
+	}
+	if err := h.deliveryTimeRepo.Create(&dt); err != nil {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	httpres.WriteJSON(w, http.StatusCreated, dt)
+}
+
+func (h *Handlers) HandleDeliveryTimeGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	id, ok := parseID(w, r, "delivery_time_id")
+	if !ok {
+		return
+	}
+	dt, err := h.deliveryTimeRepo.Get(id)
+	if err != nil {
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
+		return
+	}
+	httpres.WriteJSON(w, http.StatusOK, dt)
+}
+
+func (h *Handlers) HandleDeliveryTimeUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	id, ok := parseID(w, r, "delivery_time_id")
+	if !ok {
+		return
+	}
+	var dt model.DeliveryTime
+	if !httpres.ReadJSON(w, r, &dt) {
+		return
+	}
+	if err := h.deliveryTimeRepo.Update(id, func(d *model.DeliveryTime) {
+		if dt.Name != "" {
+			d.Name = dt.Name
+		}
+		if dt.Slug != "" {
+			d.Slug = dt.Slug
+		}
+		d.IsActive = dt.IsActive
+		if dt.SortOrder != 0 {
+			d.SortOrder = dt.SortOrder
+		}
+	}); err != nil {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	updated, _ := h.deliveryTimeRepo.Get(id)
+	httpres.WriteJSON(w, http.StatusOK, updated)
+}
+
+func (h *Handlers) HandleDeliveryTimeDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	id, ok := parseID(w, r, "delivery_time_id")
+	if !ok {
+		return
+	}
+	if err := h.deliveryTimeRepo.Delete(id); err != nil {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	httpres.WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// --- Installment Plans CRUD ---
+
+func (h *Handlers) HandleInstallmentPlansList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	items, err := h.installmentPlanRepo.List()
+	if err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+	if items == nil {
+		items = []model.InstallmentPlan{}
+	}
+	httpres.WriteJSON(w, http.StatusOK, items)
+}
+
+func (h *Handlers) HandleInstallmentPlanCreate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	var ip model.InstallmentPlan
+	if !httpres.ReadJSON(w, r, &ip) {
+		return
+	}
+	if err := h.installmentPlanRepo.Create(&ip); err != nil {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	httpres.WriteJSON(w, http.StatusCreated, ip)
+}
+
+func (h *Handlers) HandleInstallmentPlanGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	id, ok := parseID(w, r, "installment_plan_id")
+	if !ok {
+		return
+	}
+	ip, err := h.installmentPlanRepo.Get(id)
+	if err != nil {
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
+		return
+	}
+	httpres.WriteJSON(w, http.StatusOK, ip)
+}
+
+func (h *Handlers) HandleInstallmentPlanUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	id, ok := parseID(w, r, "installment_plan_id")
+	if !ok {
+		return
+	}
+	var ip model.InstallmentPlan
+	if !httpres.ReadJSON(w, r, &ip) {
+		return
+	}
+	if err := h.installmentPlanRepo.Update(id, func(i *model.InstallmentPlan) {
+		if ip.Name != "" {
+			i.Name = ip.Name
+		}
+		if ip.Slug != "" {
+			i.Slug = ip.Slug
+		}
+		i.IsActive = ip.IsActive
+		if ip.SortOrder != 0 {
+			i.SortOrder = ip.SortOrder
+		}
+	}); err != nil {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	updated, _ := h.installmentPlanRepo.Get(id)
+	httpres.WriteJSON(w, http.StatusOK, updated)
+}
+
+func (h *Handlers) HandleInstallmentPlanDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+	id, ok := parseID(w, r, "installment_plan_id")
+	if !ok {
+		return
+	}
+	if err := h.installmentPlanRepo.Delete(id); err != nil {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	httpres.WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// --- Company settings: get with full details ---
+
+func (h *Handlers) HandleCompanyGetWithSettings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	// Path: /admin/companies/{id}/settings
+	path := r.URL.Path
+	// Trim trailing "/settings"
+	if !strings.HasSuffix(path, "/settings") {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
+		return
+	}
+	prefix := strings.TrimSuffix(path, "/settings")
+	// prefix is now "/admin/companies/{id}"
+	parts := strings.Split(prefix, "/")
+	if len(parts) < 4 {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "missing company id")
+		return
+	}
+	idStr := parts[3]
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid company id")
+		return
+	}
+
+	c, err := h.companyRepo.Get(id)
+	if err != nil {
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
+		return
+	}
+
+	// Load settings from separate storage
+	settings, _ := h.companyRepo.GetCompanySettings(id)
+	if settings != nil {
+		c.PaymentMethodIds = settings.PaymentMethodIds
+		c.DeliveryTimeIds = settings.DeliveryTimeIds
+		c.InstallmentPlanIds = settings.InstallmentPlanIds
+	}
+
+	// Load full objects for payment methods, delivery times, installment plans
+	var paymentMethods []model.CompanyPaymentMethod
+	var deliveryTimes []model.DeliveryTime
+	var installmentPlans []model.InstallmentPlan
+
+	if len(c.PaymentMethodIds) > 0 {
+		for _, id := range c.PaymentMethodIds {
+			if pm, err := h.paymentMethodRepo.Get(id); err == nil {
+				paymentMethods = append(paymentMethods, *pm)
+			}
+		}
+	}
+	if len(c.DeliveryTimeIds) > 0 {
+		for _, id := range c.DeliveryTimeIds {
+			if dt, err := h.deliveryTimeRepo.Get(id); err == nil {
+				deliveryTimes = append(deliveryTimes, *dt)
+			}
+		}
+	}
+	if len(c.InstallmentPlanIds) > 0 {
+		for _, id := range c.InstallmentPlanIds {
+			if ip, err := h.installmentPlanRepo.Get(id); err == nil {
+				installmentPlans = append(installmentPlans, *ip)
+			}
+		}
+	}
+
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"company":           c,
+		"payment_methods":   paymentMethods,
+		"delivery_times":    deliveryTimes,
+		"installment_plans": installmentPlans,
+	})
+}

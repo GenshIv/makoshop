@@ -16,9 +16,11 @@ import (
 	"github.com/GenshIv/makoshop/internal/api"
 	"github.com/GenshIv/makoshop/internal/auth"
 	"github.com/GenshIv/makoshop/internal/db"
+	"github.com/GenshIv/makoshop/internal/httpres"
 	"github.com/GenshIv/makoshop/internal/i18n"
 	"github.com/GenshIv/makoshop/internal/metrics"
 	"github.com/GenshIv/makoshop/internal/model"
+	"github.com/GenshIv/makoshop/internal/stats"
 	"github.com/GenshIv/makoshop/pkg/config"
 )
 
@@ -157,13 +159,6 @@ func generateRandomPassword(length int) string {
 	return string(b)
 }
 
-// writeJSON writes a JSON response.
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
 func main() {
 	// Enable mutex and block profiling for production profiling.
 	// These are read via /debug/pprof/mutex and /debug/pprof/block.
@@ -236,7 +231,7 @@ func main() {
 		}
 
 		if r.Method == http.MethodGet {
-			writeJSON(w, http.StatusOK, resp{
+			httpres.WriteJSON(w, http.StatusOK, resp{
 				Enabled:     maintenanceEnabled,
 				AutoDisable: maintenanceAutoDisable,
 			})
@@ -258,7 +253,7 @@ func main() {
 			fmt.Printf("[MAINTENANCE] mode changed: enabled=%v auto_disable=%v (prev=%v)\n",
 				maintenanceEnabled, maintenanceAutoDisable, prev)
 
-			writeJSON(w, http.StatusOK, resp{
+			httpres.WriteJSON(w, http.StatusOK, resp{
 				Enabled:        maintenanceEnabled,
 				AutoDisable:    maintenanceAutoDisable,
 				PreviousEnable: prev,
@@ -1302,6 +1297,33 @@ func main() {
 		h.HandleAdminStats(w, r)
 	}), model.RoleAdmin))
 
+	// --- Visit Statistics ---
+
+	// GET /admin/stats/visits/summary — visit statistics summary
+	mux.Handle("/admin/stats/visits/summary", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleStatsSummary(w, r)
+	}), model.RoleAdmin))
+
+	// GET /admin/stats/visits/referrers — visit statistics by referrer
+	mux.Handle("/admin/stats/visits/referrers", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleStatsReferrers(w, r)
+	}), model.RoleAdmin))
+
+	// GET /admin/stats/visits/paths — visit statistics by path
+	mux.Handle("/admin/stats/visits/paths", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleStatsPaths(w, r)
+	}), model.RoleAdmin))
+
+	// POST /admin/stats/visits/toggle — enable/disable visit stats
+	mux.Handle("/admin/stats/visits/toggle", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleStatsToggle(w, r)
+	}), model.RoleAdmin))
+
+	// GET /admin/stats/visits/status — visit stats status
+	mux.Handle("/admin/stats/visits/status", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleStatsStatus(w, r)
+	}), model.RoleAdmin))
+
 	// GET /admin/debug/turbo-key?key=... — read raw turbo key (TEMP)
 	mux.Handle("/admin/debug/turbo-key", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		key := r.URL.Query().Get("key")
@@ -1414,6 +1436,14 @@ func main() {
 
 	// Maintenance mode middleware (outermost)
 	handler = maintenanceMiddleware(handler)
+
+	// Stats middleware (visit tracking)
+	if statsCollector := h.StatsCollector(); statsCollector != nil {
+		// Start the stats collector
+		statsCollector.Start()
+		// Add stats middleware
+		handler = stats.StatsMiddleware(statsCollector)(handler)
+	}
 
 	metricsWriter, err := metrics.NewWriter("./_tmp/metrics", 1000, 2*time.Second, 50*1024*1024)
 	if err != nil {

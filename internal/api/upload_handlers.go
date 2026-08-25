@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/GenshIv/makoshop/internal/httpres"
 )
 
 const uploadDir = "./data/uploads/categories"
@@ -17,7 +19,7 @@ const uploadDir = "./data/uploads/categories"
 // Returns: { "url": "/uploads/categories/{filename}" }
 func (h *Handlers) HandleUploadImage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -26,13 +28,13 @@ func (h *Handlers) HandleUploadImage(w http.ResponseWriter, r *http.Request) {
 
 	err := r.ParseMultipartForm(10 << 20)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "file too large or invalid format")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "file too large or invalid format")
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "no file provided")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "no file provided")
 		return
 	}
 	defer file.Close()
@@ -41,7 +43,7 @@ func (h *Handlers) HandleUploadImage(w http.ResponseWriter, r *http.Request) {
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true, ".gif": true}
 	if !allowedExts[ext] {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "unsupported file type: "+ext)
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "unsupported file type: "+ext)
 		return
 	}
 
@@ -50,7 +52,7 @@ func (h *Handlers) HandleUploadImage(w http.ResponseWriter, r *http.Request) {
 
 	// Ensure upload directory exists
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create upload directory")
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create upload directory")
 		return
 	}
 
@@ -58,25 +60,25 @@ func (h *Handlers) HandleUploadImage(w http.ResponseWriter, r *http.Request) {
 	dstPath := filepath.Join(uploadDir, filename)
 	dst, err := os.Create(dstPath)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to save file")
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to save file")
 		return
 	}
 	defer dst.Close()
 
 	if _, err := io.Copy(dst, file); err != nil {
 		os.Remove(dstPath)
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to save file")
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to save file")
 		return
 	}
 
 	url := "/uploads/categories/" + filename
-	writeJSON(w, http.StatusOK, map[string]string{"url": url, "filename": filename})
+	httpres.WriteJSON(w, http.StatusOK, map[string]string{"url": url, "filename": filename})
 }
 
 // HandleDeleteImage handles DELETE /admin/upload-image/{filename}
 func (h *Handlers) HandleDeleteImage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -84,7 +86,7 @@ func (h *Handlers) HandleDeleteImage(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/admin/upload-image/")
 	filename := filepath.Base(path)
 	if filename == "" || strings.Contains(filename, "..") {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid filename")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid filename")
 		return
 	}
 
@@ -92,12 +94,12 @@ func (h *Handlers) HandleDeleteImage(w http.ResponseWriter, r *http.Request) {
 
 	// Check if file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "file not found")
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "file not found")
 		return
 	}
 
 	if err := os.Remove(filePath); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to delete file")
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to delete file")
 		return
 	}
 

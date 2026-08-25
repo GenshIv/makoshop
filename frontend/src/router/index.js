@@ -37,6 +37,7 @@ const routes = [
   { path: '/admin/scupages', name: 'admin-scupages', component: () => import('../views/admin/AdminSCUPageView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/catalogizer', name: 'admin-catalogizer', component: () => import('../views/admin/AdminCatalogizerView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/stats', name: 'admin-stats', component: () => import('../views/admin/AdminStatsView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
+  { path: '/admin/metrics', redirect: '/admin/stats' },
   { path: '/admin/analytics', name: 'admin-analytics', component: () => import('../views/admin/AdminAnalyticsView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/promo', name: 'admin-promo', component: () => import('../views/admin/AdminPromoView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/payment-methods', name: 'admin-payment-methods', component: () => import('../views/admin/AdminPaymentMethodsView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },

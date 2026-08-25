@@ -319,8 +319,8 @@ onMounted(() => {
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.catalogizer_desc_short') || 'Auto-assign products to categories' }}</div>
         </router-link>
         <router-link to="/admin/stats" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
-          <div class="font-medium">{{ t('admin.request_stats') }}</div>
-          <div class="text-sm text-ink-3 mt-1">{{ t('admin.request_stats_desc') }}</div>
+          <div class="font-medium">{{ t('admin.visits_stats') }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('admin.visits_stats_desc') }}</div>
         </router-link>
         <router-link to="/admin/payment-methods" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
           <div class="font-medium">{{ t('admin.payment_methods_title') || 'Payment Methods' }}</div>

@@ -13,8 +13,10 @@ import (
 	"unsafe"
 
 	"github.com/GenshIv/makoshop/internal/db"
+	"github.com/GenshIv/makoshop/internal/httpres"
 	"github.com/GenshIv/makoshop/internal/i18n"
 	"github.com/GenshIv/makoshop/internal/model"
+	"github.com/GenshIv/makoshop/internal/slug"
 	"github.com/GenshIv/silentjson/v2"
 )
 
@@ -24,13 +26,13 @@ import (
 // GET /admin/landings
 func (h *Handlers) HandleLandingPagesList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
 	lps, err := h.landingRepo.List()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
@@ -38,7 +40,7 @@ func (h *Handlers) HandleLandingPagesList(w http.ResponseWriter, r *http.Request
 		lps = []model.LandingPage{}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"items": lps,
 	})
 }
@@ -47,7 +49,7 @@ func (h *Handlers) HandleLandingPagesList(w http.ResponseWriter, r *http.Request
 // GET /admin/landings/{id}
 func (h *Handlers) HandleLandingPageGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -58,28 +60,28 @@ func (h *Handlers) HandleLandingPageGet(w http.ResponseWriter, r *http.Request) 
 
 	lp, err := h.landingRepo.Get(id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "landing page not found")
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "landing page not found")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, lp)
+	httpres.WriteJSON(w, http.StatusOK, lp)
 }
 
 // HandleLandingPageCreate creates a new landing page (admin).
 // POST /admin/landings
 func (h *Handlers) HandleLandingPageCreate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
 	var req CreateLandingRequest
-	if !readJSON(w, r, &req) {
+	if !httpres.ReadJSON(w, r, &req) {
 		return
 	}
 
 	if req.SCU == "" {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "scu is required")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "scu is required")
 		return
 	}
 
@@ -95,18 +97,18 @@ func (h *Handlers) HandleLandingPageCreate(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.landingRepo.Create(lp); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, lp)
+	httpres.WriteJSON(w, http.StatusCreated, lp)
 }
 
 // HandleLandingPageUpdate updates a landing page (admin).
 // PUT /admin/landings/{id}
 func (h *Handlers) HandleLandingPageUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -116,7 +118,7 @@ func (h *Handlers) HandleLandingPageUpdate(w http.ResponseWriter, r *http.Reques
 	}
 
 	var req UpdateLandingRequest
-	if !readJSON(w, r, &req) {
+	if !httpres.ReadJSON(w, r, &req) {
 		return
 	}
 
@@ -146,19 +148,19 @@ func (h *Handlers) HandleLandingPageUpdate(w http.ResponseWriter, r *http.Reques
 			lp.ProductIDs = *req.ProductIDs
 		}
 	}); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	lp, _ := h.landingRepo.Get(id)
-	writeJSON(w, http.StatusOK, lp)
+	httpres.WriteJSON(w, http.StatusOK, lp)
 }
 
 // HandleLandingPageDelete deletes a landing page (admin).
 // DELETE /admin/landings/{id}
 func (h *Handlers) HandleLandingPageDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -168,18 +170,18 @@ func (h *Handlers) HandleLandingPageDelete(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.landingRepo.Delete(id); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	httpres.WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 // HandleLandingPageBySlug returns a landing page by slug (public).
 // GET /landing/{slug}
 func (h *Handlers) HandleLandingPageBySlug(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -187,18 +189,18 @@ func (h *Handlers) HandleLandingPageBySlug(w http.ResponseWriter, r *http.Reques
 	path := r.URL.Path
 	prefix := "/landing/"
 	if !strings.HasPrefix(path, prefix) {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
 		return
 	}
 	slug := strings.TrimPrefix(path, prefix)
 	if slug == "" {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "missing slug")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "missing slug")
 		return
 	}
 
 	lp, err := h.landingRepo.GetBySlug(slug)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "landing page not found")
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "landing page not found")
 		return
 	}
 
@@ -208,7 +210,7 @@ func (h *Handlers) HandleLandingPageBySlug(w http.ResponseWriter, r *http.Reques
 		products = []model.Product{}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"landing":  lp,
 		"products": products,
 	})
@@ -218,7 +220,7 @@ func (h *Handlers) HandleLandingPageBySlug(w http.ResponseWriter, r *http.Reques
 // GET /landing/scu/{scu}
 func (h *Handlers) HandleLandingPageBySCU(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -226,18 +228,18 @@ func (h *Handlers) HandleLandingPageBySCU(w http.ResponseWriter, r *http.Request
 	path := r.URL.Path
 	prefix := "/landing/scu/"
 	if !strings.HasPrefix(path, prefix) {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
 		return
 	}
 	scu := strings.TrimPrefix(path, prefix)
 	if scu == "" {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "missing scu")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "missing scu")
 		return
 	}
 
 	lp, err := h.landingRepo.GetBySCU(scu)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "landing page not found")
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "landing page not found")
 		return
 	}
 
@@ -247,7 +249,7 @@ func (h *Handlers) HandleLandingPageBySCU(w http.ResponseWriter, r *http.Request
 		products = []model.Product{}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"landing":  lp,
 		"products": products,
 	})
@@ -257,7 +259,7 @@ func (h *Handlers) HandleLandingPageBySCU(w http.ResponseWriter, r *http.Request
 // GET /landing/{slug}/products
 func (h *Handlers) HandleLandingPageProducts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -265,24 +267,24 @@ func (h *Handlers) HandleLandingPageProducts(w http.ResponseWriter, r *http.Requ
 	path := r.URL.Path
 	prefix := "/landing/"
 	if !strings.HasPrefix(path, prefix) {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
 		return
 	}
 	rest := strings.TrimPrefix(path, prefix)
 	parts := strings.Split(rest, "/")
 	if len(parts) < 2 || parts[1] != "products" {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
 		return
 	}
 	slug := parts[0]
 	if slug == "" {
-		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "missing slug")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "missing slug")
 		return
 	}
 
 	lp, err := h.landingRepo.GetBySlug(slug)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "landing page not found")
+		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "landing page not found")
 		return
 	}
 
@@ -356,7 +358,7 @@ func (h *Handlers) HandleLandingPageProducts(w http.ResponseWriter, r *http.Requ
 		filtered = filtered[start:end]
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"items": filtered,
 		"total": total,
 		"page":  page,
@@ -374,7 +376,7 @@ func (h *Handlers) HandleLandingPageProducts(w http.ResponseWriter, r *http.Requ
 // Priority: category first, then SCU page, then redirect to referer/home.
 func (h *Handlers) HandleSCUPageByPath(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -453,7 +455,7 @@ func (h *Handlers) HandleSCUPageByPath(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Step 3: Not found — return 404
-	writeError(w, http.StatusNotFound, "NOT_FOUND", "page not found")
+	httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "page not found")
 }
 
 var scuListRespRegistry = silentjson.BuildRegistry(reflect.TypeOf(db.SCUListRespData{}))
@@ -531,7 +533,7 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 		}
 		result, err := h.scuPageSearch.ListWithTurbo(params)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 			return
 		}
 
@@ -592,7 +594,7 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 	}
 	result, err := h.productRepo.ListWithFacets(productParams)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
@@ -1312,7 +1314,7 @@ type UpdateLandingRequest struct {
 // Uses the same logic as import: BatchUpsertFromProducts for consistent seo_url generation.
 func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -1340,7 +1342,7 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 	fmt.Printf("[REBUILD-SCUPAGES] Total products: %d\n", len(allIDs))
 
 	if len(allIDs) == 0 {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "no_products"})
+		httpres.WriteJSON(w, http.StatusOK, map[string]string{"status": "no_products"})
 		return
 	}
 
@@ -1368,7 +1370,7 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 	fmt.Printf("[REBUILD-SCUPAGES] Read %d products in %v\n", len(allProducts), time.Since(readStart))
 
 	if len(allProducts) == 0 {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "no_products_with_scu"})
+		httpres.WriteJSON(w, http.StatusOK, map[string]string{"status": "no_products_with_scu"})
 		return
 	}
 
@@ -1465,7 +1467,7 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 	elapsed := time.Since(startTime)
 	fmt.Printf("[REBUILD-SCUPAGES] Completed in %v\n", elapsed)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":   "completed",
 		"products": len(allProducts),
 		"elapsed":  elapsed.String(),
@@ -1475,12 +1477,12 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 // HandleAdminRebuildSCUPageSortIndexes rebuilds sort indexes for SCU pages.
 func (h *Handlers) HandleAdminRebuildSCUPageSortIndexes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
 	if h.scuPageSearch == nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "scupage search not initialized")
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "scupage search not initialized")
 		return
 	}
 
@@ -1488,14 +1490,14 @@ func (h *Handlers) HandleAdminRebuildSCUPageSortIndexes(w http.ResponseWriter, r
 	startTime := time.Now()
 
 	if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	elapsed := time.Since(startTime)
 	fmt.Printf("[REBUILD-SCUPAGE-SORT-INDEXES] Completed in %v\n", elapsed)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "completed",
 		"elapsed": elapsed.String(),
 	})
@@ -1505,12 +1507,12 @@ func (h *Handlers) HandleAdminRebuildSCUPageSortIndexes(w http.ResponseWriter, r
 // POST /admin/rebuild-product-counts
 func (h *Handlers) HandleAdminRebuildProductCounts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
 	if h.scuPageRepo == nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "scupage repo not initialized")
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "scupage repo not initialized")
 		return
 	}
 
@@ -1518,14 +1520,14 @@ func (h *Handlers) HandleAdminRebuildProductCounts(w http.ResponseWriter, r *htt
 	startTime := time.Now()
 
 	if err := h.scuPageRepo.RecalculateProductCounts(); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	elapsed := time.Since(startTime)
 	fmt.Printf("[REBUILD-PRODUCT-COUNTS] Completed in %v\n", elapsed)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "completed",
 		"elapsed": elapsed.String(),
 	})
@@ -1534,12 +1536,12 @@ func (h *Handlers) HandleAdminRebuildProductCounts(w http.ResponseWriter, r *htt
 // HandleAdminRebuildSCUPageIndexes indexes all SCU pages into SCUPageSearch.
 func (h *Handlers) HandleAdminRebuildSCUPageIndexes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
 	if h.scuPageSearch == nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "scupage search not initialized")
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "scupage search not initialized")
 		return
 	}
 
@@ -1549,7 +1551,7 @@ func (h *Handlers) HandleAdminRebuildSCUPageIndexes(w http.ResponseWriter, r *ht
 	// Get all SCU pages
 	all, err := h.scuPageRepo.ListAll()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
@@ -1559,7 +1561,7 @@ func (h *Handlers) HandleAdminRebuildSCUPageIndexes(w http.ResponseWriter, r *ht
 		allPtrs[i] = &all[i]
 	}
 	if err := h.scuPageSearch.IndexSCUPageBatch(allPtrs); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 	indexed := len(all)
@@ -1573,7 +1575,7 @@ func (h *Handlers) HandleAdminRebuildSCUPageIndexes(w http.ResponseWriter, r *ht
 	elapsed := time.Since(startTime)
 	fmt.Printf("[REBUILD-SCUPAGE-INDEXES] Completed: %d indexed, %d errors in %v\n", indexed, errors, elapsed)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "completed",
 		"total":   len(all),
 		"indexed": indexed,
@@ -1585,7 +1587,7 @@ func (h *Handlers) HandleAdminRebuildSCUPageIndexes(w http.ResponseWriter, r *ht
 // HandleAdminRebuildCategorySlugs rebuilds slugs for all categories.
 func (h *Handlers) HandleAdminRebuildCategorySlugs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -1594,7 +1596,7 @@ func (h *Handlers) HandleAdminRebuildCategorySlugs(w http.ResponseWriter, r *htt
 
 	cats, err := h.categoryRepo.ListAll()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
@@ -1605,7 +1607,7 @@ func (h *Handlers) HandleAdminRebuildCategorySlugs(w http.ResponseWriter, r *htt
 			nameEn = c.NameRu
 		}
 		if c.Slug == "" || c.Slug == nameEn {
-			newSlug := toSlugLocal(nameEn)
+			newSlug := slug.Slug(nameEn)
 			if err := h.categoryRepo.Update(c.ID, func(cat *model.Category) {
 				cat.Slug = newSlug
 			}); err != nil {
@@ -1618,7 +1620,7 @@ func (h *Handlers) HandleAdminRebuildCategorySlugs(w http.ResponseWriter, r *htt
 
 	elapsed := time.Since(startTime)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "ok",
 		"updated": updated,
 		"elapsed": elapsed.String(),
@@ -1629,7 +1631,7 @@ func (h *Handlers) HandleAdminRebuildCategorySlugs(w http.ResponseWriter, r *htt
 // POST /admin/rebuild-category-indexes?force=1 — force rebuild from docs
 func (h *Handlers) HandleAdminRebuildCategoryIndexes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -1645,12 +1647,12 @@ func (h *Handlers) HandleAdminRebuildCategoryIndexes(w http.ResponseWriter, r *h
 		err = h.categoryRepo.RebuildAllIndexes()
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	elapsed := time.Since(startTime)
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "ok",
 		"elapsed": elapsed.String(),
 	})
@@ -1659,7 +1661,7 @@ func (h *Handlers) HandleAdminRebuildCategoryIndexes(w http.ResponseWriter, r *h
 // HandleAdminRebuildAttrDefIndexes rebuilds attrdef cat_codes and attr_values indexes.
 func (h *Handlers) HandleAdminRebuildAttrDefIndexes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
@@ -1668,14 +1670,14 @@ func (h *Handlers) HandleAdminRebuildAttrDefIndexes(w http.ResponseWriter, r *ht
 
 	// Rebuild cat_codes index
 	if err := h.attrDefRepo.RebuildCatCodesIndex(); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	// Rebuild attr_values from SCU pages
 	if h.scuPageRepo != nil {
 		if err := h.attrDefRepo.RebuildAttrValuesFromSCUPages(h.scuPageRepo); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 			return
 		}
 	}
@@ -1690,43 +1692,10 @@ func (h *Handlers) HandleAdminRebuildAttrDefIndexes(w http.ResponseWriter, r *ht
 	}
 
 	elapsed := time.Since(startTime)
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "ok",
 		"elapsed": elapsed.String(),
 	})
-}
-
-// toSlugLocal creates a URL-friendly slug with Cyrillic transliteration.
-func toSlugLocal(s string) string {
-	translitMap := map[rune]string{
-		'А': "a", 'Б': "b", 'В': "v", 'Г': "g", 'Д': "d", 'Е': "e", 'Ё': "e", 'Ж': "zh",
-		'З': "z", 'И': "i", 'Й': "y", 'К': "k", 'Л': "l", 'М': "m", 'Н': "n", 'О': "o",
-		'П': "p", 'Р': "r", 'С': "s", 'Т': "t", 'У': "u", 'Ф': "f", 'Х': "kh", 'Ц': "ts",
-		'Ч': "ch", 'Ш': "sh", 'Щ': "shch", 'Ъ': "", 'Ы': "y", 'Ь': "", 'Э': "e", 'Ю': "yu", 'Я': "ya",
-		'а': "a", 'б': "b", 'в': "v", 'г': "g", 'д': "d", 'е': "e", 'ё': "e", 'ж': "zh",
-		'з': "z", 'и': "i", 'й': "y", 'к': "k", 'л': "l", 'м': "m", 'н': "n", 'о': "o",
-		'п': "p", 'р': "r", 'с': "s", 'т': "t", 'у': "u", 'ф': "f", 'х': "kh", 'ц': "ts",
-		'ч': "ch", 'ш': "sh", 'щ': "shch", 'ъ': "", 'ы': "y", 'ь': "", 'э': "e", 'ю': "yu", 'я': "ya",
-	}
-
-	var result strings.Builder
-	for _, r := range s {
-		if t, ok := translitMap[r]; ok {
-			result.WriteString(t)
-		} else if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-			result.WriteRune(r)
-		} else if r == ' ' || r == '-' || r == '_' {
-			result.WriteString("-")
-		}
-	}
-
-	slug := result.String()
-	for strings.Contains(slug, "--") {
-		slug = strings.ReplaceAll(slug, "--", "-")
-	}
-	slug = strings.Trim(slug, "-")
-
-	return strings.ToLower(slug)
 }
 
 // limitStrings truncates a slice to at most maxLen elements.
