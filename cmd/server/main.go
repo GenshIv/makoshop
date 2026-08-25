@@ -7,9 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
-	"net/http/pprof"
 	"os"
-	"runtime"
 	"strings"
 	"time"
 
@@ -108,6 +106,15 @@ p{font-size:16px;color:#555}
 	})
 }
 
+// paymentsDisabledHandler blocks all payment-related endpoints.
+// Payments are temporarily disabled: no payment providers are integrated yet,
+// so every payment route returns 503 for all users (including admins).
+var paymentsDisabledHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_, _ = w.Write([]byte(`{"error":{"code":"PAYMENTS_DISABLED","message":"Payments are temporarily unavailable"}}`))
+})
+
 // bootstrapSuperAdmin creates a superadmin if no admins exist.
 func bootstrapSuperAdmin(userRepo *db.UserRepo) {
 	users, _, err := userRepo.List(db.ListUsersParams{})
@@ -160,12 +167,11 @@ func generateRandomPassword(length int) string {
 }
 
 func main() {
-	// Enable mutex and block profiling for production profiling.
-	// These are read via /debug/pprof/mutex and /debug/pprof/block.
-	runtime.SetMutexProfileFraction(1)
-	runtime.SetBlockProfileRate(1)
-
 	cfg := config.DefaultConfig()
+
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("config error: %v", err)
+	}
 
 	// Load i18n translations
 	loadI18n()
@@ -263,17 +269,6 @@ func main() {
 
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}), model.RoleAdmin))
-
-	// Pprof endpoints (for profiling/debugging)
-	mux.HandleFunc("/debug/pprof/", pprof.Index)
-	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-	mux.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
-	mux.Handle("/debug/pprof/heap", pprof.Handler("heap"))
-	mux.Handle("/debug/pprof/block", pprof.Handler("block"))
-	mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
 
 	// --- Auth endpoints ---
 
@@ -541,41 +536,13 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}), model.RoleAdmin))
 
-	// --- Company settings: Payment Methods ---
+	// --- Company settings: Payment Methods (temporarily disabled) ---
 
 	// GET /admin/payment-methods (public)
-	mux.HandleFunc("/admin/payment-methods", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			h.HandlePaymentMethodsList(w, r)
-			return
-		}
-		// POST only for admin
-		if r.Method == http.MethodPost {
-			jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				h.HandlePaymentMethodCreate(w, r)
-			}), model.RoleAdmin).ServeHTTP(w, r)
-			return
-		}
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	})
+	mux.HandleFunc("/admin/payment-methods", paymentsDisabledHandler.ServeHTTP)
 
 	// GET /admin/payment-methods/{id} (public), PATCH/DELETE (admin)
-	mux.Handle("/admin/payment-methods/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			h.HandlePaymentMethodGet(w, r)
-		case http.MethodPatch:
-			jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				h.HandlePaymentMethodUpdate(w, r)
-			}), model.RoleAdmin).ServeHTTP(w, r)
-		case http.MethodDelete:
-			jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				h.HandlePaymentMethodDelete(w, r)
-			}), model.RoleAdmin).ServeHTTP(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
+	mux.Handle("/admin/payment-methods/", paymentsDisabledHandler)
 
 	// --- Company settings: Delivery Times ---
 
@@ -1221,55 +1188,19 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})))
 
-	// --- Payment endpoints ---
+	// --- Payment endpoints (temporarily disabled) ---
 
 	// POST /payments (create payment for order)
-	mux.HandleFunc("/payments", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		h.HandlePaymentCreate(w, r)
-	})
+	mux.HandleFunc("/payments", paymentsDisabledHandler.ServeHTTP)
 
 	// /payments/{id}, /payments/{id}/confirm, /payments/{id}/refund
-	mux.Handle("/payments/", jwtMiddleware.OptionalAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		parts := strings.Split(r.URL.Path, "/")
-		if len(parts) < 3 || parts[2] == "" {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		// /payments/{id}/confirm POST
-		if len(parts) >= 4 && parts[3] == "confirm" && r.Method == http.MethodPost {
-			h.HandlePaymentConfirm(w, r)
-			return
-		}
-
-		// /payments/{id}/refund POST (admin only, checked in handler)
-		if len(parts) >= 4 && parts[3] == "refund" && r.Method == http.MethodPost {
-			h.HandlePaymentRefund(w, r)
-			return
-		}
-
-		// /payments/{id} GET
-		if len(parts) == 3 && r.Method == http.MethodGet {
-			h.HandlePaymentGet(w, r)
-			return
-		}
-
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	})))
+	mux.Handle("/payments/", paymentsDisabledHandler)
 
 	// Webhook endpoint (no auth, signature-based)
-	mux.HandleFunc("/payments/webhook/", func(w http.ResponseWriter, r *http.Request) {
-		h.HandlePaymentWebhook(w, r)
-	})
+	mux.HandleFunc("/payments/webhook/", paymentsDisabledHandler.ServeHTTP)
 
 	// Admin: timeout cleanup
-	mux.Handle("/admin/payments/timeout-cleanup", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h.HandlePaymentTimeoutCleanup(w, r)
-	}), model.RoleAdmin))
+	mux.Handle("/admin/payments/timeout-cleanup", paymentsDisabledHandler)
 
 	// --- Admin: DB shard usage ---
 

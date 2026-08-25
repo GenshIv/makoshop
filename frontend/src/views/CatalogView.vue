@@ -12,6 +12,12 @@ import { useAnimation } from '../composables/useAnimation';
 // Lazy-load SCUPageView to avoid circular imports
 const SCUPageView = defineAsyncComponent(() => import('../views/SCUPageView.vue'));
 
+// Preload the SCUPageView chunk eagerly so the inline expansion transition is
+// never interrupted by async loading on first use (fixes flaky enter animation).
+// The same module specifier is deduped by the bundler, so this shares the
+// exact chunk/promise used by defineAsyncComponent above.
+import('../views/SCUPageView.vue');
+
 const { animationEnabled } = useAnimation();
 
 const route = useRoute();
@@ -194,20 +200,40 @@ const scuPreviewTimer = ref(null); // delay timer for showing popup
 const scuPreviewFetchTimer = ref(null); // delay timer for fetching data
 const PREVIEW_DELAY_MS = 500; // must hover 500ms before showing popup / fetching
 
+// Build the canonical cache/URL key for a product's SCU page.
+// Must stay in sync with goToSCUPage and fetchProducts (route.path based).
+const getScuKey = (product) => {
+  if (!product) return null;
+  if (product.seo_url) return product.seo_url;
+  if (product.slug) return '/shop/' + product.slug;
+  return null;
+};
+
 const showScuPreview = (product) => {
   if (!product || (!product.seo_url && !product.slug)) return;
   if (product.product_count && product.product_count <= 1) return; // Only for SCU pages
   // Respect animation setting: don't show popup or fetch data when animations are off
   if (!animationEnabled.value) return;
-  
+
+  // Preview is already active for this product (e.g. mouse moved from the card
+  // onto the popup itself) — keep it as-is to avoid a flicker/reset.
+  if (
+    hoveredScuProduct.value?.id === product.id &&
+    (scuPreviewData.value || scuPreviewLoading.value)
+  ) {
+    // Cancel any pending hide so the popup stays open while on it
+    clearTimeout(scuPreviewTimer.value);
+    return;
+  }
+
   clearTimeout(scuPreviewTimer.value);
   clearTimeout(scuPreviewFetchTimer.value);
   hoveredScuProduct.value = product;
   scuPreviewData.value = null;
   scuPreviewLoading.value = false;
-  
+
   // Delay both popup and fetch by 500ms (only if mouse stays on the card)
-  const cacheKey = product.seo_url || product.slug;
+  const cacheKey = getScuKey(product);
   scuPreviewTimer.value = setTimeout(async () => {
     // Check cache first
     if (scuPageCache.value.has(cacheKey)) {
@@ -218,7 +244,7 @@ const showScuPreview = (product) => {
     // Fetch from API
     scuPreviewLoading.value = true;
     try {
-      const url = product.seo_url || ('/shop/' + product.slug);
+      const url = cacheKey;
       const response = await api.get(url);
       const data = response.data;
       
@@ -934,13 +960,14 @@ onMounted(async () => {
 watch(
   () => [route.query, route.path],
   async () => {
-    syncFiltersFromRoute();
-    buildPathFromUrl();
-
-    // If we're in the middle of an inline SCU transition, skip re-fetch
+    // If we're in the middle of an inline SCU transition, skip everything —
+    // including filter syncing, which could trigger a competing navigation.
     if (isInlineScuTransition.value) {
       return;
     }
+
+    syncFiltersFromRoute();
+    buildPathFromUrl();
 
     // If we already have SCUPage data for this path (from inline expansion), skip re-fetch
     if (scuPageData.value && route.path) {
@@ -1005,11 +1032,16 @@ const goToPage = (page) => {
   // fetchProducts() will be called by watch(route.query)
 };
 
+// Monotonic token so only the latest inline transition resets the guard flag
+// (protects against rapid double-clicks racing each other).
+let inlineScuNavToken = 0;
+
 // Navigate to SCU page (landing page for product group)
 // When animations are enabled and data is available, render SCUPageView inline
 // with a smooth transition instead of a full router navigation.
 const goToSCUPage = async (product) => {
-  const cacheKey = product.seo_url || (product.slug ? '/shop/' + product.slug : null);
+  const cacheKey = getScuKey(product);
+  const myToken = ++inlineScuNavToken;
 
   // Clear any pending preview timers when clicking
   clearTimeout(scuPreviewTimer.value);
@@ -1031,19 +1063,23 @@ const goToSCUPage = async (product) => {
       }
       // Set flag to prevent route watch from re-fetching
       isInlineScuTransition.value = true;
-      
+
       // Set SCUPage data BEFORE router.push to ensure it's ready
       scuPageData.value = data;
-      
-      // Update URL (router.push is async, but we've already set the data)
-      const targetPath = product.seo_url || (product.slug ? '/shop/' + product.slug : null);
-      if (targetPath) {
-        await router.push({ path: targetPath });
+
+      try {
+        // Update URL (router.push is async, but we've already set the data).
+        // Scroll to top is handled by the router scrollBehavior — no manual
+        // scrollTo here (it raced the router and caused a visible jump).
+        await router.push({ path: cacheKey });
+      } catch (e) {
+        console.error('Failed to navigate to SCU page:', e);
+      } finally {
+        // Only the latest navigation resets the guard flag
+        if (myToken === inlineScuNavToken) {
+          isInlineScuTransition.value = false;
+        }
       }
-      
-      isInlineScuTransition.value = false;
-      // Scroll to top smoothly
-      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
   }
@@ -1087,18 +1123,31 @@ defineOptions({ name: 'CatalogView' });
     </div>
   </div>
 
-  <!-- Render SCUPageView if API returned an SCUPage -->
-  <Transition
-    v-else-if="scuPageData"
-    enter-active-class="transition duration-600 ease-out"
-    enter-from-class="opacity-0 scale-95"
-    leave-active-class="transition duration-400 ease-in"
-    leave-to-class="opacity-0"
-  >
-    <SCUPageView :data="scuPageData" />
-  </Transition>
+  <!-- Crossfade container: catalog <-> SCU page.
+       The leaving element is taken out of flow (absolute inset-0) so the two
+       views crossfade in place instead of stacking vertically. -->
+  <div v-else class="relative">
+    <!-- Render SCUPageView if API returned an SCUPage -->
+    <Transition
+      enter-active-class="transition duration-600 ease-out"
+      enter-from-class="opacity-0 scale-95"
+      enter-to-class="opacity-100 scale-100"
+      leave-active-class="transition duration-400 ease-in absolute inset-0"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <SCUPageView v-if="scuPageData" :data="scuPageData" key="scu-page" />
+    </Transition>
 
-  <div v-else class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <Transition
+      enter-active-class="transition duration-400 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-300 ease-in absolute inset-0"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div v-if="!scuPageData" class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6" key="catalog">
 
     <!-- Root categories grid -->
     <div class="mb-4">
@@ -1594,7 +1643,7 @@ defineOptions({ name: 'CatalogView' });
             >
               <div
                 v-if="hoveredScuProduct?.id === product.id && (scuPreviewLoading || scuPreviewData)"
-                class="absolute left-0 top-full mt-2 z-50 w-72 bg-surface border border-line rounded-xl shadow-xl overflow-hidden"
+                class="absolute left-0 top-full z-50 w-72 bg-surface border border-line rounded-xl shadow-xl overflow-hidden"
                 @mouseenter="showScuPreview(product)"
                 @mouseleave="hideScuPreview()"
               >
@@ -1665,7 +1714,7 @@ defineOptions({ name: 'CatalogView' });
             >
               <div
                 v-if="hoveredScuProduct?.id === product.id && (scuPreviewLoading || scuPreviewData)"
-                class="absolute left-0 top-full mt-2 z-50 w-72 bg-surface border border-line rounded-xl shadow-xl overflow-hidden"
+                class="absolute left-0 top-full z-50 w-72 bg-surface border border-line rounded-xl shadow-xl overflow-hidden"
                 @mouseenter="showScuPreview(product)"
                 @mouseleave="hideScuPreview()"
               >
@@ -1831,6 +1880,8 @@ defineOptions({ name: 'CatalogView' });
         </div>
       </div>
     </div>
+  </div>
+    </Transition>
   </div>
 </template>
 

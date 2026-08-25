@@ -2,6 +2,8 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 
+const BACKEND = 'http://localhost:9090'
+
 // Helper to forward custom header X-Response-Time-Ms from backend to browser
 const forwardResponseTimeHeader = (proxyReq, req, res) => {
   const originalWriteHead = res.writeHead;
@@ -13,6 +15,36 @@ const forwardResponseTimeHeader = (proxyReq, req, res) => {
     return originalWriteHead.apply(this, arguments);
   };
 };
+
+// Decide whether a request is an API call (proxy to backend) or a page
+// navigation / static asset (serve via Vite).
+//
+// In production the Go server serves both the SPA and the API on the same
+// origin and disambiguates via the Accept header:
+//   - page navigations send Accept: text/html  -> served as index.html (SPA)
+//   - API calls (axios) send Accept: application/json, text/plain, */*
+//     (no literal "text/html") -> handled by the API routes
+// We replicate that logic here so dev mode matches production.
+function isApiRequest(req) {
+  const url = req.url || '';
+  const accept = req.headers['accept'] || '';
+
+  // Vite internals and static assets are always served by Vite.
+  if (
+    url.startsWith('/@') ||
+    url.startsWith('/src/') ||
+    url.startsWith('/node_modules/') ||
+    url.includes('.')
+  ) {
+    return false;
+  }
+  // Page navigations (browser requesting HTML) are served by Vite as the SPA.
+  if (accept.includes('text/html')) {
+    return false;
+  }
+  // Everything else is an API call -> proxy to backend.
+  return true;
+}
 
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
@@ -26,55 +58,22 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     proxy: {
-      // Proxy /api/* to backend, strip /api prefix
-      '/api': {
-        target: 'http://localhost:9090',
+      // Catch-all proxy: API calls go to the backend, everything else to Vite.
+      '/': {
+        target: BACKEND,
         changeOrigin: true,
         followRedirects: false,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        bypass(req) {
+          if (!isApiRequest(req)) {
+            // Serve via Vite (static asset or SPA fallback).
+            return req.url;
+          }
+          // Proxy to backend.
+          return null;
+        },
         configure: (proxy) => {
           proxy.on('proxyReq', forwardResponseTimeHeader);
         },
-      },
-      // Proxy /shop/* to backend for SSR (HTML with data)
-      '/shop': {
-        target: 'http://localhost:9090',
-        changeOrigin: true,
-        followRedirects: false,
-        configure: (proxy) => {
-          proxy.on('proxyReq', forwardResponseTimeHeader);
-        },
-      },
-      // Proxy /categories/* to backend for public category data
-      '/categories': {
-        target: 'http://localhost:9090',
-        changeOrigin: true,
-        followRedirects: false,
-        configure: (proxy) => {
-          proxy.on('proxyReq', forwardResponseTimeHeader);
-        },
-      },
-      // Proxy robots.txt and sitemap to backend
-      '/robots.txt': {
-        target: 'http://localhost:9090',
-        changeOrigin: true,
-      },
-      '/sitemap.xml': {
-        target: 'http://localhost:9090',
-        changeOrigin: true,
-      },
-      '/sitemap-categories.xml': {
-        target: 'http://localhost:9090',
-        changeOrigin: true,
-      },
-      '/sitemap-scupage': {
-        target: 'http://localhost:9090',
-        changeOrigin: true,
-      },
-      // Proxy /uploads/* for category images
-      '/uploads': {
-        target: 'http://localhost:9090',
-        changeOrigin: true,
       },
     },
   },

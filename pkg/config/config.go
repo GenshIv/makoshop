@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 )
 
@@ -33,9 +34,6 @@ func DefaultConfig() Config {
 	if jwtSecret == "" {
 		jwtSecret = os.Getenv("PKG_CONFIG")
 	}
-	if jwtSecret == "" {
-		jwtSecret = "makoshop-dev-secret-change-me-in-production"
-	}
 
 	return Config{
 		Server: ServerConfig{
@@ -52,4 +50,13 @@ func DefaultConfig() Config {
 			JWTSecret: jwtSecret,
 		},
 	}
+}
+
+// Validate checks that required configuration values are set.
+// The JWT secret must always be provided explicitly via environment variable.
+func (c Config) Validate() error {
+	if c.Auth.JWTSecret == "" {
+		return errors.New("JWT secret is not set: set MAKOSHOP_JWT_SECRET or PKG_CONFIG environment variable")
+	}
+	return nil
 }
