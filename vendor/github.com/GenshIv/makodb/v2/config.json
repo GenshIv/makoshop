@@ -1,0 +1,25 @@
+{
+  "llama_cpp_url": "http://localhost:8080/v1/chat/completions",
+  "model": "bartowski/Qwen2.5-Coder-14B-Instruct-GGUF:Q4_K_M",
+  "temperature": 0.9,
+  "max_tokens": 2768,
+  "data_dir": "./agent_memory_db",
+  "database": {
+    "shards": 16,
+    "size_mb": 10240
+  },
+  "prompts": {
+    "general_prompt": "Твоя роль: Автономный Senior Backend Developer, управляющий средой Data-Plane. Ты не просто отвечаешь на вопросы, ты активно манипулируешь состоянием системы через инструменты памяти, чтобы поддерживать фокус внимания и сохранять технический опыт. Приступай к работе."
+  },
+  "num_ctx": 165000,
+  "stream": true,
+  "return_progress": true,
+  "sse_ping_interval": 1,
+  "reasoning_format": "none",
+  "chat_template_kwargs": {
+    "enable_thinking": false
+  },
+  "reasoning_control": true,
+  "backend_sampling": true,
+  "timings_per_token": true
+}

@@ -115,6 +115,21 @@ var paymentsDisabledHandler = http.HandlerFunc(func(w http.ResponseWriter, r *ht
 	_, _ = w.Write([]byte(`{"error":{"code":"PAYMENTS_DISABLED","message":"Payments are temporarily unavailable"}}`))
 })
 
+// securityHeadersMiddleware adds baseline security headers to every response.
+func securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.Set("X-XSS-Protection", "0")
+		// CSP: allow self resources and inline styles/scripts used by the SPA.
+		h.Set("Content-Security-Policy",
+			"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // bootstrapSuperAdmin creates a superadmin if no admins exist.
 func bootstrapSuperAdmin(userRepo *db.UserRepo) {
 	users, _, err := userRepo.List(db.ListUsersParams{})
@@ -1369,7 +1384,10 @@ func main() {
 	// Metrics writer (low-overhead, async, batch to ./_tmp/metrics)
 	var handler http.Handler = mux
 
-	// Maintenance mode middleware (outermost)
+	// Security headers (outermost, applies to all responses)
+	handler = securityHeadersMiddleware(handler)
+
+	// Maintenance mode middleware
 	handler = maintenanceMiddleware(handler)
 
 	// Stats middleware (visit tracking)
@@ -1388,11 +1406,63 @@ func main() {
 		handler = metrics.Middleware(metricsWriter)(handler)
 	}
 
-	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
-	log.Printf("Makoshop API server starting on %s", addr)
-	if err := http.ListenAndServe(addr, handler); err != nil {
+	// Production-hardened HTTP server with sane timeouts.
+	srv := &http.Server{
+		Addr:              fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port),
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	if cfg.TLSEnabled() {
+		log.Printf("Makoshop API server starting on https://%s (TLS)", srv.Addr)
+
+		// Optional plain-HTTP listener that redirects everything to HTTPS.
+		if cfg.Server.TLS.HTTPPort != "" {
+			go func() {
+				redirectAddr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.TLS.HTTPPort)
+				redirectSrv := &http.Server{
+					Addr:              redirectAddr,
+					Handler:           httpsRedirectHandler(cfg.Server.Port),
+					ReadHeaderTimeout: 5 * time.Second,
+				}
+				log.Printf("HTTP->HTTPS redirect listener on http://%s", redirectAddr)
+				if err := redirectSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					log.Printf("redirect listener stopped: %v", err)
+				}
+			}()
+		}
+
+		if err := srv.ListenAndServeTLS(cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server failed: %v", err)
+		}
+		return
+	}
+
+	log.Printf("Makoshop API server starting on http://%s", srv.Addr)
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server failed: %v", err)
 	}
+}
+
+// httpsRedirectHandler returns a handler that 301-redirects all requests to
+// the HTTPS port. Used by the optional plain-HTTP listener. It preserves the
+// request host (domain) but always points to the HTTPS port.
+func httpsRedirectHandler(httpsPort string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Extract the host name without any port.
+		host := r.Host
+		if host == "" {
+			host = r.RemoteAddr
+		}
+		if idx := strings.LastIndex(host, ":"); idx > 0 {
+			host = host[:idx]
+		}
+		target := "https://" + host + ":" + httpsPort
+		http.Redirect(w, r, target+r.RequestURI, http.StatusMovedPermanently)
+	})
 }
 
 func loadI18n() {
