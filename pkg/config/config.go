@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -26,6 +27,13 @@ type TLSConfig struct {
 	// HTTPPort, when set together with TLS, runs a plain-HTTP listener that
 	// redirects all traffic to HTTPS (port).
 	HTTPPort string
+
+	// Autocert enables automatic Let's Encrypt certificate issuance via ACME
+	// (golang.org/x/crypto/acme/autocert). When AutocertDomains is non-empty,
+	// the server obtains and renews certificates automatically instead of
+	// using CertFile/KeyFile.
+	AutocertDomains []string
+	AutocertCache   string
 }
 
 type DatabaseConfig struct {
@@ -49,6 +57,21 @@ func env(key, def string) string {
 	return def
 }
 
+// parseDomains splits a comma-separated domain list into a clean slice.
+func parseDomains(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var out []string
+	for _, d := range strings.Split(s, ",") {
+		d = strings.TrimSpace(d)
+		if d != "" {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
 func DefaultConfig() Config {
 	jwtSecret := os.Getenv("MAKOSHOP_JWT_SECRET")
 	if jwtSecret == "" {
@@ -63,6 +86,8 @@ func DefaultConfig() Config {
 				CertFile: os.Getenv("MAKOSHOP_TLS_CERT"),
 				KeyFile:  os.Getenv("MAKOSHOP_TLS_KEY"),
 				HTTPPort: os.Getenv("MAKOSHOP_HTTP_PORT"),
+				AutocertDomains: parseDomains(os.Getenv("MAKOSHOP_AUTOCERT_DOMAINS")),
+				AutocertCache:   env("MAKOSHOP_AUTOCERT_CACHE", "certs"),
 			},
 		},
 		Database: DatabaseConfig{
@@ -77,9 +102,14 @@ func DefaultConfig() Config {
 	}
 }
 
-// TLSEnabled reports whether TLS is configured.
+// AutocertEnabled reports whether automatic Let's Encrypt issuance is configured.
+func (c Config) AutocertEnabled() bool {
+	return len(c.Server.TLS.AutocertDomains) > 0
+}
+
+// TLSEnabled reports whether TLS is configured (either via explicit files or autocert).
 func (c Config) TLSEnabled() bool {
-	return c.Server.TLS.CertFile != "" && c.Server.TLS.KeyFile != ""
+	return c.AutocertEnabled() || (c.Server.TLS.CertFile != "" && c.Server.TLS.KeyFile != "")
 }
 
 // Validate checks that required configuration values are set.
@@ -91,6 +121,10 @@ func (c Config) Validate() error {
 	// If only one of the TLS files is set, that is a misconfiguration.
 	if (c.Server.TLS.CertFile == "") != (c.Server.TLS.KeyFile == "") {
 		return errors.New("TLS misconfigured: both MAKOSHOP_TLS_CERT and MAKOSHOP_TLS_KEY must be set (or neither)")
+	}
+	// Autocert and explicit files are mutually exclusive.
+	if c.AutocertEnabled() && (c.Server.TLS.CertFile != "" || c.Server.TLS.KeyFile != "") {
+		return errors.New("TLS misconfigured: choose either MAKOSHOP_AUTOCERT_DOMAINS or MAKOSHOP_TLS_CERT/KEY, not both")
 	}
 	return nil
 }

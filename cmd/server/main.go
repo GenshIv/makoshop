@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/crypto/acme/autocert"
+
 	"github.com/GenshIv/makoshop/internal/api"
 	"github.com/GenshIv/makoshop/internal/auth"
 	"github.com/GenshIv/makoshop/internal/db"
@@ -1417,9 +1419,8 @@ func main() {
 	}
 
 	if cfg.TLSEnabled() {
-		log.Printf("Makoshop API server starting on https://%s (TLS)", srv.Addr)
-
 		// Optional plain-HTTP listener that redirects everything to HTTPS.
+		// Needed for both explicit-TLS and autocert modes.
 		if cfg.Server.TLS.HTTPPort != "" {
 			go func() {
 				redirectAddr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.TLS.HTTPPort)
@@ -1435,6 +1436,24 @@ func main() {
 			}()
 		}
 
+		if cfg.AutocertEnabled() {
+			// Automatic Let's Encrypt certificates via ACME.
+			cm := autocert.Manager{
+				Prompt:     autocert.AcceptTOS,
+				HostPolicy: autocert.HostWhitelist(cfg.Server.TLS.AutocertDomains...),
+				Cache:      autocert.DirCache(cfg.Server.TLS.AutocertCache),
+			}
+			srv.TLSConfig = cm.TLSConfig()
+			log.Printf("Makoshop API server starting on https://%s (autocert, domains: %v, cache: %s)",
+				srv.Addr, cfg.Server.TLS.AutocertDomains, cfg.Server.TLS.AutocertCache)
+			if err := srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("server failed: %v", err)
+			}
+			return
+		}
+
+		// Explicit TLS certificate files.
+		log.Printf("Makoshop API server starting on https://%s (TLS)", srv.Addr)
 		if err := srv.ListenAndServeTLS(cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server failed: %v", err)
 		}

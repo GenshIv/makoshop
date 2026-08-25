@@ -12,7 +12,9 @@ require (
 
 require (
 	github.com/cespare/ryu v0.0.1 // indirect
+	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
 )
 
 replace github.com/GenshIv/makodb/v2 => /home/ihar/IdeaProjects/makodb

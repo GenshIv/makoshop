@@ -76,8 +76,10 @@ Key variables:
 | `MAKOSHOP_JWT_SECRET` | **yes** | JWT signing secret. `openssl rand -hex 32` |
 | `MAKOSHOP_HOST` | no | Bind address (default `0.0.0.0`) |
 | `MAKOSHOP_PORT` | no | HTTPS port (default `9090`) |
-| `MAKOSHOP_TLS_CERT` | for HTTPS | Path to TLS certificate |
-| `MAKOSHOP_TLS_KEY` | for HTTPS | Path to TLS key |
+| `MAKOSHOP_AUTOCERT_DOMAINS` | for autocert | Comma-separated domains for Let's Encrypt |
+| `MAKOSHOP_AUTOCERT_CACHE` | no | Dir to cache autocert certs (default `certs`) |
+| `MAKOSHOP_TLS_CERT` | for manual TLS | Path to TLS certificate |
+| `MAKOSHOP_TLS_KEY` | for manual TLS | Path to TLS key |
 | `MAKOSHOP_HTTP_PORT` | no | Plain-HTTP port that redirects to HTTPS |
 | `MAKOSHOP_DB_PATH` | no | makodb data dir (default `makoshop_db`) |
 | `I18N_LANG` | no | Default language (default `ru`) |
@@ -86,12 +88,37 @@ Key variables:
 
 ### TLS
 
-To serve HTTPS directly, set both `MAKOSHOP_TLS_CERT` and `MAKOSHOP_TLS_KEY`.
-Optionally set `MAKOSHOP_HTTP_PORT` to run a plain-HTTP listener that 301-
-redirects all traffic to HTTPS.
+There are two ways to enable HTTPS. Choose **one**:
 
-For a production domain, use a real certificate (e.g. Let's Encrypt via
-certbot).
+#### Option A: Automatic Let's Encrypt (recommended)
+
+Set `MAKOSHOP_AUTOCERT_DOMAINS` to the comma-separated list of domains the
+server may serve. The server uses `golang.org/x/crypto/acme/autocert` to
+obtain and automatically renew Let's Encrypt certificates.
+
+```
+MAKOSHOP_AUTOCERT_DOMAINS="yourdomain.com,www.yourdomain.com"
+MAKOSHOP_AUTOCERT_CACHE="/var/lib/makoshop/certs"
+```
+
+Requirements:
+- The domain's DNS (A record) must point at this server.
+- Ports **80** (for the HTTP-01 challenge) and **443** must be reachable.
+- The server must be able to reach Let's Encrypt (`acme-v02.api.letsencrypt.org`).
+
+Certificates are cached in `MAKOSHOP_AUTOCERT_CACHE` and reused across
+restarts; autocert renews them automatically before expiry.
+
+#### Option B: Your own certificate
+
+Set both `MAKOSHOP_TLS_CERT` and `MAKOSHOP_TLS_KEY` to the paths of your
+certificate and key files.
+
+> Do **not** set both autocert and explicit cert/key — the server will refuse
+> to start.
+
+In both cases, optionally set `MAKOSHOP_HTTP_PORT` to run a plain-HTTP
+listener that 301-redirects all traffic to HTTPS.
 
 ---
 
