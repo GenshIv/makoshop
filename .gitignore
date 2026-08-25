@@ -7,3 +7,10 @@
 /bin/
 /.gocache/
 /.gopath/
+*.png
+*.hprof
+*.prof
+*.db
+*.lock
+.env
+*.log
