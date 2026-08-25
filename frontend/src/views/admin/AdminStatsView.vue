@@ -207,7 +207,7 @@ const baseChartOpts = (type, height) => ({
     animations: { enabled: !isDark() && true, speed: 500 },
   },
   theme: { mode: isDark() ? 'dark' : 'light' },
-  colors: ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6'],
+  colors: ['#f97316', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6'],
   stroke: { curve: 'smooth', width: 2 },
   grid: {
     borderColor: isDark() ? 'rgba(148,163,184,0.15)' : 'rgba(107,114,128,0.15)',
@@ -296,7 +296,7 @@ const renderCharts = async () => {
           x: hourLabels.value[12],
           label: {
             text: 'now',
-            style: { background: '#6366f1', borderRadius: 4, fontSize: '10px', color: '#fff' },
+            style: { background: '#f97316', borderRadius: 4, fontSize: '10px', color: '#fff' },
           },
         },
       ],
@@ -363,7 +363,7 @@ const renderCharts = async () => {
       horizontalAlign: 'right',
       labels: { colors: [theme.foreColor] },
     },
-    markers: { size: 2, colors: ['#6366f1', '#f59e0b'], strokeColors: '#fff', strokeWidth: 1 },
+    markers: { size: 2, colors: ['#f97316', '#f59e0b'], strokeColors: '#fff', strokeWidth: 1 },
   });
 
   // 4) Human vs Bot donut
@@ -376,7 +376,7 @@ const renderCharts = async () => {
     theme: { mode: isDark() ? 'dark' : 'light' },
     series: [totalHuman.value, totalBot.value],
     labels: [t('admin.visits_human'), t('admin.visits_bot')],
-    colors: ['#6366f1', '#f59e0b'],
+    colors: ['#f97316', '#f59e0b'],
     stroke: {
       colors: [isDark() ? '#0f172a' : '#ffffff', isDark() ? '#0f172a' : '#ffffff'],
       width: 2,
@@ -540,13 +540,13 @@ watch(locale, () => {
         <div class="bg-surface rounded-xl shadow-sm p-5 border border-line">
           <div class="flex items-center justify-between">
             <span class="text-xs font-medium text-ink-3 uppercase tracking-wide">{{ t('admin.visits_human') }}</span>
-            <div class="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
-              <svg class="h-4 w-4 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div class="h-8 w-8 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center">
+              <svg class="h-4 w-4 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
               </svg>
             </div>
           </div>
-          <div class="mt-2 text-3xl font-bold tracking-tight text-indigo-600 dark:text-indigo-400">{{ fmtNum(totalHuman) }}</div>
+          <div class="mt-2 text-3xl font-bold tracking-tight text-orange-600 dark:text-orange-400">{{ fmtNum(totalHuman) }}</div>
           <div class="mt-1 text-xs text-ink-3">{{ humanShare }}% {{ t('admin.visits_of_total') }}</div>
         </div>
 
@@ -640,7 +640,7 @@ watch(locale, () => {
               </div>
               <div class="h-2 bg-surface-2 rounded-full overflow-hidden">
                 <div
-                  class="h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-500"
+                  class="h-full rounded-full bg-gradient-to-r from-purple-500 to-orange-500 transition-all duration-500"
                   :style="{ width: (r.total / maxReferrerTotal * 100) + '%' }"
                 ></div>
               </div>
@@ -704,7 +704,7 @@ watch(locale, () => {
               </div>
               <div class="h-2 bg-surface-2 rounded-full overflow-hidden">
                 <div
-                  class="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-500"
+                  class="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all duration-500"
                   :style="{ width: (p.total / maxPathTotal * 100) + '%' }"
                 ></div>
               </div>

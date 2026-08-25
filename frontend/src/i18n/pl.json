@@ -1,7 +1,8 @@
 {
   "common": {
-    "app_name": "MakoShop",
+    "app_name": "wszyst.pl",
     "app_tagline": "B2B/B2C marketplace",
+    "powered_by": "Zbudowano na makoDB",
     "search_placeholder": "Szukaj produktów...",
     "categories": "Kategorie",
     "menu": "Menu",
@@ -73,30 +74,30 @@
     "visits_paths": "Ścieżki / Kategorie"
   },
   "pages": {
-    "catalog_title": "Katalog produktów — MakoShop",
-    "product_title": "Produkt — MakoShop",
-    "cart_title": "Koszyk — MakoShop",
-    "checkout_title": "Realizacja zamówienia — MakoShop",
-    "login_title": "Logowanie — MakoShop",
-    "register_title": "Rejestracja — MakoShop",
-    "profile_title": "Konto użytkownika — MakoShop",
-    "orders_title": "Moje zamówienia — MakoShop",
-    "order_detail_title": "Zamówienie — MakoShop",
-    "reviews_title": "Moje opinie — MakoShop",
-    "seller_dashboard_title": "Panel sprzedawcy — MakoShop",
+    "catalog_title": "Katalog produktów — wszyst.pl",
+    "product_title": "Produkt — wszyst.pl",
+    "cart_title": "Koszyk — wszyst.pl",
+    "checkout_title": "Realizacja zamówienia — wszyst.pl",
+    "login_title": "Logowanie — wszyst.pl",
+    "register_title": "Rejestracja — wszyst.pl",
+    "profile_title": "Konto użytkownika — wszyst.pl",
+    "orders_title": "Moje zamówienia — wszyst.pl",
+    "order_detail_title": "Zamówienie — wszyst.pl",
+    "reviews_title": "Moje opinie — wszyst.pl",
+    "seller_dashboard_title": "Panel sprzedawcy — wszyst.pl",
     "seller_products_title": "Produkty — Panel sprzedawcy",
     "seller_product_new_title": "Dodaj produkt — Panel sprzedawcy",
     "seller_product_edit_title": "Edytuj produkt — Panel sprzedawcy",
     "seller_orders_title": "Zamówienia — Panel sprzedawcy",
     "seller_promo_title": "Promocja — Panel sprzedawcy",
-    "admin_dashboard_title": "Panel administracyjny — MakoShop",
+    "admin_dashboard_title": "Panel administracyjny — wszyst.pl",
     "admin_users_title": "Użytkownicy — Panel administracyjny",
     "admin_companies_title": "Firmy — Panel administracyjny",
     "admin_categories_title": "Kategorie — Panel administracyjny",
     "admin_analytics_title": "Analityka — Panel administracyjny",
     "admin_promo_title": "Promocje — Panel administracyjny",
-    "default_title": "MakoShop — Marketplace",
-    "default_description": "MakoShop — onlineowy katalog produktów od zaufanych sprzedawców. Porównuj ceny, czytaj opinie i kupuj z pewnością."
+    "default_title": "wszyst.pl — Marketplace",
+    "default_description": "wszyst.pl — onlineowy katalog produktów od zaufanych sprzedawców. Porównuj ceny, czytaj opinie i kupuj z pewnością."
   },
   "auth": {
     "login": "Logowanie",
@@ -117,9 +118,12 @@
     "email": "Email"
   },
   "catalog": {
+    "hero_headline": "Wpadłeś tylko po to, żeby zerknąć na etui na telefon?",
+    "hero_sub": "Do zobaczenia za dwie godziny z nowym namiotem i zestawem garnków!",
+    "hero_tagline": "wszyst.pl — mamy wszystko. Dosłownie wszystko.",
     "all_products": "Wszystkie produkty",
     "catalog_title": "Katalog produktów",
-    "root_description": "Witamy w katalogu MakoShop. Znajdź tysiące produktów od zaufanych sprzedawców.",
+    "root_description": "Witamy w katalogu wszyst.pl. Znajdź tysiące produktów od zaufanych sprzedawców.",
     "reset_filters": "Resetuj filtry",
     "back_to_catalog": "← Wróć do katalogu",
     "search_label": "Szukaj",
@@ -171,7 +175,7 @@
     "view_grid": "Siatka",
     "view_list": "Lista",
     "from_price_sellers": "{count} sprzedawców",
-    "search_time": "Wyszukiwanie: {ms}ms",
+    "search_time": "Wyniki w {ms} ms",
     "filters": "Filtry"
   },
   "cart": {
@@ -659,7 +663,7 @@
   },
   "cookie": {
     "banner_title": "Używamy cookies",
-    "banner_text": "Ta strona używa cookies do poprawy funkcjonalności i analityki. Kontynuując korzystanie ze strony, wyrażasz na to zgodę.",
+    "banner_text": "wszyst.pl używa cookies do poprawy funkcjonalności i analityki. Kontynuując korzystanie ze strony, wyrażasz na to zgodę.",
     "accept_all": "Zaakceptuj wszystkie",
     "essential_only": "Tylko niezbędne",
     "settings": "Ustawienia",

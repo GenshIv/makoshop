@@ -76,7 +76,7 @@ onMounted(() => {
   <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold">{{ t('seller.promotion') }}</h1>
-      <button @click="showForm = true" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+      <button @click="showForm = true" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">
         {{ t('seller.new_campaign') }}
       </button>
     </div>
@@ -88,7 +88,7 @@ onMounted(() => {
 
     <!-- Loading -->
     <div v-if="loading" class="flex justify-center py-12">
-      <div class="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div>
+      <div class="animate-spin h-8 w-8 border-4 border-orange-600 border-t-transparent rounded-full"></div>
     </div>
 
     <!-- Form -->
@@ -116,7 +116,7 @@ onMounted(() => {
         </div>
       </div>
       <div class="flex gap-2 mt-3">
-        <button @click="createCampaign" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
+        <button @click="createCampaign" class="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm hover:bg-orange-700">
           {{ t('seller.create') }}
         </button>
         <button @click="showForm = false" class="px-4 py-2 border rounded-lg text-sm hover:bg-surface-2">

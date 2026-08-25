@@ -47,7 +47,7 @@ const error = ref(null);
 
 
 useSeo({
-  title: computed(() => (page.value?.title ? `${page.value.title} — MakoShop` : t('pages.default_title'))),
+  title: computed(() => (page.value?.title ? `${page.value.title} — wszyst.pl` : t('pages.default_title'))),
   description: computed(() => page.value?.description || t('pages.default_description')),
   image: computed(() => page.value?.images?.[0] || null),
 });
@@ -581,7 +581,7 @@ watch(
           </div>
           <button
             @click="goBack"
-            class="link-btn text-sm text-indigo-600 whitespace-nowrap cursor-pointer shrink-0"
+            class="link-btn text-sm text-orange-600 whitespace-nowrap cursor-pointer shrink-0"
           >
             {{ t('scupage.to_catalog') }}
           </button>
@@ -619,8 +619,8 @@ watch(
                 :class="[
                   'w-14 h-14 object-cover rounded-xl border-2 cursor-pointer transition',
                   currentImageIndex === idx
-                    ? 'border-indigo-600'
-                    : 'border-transparent hover:border-indigo-400'
+                    ? 'border-orange-600'
+                    : 'border-transparent hover:border-orange-400'
                 ]"
               />
             </div>
@@ -641,7 +641,7 @@ watch(
                   :class="[
                     'px-3 py-1.5 text-xs rounded-t-lg whitespace-nowrap transition',
                     activeTab === idx
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-orange-600 text-white'
                       : 'bg-surface-2 text-ink-2 hover:bg-surface-3'
                   ]"
                 >
@@ -652,7 +652,7 @@ watch(
             <div class="p-4">
               <template v-if="modifications[activeTab]">
                 <div class="flex items-center justify-between mb-3">
-                  <span class="inline-block px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded">
+                  <span class="inline-block px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded">
                     {{ getCompanyName(modifications[activeTab].suppliers[descSupplierIndex]) }}
                   </span>
                   <div class="flex gap-1">
@@ -696,17 +696,17 @@ watch(
           <!-- "Best price" block -->
           <div
             v-if="selectedProduct && !selectedProduct.is_virtual"
-            class="bg-gradient-to-br from-indigo-900 to-indigo-800 rounded-2xl shadow-sm p-5 text-white"
+            class="bg-gradient-to-br from-orange-50 to-amber-100 dark:from-orange-950/50 dark:to-orange-900/30 border border-orange-200 dark:border-orange-800/60 rounded-2xl shadow-sm p-5 text-orange-900 dark:text-orange-50"
           >
             <div class="flex items-end justify-between gap-4">
               <div>
-                <div class="text-sm text-indigo-200">{{ t('scupage.best_price') }}</div>
-                <div class="text-3xl font-bold mt-0.5">{{ formatPrice(currentPrice) }}</div>
-                <div class="text-xs text-indigo-200 mt-1">
+                <div class="text-sm font-medium text-orange-700 dark:text-orange-300">{{ t('scupage.best_price') }}</div>
+                <div class="text-3xl font-bold mt-0.5 text-orange-900 dark:text-white">{{ formatPrice(currentPrice) }}</div>
+                <div class="text-xs text-orange-700 dark:text-orange-300 mt-1">
                   {{ isInStock(selectedProduct) ? t('scupage.in_stock') : t('scupage.out_of_stock') }}
                 </div>
                 <!-- Mini price trend across offers -->
-                <div v-if="modifications.length > 0" class="mt-2 text-indigo-200">
+                <div v-if="modifications.length > 0" class="mt-2 text-orange-600 dark:text-orange-400">
                   <PriceSparkline
                     :values="modifications.map(m => m.suppliers[0]?.price).filter(p => Number.isFinite(p))"
                     :width="120"
@@ -717,7 +717,7 @@ watch(
               <button
                 @click="addToCart"
                 :disabled="!isInStock(selectedProduct)"
-                class="px-6 py-3 bg-surface text-indigo-900 dark:text-indigo-300 rounded-xl font-semibold text-sm hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition shrink-0"
+                class="px-6 py-3 bg-orange-600 text-white rounded-xl font-semibold text-sm hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed transition shrink-0"
               >
                 {{ t('catalog.add_to_cart') }}
               </button>
@@ -756,7 +756,7 @@ watch(
                 :class="[
                   'flex items-start gap-4 px-4 py-3 cursor-pointer transition',
                   selectedProduct?.id === product.id
-                    ? 'bg-indigo-50 border-l-4 border-indigo-600 pl-3'
+                    ? 'bg-orange-50 border-l-4 border-orange-600 pl-3'
                     : 'hover:bg-surface-2 border-l-4 border-transparent'
                 ]"
               >
@@ -766,7 +766,7 @@ watch(
                   :value="product.id"
                   :checked="selectedProduct?.id === product.id"
                   @change="selectProduct(product)"
-                  class="w-4 h-4 text-indigo-600 border-line focus:ring-indigo-500 flex-shrink-0 cursor-pointer mt-1"
+                  class="w-4 h-4 text-orange-600 border-line focus:ring-orange-500 flex-shrink-0 cursor-pointer mt-1"
                 />
                 <!-- Left: seller info -->
                 <div class="flex-shrink-0 w-36">
@@ -790,7 +790,7 @@ watch(
                   {{ product.description }}
                 </div>
                 <!-- Far right: price -->
-                <div class="font-semibold text-indigo-600 whitespace-nowrap text-sm flex-shrink-0 mt-1">
+                <div class="font-semibold text-orange-600 whitespace-nowrap text-sm flex-shrink-0 mt-1">
                   {{ formatPrice(product.price) }}
                 </div>
               </label>
@@ -806,7 +806,7 @@ watch(
             <div class="font-semibold text-ink-2 mb-1">{{ t('scupage.filter_by_company') }}</div>
             <div class="flex flex-col gap-1">
               <label v-for="company in allSuppliers" :key="company" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
-                <input type="checkbox" :value="company" v-model="filterForm.companyFilters" class="rounded text-indigo-600 focus:ring-indigo-500" />
+                <input type="checkbox" :value="company" v-model="filterForm.companyFilters" class="rounded text-orange-600 focus:ring-orange-500" />
                 {{ company }}
               </label>
             </div>
@@ -816,7 +816,7 @@ watch(
             <div class="font-semibold text-ink-2 mb-1">{{ t('scupage.filter_by_payment') }}</div>
             <div class="flex flex-col gap-1">
               <label v-for="pm in allPaymentMethods" :key="pm" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
-                <input type="checkbox" :value="pm" v-model="filterForm.paymentMethodFilters" class="rounded text-indigo-600 focus:ring-indigo-500" />
+                <input type="checkbox" :value="pm" v-model="filterForm.paymentMethodFilters" class="rounded text-orange-600 focus:ring-orange-500" />
                 {{ pm }}
               </label>
             </div>
@@ -826,7 +826,7 @@ watch(
             <div class="font-semibold text-ink-2 mb-1">{{ t('scupage.filter_by_delivery') }}</div>
             <div class="flex flex-col gap-1">
               <label v-for="dt in allDeliveryTimes" :key="dt" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
-                <input type="checkbox" :value="dt" v-model="filterForm.deliveryTimeFilters" class="rounded text-indigo-600 focus:ring-indigo-500" />
+                <input type="checkbox" :value="dt" v-model="filterForm.deliveryTimeFilters" class="rounded text-orange-600 focus:ring-orange-500" />
                 {{ dt }}
               </label>
             </div>
@@ -836,7 +836,7 @@ watch(
             <div class="font-semibold text-ink-2 mb-1">{{ t('scupage.filter_by_installment') }}</div>
             <div class="flex flex-col gap-1">
               <label v-for="ip in allInstallmentPlans" :key="ip" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
-                <input type="checkbox" :value="ip" v-model="filterForm.installmentPlanFilters" class="rounded text-indigo-600 focus:ring-indigo-500" />
+                <input type="checkbox" :value="ip" v-model="filterForm.installmentPlanFilters" class="rounded text-orange-600 focus:ring-orange-500" />
                 {{ ip }}
               </label>
             </div>

@@ -93,7 +93,7 @@ const attrsString = computed(() => {
     :aria-label="title"
     class="group bg-surface rounded-xl border border-line overflow-hidden cursor-pointer relative
            transition-all duration-200 ease-out
-           hover:shadow-lg hover:-translate-y-0.5 hover:border-indigo-300
+           hover:shadow-lg hover:-translate-y-0.5 hover:border-orange-300 dark:hover:bg-surface-elevated
            focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1
            active:scale-[0.99]
            flex flex-col h-full"
@@ -116,7 +116,7 @@ const attrsString = computed(() => {
 
     <!-- Image -->
     <div
-      class="aspect-[4/3] bg-surface-2 flex items-center justify-center overflow-hidden"
+      class="aspect-[4/3] bg-surface-image flex items-center justify-center overflow-hidden"
       @mouseenter="onImageMouseEnter"
       @mouseleave="onImageMouseLeave"
     >
@@ -168,7 +168,7 @@ const attrsString = computed(() => {
           </span>
           <span
             v-if="product.sellers_count && product.sellers_count > 1"
-            class="text-[11px] text-ink-3"
+            class="text-[11px] text-ink-3 dark:text-amber-400/90"
           >
             {{ t('catalog.from_price_sellers', { count: product.sellers_count }) }}
           </span>
@@ -188,7 +188,7 @@ const attrsString = computed(() => {
     :aria-label="title"
     class="group bg-surface rounded-xl border border-line overflow-hidden cursor-pointer
            transition-all duration-200 ease-out
-           hover:shadow-lg hover:border-indigo-300
+           hover:shadow-lg hover:border-orange-300 dark:hover:bg-surface-elevated
            focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     @click="$emit('click')"
     @keydown.enter="$emit('click')"
@@ -196,7 +196,7 @@ const attrsString = computed(() => {
     <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 p-3">
       <!-- Image -->
       <div
-        class="relative w-full sm:w-32 h-32 sm:h-32 flex-shrink-0 bg-surface-2 rounded-lg overflow-hidden"
+        class="relative w-full sm:w-32 h-32 sm:h-32 flex-shrink-0 bg-surface-image rounded-lg overflow-hidden"
         @mouseenter="onImageMouseEnter"
         @mouseleave="onImageMouseLeave"
       >
@@ -226,7 +226,7 @@ const attrsString = computed(() => {
       <!-- Info: 3 columns - attributes | description | price -->
       <div class="flex-1 min-w-0 flex flex-col">
         <h3 class="font-semibold text-sm text-ink line-clamp-2">{{ title }}</h3>
-        <div v-if="product.brand" class="mt-0.5 text-xs font-medium text-indigo-600 theme-dark:text-indigo-400">{{ product.brand }}</div>
+        <div v-if="product.brand" class="mt-0.5 text-xs font-medium text-orange-600 theme-dark:text-orange-400">{{ product.brand }}</div>
 
         <!-- Content row: attributes | description | price -->
         <div class="mt-2 flex items-start gap-3 flex-1 min-h-0">

@@ -27,7 +27,7 @@ const statusLabels = computed(() => ({
 const statusColors = {
   pending: 'text-yellow-600 bg-yellow-50',
   paid: 'text-blue-600 bg-blue-50',
-  processing: 'text-indigo-600 bg-indigo-50',
+  processing: 'text-orange-600 bg-orange-50',
   shipped: 'text-purple-600 bg-purple-50',
   delivered: 'text-green-600 bg-green-50',
   cancelled: 'text-red-600 bg-red-50',
@@ -102,7 +102,7 @@ onMounted(fetchOrder);
           <div class="flex-1">
             <router-link
               :to="{ name: 'product', params: { id: item.product_id } }"
-              class="font-medium hover:text-indigo-600"
+              class="font-medium hover:text-orange-600"
             >
               {{ item.name }}
             </router-link>

@@ -26,7 +26,7 @@
 
     <section class="mb-6">
       <h2 class="text-lg font-semibold mb-2">{{ t('privacy.contact') }}</h2>
-      <p class="text-ink-2">{{ t('privacy.contact_desc') }} privacy@mako.com</p>
+      <p class="text-ink-2">{{ t('privacy.contact_desc') }} privacy@wszyst.pl</p>
     </section>
 
     <p class="text-sm text-ink-3">
@@ -46,6 +46,6 @@ const lastUpdated = computed(() => {
 });
 
 onMounted(() => {
-  document.title = `${t('privacy.title')} — MakoShop`;
+  document.title = `${t('privacy.title')} — wszyst.pl`;
 });
 </script>

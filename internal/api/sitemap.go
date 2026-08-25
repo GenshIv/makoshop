@@ -14,8 +14,7 @@ import (
 )
 
 const (
-	sitemapSCUPageSize = 50000                   // max URLs per sitemap file (XML spec safe limit)
-	sitemapBaseURL     = "http://localhost:5173" // base URL for sitemap (change in production)
+	sitemapSCUPageSize = 50000 // max URLs per sitemap file (XML spec safe limit)
 )
 
 // ---------- robots.txt ----------
@@ -44,7 +43,7 @@ func (h *Handlers) HandleRobotsTXT(w http.ResponseWriter, r *http.Request) {
 	sb.WriteString(fmt.Sprintf("Disallow: /payments/\n"))
 	sb.WriteString(fmt.Sprintf("Disallow: /landing/\n"))
 	sb.WriteString(fmt.Sprintf("\n"))
-	sb.WriteString(fmt.Sprintf("Sitemap: %s/sitemap.xml\n", sitemapBaseURL))
+	sb.WriteString(fmt.Sprintf("Sitemap: %s/sitemap.xml\n", h.siteBaseURL()))
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(sb.String()))
@@ -89,16 +88,18 @@ func (h *Handlers) HandleSitemapIndex(w http.ResponseWriter, r *http.Request) {
 
 	sitemaps := make([]SitemapRef, 0, 2+numSCUSitemaps)
 
+	baseURL := h.siteBaseURL()
+
 	// Categories sitemap
 	sitemaps = append(sitemaps, SitemapRef{
-		Loc:     sitemapBaseURL + "/sitemap-categories.xml",
+		Loc:     baseURL + "/sitemap-categories.xml",
 		LastMod: now,
 	})
 
 	// SCUPage sitemaps
 	for i := 0; i < numSCUSitemaps; i++ {
 		sitemaps = append(sitemaps, SitemapRef{
-			Loc:     fmt.Sprintf("%s/sitemap-scupage-%d.xml", sitemapBaseURL, i),
+			Loc:     fmt.Sprintf("%s/sitemap-scupage-%d.xml", baseURL, i),
 			LastMod: now,
 		})
 	}
@@ -163,7 +164,7 @@ func (h *Handlers) HandleSitemapCategories(w http.ResponseWriter, r *http.Reques
 		loc := "/shop/" + strings.Join(treePath, "/")
 
 		urls = append(urls, SitemapURL{
-			Loc:        sitemapBaseURL + loc,
+			Loc:        h.siteBaseURL() + loc,
 			LastMod:    time.Unix(cat.UpdatedAt, 0).UTC().Format(time.RFC3339),
 			ChangeFreq: "weekly",
 			Priority:   "0.7",
@@ -275,7 +276,7 @@ func (h *Handlers) HandleSitemapSCUPage(w http.ResponseWriter, r *http.Request) 
 		loc := h.buildSCUPageURL(sp)
 
 		urls = append(urls, SitemapURL{
-			Loc:        sitemapBaseURL + loc,
+			Loc:        h.siteBaseURL() + loc,
 			LastMod:    time.Unix(sp.UpdatedAt, 0).UTC().Format(time.RFC3339),
 			ChangeFreq: "daily",
 			Priority:   "0.8",

@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -15,6 +16,12 @@ type Config struct {
 type ServerConfig struct {
 	Host string
 	Port string
+
+	// SiteURL is the canonical public base URL of the site (e.g.
+	// https://www.wszyst.pl). Used for canonical links, sitemaps, robots.txt,
+	// and og: metadata. When empty, the server falls back to a localhost dev
+	// URL. Set via MAKOSHOP_SITE_URL.
+	SiteURL string
 
 	// TLS is enabled when both CertFile and KeyFile are set.
 	TLS TLSConfig
@@ -57,6 +64,28 @@ func env(key, def string) string {
 	return def
 }
 
+// envInt returns the integer value of the given environment variable, or def
+// if unset/empty or not a valid integer.
+func envInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
+}
+
+// envUint64 returns the uint64 value of the given environment variable, or def
+// if unset/empty or not a valid number.
+func envUint64(key string, def uint64) uint64 {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.ParseUint(v, 10, 64); err == nil {
+			return n
+		}
+	}
+	return def
+}
+
 // parseDomains splits a comma-separated domain list into a clean slice.
 func parseDomains(s string) []string {
 	if s == "" {
@@ -80,21 +109,22 @@ func DefaultConfig() Config {
 
 	return Config{
 		Server: ServerConfig{
-			Host: env("MAKOSHOP_HOST", "0.0.0.0"),
-			Port: env("MAKOSHOP_PORT", "9090"),
+			Host:    env("MAKOSHOP_HOST", "0.0.0.0"),
+			Port:    env("MAKOSHOP_PORT", "9090"),
+			SiteURL: env("MAKOSHOP_SITE_URL", "http://localhost:5173"),
 			TLS: TLSConfig{
-				CertFile: os.Getenv("MAKOSHOP_TLS_CERT"),
-				KeyFile:  os.Getenv("MAKOSHOP_TLS_KEY"),
-				HTTPPort: os.Getenv("MAKOSHOP_HTTP_PORT"),
+				CertFile:        os.Getenv("MAKOSHOP_TLS_CERT"),
+				KeyFile:         os.Getenv("MAKOSHOP_TLS_KEY"),
+				HTTPPort:        os.Getenv("MAKOSHOP_HTTP_PORT"),
 				AutocertDomains: parseDomains(os.Getenv("MAKOSHOP_AUTOCERT_DOMAINS")),
 				AutocertCache:   env("MAKOSHOP_AUTOCERT_CACHE", "certs"),
 			},
 		},
 		Database: DatabaseConfig{
 			Path:               env("MAKOSHOP_DB_PATH", "makoshop_db"),
-			NumShards:          16,
-			MaxTotalSize:       40 * 1024 * 1024 * 1024, // 40 GB
-			NumBucketsPerShard: 5_000_000,
+			NumShards:          envInt("MAKOSHOP_DB_NUM_SHARDS", 16),
+			MaxTotalSize:       envUint64("MAKOSHOP_DB_MAX_TOTAL_SIZE", 40*1024*1024*1024), // 40 GB
+			NumBucketsPerShard: envUint64("MAKOSHOP_DB_NUM_BUCKETS", 5_000_000),
 		},
 		Auth: AuthConfig{
 			JWTSecret: jwtSecret,

@@ -1,7 +1,7 @@
 import { watchEffect } from 'vue';
 import { useI18n } from 'vue-i18n';
 
-const SITE_NAME = 'MakoShop';
+const SITE_NAME = 'wszyst.pl';
 
 function upsertMeta(attr, key, content) {
   if (typeof document === 'undefined') return;
@@ -33,7 +33,7 @@ function upsertCanonical(href) {
  * Usage:
  *   const { t } = useI18n();
  *   useSeo({
- *     title: computed(() => product.value?.name ? `${product.value.name} — MakoShop` : t('pages.product_title')),
+ *     title: computed(() => product.value?.name ? `${product.value.name} — SITE_NAME` : t('pages.product_title')),
  *     description: computed(() => product.value?.description || t('pages.default_description')),
  *     image: computed(() => product.value?.images?.[0] || null),
  *   });

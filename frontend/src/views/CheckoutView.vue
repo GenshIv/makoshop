@@ -155,7 +155,7 @@ onMounted(async () => {
           </div>
           <div class="flex justify-between font-bold mt-4 pt-2 text-lg">
             <span>{{ t('checkout.total') }}</span>
-            <span class="text-indigo-600">{{ formatPrice(cart.totalPrice) }}</span>
+            <span class="text-orange-600">{{ formatPrice(cart.totalPrice) }}</span>
           </div>
         </div>
 

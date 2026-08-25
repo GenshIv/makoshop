@@ -21,7 +21,7 @@ const { t, locale } = useI18n();
 const product = ref(null);
 
 useSeo({
-  title: computed(() => (product.value?.name ? `${product.value.name} — MakoShop` : t('pages.product_title'))),
+  title: computed(() => (product.value?.name ? `${product.value.name} — wszyst.pl` : t('pages.product_title'))),
   description: computed(() => product.value?.description || t('pages.default_description')),
   image: computed(() => product.value?.images?.[0] || null),
 });
@@ -222,8 +222,8 @@ onMounted(() => {
             :class="[
               'w-16 h-16 object-cover rounded-lg border-2 cursor-pointer transition',
               currentImageIndex === idx
-                ? 'border-indigo-600'
-                : 'border-transparent hover:border-indigo-400'
+                ? 'border-orange-600'
+                : 'border-transparent hover:border-orange-400'
             ]"
           />
         </div>
@@ -297,7 +297,7 @@ onMounted(() => {
           v-model="reviewForm.comment"
           rows="3"
           :placeholder="t('catalog.review_placeholder')"
-          class="w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          class="w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
         ></textarea>
         <button
           @click="submitReview"

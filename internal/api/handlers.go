@@ -17,6 +17,7 @@ import (
 
 type Handlers struct {
 	store             *db.Store
+	siteURL           string // canonical public base URL (no trailing slash)
 	categoryRepo      *db.CategoryRepo
 	attrDefRepo       *db.AttrDefRepo
 	productRepo       *db.ProductRepo
@@ -131,6 +132,21 @@ func NewHandlers(store *db.Store) *Handlers {
 // Store returns the underlying store.
 func (h *Handlers) Store() *db.Store {
 	return h.store
+}
+
+// SetSiteURL sets the canonical public base URL used for sitemaps, robots.txt
+// and canonical links. Trailing slashes are stripped.
+func (h *Handlers) SetSiteURL(u string) {
+	h.siteURL = strings.TrimRight(u, "/")
+}
+
+// siteBaseURL returns the configured site base URL, falling back to a local
+// dev URL when unset.
+func (h *Handlers) siteBaseURL() string {
+	if h.siteURL != "" {
+		return h.siteURL
+	}
+	return "http://localhost:5173"
 }
 
 // TurboSearch returns the attached TurboProductSearch.

@@ -877,6 +877,12 @@ const pageTitle = computed(() => {
   return t('catalog.catalog_title');
 });
 
+// Show the hero intro only on the clean home state:
+// no search query, no selected category, and not on an SCU page.
+const showHero = computed(() => {
+  return !scuPageData.value && !filters.q && !currentCategory.value;
+});
+
 
 
 // Sync filters from route
@@ -1149,6 +1155,22 @@ defineOptions({ name: 'CatalogView' });
     >
       <div v-if="!scuPageData" class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6" key="catalog">
 
+    <!-- Hero intro (home only) -->
+    <div
+      v-if="showHero"
+      class="hero-glow relative overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-accent/10 via-surface to-surface-2 py-10 sm:py-14 px-6 text-center mb-6"
+    >
+      <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-ink mb-4 leading-tight">
+        {{ t('catalog.hero_headline') }}
+      </h1>
+      <p class="text-lg sm:text-xl text-ink-2 max-w-2xl mx-auto mb-6 leading-relaxed">
+        {{ t('catalog.hero_sub') }}
+      </p>
+      <p class="inline-flex items-center gap-2 text-sm font-semibold text-accent bg-accent/10 px-4 py-2 rounded-full">
+        {{ t('catalog.hero_tagline') }}
+      </p>
+    </div>
+
     <!-- Root categories grid -->
     <div class="mb-4">
       <!-- Loading state -->
@@ -1165,8 +1187,8 @@ defineOptions({ name: 'CatalogView' });
             'flex-1 cursor-pointer group rounded-xl overflow-hidden border transition-all duration-200 flex flex-col',
             // Active category (we are browsing it or its subtree)
             isRootCategoryActive(cat)
-              ? 'border-indigo-500 ring-2 ring-indigo-200 shadow-md'
-              : 'border-line hover:border-indigo-300 hover:shadow-md'
+              ? 'border-orange-500 ring-2 ring-orange-200 shadow-md'
+              : 'border-line hover:border-orange-300 hover:shadow-md'
           ]"
           @click="navigateToCategory(cat)"
         >
@@ -1222,7 +1244,7 @@ defineOptions({ name: 'CatalogView' });
               :class="[
                 'flex-1 flex items-center px-2 py-1.5',
                 isRootCategoryActive(cat)
-                  ? 'bg-indigo-50 dark:bg-indigo-900/30'
+                  ? 'bg-orange-50 dark:bg-orange-900/30'
                   : 'bg-surface'
               ]"
             >
@@ -1230,7 +1252,7 @@ defineOptions({ name: 'CatalogView' });
                 :class="[
                   'text-xs font-medium text-left line-clamp-2',
                   isRootCategoryActive(cat)
-                    ? 'text-indigo-700 dark:text-indigo-300 font-semibold'
+                    ? 'text-orange-700 dark:text-orange-300 font-semibold'
                     : 'text-ink'
                 ]"
               >
@@ -1351,12 +1373,12 @@ defineOptions({ name: 'CatalogView' });
                 'inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-150 cursor-pointer',
                 // Active category (we are inside it)
                 currentCategory && currentCategory.id === sub.id
-                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                  ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
                   // Has children — slightly highlighted
                   : sub.children && sub.children.length > 0
-                    ? 'border-line bg-surface-2 text-ink hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-600'
+                    ? 'border-line bg-surface-2 text-ink hover:border-orange-300 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-slate-600'
                     // Leaf category
-                    : 'border-line text-ink-2 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-700'
+                    : 'border-line text-ink-2 hover:border-orange-300 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-slate-700'
               ]"
             >
               {{ catName(sub) }}
@@ -1401,9 +1423,11 @@ defineOptions({ name: 'CatalogView' });
 
         <span
           v-if="lastSearchMs != null"
-          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-50 text-green-700 border border-green-200 theme-dark:bg-green-900/30 theme-dark:text-green-300 theme-dark:border-green-800"
+          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 theme-dark:bg-amber-900/30 theme-dark:text-amber-300 theme-dark:border-amber-700/60"
         >
-          <span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500"></span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-amber-500 theme-dark:text-amber-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" />
+          </svg>
           {{ t('catalog.search_time', { ms: lastSearchMs }) }}
         </span>
       </div>
@@ -1424,7 +1448,7 @@ defineOptions({ name: 'CatalogView' });
           v-model="filters.q"
           type="text"
           :placeholder="t('catalog.search_placeholder')"
-          class="w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          class="search-field w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
         />
       </div>
       <!-- Price range -->
@@ -1456,7 +1480,7 @@ defineOptions({ name: 'CatalogView' });
               v-model="filters.q"
               type="text"
               :placeholder="t('catalog.search_placeholder')"
-              class="w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              class="search-field w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
             />
           </div>
 
@@ -1514,7 +1538,7 @@ defineOptions({ name: 'CatalogView' });
                 v-for="tag in selectedAttrTags(attr)"
                 :key="tag"
                 @click="toggleAttrFilter(attr.code, tag, false)"
-                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-indigo-600 text-white border-indigo-600"
+                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-orange-600 text-white border-orange-600"
               >
                 {{ enumValueLabel(attr, tag) }}
               </button>
@@ -1536,7 +1560,7 @@ defineOptions({ name: 'CatalogView' });
             <button
               v-if="hasMoreUnselectedTags(attr)"
               @click="toggleAttrExpanded(attr.code)"
-              class="mt-1 text-xs text-indigo-600 hover:underline"
+              class="mt-1 text-xs text-orange-600 hover:underline"
             >
               {{ attrExpanded[attr.code] ? t('catalog.hide') : t('catalog.show_more', { count: hiddenUnselectedTags(attr).length }) }}
             </button>
@@ -1551,7 +1575,7 @@ defineOptions({ name: 'CatalogView' });
                 v-model="attrSearch[attr.code]"
                 type="text"
                 :placeholder="t('catalog.search_attr_placeholder')"
-                class="w-full mb-1.5 px-2 py-0.5 border border-line rounded text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                class="w-full mb-1.5 px-2 py-0.5 border border-line rounded text-[11px] focus:outline-none focus:ring-1 focus:ring-orange-500"
               />
               <!-- Tags -->
               <div class="flex flex-wrap gap-1">
@@ -1811,7 +1835,7 @@ defineOptions({ name: 'CatalogView' });
               v-model="filters.q"
               type="text"
               :placeholder="t('catalog.search_placeholder')"
-              class="w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              class="search-field w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
             />
           </div>
 
@@ -1846,7 +1870,7 @@ defineOptions({ name: 'CatalogView' });
                 v-for="tag in selectedAttrTags(attr)"
                 :key="tag"
                 @click="toggleAttrFilter(attr.code, tag, false)"
-                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-indigo-600 text-white border-indigo-600"
+                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-orange-600 text-white border-orange-600"
               >
                 {{ enumValueLabel(attr, tag) }}
               </button>
@@ -1861,7 +1885,7 @@ defineOptions({ name: 'CatalogView' });
                   @click="toggleAttrFilter(attr.code, tag, !isAttrSelected(attr.code, tag))"
                   class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer"
                   :class="isAttrSelected(attr.code, tag)
-                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    ? 'bg-orange-600 text-white border-orange-600'
                     : 'bg-surface-2 text-ink-2 border-line hover:bg-surface-3'"
                 >
                   {{ enumValueLabel(attr, tag) }}

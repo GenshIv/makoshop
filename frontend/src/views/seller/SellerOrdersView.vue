@@ -30,7 +30,7 @@ const statusColors = {
   new: 'text-blue-600 bg-blue-50',
   pending: 'text-yellow-600 bg-yellow-50',
   paid: 'text-green-600 bg-green-50',
-  processing: 'text-indigo-600 bg-indigo-50',
+  processing: 'text-orange-600 bg-orange-50',
   shipped: 'text-purple-600 bg-purple-50',
   delivered: 'text-green-700 bg-green-100',
   cancelled: 'text-red-600 bg-red-50',
@@ -65,7 +65,7 @@ onMounted(fetchOrders);
 
     <!-- Loading -->
     <div v-if="loading" class="flex justify-center py-12">
-      <div class="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div>
+      <div class="animate-spin h-8 w-8 border-4 border-orange-600 border-t-transparent rounded-full"></div>
     </div>
 
     <!-- Error -->
@@ -107,7 +107,7 @@ onMounted(fetchOrders);
               </span>
             </td>
             <td class="px-4 py-3 text-right">
-              <router-link :to="{ name: 'order-detail', params: { id: order.id } }" class="text-indigo-600 hover:underline">
+              <router-link :to="{ name: 'order-detail', params: { id: order.id } }" class="text-orange-600 hover:underline">
                 {{ t('seller.details') }}
               </router-link>
             </td>

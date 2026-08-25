@@ -137,7 +137,7 @@ onMounted(fetchSCUPages);
       <div class="flex items-center gap-3">
         <button
           @click="recalculateMinPrices"
-          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+          class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm"
         >
           Recalculate Min Prices
         </button>
@@ -201,7 +201,7 @@ onMounted(fetchSCUPages);
               <td class="px-4 py-2 space-x-2">
                 <button
                   @click="startEdit(sp)"
-                  class="text-blue-600 hover:text-blue-800 text-xs"
+                  class="text-orange-600 hover:text-orange-800 text-xs"
                 >
                   {{ t('common.edit') || 'Edit' }}
                 </button>

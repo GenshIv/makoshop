@@ -291,7 +291,7 @@ onMounted(() => {
       <div class="flex flex-wrap gap-2">
         <button
           @click="exportCategories"
-          class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          class="px-4 py-2 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700"
         >
           {{ t('admin.catalogizer_export_categories') || 'Export Categories' }}
         </button>
@@ -409,7 +409,7 @@ onMounted(() => {
         <button
           @click="fetchCoverage"
           :disabled="coverageLoading"
-          class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          class="px-3 py-1 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50"
         >
           {{ coverageLoading ? t('common.loading') : t('admin.refresh') }}
         </button>
@@ -433,9 +433,9 @@ onMounted(() => {
             <div class="text-xs text-yellow-600">{{ t('admin.empty_no_keywords') }}</div>
             <div class="text-xl font-bold text-yellow-700">{{ coverageData.empty || 0 }}</div>
           </div>
-          <div class="bg-blue-50 rounded p-3">
-            <div class="text-xs text-blue-600">{{ t('admin.active_categories') }}</div>
-            <div class="text-xl font-bold text-blue-700">{{ coverageData.active || 0 }}</div>
+          <div class="bg-orange-50 rounded p-3">
+            <div class="text-xs text-orange-600">{{ t('admin.active_categories') }}</div>
+            <div class="text-xl font-bold text-orange-700">{{ coverageData.active || 0 }}</div>
           </div>
         </div>
 
@@ -570,9 +570,9 @@ onMounted(() => {
           <div class="text-sm text-green-600">{{ t('admin.catalogizer_matched') || 'Matched' }}</div>
           <div class="text-2xl font-bold text-green-700">{{ results.matched }}</div>
         </div>
-        <div class="bg-blue-50 rounded-lg p-4">
-          <div class="text-sm text-blue-600">{{ t('admin.catalogizer_applied') || 'Applied' }}</div>
-          <div class="text-2xl font-bold text-blue-700">{{ results.apply ? results.matched : 0 }}</div>
+        <div class="bg-orange-50 rounded-lg p-4">
+          <div class="text-sm text-orange-600">{{ t('admin.catalogizer_applied') || 'Applied' }}</div>
+          <div class="text-2xl font-bold text-orange-700">{{ results.apply ? results.matched : 0 }}</div>
         </div>
       </div>
 

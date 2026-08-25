@@ -160,14 +160,9 @@ onBeforeUnmount(() => {
             </button>
 
             <!-- Logo -->
-            <router-link to="/" class="flex items-center gap-2 transition-opacity hover:opacity-80">
-              <img
-                src="/koshik.png"
-                alt="MakoShop"
-                class="h-8 w-auto"
-              />
-              <span class="text-xl font-bold text-accent whitespace-nowrap">
-                MakoShop
+            <router-link to="/" class="transition-opacity hover:opacity-80">
+              <span class="text-2xl font-extrabold tracking-tight whitespace-nowrap text-accent">
+                wszyst<span class="text-ink-2">.pl</span>
               </span>
             </router-link>
           </div>
@@ -181,7 +176,7 @@ onBeforeUnmount(() => {
               ref="search"
               type="text"
               :placeholder="t('common.search_placeholder')"
-              class="w-full px-4 py-2 border border-line rounded-lg bg-surface-2/50 text-sm placeholder:text-ink-3
+              class="search-field w-full px-4 py-2 border border-line rounded-lg bg-surface-2/50 text-sm placeholder:text-ink-3
                      focus:outline-none focus:ring-2 focus:ring-accent focus:bg-surface transition"
             />
           </form>
@@ -405,6 +400,9 @@ onBeforeUnmount(() => {
             <a href="/privacy-policy" class="hover:text-accent transition-colors">{{ t('common.privacy_policy') }}</a>
             <button @click="showSettings" class="hover:text-accent transition-colors">{{ t('common.cookie_settings') }}</button>
           </div>
+        </div>
+        <div class="mt-2 text-xs text-ink-3">
+          {{ t('common.powered_by') }}
         </div>
       </div>
     </footer>

@@ -44,7 +44,7 @@ const handleGo = () => {
   <div class="relative">
     <!-- Category item -->
     <div
-      class="flex items-center gap-2 p-2 rounded-lg border border-line cursor-pointer hover:bg-surface-2 hover:border-indigo-200 transition-all duration-150"
+      class="flex items-center gap-2 p-2 rounded-lg border border-line cursor-pointer hover:bg-surface-2 hover:border-orange-200 transition-all duration-150"
       @click="handleGo"
     >
       <!-- Toggle button (if has children) -->

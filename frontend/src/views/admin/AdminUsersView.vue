@@ -79,7 +79,7 @@ onMounted(fetchUsers);
               <span class="px-2 py-0.5 rounded-full text-xs"
                 :class="{
                   'bg-purple-100 text-purple-700': user.role === 'admin',
-                  'bg-blue-100 text-blue-700': user.role === 'seller',
+                  'bg-orange-100 text-orange-700': user.role === 'seller',
                   'bg-surface-2 text-ink-2': user.role === 'buyer',
                 }">
                 {{ user.role }}
@@ -100,7 +100,7 @@ onMounted(fetchUsers);
               {{ user.created_at ? formatDate(user.created_at) : '—' }}
             </td>
             <td class="px-4 py-3 text-right">
-              <button class="text-indigo-600 hover:underline text-xs">{{ t('admin.details') }}</button>
+              <button class="text-orange-600 hover:underline text-xs">{{ t('admin.details') }}</button>
             </td>
           </tr>
         </tbody>

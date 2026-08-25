@@ -80,7 +80,7 @@ onMounted(() => {
 
     <!-- Loading -->
     <div v-if="loading" class="flex justify-center py-12">
-      <div class="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div>
+      <div class="animate-spin h-8 w-8 border-4 border-orange-600 border-t-transparent rounded-full"></div>
     </div>
 
     <div v-else>
@@ -131,7 +131,7 @@ onMounted(() => {
         </div>
 
         <div class="flex gap-3 pt-4">
-          <button type="submit" :disabled="submitting" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40">
+          <button type="submit" :disabled="submitting" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-40">
             {{ submitting ? t('seller.saving') : t('seller.save') }}
           </button>
           <router-link to="/seller/products" class="px-4 py-2 border rounded-lg hover:bg-surface-2">

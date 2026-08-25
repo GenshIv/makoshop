@@ -28,7 +28,7 @@ const statusLabels = computed(() => ({
 const statusColors = {
   pending: 'text-yellow-600 bg-yellow-50',
   paid: 'text-blue-600 bg-blue-50',
-  processing: 'text-indigo-600 bg-indigo-50',
+  processing: 'text-orange-600 bg-orange-50',
   shipped: 'text-purple-600 bg-purple-50',
   delivered: 'text-green-600 bg-green-50',
   cancelled: 'text-red-600 bg-red-50',
@@ -78,7 +78,7 @@ onMounted(fetchOrders);
       <div
         v-for="order in orders"
         :key="order.id"
-        class="bg-surface rounded-lg border border-line p-4 hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer"
+        class="bg-surface rounded-lg border border-line p-4 hover:shadow-md hover:border-orange-300 transition-all cursor-pointer"
         @click="router.push({ name: 'order-detail', params: { id: order.id } })"
       >
         <div class="flex items-center justify-between">

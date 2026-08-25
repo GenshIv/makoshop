@@ -370,7 +370,7 @@ watch(showForm, (val) => {
               </div>
               <div class="flex gap-2">
                 <label class="flex-1 cursor-pointer">
-                  <span class="inline-block px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700">
+                  <span class="inline-block px-3 py-1.5 bg-orange-600 text-white text-xs rounded-lg hover:bg-orange-700">
                     {{ uploading.light ? 'Uploading...' : 'Upload' }}
                   </span>
                   <input type="file" accept="image/*" class="hidden" @change="onFileChange($event, 'light')" :disabled="uploading.light" />
@@ -395,7 +395,7 @@ watch(showForm, (val) => {
               </div>
               <div class="flex gap-2">
                 <label class="flex-1 cursor-pointer">
-                  <span class="inline-block px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700">
+                  <span class="inline-block px-3 py-1.5 bg-orange-600 text-white text-xs rounded-lg hover:bg-orange-700">
                     {{ uploading.dark ? 'Uploading...' : 'Upload' }}
                   </span>
                   <input type="file" accept="image/*" class="hidden" @change="onFileChange($event, 'dark')" :disabled="uploading.dark" />
@@ -475,7 +475,7 @@ watch(showForm, (val) => {
             </td>
             <td class="px-4 py-3">
               <div class="flex gap-2">
-                <button @click="editCategory(cat)" class="text-xs text-blue-600 hover:underline">
+                <button @click="editCategory(cat)" class="text-xs text-orange-600 hover:underline">
                   {{ t('admin.edit') }}
                 </button>
                 <button @click="goToAttributes(cat)" class="text-xs text-purple-600 hover:underline">

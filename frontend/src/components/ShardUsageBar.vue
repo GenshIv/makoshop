@@ -213,7 +213,7 @@ onUnmounted(() => {
           <button
             @click="runCompact"
             :disabled="compacting || loading"
-            class="w-full mt-1 px-2 py-1.5 text-[11px] rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full mt-1 px-2 py-1.5 text-[11px] rounded-md bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {{ compacting ? t('db_monitor.compact_running') : t('db_monitor.compact_button') }}
           </button>

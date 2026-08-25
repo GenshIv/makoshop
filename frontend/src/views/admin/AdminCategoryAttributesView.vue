@@ -458,7 +458,7 @@ onMounted(() => {
                 {{ typeof typeLabels[attr.type] === 'function' ? typeLabels[attr.type]() : (typeLabels[attr.type] || attr.type) }}
               </span>
               <span v-if="attr.unit" class="text-[11px] text-ink-3">({{ attr.unit }})</span>
-              <span v-if="attr.range_params?.length" class="text-[11px] text-blue-600">
+              <span v-if="attr.range_params?.length" class="text-[11px] text-orange-600">
                 {{ attr.range_params.join(' × ') }}
               </span>
               <span v-if="!attr.is_active" class="text-[11px] px-1.5 py-0.5 rounded bg-surface-3 text-ink-3">
@@ -467,7 +467,7 @@ onMounted(() => {
               <span v-if="attr.is_filterable" class="text-[11px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">
                 {{ t('admin.attr_filter') }}
               </span>
-              <span v-if="attr.is_sortable" class="text-[11px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+              <span v-if="attr.is_sortable" class="text-[11px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">
                 {{ t('admin.attr_sort') }}
               </span>
             </div>
@@ -488,7 +488,7 @@ onMounted(() => {
             <div v-else class="text-xs text-ink-3 italic mt-1">{{ t('admin.attr_no_values') }}</div>
           </div>
           <div class="flex flex-col gap-1">
-            <button @click="openEdit(attr)" class="text-xs text-blue-600 hover:underline text-right">
+            <button @click="openEdit(attr)" class="text-xs text-orange-600 hover:underline text-right">
               {{ t('admin.edit') }}
             </button>
             <button @click="askRemoveAttribute(attr.code)" class="text-xs text-red-600 hover:underline text-right">

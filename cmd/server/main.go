@@ -231,6 +231,11 @@ func main() {
 	installmentPlanRepo := db.NewInstallmentPlanRepo(store)
 
 	h := api.NewHandlers(store)
+	// Set the canonical site base URL (for sitemaps, robots.txt, canonicals).
+	h.SetSiteURL(cfg.Server.SiteURL)
+	// Load production frontend asset tags so browser SSR pages reference the
+	// built bundles (not the dev /src/main.js) on deep-link navigation.
+	api.LoadBrowserAssetTags()
 	// Attach company settings repos to handlers
 	h.SetCompanySettingsRepos(companyRepo, paymentMethodRepo, deliveryTimeRepo, installmentPlanRepo)
 	authHandlers := api.NewAuthHandlers(userRepo, companyRepo, cartRepo, jwtMiddleware, cfg.Auth.JWTSecret)
@@ -1355,6 +1360,16 @@ func main() {
 		h.HandleSitemapCategories(w, r)
 	})
 
+	// Serve built frontend static assets (JS/CSS/images) from frontend/dist/.
+	// In production the Go server serves both the SPA and the API on the same
+	// origin; these routes cover the hashed build artifacts referenced by
+	// dist/index.html, which would otherwise fall through to 404.
+	distDir := http.Dir("frontend/dist")
+	mux.Handle("/assets/", http.FileServer(distDir))
+	mux.Handle("/favicon.svg", http.FileServer(distDir))
+	mux.Handle("/icons.svg", http.FileServer(distDir))
+	mux.Handle("/koshik.png", http.FileServer(distDir))
+
 	// SPA fallback: for any unmatched path that wants HTML, serve index.html
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Handle /sitemap-scupage-{N}.xml (Go ServeMux doesn't match this pattern directly)
@@ -1363,7 +1378,7 @@ func main() {
 			return
 		}
 
-		if r.Method == http.MethodGet &&
+		if (r.Method == http.MethodGet || r.Method == http.MethodHead) &&
 			strings.Contains(r.Header.Get("Accept"), "text/html") &&
 			!strings.Contains(r.URL.Path, ".") {
 			// Serve frontend index.html for SPA routes
@@ -1377,7 +1392,10 @@ func main() {
 				}
 			}
 			w.Header().Set("Content-Type", "text/html")
-			w.Write(index)
+			// HEAD requests: send headers only, no body
+			if r.Method != http.MethodHead {
+				w.Write(index)
+			}
 			return
 		}
 		http.NotFound(w, r)
@@ -1419,14 +1437,32 @@ func main() {
 	}
 
 	if cfg.TLSEnabled() {
-		// Optional plain-HTTP listener that redirects everything to HTTPS.
-		// Needed for both explicit-TLS and autocert modes.
+		// Port 80 handler: HTTPS redirect by default.
+		var port80Handler http.Handler = httpsRedirectHandler(cfg.Server.Port)
+
+		if cfg.AutocertEnabled() {
+			// Automatic Let's Encrypt certificates via ACME.
+			cm := &autocert.Manager{
+				Prompt:     autocert.AcceptTOS,
+				HostPolicy: autocert.HostWhitelist(cfg.Server.TLS.AutocertDomains...),
+				Cache:      autocert.DirCache(cfg.Server.TLS.AutocertCache),
+			}
+			srv.TLSConfig = cm.TLSConfig()
+			// Enable HTTP-01 challenges: serve ACME challenge responses on port 80,
+			// falling back to the HTTPS redirect for all other requests. Without this,
+			// autocert only supports tls-alpn-01 and fails with "no viable challenge
+			// type found" when the CA does not offer that type.
+			port80Handler = cm.HTTPHandler(port80Handler)
+		}
+
+		// Optional plain-HTTP listener. Serves ACME http-01 challenges (autocert)
+		// and/or redirects everything else to HTTPS.
 		if cfg.Server.TLS.HTTPPort != "" {
 			go func() {
 				redirectAddr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.TLS.HTTPPort)
 				redirectSrv := &http.Server{
 					Addr:              redirectAddr,
-					Handler:           httpsRedirectHandler(cfg.Server.Port),
+					Handler:           port80Handler,
 					ReadHeaderTimeout: 5 * time.Second,
 				}
 				log.Printf("HTTP->HTTPS redirect listener on http://%s", redirectAddr)
@@ -1437,13 +1473,6 @@ func main() {
 		}
 
 		if cfg.AutocertEnabled() {
-			// Automatic Let's Encrypt certificates via ACME.
-			cm := autocert.Manager{
-				Prompt:     autocert.AcceptTOS,
-				HostPolicy: autocert.HostWhitelist(cfg.Server.TLS.AutocertDomains...),
-				Cache:      autocert.DirCache(cfg.Server.TLS.AutocertCache),
-			}
-			srv.TLSConfig = cm.TLSConfig()
 			log.Printf("Makoshop API server starting on https://%s (autocert, domains: %v, cache: %s)",
 				srv.Addr, cfg.Server.TLS.AutocertDomains, cfg.Server.TLS.AutocertCache)
 			if err := srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {

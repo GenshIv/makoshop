@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"os"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,6 +21,41 @@ import (
 	"github.com/GenshIv/makoshop/internal/slug"
 	"github.com/GenshIv/silentjson/v2"
 )
+
+// browserAssetTags holds the <script>/<link> tags extracted from the built
+// frontend index.html, so browser (non-bot) SSR pages reference the real
+// production bundles. Defaults to the dev entry point when dist/ is absent.
+var browserAssetTags = `<script type="module" src="/src/main.js"></script>`
+
+// LoadBrowserAssetTags reads frontend/dist/index.html and extracts the
+// production asset tags (script/link tags with src or href). Call once at
+// startup. If the built index.html is missing, it keeps the dev fallback so
+// local development (Vite dev server) still works.
+func LoadBrowserAssetTags() {
+	data, err := os.ReadFile("frontend/dist/index.html")
+	if err != nil {
+		return
+	}
+	re := regexp.MustCompile(`<script[^>]*src=["'][^"']*["'][^>]*></script>|<link[^>]*href=["'][^"']*["'][^>]*>`)
+	tags := re.FindAllString(string(data), -1)
+	if len(tags) > 0 {
+		browserAssetTags = strings.Join(tags, "\n  ")
+		// Update the shared script-end used by the SCU list browser path.
+		htmlScriptEnd = []byte(`</script>
+  ` + browserAssetTags + `
+</body>
+</html>`)
+	}
+}
+
+// browserScriptEnd returns the closing HTML for browser SSR pages, using the
+// production asset tags (or the dev fallback).
+func browserScriptEnd() []byte {
+	return []byte(`</script>
+  ` + browserAssetTags + `
+</body>
+</html>`)
+}
 
 // --- Landing Page handlers ---
 
@@ -818,6 +855,7 @@ var (
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="mylead-verification" content="7bc06fe7286b5ce1f518b4c133a2c106">
   <title>`)
 	htmlBotTitleEnd = []byte(`</title>
   <meta name="description" content="`)
@@ -850,6 +888,7 @@ var (
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="mylead-verification" content="7bc06fe7286b5ce1f518b4c133a2c106">
   <title>`)
 	htmlTitleEnd = []byte(`</title>
 `)
@@ -1018,10 +1057,7 @@ func writeHTMLResponse(w http.ResponseWriter, r *http.Request, title string, dat
   <div id="app"></div>
   <script>window.__INITIAL_DATA__=`))
 	w.Write(stringToBytes(safeJSON))
-	w.Write(stringToBytes(`</script>
-  <script type="module" src="/src/main.js"></script>
-</body>
-</html>`))
+	w.Write(browserScriptEnd())
 	//w.Write(stringToBytes(htmlStr))
 }
 

@@ -13,28 +13,40 @@
   --text-secondary: #374151;
   --text-muted: #6b7280;
   --border-color: #e5e7eb;
-  /* Brand accent = indigo-600 (matches buyer primary buttons) */
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
+  /* Brand accent = orange-600 (warm, high-conversion "buy" color) */
+  --accent: #ea580c;
+  --accent-hover: #c2410c;
   --danger: #ef4444;
   --success: #10b981;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  /* Depth tokens (light): keep current behavior */
+  --bg-elevated: #e5e7eb;
+  --bg-image: #f3f4f6;
+  --bg-input: #ffffff;
 }
 
 .theme-dark {
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-tertiary: #334155;
+  /* Depth system: 4–5 close levels so surfaces don't compete.
+     Darkest → lightest:
+       image #101722  <  body/header/input #111827  <  card/hero #182337
+       <  category #1a2638  <  hover #202e43 */
+  --bg-primary: #111827;    /* body, header, footer, inputs (base) */
+  --bg-secondary: #182337;  /* surface: cards, main panels, hero */
+  --bg-tertiary: #1a2638;   /* surface-2: category tiles, raised */
   --text-primary: #f1f5f9;
   --text-secondary: #e2e8f0;
   --text-muted: #94a3b8;
   --border-color: #334155;
-  /* Brand accent = indigo-400 (lighter for dark-surface contrast) */
-  --accent: #818cf8;
-  --accent-hover: #6366f1;
+  /* Brand accent = orange-500: pops far more on dark than on white */
+  --accent: #f97316;
+  --accent-hover: #fb923c;
   --danger: #f87171;
   --success: #34d399;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  /* Extra depth tokens (dark-specific) */
+  --bg-elevated: #202e43;   /* card hover */
+  --bg-image: #101722;      /* product image wells (near-black) */
+  --bg-input: #111827;      /* recessed inputs (same as body) */
 }
 
 /* Semantic tokens exposed as Tailwind color utilities:
@@ -46,6 +58,9 @@
   --color-surface: var(--bg-secondary);
   --color-surface-2: var(--bg-tertiary);
   --color-surface-3: #e5e7eb;
+  --color-surface-elevated: var(--bg-elevated);
+  --color-surface-image: var(--bg-image);
+  --color-surface-input: var(--bg-input);
   --color-ink: var(--text-primary);
   --color-ink-2: var(--text-secondary);
   --color-ink-3: var(--text-muted);
@@ -184,22 +199,22 @@ body {
 
 /* ====== Dark theme overrides (only what semantic tokens cannot cover) ====== */
 
-/* Active category in the tree (indigo highlight) */
-.theme-dark li button.bg-indigo-50.text-indigo-700 {
+/* Active category in the tree (orange highlight) */
+.theme-dark li button.bg-orange-50.text-orange-700 {
   background-color: #111827 !important;
-  color: #e0e7ff !important;
+  color: #fed7aa !important;
 }
 
-/* SCU product selection cards (bg-indigo-50 labels) */
-.theme-dark label.bg-indigo-50 {
+/* SCU product selection cards (bg-orange-50 labels) */
+.theme-dark label.bg-orange-50 {
   background-color: #111827 !important;
   border-color: var(--border-color) !important;
 }
-.theme-dark label.bg-indigo-50 .text-gray-600 {
+.theme-dark label.bg-orange-50 .text-gray-600 {
   color: var(--text-muted) !important;
 }
-.theme-dark label.bg-indigo-50 .text-indigo-600 {
-  color: #a5b4fc !important;
+.theme-dark label.bg-orange-50 .text-orange-600 {
+  color: #fdba74 !important;
 }
 
 /* Radio/checkbox borders in dark theme (inside product lists) */
@@ -213,8 +228,43 @@ body {
 }
 
 /* Accent links inside cards in dark theme */
-.theme-dark .text-indigo-600 {
-  color: #a5b4fc;
+.theme-dark .text-orange-600 {
+  color: #fdba74;
+}
+
+/* Header + footer blend into the base layer (same as body), separated by border */
+.theme-dark header,
+.theme-dark footer {
+  background-color: #111827;
+}
+
+/* Hero: subtle tech-search glow. A faint orange radial behind the center,
+   over a very dark navy base. Not neon — just enough to feel alive. */
+.theme-dark .hero-glow {
+  background-color: #111827;
+}
+.theme-dark .hero-glow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(60% 80% at 50% 38%, rgba(249, 115, 22, 0.16), transparent 70%),
+    linear-gradient(180deg, #111827 0%, #172338 100%);
+  pointer-events: none;
+}
+.theme-dark .hero-glow > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Search inputs: recessed, prominent, orange focus ring (dark mode) */
+.theme-dark .search-field {
+  background-color: #0f1724;
+  border-color: #334155;
+}
+.theme-dark .search-field:focus {
+  border-color: #f97316;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.25);
 }
 
 /* ====== Link-as-button styles ======

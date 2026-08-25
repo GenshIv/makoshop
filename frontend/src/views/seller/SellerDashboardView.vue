@@ -59,7 +59,7 @@ onMounted(fetchStats);
 
     <!-- Loading -->
     <div v-if="loading" class="flex justify-center py-12">
-      <div class="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div>
+      <div class="animate-spin h-8 w-8 border-4 border-orange-600 border-t-transparent rounded-full"></div>
     </div>
 
     <div v-else>
