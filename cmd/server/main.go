@@ -167,6 +167,10 @@ func generateRandomPassword(length int) string {
 }
 
 func main() {
+	// Automatically load .env (if present) so the server picks up its
+	// configuration without the operator exporting variables manually.
+	config.LoadEnv()
+
 	cfg := config.DefaultConfig()
 
 	if err := cfg.Validate(); err != nil {
