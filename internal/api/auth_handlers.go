@@ -458,6 +458,27 @@ func (h *AuthHandlers) HandleAdminCompanyGet(w http.ResponseWriter, r *http.Requ
 	httpres.WriteJSON(w, http.StatusOK, c)
 }
 
+// HandleAdminCompanyDelete deletes a company by ID.
+// DELETE /admin/companies/{id}
+func (h *AuthHandlers) HandleAdminCompanyDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	id, ok := parseID(w, r, "company_id")
+	if !ok {
+		return
+	}
+
+	if err := h.companyRepo.Delete(id); err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPatch {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
@@ -471,12 +492,31 @@ func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.R
 
 	var req struct {
 		Name               string                  `json:"name,omitempty"`
+		LogoURL            string                  `json:"logo_url,omitempty"`
+		WebsiteURL         string                  `json:"website_url,omitempty"`
+		Description        string                  `json:"description,omitempty"`
 		LegalInfo          *model.CompanyLegalInfo `json:"legal_info,omitempty"`
 		Settings           *model.CompanySettings  `json:"settings,omitempty"`
 		Status             model.CompanyStatus     `json:"status,omitempty"`
 		PaymentMethodIds   []int64                 `json:"payment_method_ids,omitempty"`
 		DeliveryTimeIds    []int64                 `json:"delivery_time_ids,omitempty"`
 		InstallmentPlanIds []int64                 `json:"installment_plan_ids,omitempty"`
+
+		// Price import (tasks 1, 3, 7)
+		ImportFolder string                   `json:"import_folder,omitempty"`
+		PriceSource  *model.PriceSourceConfig `json:"price_source,omitempty"`
+
+		// Company landing page (task 4)
+		NameRu    string `json:"name_ru,omitempty"`
+		NameUa    string `json:"name_ua,omitempty"`
+		NamePl    string `json:"name_pl,omitempty"`
+		NameEn    string `json:"name_en,omitempty"`
+		DescRu    string `json:"desc_ru,omitempty"`
+		DescUa    string `json:"desc_ua,omitempty"`
+		DescPl    string `json:"desc_pl,omitempty"`
+		DescEn    string `json:"desc_en,omitempty"`
+		HeroImage string `json:"hero_image,omitempty"`
+		IsVisible *bool  `json:"is_visible,omitempty"`
 	}
 	if !httpres.ReadJSON(w, r, &req) {
 		return
@@ -485,6 +525,15 @@ func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.R
 	if err := h.companyRepo.Update(id, func(c *model.Company) {
 		if req.Name != "" {
 			c.Name = req.Name
+		}
+		if req.LogoURL != "" {
+			c.LogoURL = req.LogoURL
+		}
+		if req.WebsiteURL != "" {
+			c.WebsiteURL = req.WebsiteURL
+		}
+		if req.Description != "" {
+			c.Description = req.Description
 		}
 		if req.LegalInfo != nil {
 			c.LegalInfo = *req.LegalInfo
@@ -504,6 +553,44 @@ func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.R
 		}
 		if req.InstallmentPlanIds != nil {
 			c.InstallmentPlanIds = req.InstallmentPlanIds
+		}
+		// Price import config
+		if req.ImportFolder != "" {
+			c.ImportFolder = req.ImportFolder
+		}
+		if req.PriceSource != nil {
+			c.PriceSource = *req.PriceSource
+		}
+		// Landing page fields
+		if req.NameRu != "" {
+			c.NameRu = req.NameRu
+		}
+		if req.NameUa != "" {
+			c.NameUa = req.NameUa
+		}
+		if req.NamePl != "" {
+			c.NamePl = req.NamePl
+		}
+		if req.NameEn != "" {
+			c.NameEn = req.NameEn
+		}
+		if req.DescRu != "" {
+			c.DescRu = req.DescRu
+		}
+		if req.DescUa != "" {
+			c.DescUa = req.DescUa
+		}
+		if req.DescPl != "" {
+			c.DescPl = req.DescPl
+		}
+		if req.DescEn != "" {
+			c.DescEn = req.DescEn
+		}
+		if req.HeroImage != "" {
+			c.HeroImage = req.HeroImage
+		}
+		if req.IsVisible != nil {
+			c.IsVisible = *req.IsVisible
 		}
 	}); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())

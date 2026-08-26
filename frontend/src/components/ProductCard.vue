@@ -55,6 +55,19 @@ onBeforeUnmount(() => {
 const title = computed(() => props.product.title || props.product.name || '');
 const price = computed(() => props.product.price ?? props.product.min_price ?? 0);
 
+// Previous (old) price: shown struck-through when higher than current price.
+const previousPrice = computed(() => {
+  const pp = Number(props.product.previous_price);
+  const cur = Number(price.value);
+  if (Number.isFinite(pp) && Number.isFinite(cur) && pp > cur) {
+    return pp;
+  }
+  return null;
+});
+
+// Orange price: true when there is a discount (previous_price > current price).
+const hasDiscount = computed(() => previousPrice.value !== null);
+
 // Derive a mini price trend from available data:
 // - explicit priceHistory if provided
 // - otherwise synthesize from min/max price when both exist
@@ -163,9 +176,20 @@ const attrsString = computed(() => {
       <!-- Price + sellers + rating (pushed to bottom for equal card heights) -->
       <div class="flex items-end justify-between pt-1 gap-2 mt-auto">
         <div class="flex flex-col">
-          <span class="font-bold text-sm sm:text-base text-accent">
-            {{ formatPrice(price) }}
-          </span>
+          <div class="flex items-baseline gap-1.5 flex-wrap">
+            <span
+              v-if="previousPrice"
+              class="text-[11px] sm:text-xs text-ink-3 line-through"
+            >
+              {{ formatPrice(previousPrice) }}
+            </span>
+            <span
+              class="font-bold text-sm sm:text-base"
+              :class="hasDiscount ? 'text-orange-600 theme-dark:text-orange-400' : 'text-accent'"
+            >
+              {{ formatPrice(price) }}
+            </span>
+          </div>
           <span
             v-if="product.sellers_count && product.sellers_count > 1"
             class="text-[11px] text-ink-3 dark:text-amber-400/90"
@@ -240,7 +264,20 @@ const attrsString = computed(() => {
           </div>
           <!-- Right: price + tags -->
           <div class="flex-shrink-0 text-right">
-            <div class="font-bold text-base text-accent">{{ formatPrice(price) }}</div>
+            <div class="flex items-baseline gap-1.5 justify-end flex-wrap">
+              <span
+                v-if="previousPrice"
+                class="text-xs text-ink-3 line-through"
+              >
+                {{ formatPrice(previousPrice) }}
+              </span>
+              <span
+                class="font-bold text-base"
+                :class="hasDiscount ? 'text-orange-600 theme-dark:text-orange-400' : 'text-accent'"
+              >
+                {{ formatPrice(price) }}
+              </span>
+            </div>
             <div v-if="product.product_count && product.product_count > 1" class="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-surface-2 text-ink-2 border border-line">
               {{ product.product_count }}
             </div>

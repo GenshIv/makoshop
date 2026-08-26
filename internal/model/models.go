@@ -95,12 +95,34 @@ type CompanySettings struct {
 	DefaultPaymentTerms string `json:"default_payment_terms,omitempty"`
 }
 
+// AttrFieldMap maps an XML property field to a catalog attribute code.
+type AttrFieldMap struct {
+	Field string `json:"field"` // property name in the price file (e.g. "Material")
+	Code  string `json:"code"`  // attribute code in the catalog (e.g. "material")
+}
+
+// PriceSourceConfig describes how to parse a specific company's price file.
+// Different companies provide attributes differently, so this is configurable.
+type PriceSourceConfig struct {
+	Format             string            `json:"format,omitempty"`               // "nokaut" (default)
+	Currency           string            `json:"currency,omitempty"`             // e.g. "PLN" (default from company settings)
+	EANField           string            `json:"ean_field,omitempty"`            // property name for EAN (default "EAN")
+	PreviousPriceField string            `json:"previous_price_field,omitempty"` // property name (default "PreviousPrice")
+	ImageField         string            `json:"image_field,omitempty"`          // property name (default "ImageOriginalUrl", fallback <image>)
+	ProductURLField    string            `json:"product_url_field,omitempty"`    // property name (default "ProductUrl", fallback <url>)
+	BrandField         string            `json:"brand_field,omitempty"`          // property name (default "Producent", fallback <producer>)
+	ShopCategoryField  string            `json:"shop_category_field,omitempty"`  // property name (default "ShopProductCategory")
+	AvailabilityMap    map[string]string `json:"availability_map,omitempty"`     // raw value -> "in_stock"|"out_of_stock"
+	AttrFields         []AttrFieldMap    `json:"attr_fields,omitempty"`          // extra attributes to extract
+}
+
 type Company struct {
 	ID                 int64            `json:"id"`
 	Name               string           `json:"name"`
 	Slug               string           `json:"slug"`                  // URL-friendly name
 	Description        string           `json:"description,omitempty"` // company description
 	LogoURL            string           `json:"logo_url,omitempty"`    // company logo
+	WebsiteURL         string           `json:"website_url,omitempty"` // company's external website
 	LegalInfo          CompanyLegalInfo `json:"legal_info,omitempty"`
 	Contacts           CompanyContacts  `json:"contacts,omitempty"`
 	Settings           CompanySettings  `json:"settings"`
@@ -109,8 +131,24 @@ type Company struct {
 	PaymentMethodIds   []int64          `json:"payment_method_ids,omitempty"`
 	DeliveryTimeIds    []int64          `json:"delivery_time_ids,omitempty"`
 	InstallmentPlanIds []int64          `json:"installment_plan_ids,omitempty"`
-	CreatedAt          int64            `json:"created_at"`
-	UpdatedAt          int64            `json:"updated_at"`
+
+	// --- Price import (tasks 1, 3, 7) ---
+	ImportFolder string            `json:"import_folder,omitempty"` // folder name in prices/ dir
+	PriceSource  PriceSourceConfig `json:"price_source,omitempty"`  // parsing config
+
+	// --- Company landing page (task 4) ---
+	NameRu    string `json:"name_ru,omitempty"`
+	NameUa    string `json:"name_ua,omitempty"`
+	NamePl    string `json:"name_pl,omitempty"`
+	NameEn    string `json:"name_en,omitempty"`
+	DescRu    string `json:"desc_ru,omitempty"`
+	DescUa    string `json:"desc_ua,omitempty"`
+	DescPl    string `json:"desc_pl,omitempty"`
+	DescEn    string `json:"desc_en,omitempty"`
+	HeroImage string `json:"hero_image,omitempty"`
+	IsVisible bool   `json:"is_visible"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
 // Brand
@@ -198,32 +236,33 @@ type ProductSEO struct {
 }
 
 type Product struct {
-	ID          int64         `json:"id"`
-	SKU         string        `json:"sku"`
-	SCU         string        `json:"scu,omitempty"` // Standard Catalog Unit — links to landing page
-	Name        string        `json:"name"`
-	Description string        `json:"description,omitempty"`
-	CategoryID  int64         `json:"category_id"`
-	BrandID     int64         `json:"brand_id,omitempty"`
-	CompanyID   int64         `json:"company_id"`
-	Brand       string        `json:"brand,omitempty"`
-	Price       float64       `json:"price"`
-	Currency    string        `json:"currency"`
-	StockQty    int64         `json:"stock_qty"`
-	Status      ProductStatus `json:"status"`
-	Attributes  []KeyValue    `json:"attributes,omitempty"`
-	Images      []string      `json:"images,omitempty"`
-	SEO         ProductSEO    `json:"seo,omitempty"`
-	CreatedAt   int64         `json:"created_at"`
-	UpdatedAt   int64         `json:"updated_at"`
+	ID            int64         `json:"id"`
+	SKU           string        `json:"sku"`
+	EAN           string        `json:"ean,omitempty"` // European barcode — links to landing page
+	Name          string        `json:"name"`
+	Description   string        `json:"description,omitempty"`
+	CategoryID    int64         `json:"category_id"`
+	BrandID       int64         `json:"brand_id,omitempty"`
+	CompanyID     int64         `json:"company_id"`
+	Brand         string        `json:"brand,omitempty"`
+	Price         float64       `json:"price"`
+	PreviousPrice float64       `json:"previous_price,omitempty"` // old price; if > Price → discount
+	Currency      string        `json:"currency"`
+	StockQty      int64         `json:"stock_qty"`
+	Status        ProductStatus `json:"status"`
+	Attributes    []KeyValue    `json:"attributes,omitempty"`
+	Images        []string      `json:"images,omitempty"`
+	SEO           ProductSEO    `json:"seo,omitempty"`
+	CreatedAt     int64         `json:"created_at"`
+	UpdatedAt     int64         `json:"updated_at"`
 }
 
-// LandingPage — посадочная страница для группы товаров с одинаковым SCU.
-// Все товары с этим SCU редиректятся на эту страницу.
+// LandingPage — посадочная страница для группы товаров с одинаковым EAN.
+// Все товары с этим EAN редиректятся на эту страницу.
 
 type LandingPage struct {
 	ID          int64    `json:"id"`
-	SCU         string   `json:"scu"`         // unique identifier
+	EAN         string   `json:"ean"`         // unique identifier
 	Slug        string   `json:"slug"`        // URL-friendly path
 	Title       string   `json:"title"`       // page title
 	Description string   `json:"description"` // meta description
@@ -235,18 +274,18 @@ type LandingPage struct {
 	UpdatedAt   int64    `json:"updated_at"`
 }
 
-// SCUPage — SEO-страница для группы товаров с одинаковым SCU.
-// Основная сущность каталога: каталог и поиск работают по SCUPage, не по товарам.
+// EANPage — SEO-страница для группы товаров с одинаковым EAN.
+// Основная сущность каталога: каталог и поиск работают по EANPage, не по товарам.
 // Путь: /shop/{category_tree}/{slug}
 
-type SCUPage struct {
+type EANPage struct {
 	ID           int64      `json:"id"`
-	SCU          string     `json:"scu"`                // unique identifier from supplier
+	EAN          string     `json:"ean"`                // European barcode (or normalized name if no EAN)
 	Slug         string     `json:"slug"`               // URL-friendly slug (unique)
 	Title        string     `json:"title"`              // SEO title (from first product name)
 	Description  string     `json:"description"`        // SEO meta description
 	Content      string     `json:"content,omitempty"`  // full HTML content (omitted in list responses)
-	Images       []string   `json:"images"`             // unique product images (limited to maxSCUPageImages)
+	Images       []string   `json:"images"`             // unique product images (limited to maxEANPageImages)
 	CategoryID   int64      `json:"category_id"`        // main category
 	Brand        string     `json:"brand"`              // brand name
 	BrandID      int64      `json:"brand_id,omitempty"` // brand ID
@@ -254,15 +293,15 @@ type SCUPage struct {
 	MinPrice     float64    `json:"min_price"`            // minimum price among all products
 	Currency     string     `json:"currency"`             // currency (default: RUB)
 	Attributes   []KeyValue `json:"attributes,omitempty"` // merged attributes (no duplicates)
-	ProductCount int        `json:"product_count"`        // number of products with this SCU
+	ProductCount int        `json:"product_count"`        // number of products with this EAN
 	CreatedAt    int64      `json:"created_at,omitempty"`
 	UpdatedAt    int64      `json:"updated_at,omitempty"`
 	SeoURL       string     `json:"seo_url,omitempty"`
 }
 
-// NOTE: ProductIDs removed from SCUPage to prevent DB bloat.
-// Product→SCU link is stored in Product.SCU field.
-// SCU→Products query via turbo index "scu:{scu}" in TurboProductSearch.
+// NOTE: ProductIDs removed from EANPage to prevent DB bloat.
+// Product→EAN link is stored in Product.EAN field.
+// EAN→Products query via turbo index "ean:{ean}" in TurboProductSearch.
 
 // Cart
 

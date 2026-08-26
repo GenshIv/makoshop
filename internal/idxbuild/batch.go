@@ -376,7 +376,7 @@ func readStringSlice(path string) ([]string, error) {
 }
 
 // extractNumericSuffix extracts the numeric part after the last colon in a string.
-// For example: "product:123" -> 123, "scu:456" -> 456, "123" -> 123.
+// For example: "product:123" -> 123, "ean:456" -> 456, "123" -> 123.
 // Returns 0 if no numeric suffix is found.
 func extractNumericSuffix(s string) int64 {
 	lastColon := strings.LastIndex(s, ":")

@@ -14,11 +14,11 @@ import (
 	"github.com/GenshIv/silentjson/v2"
 )
 
-// SCUPageSearch — turbo-поиск по посадочным страницам (SCUPage).
-// Каталог и фильтрация работают по SCUPage, не по товарам.
-type SCUPageSearch struct {
+// EANPageSearch — turbo-поиск по посадочным страницам (EANPage).
+// Каталог и фильтрация работают по EANPage, не по товарам.
+type EANPageSearch struct {
 	db           *makodb.ShardedDB
-	repo         *SCUPageRepo
+	repo         *EANPageRepo
 	productRepo  *ProductRepo
 	categoryRepo *CategoryRepo
 	enabled      bool
@@ -30,8 +30,8 @@ type SCUPageSearch struct {
 	descCacheTTL time.Duration
 }
 
-func NewSCUPageSearch(db *makodb.ShardedDB, repo *SCUPageRepo, productRepo *ProductRepo, categoryRepo *CategoryRepo, enabled bool) *SCUPageSearch {
-	return &SCUPageSearch{
+func NewEANPageSearch(db *makodb.ShardedDB, repo *EANPageRepo, productRepo *ProductRepo, categoryRepo *CategoryRepo, enabled bool) *EANPageSearch {
+	return &EANPageSearch{
 		db:           db,
 		repo:         repo,
 		productRepo:  productRepo,
@@ -44,53 +44,53 @@ func NewSCUPageSearch(db *makodb.ShardedDB, repo *SCUPageRepo, productRepo *Prod
 
 // ---------- key helpers ----------
 
-func scupageKeyBrand(brandID int64) string { return "scupage_brand:" + strconv.FormatInt(brandID, 10) }
-func scupageKeyVendor(companyID int64) string {
-	return "scupage_vendor:" + strconv.FormatInt(companyID, 10)
+func eanpageKeyBrand(brandID int64) string { return "eanpage_brand:" + strconv.FormatInt(brandID, 10) }
+func eanpageKeyVendor(companyID int64) string {
+	return "eanpage_vendor:" + strconv.FormatInt(companyID, 10)
 }
-func scupageKeyAttr(code string, value string) string {
-	return "scupage_attr:" + code + ":" + value
+func eanpageKeyAttr(code string, value string) string {
+	return "eanpage_attr:" + code + ":" + value
 }
-func scupageKeyText(token string) string { return "scupage_text:" + token }
+func eanpageKeyText(token string) string { return "eanpage_text:" + token }
 
-// scupageKeyCategoryUnion returns the key for a category union index.
+// eanpageKeyCategoryUnion returns the key for a category union index.
 // Contains all SCU pages of this category and all descendants.
-func scupageKeyCategoryUnion(catID int64) string {
-	return "scupage_cat_union:" + strconv.FormatInt(catID, 10)
+func eanpageKeyCategoryUnion(catID int64) string {
+	return "eanpage_cat_union:" + strconv.FormatInt(catID, 10)
 }
 
-// Sort index keys per category: scupage_sort:{catID}:{type}
-// Global sort indexes (catID=0): scupage_sort:0:{type}
-func scupageSortKey(catID int64, sortType string) string {
-	return "scupage_sort:" + strconv.FormatInt(catID, 10) + ":" + sortType
+// Sort index keys per category: eanpage_sort:{catID}:{type}
+// Global sort indexes (catID=0): eanpage_sort:0:{type}
+func eanpageSortKey(catID int64, sortType string) string {
+	return "eanpage_sort:" + strconv.FormatInt(catID, 10) + ":" + sortType
 }
 
-// Sort index keys per category: scupage_sort:{catID}:{type}
-// Global sort indexes (catID=0): scupage_sort:0:{type}
-func scupageDocKey(docID int64) string {
-	return "scupage:" + strconv.FormatInt(docID, 10)
+// Sort index keys per category: eanpage_sort:{catID}:{type}
+// Global sort indexes (catID=0): eanpage_sort:0:{type}
+func eanpageDocKey(docID int64) string {
+	return "eanpage:" + strconv.FormatInt(docID, 10)
 }
 
-// NumSort price index per category: scupage_price:{catID}
-func scupageNumSortPriceKey(catID int64) string {
-	return "scupage_price:" + strconv.FormatInt(catID, 10)
+// NumSort price index per category: eanpage_price:{catID}
+func eanpageNumSortPriceKey(catID int64) string {
+	return "eanpage_price:" + strconv.FormatInt(catID, 10)
 }
 
 const (
-	scupageSortTypePriceAsc      = "price_asc"
-	scupageSortTypePriceDesc     = "price_desc"
-	scupageSortTypeCreatedAtDesc = "created_at_desc"
+	eanpageSortTypePriceAsc      = "price_asc"
+	eanpageSortTypePriceDesc     = "price_desc"
+	eanpageSortTypeCreatedAtDesc = "created_at_desc"
 )
 
 // ---------- indexing ----------
 
-// IndexSCUPage indexes a single SCU page into turbo indexes.
+// IndexEANPage indexes a single SCU page into turbo indexes.
 // Collects all indexes in memory, then writes in batch (no repeated writes to same key).
-func (s *SCUPageSearch) IndexSCUPage(sp *model.SCUPage) error {
+func (s *EANPageSearch) IndexEANPage(sp *model.EANPage) error {
 	if !s.enabled {
 		return nil
 	}
-	docID := KeySCUPage(sp.ID)
+	docID := KeyEANPage(sp.ID)
 
 	// Collect all indexes in memory
 	indexes := make(map[string][]string)
@@ -103,20 +103,20 @@ func (s *SCUPageSearch) IndexSCUPage(sp *model.SCUPage) error {
 			ancestors = []int64{sp.CategoryID}
 		}
 		for _, cid := range ancestors {
-			indexes[scupageKeyCategoryUnion(cid)] = append(indexes[scupageKeyCategoryUnion(cid)], docID)
+			indexes[eanpageKeyCategoryUnion(cid)] = append(indexes[eanpageKeyCategoryUnion(cid)], docID)
 		}
 	}
 
 	// Brand index
 	if sp.BrandID != 0 {
-		indexes[scupageKeyBrand(sp.BrandID)] = append(indexes[scupageKeyBrand(sp.BrandID)], docID)
+		indexes[eanpageKeyBrand(sp.BrandID)] = append(indexes[eanpageKeyBrand(sp.BrandID)], docID)
 	}
 
 	// Attributes index
 	for _, kv := range sp.Attributes {
 		valStr := kv.Value
 		if valStr != "" {
-			indexes[scupageKeyAttr(kv.Key, valStr)] = append(indexes[scupageKeyAttr(kv.Key, valStr)], docID)
+			indexes[eanpageKeyAttr(kv.Key, valStr)] = append(indexes[eanpageKeyAttr(kv.Key, valStr)], docID)
 			// Attr values per category for filter UI: own category only (no ancestors)
 			if sp.CategoryID != 0 {
 				labelKey := "attr_label:" + kv.Key + ":" + valStr
@@ -160,8 +160,8 @@ func (s *SCUPageSearch) IndexSCUPage(sp *model.SCUPage) error {
 	}
 
 	// Text index
-	for _, tok := range tokenizeSCUPage(sp) {
-		indexes[scupageKeyText(tok)] = append(indexes[scupageKeyText(tok)], docID)
+	for _, tok := range tokenizeEANPage(sp) {
+		indexes[eanpageKeyText(tok)] = append(indexes[eanpageKeyText(tok)], docID)
 	}
 
 	// Write all indexes in batch (one write per key)
@@ -170,16 +170,16 @@ func (s *SCUPageSearch) IndexSCUPage(sp *model.SCUPage) error {
 			continue
 		}
 		if _, err := s.db.TurboPutBatchIndexString(key, docIDs); err != nil {
-			return fmt.Errorf("turbo scupage batch index %s: %w", key, err)
+			return fmt.Errorf("turbo eanpage batch index %s: %w", key, err)
 		}
 	}
 
 	return nil
 }
 
-// IndexSCUPageBatch indexes many SCU pages using batch turbo writes.
-// ~10x faster than calling IndexSCUPage in a loop.
-func (s *SCUPageSearch) IndexSCUPageBatch(pages []*model.SCUPage) error {
+// IndexEANPageBatch indexes many SCU pages using batch turbo writes.
+// ~10x faster than calling IndexEANPage in a loop.
+func (s *EANPageSearch) IndexEANPageBatch(pages []*model.EANPage) error {
 	if !s.enabled || len(pages) == 0 {
 		return nil
 	}
@@ -192,7 +192,7 @@ func (s *SCUPageSearch) IndexSCUPageBatch(pages []*model.SCUPage) error {
 	catCodes := make(map[int64]map[string]struct{})
 
 	for _, sp := range pages {
-		docID := KeySCUPage(sp.ID)
+		docID := KeyEANPage(sp.ID)
 
 		// Category union index for all ancestors.
 		if sp.CategoryID != 0 {
@@ -201,20 +201,20 @@ func (s *SCUPageSearch) IndexSCUPageBatch(pages []*model.SCUPage) error {
 				ancestors = []int64{sp.CategoryID}
 			}
 			for _, cid := range ancestors {
-				indexes[scupageKeyCategoryUnion(cid)] = append(indexes[scupageKeyCategoryUnion(cid)], docID)
+				indexes[eanpageKeyCategoryUnion(cid)] = append(indexes[eanpageKeyCategoryUnion(cid)], docID)
 			}
 		}
 
 		// Brand index
 		if sp.BrandID != 0 {
-			indexes[scupageKeyBrand(sp.BrandID)] = append(indexes[scupageKeyBrand(sp.BrandID)], docID)
+			indexes[eanpageKeyBrand(sp.BrandID)] = append(indexes[eanpageKeyBrand(sp.BrandID)], docID)
 		}
 
 		// Attributes index
 		for _, kv := range sp.Attributes {
 			valStr := kv.Value
 			if valStr != "" {
-				indexes[scupageKeyAttr(kv.Key, valStr)] = append(indexes[scupageKeyAttr(kv.Key, valStr)], docID)
+				indexes[eanpageKeyAttr(kv.Key, valStr)] = append(indexes[eanpageKeyAttr(kv.Key, valStr)], docID)
 				// Attr values per category for filter UI: own category only (no ancestors)
 				if sp.CategoryID != 0 {
 					if attrCatRef[kv.Key] == nil {
@@ -234,8 +234,8 @@ func (s *SCUPageSearch) IndexSCUPageBatch(pages []*model.SCUPage) error {
 		}
 
 		// Text index
-		for _, tok := range tokenizeSCUPage(sp) {
-			indexes[scupageKeyText(tok)] = append(indexes[scupageKeyText(tok)], docID)
+		for _, tok := range tokenizeEANPage(sp) {
+			indexes[eanpageKeyText(tok)] = append(indexes[eanpageKeyText(tok)], docID)
 		}
 	}
 
@@ -245,7 +245,7 @@ func (s *SCUPageSearch) IndexSCUPageBatch(pages []*model.SCUPage) error {
 			continue
 		}
 		if _, err := s.db.TurboPutBatchIndexString(key, docIDs); err != nil {
-			fmt.Printf("WARN: scupage batch index %s: %v\n", key, err)
+			fmt.Printf("WARN: eanpage batch index %s: %v\n", key, err)
 		}
 	}
 
@@ -297,12 +297,12 @@ func (s *SCUPageSearch) IndexSCUPageBatch(pages []*model.SCUPage) error {
 	return nil
 }
 
-// UnindexSCUPage removes a SCU page from all turbo indexes.
-func (s *SCUPageSearch) UnindexSCUPage(sp *model.SCUPage) error {
+// UnindexEANPage removes a SCU page from all turbo indexes.
+func (s *EANPageSearch) UnindexEANPage(sp *model.EANPage) error {
 	if !s.enabled {
 		return nil
 	}
-	docID := KeySCUPage(sp.ID)
+	docID := KeyEANPage(sp.ID)
 
 	if sp.CategoryID != 0 {
 		ancestors, err := s.getCategoryAncestors(sp.CategoryID)
@@ -310,32 +310,32 @@ func (s *SCUPageSearch) UnindexSCUPage(sp *model.SCUPage) error {
 			ancestors = []int64{sp.CategoryID}
 		}
 		for _, cid := range ancestors {
-			s.db.TurboDeleteIndexString(scupageKeyCategoryUnion(cid), docID)
+			s.db.TurboDeleteIndexString(eanpageKeyCategoryUnion(cid), docID)
 		}
 	}
 
 	if sp.BrandID != 0 {
-		s.db.TurboDeleteIndexString(scupageKeyBrand(sp.BrandID), docID)
+		s.db.TurboDeleteIndexString(eanpageKeyBrand(sp.BrandID), docID)
 	}
 
 	for _, kv := range sp.Attributes {
 		valStr := kv.Value
 		if valStr != "" {
-			s.db.TurboDeleteIndexString(scupageKeyAttr(kv.Key, valStr), docID)
+			s.db.TurboDeleteIndexString(eanpageKeyAttr(kv.Key, valStr), docID)
 		}
 	}
 
-	for _, tok := range tokenizeSCUPage(sp) {
-		s.db.TurboDeleteIndexString(scupageKeyText(tok), docID)
+	for _, tok := range tokenizeEANPage(sp) {
+		s.db.TurboDeleteIndexString(eanpageKeyText(tok), docID)
 	}
 
 	return nil
 }
 
 // BuildSortIndexes rebuilds all sort indexes for SCU pages per category.
-// Each category has its own sort indexes: scupage_sort:{catID}:{type}
-// and numSort price index: scupage_price:{catID}
-func (s *SCUPageSearch) BuildSortIndexes() error {
+// Each category has its own sort indexes: eanpage_sort:{catID}:{type}
+// and numSort price index: eanpage_price:{catID}
+func (s *EANPageSearch) BuildSortIndexes() error {
 	if !s.enabled {
 		return nil
 	}
@@ -345,7 +345,7 @@ func (s *SCUPageSearch) BuildSortIndexes() error {
 
 	all, err := s.repo.List()
 	if err != nil {
-		return fmt.Errorf("list scupages: %w", err)
+		return fmt.Errorf("list eanpages: %w", err)
 	}
 
 	// Group by category ancestors (each ancestor gets its own sort index)
@@ -365,7 +365,7 @@ func (s *SCUPageSearch) BuildSortIndexes() error {
 	catPricePairs := make(map[int64][]makodb.TurboNumSortPair)
 
 	for _, sp := range all {
-		docIDKey := KeySCUPage(sp.ID)
+		docIDKey := KeyEANPage(sp.ID)
 		priceVal := uint64(sp.MinPrice * 100)
 
 		scCreated := sp.CreatedAt
@@ -407,8 +407,8 @@ func (s *SCUPageSearch) BuildSortIndexes() error {
 		for i, e := range entries {
 			docIDsAsc[i] = e.docID
 		}
-		if err := s.db.TurboPutSortIndexString(scupageSortKey(catID, scupageSortTypePriceAsc), docIDsAsc); err != nil {
-			fmt.Printf("WARN: sort index %s: %v\n", scupageSortKey(catID, scupageSortTypePriceAsc), err)
+		if err := s.db.TurboPutSortIndexString(eanpageSortKey(catID, eanpageSortTypePriceAsc), docIDsAsc); err != nil {
+			fmt.Printf("WARN: sort index %s: %v\n", eanpageSortKey(catID, eanpageSortTypePriceAsc), err)
 		}
 
 		// Price desc
@@ -423,8 +423,8 @@ func (s *SCUPageSearch) BuildSortIndexes() error {
 		for i, e := range entriesDesc {
 			docIDsDesc[i] = e.docID
 		}
-		if err := s.db.TurboPutSortIndexString(scupageSortKey(catID, scupageSortTypePriceDesc), docIDsDesc); err != nil {
-			fmt.Printf("WARN: sort index %s: %v\n", scupageSortKey(catID, scupageSortTypePriceDesc), err)
+		if err := s.db.TurboPutSortIndexString(eanpageSortKey(catID, eanpageSortTypePriceDesc), docIDsDesc); err != nil {
+			fmt.Printf("WARN: sort index %s: %v\n", eanpageSortKey(catID, eanpageSortTypePriceDesc), err)
 		}
 
 		// Created at desc
@@ -439,13 +439,13 @@ func (s *SCUPageSearch) BuildSortIndexes() error {
 		for i, e := range entriesTime {
 			docIDsTime[i] = e.docID
 		}
-		if err := s.db.TurboPutSortIndexString(scupageSortKey(catID, scupageSortTypeCreatedAtDesc), docIDsTime); err != nil {
-			fmt.Printf("WARN: sort index %s: %v\n", scupageSortKey(catID, scupageSortTypeCreatedAtDesc), err)
+		if err := s.db.TurboPutSortIndexString(eanpageSortKey(catID, eanpageSortTypeCreatedAtDesc), docIDsTime); err != nil {
+			fmt.Printf("WARN: sort index %s: %v\n", eanpageSortKey(catID, eanpageSortTypeCreatedAtDesc), err)
 		}
 
 		// NumSort price index
 		if pairs, ok := catPricePairs[catID]; ok && len(pairs) > 0 {
-			_, _ = s.db.TurboPutNumSortBatch(scupageNumSortPriceKey(catID), pairs)
+			_, _ = s.db.TurboPutNumSortBatch(eanpageNumSortPriceKey(catID), pairs)
 		}
 	}
 
@@ -455,7 +455,7 @@ func (s *SCUPageSearch) BuildSortIndexes() error {
 
 // ---------- search ----------
 
-type SCUPageListParams struct {
+type EANPageListParams struct {
 	Q           string
 	CategoryID  int64
 	CompanyID   int64
@@ -468,8 +468,8 @@ type SCUPageListParams struct {
 	Limit       int
 }
 
-type SCUPageListResult struct {
-	Items []silentjson.RawMessage `json:"items"` // raw SCUPage JSON
+type EANPageListResult struct {
+	Items []silentjson.RawMessage `json:"items"` // raw EANPage JSON
 	Total int64                   `json:"total"`
 	Page  int                     `json:"page"`
 	Limit int                     `json:"limit"`
@@ -477,9 +477,9 @@ type SCUPageListResult struct {
 
 // ListWithTurbo returns paginated SCU pages with filters and sorting.
 // Uses per-category sort indexes — no union index, no candidates for category filter.
-func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListResult, error) {
+func (s *EANPageSearch) ListWithTurbo(params EANPageListParams) (*EANPageListResult, error) {
 	if !s.enabled {
-		return nil, fmt.Errorf("scupage search is disabled")
+		return nil, fmt.Errorf("eanpage search is disabled")
 	}
 
 	if params.Page < 1 {
@@ -498,16 +498,16 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		catID = params.CategoryID
 	}
 
-	sortType := scupageSortTypePriceAsc
+	sortType := eanpageSortTypePriceAsc
 	switch params.Sort {
 	case "price", "price_asc":
-		sortType = scupageSortTypePriceAsc
+		sortType = eanpageSortTypePriceAsc
 	case "price_desc":
-		sortType = scupageSortTypePriceDesc
+		sortType = eanpageSortTypePriceDesc
 	case "created_at":
-		sortType = scupageSortTypeCreatedAtDesc
+		sortType = eanpageSortTypeCreatedAtDesc
 	}
-	sortKey := scupageSortKey(catID, sortType)
+	sortKey := eanpageSortKey(catID, sortType)
 
 	// Fast path: no additional filters — use sort index directly.
 	// Per-category sort index already contains only category docs.
@@ -529,7 +529,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 				items = append(items, silentjson.RawMessage(doc))
 			}
 		}
-		return &SCUPageListResult{
+		return &EANPageListResult{
 			Items: items,
 			Total: int64(res.Total),
 			Page:  params.Page,
@@ -541,20 +541,20 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 	// No intersect, no extra sorting — numSort already sorted by price.
 	if params.Q == "" && params.CompanyID == 0 &&
 		len(params.AttrFilters) == 0 && (params.PriceMin > 0 || params.PriceMax > 0) &&
-		sortType == scupageSortTypePriceAsc {
+		sortType == eanpageSortTypePriceAsc {
 		minVal := uint64(params.PriceMin * 100)
 		maxVal := uint64(params.PriceMax * 100)
 		if params.PriceMax == 0 {
 			maxVal = ^uint64(0)
 		}
 		res, err := s.db.TurboGetNumSortRangeWithDocs(makodb.TurboGetNumSortRangeWithDocsParams{
-			Name:      scupageNumSortPriceKey(catID),
+			Name:      eanpageNumSortPriceKey(catID),
 			MinValue:  minVal,
 			MaxValue:  maxVal,
 			Page:      params.Page - 1,
 			PageSize:  params.Limit,
 			Desc:      false,
-			DocPrefix: "scupage:",
+			DocPrefix: "eanpage:",
 		})
 		if err != nil {
 			return nil, fmt.Errorf("turbo numSort range with docs: %w", err)
@@ -565,7 +565,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 				items = append(items, silentjson.RawMessage(doc))
 			}
 		}
-		return &SCUPageListResult{
+		return &EANPageListResult{
 			Items: items,
 			Total: int64(res.Total),
 			Page:  params.Page,
@@ -576,20 +576,20 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 	// Fast path: price range + price_desc sort — use numSort directly (desc).
 	if params.Q == "" && params.CompanyID == 0 &&
 		len(params.AttrFilters) == 0 && (params.PriceMin > 0 || params.PriceMax > 0) &&
-		sortType == scupageSortTypePriceDesc {
+		sortType == eanpageSortTypePriceDesc {
 		minVal := uint64(params.PriceMin * 100)
 		maxVal := uint64(params.PriceMax * 100)
 		if params.PriceMax == 0 {
 			maxVal = ^uint64(0)
 		}
 		res, err := s.db.TurboGetNumSortRangeWithDocs(makodb.TurboGetNumSortRangeWithDocsParams{
-			Name:      scupageNumSortPriceKey(catID),
+			Name:      eanpageNumSortPriceKey(catID),
 			MinValue:  minVal,
 			MaxValue:  maxVal,
 			Page:      params.Page - 1,
 			PageSize:  params.Limit,
 			Desc:      true,
-			DocPrefix: "scupage:",
+			DocPrefix: "eanpage:",
 		})
 		if err != nil {
 			return nil, fmt.Errorf("turbo numSort range with docs: %w", err)
@@ -600,7 +600,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 				items = append(items, silentjson.RawMessage(doc))
 			}
 		}
-		return &SCUPageListResult{
+		return &EANPageListResult{
 			Items: items,
 			Total: int64(res.Total),
 			Page:  params.Page,
@@ -616,13 +616,13 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 	var andTokens []string
 
 	if params.CompanyID != 0 {
-		andTokens = append(andTokens, scupageKeyVendor(params.CompanyID))
+		andTokens = append(andTokens, eanpageKeyVendor(params.CompanyID))
 	}
 
 	if params.Q != "" {
-		tokens := tokenizeQuerySCUPage(params.Q)
+		tokens := tokenizeQueryEANPage(params.Q)
 		for _, tok := range tokens {
-			andTokens = append(andTokens, scupageKeyText(tok))
+			andTokens = append(andTokens, eanpageKeyText(tok))
 		}
 	}
 
@@ -632,7 +632,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 			return nil, fmt.Errorf("turbo intersect: %w", err)
 		}
 		if andRaw == nil || len(andRaw) == 0 {
-			return &SCUPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
+			return &EANPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
 		candidatesRaw = andRaw
 	}
@@ -644,14 +644,14 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		}
 		attrTokens := make([]string, 0, len(values))
 		for _, v := range values {
-			attrTokens = append(attrTokens, scupageKeyAttr(code, v))
+			attrTokens = append(attrTokens, eanpageKeyAttr(code, v))
 		}
 		attrBitmap, err := s.db.TurboBulkUnionSortedRaw(attrTokens)
 		if err != nil {
-			return &SCUPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
+			return &EANPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
 		if attrBitmap == nil || len(attrBitmap) == 0 {
-			return &SCUPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
+			return &EANPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
 		if candidatesRaw == nil {
 			candidatesRaw = attrBitmap
@@ -659,7 +659,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 			candidatesRaw = makodb.TurboBinaryIntersectRaw([][]byte{candidatesRaw, attrBitmap})
 		}
 		if candidatesRaw == nil || len(candidatesRaw) == 0 {
-			return &SCUPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
+			return &EANPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
 	}
 
@@ -673,7 +673,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		if candidatesRaw != nil && len(candidatesRaw) > 0 {
 			// Intersect with existing candidates
 			priceRaw, err := s.db.TurboGetNumSortRangeIntersectRaw(
-				scupageNumSortPriceKey(catID),
+				eanpageNumSortPriceKey(catID),
 				minVal,
 				maxVal,
 				candidatesRaw,
@@ -686,7 +686,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		} else {
 			// No other candidates: get price range directly from numSort index
 			priceRaw, err := s.db.TurboGetNumSortRangeRaw(
-				scupageNumSortPriceKey(catID),
+				eanpageNumSortPriceKey(catID),
 				minVal,
 				maxVal,
 			)
@@ -700,7 +700,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 	var res makodb.TurboSortPageWithDocsResult
 	var err error
 
-	isDesc := sortType == scupageSortTypePriceDesc
+	isDesc := sortType == eanpageSortTypePriceDesc
 
 	if candidatesRaw == nil || len(candidatesRaw) == 0 {
 		res, err = s.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
@@ -709,7 +709,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 			Page:       params.Page - 1,
 			PageSize:   params.Limit,
 			Desc:       isDesc,
-			DocPrefix:  "scupage:",
+			DocPrefix:  "eanpage:",
 		})
 	} else {
 		res, err = s.db.TurboSortIndexPageRawWithDocsFromDB(
@@ -718,7 +718,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 			params.Page-1,
 			params.Limit,
 			isDesc,
-			"scupage:",
+			"eanpage:",
 		)
 	}
 
@@ -733,7 +733,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 		}
 	}
 
-	return &SCUPageListResult{
+	return &EANPageListResult{
 		Items: items,
 		Total: int64(res.Total),
 		Page:  params.Page,
@@ -743,7 +743,7 @@ func (s *SCUPageSearch) ListWithTurbo(params SCUPageListParams) (*SCUPageListRes
 
 // ---------- helpers ----------
 
-func (s *SCUPageSearch) getCategoryAncestors(catID int64) ([]int64, error) {
+func (s *EANPageSearch) getCategoryAncestors(catID int64) ([]int64, error) {
 	if catID == 0 {
 		return nil, nil
 	}
@@ -760,11 +760,11 @@ func (s *SCUPageSearch) getCategoryAncestors(catID int64) ([]int64, error) {
 	return ancestors, nil
 }
 
-func tokenizeSCUPage(sp *model.SCUPage) []string {
-	return tokenizeQuerySCUPage(sp.Title + " " + sp.Description)
+func tokenizeEANPage(sp *model.EANPage) []string {
+	return tokenizeQueryEANPage(sp.Title + " " + sp.Description)
 }
 
-func tokenizeQuerySCUPage(text string) []string {
+func tokenizeQueryEANPage(text string) []string {
 	text = strings.ToLower(text)
 	fields := strings.FieldsFunc(text, func(r rune) bool {
 		isLetter := (r >= 'a' && r <= 'z') || (r >= 'а' && r <= 'я') || r == 'ё'
@@ -787,15 +787,15 @@ func tokenizeQuerySCUPage(text string) []string {
 	return tokens
 }
 
-// RebuildAllIndexes fully rebuilds all SCUPage turbo indexes.
+// RebuildAllIndexes fully rebuilds all EANPage turbo indexes.
 // Strategy:
 //  1. Clear all indexable keys (cat, brand, vendor, sort, numSort) upfront.
-//  2. Stream all SCUPage documents, accumulating indexes in memory.
+//  2. Stream all EANPage documents, accumulating indexes in memory.
 //  3. Flush accumulated indexes in batches to avoid high memory usage.
 //  4. Rebuild sort/numSort indexes at the end.
 //
 // This avoids per-document deletes (vacuum) and ensures no stale indexes remain.
-func (s *SCUPageSearch) RebuildAllIndexes() error {
+func (s *EANPageSearch) RebuildAllIndexes() error {
 	if !s.enabled {
 		return nil
 	}
@@ -808,11 +808,11 @@ func (s *SCUPageSearch) RebuildAllIndexes() error {
 		return fmt.Errorf("clear indexes: %w", err)
 	}
 
-	// Step 2 & 3: Stream all SCUPage and accumulate indexes in batches
+	// Step 2 & 3: Stream all EANPage and accumulate indexes in batches
 	const batchSize = 5000
 	all, err := s.repo.List()
 	if err != nil {
-		return fmt.Errorf("list scupages: %w", err)
+		return fmt.Errorf("list eanpages: %w", err)
 	}
 
 	// In-memory index accumulator
@@ -824,7 +824,7 @@ func (s *SCUPageSearch) RebuildAllIndexes() error {
 				continue
 			}
 			if _, err := s.db.TurboPutBatchIndexString(key, docIDs); err != nil {
-				fmt.Printf("WARN: scupage batch index %s: %v\n", key, err)
+				fmt.Printf("WARN: eanpage batch index %s: %v\n", key, err)
 			}
 		}
 		// Reset accumulator
@@ -834,7 +834,7 @@ func (s *SCUPageSearch) RebuildAllIndexes() error {
 	}
 
 	for i, sp := range all {
-		docIDKey := KeySCUPage(sp.ID)
+		docIDKey := KeyEANPage(sp.ID)
 
 		// Category union index for all ancestors.
 		if sp.CategoryID != 0 {
@@ -843,18 +843,18 @@ func (s *SCUPageSearch) RebuildAllIndexes() error {
 				ancestors = []int64{sp.CategoryID}
 			}
 			for _, cid := range ancestors {
-				indexes[scupageKeyCategoryUnion(cid)] = append(indexes[scupageKeyCategoryUnion(cid)], docIDKey)
+				indexes[eanpageKeyCategoryUnion(cid)] = append(indexes[eanpageKeyCategoryUnion(cid)], docIDKey)
 			}
 		}
 
 		// Brand index
 		if sp.BrandID != 0 {
-			indexes[scupageKeyBrand(sp.BrandID)] = append(indexes[scupageKeyBrand(sp.BrandID)], docIDKey)
+			indexes[eanpageKeyBrand(sp.BrandID)] = append(indexes[eanpageKeyBrand(sp.BrandID)], docIDKey)
 		}
 
 		// Vendor index (min company ID among products with this SCU)
 		// For rebuild we approximate: use first product's company if available.
-		// In current model SCUPage doesn't store companyID directly;
+		// In current model EANPage doesn't store companyID directly;
 		// vendor index is usually not critical for catalog.
 		// If needed, compute from products; for now skip to avoid heavy scan.
 
@@ -862,13 +862,13 @@ func (s *SCUPageSearch) RebuildAllIndexes() error {
 		for _, kv := range sp.Attributes {
 			valStr := kv.Value
 			if valStr != "" {
-				indexes[scupageKeyAttr(kv.Key, valStr)] = append(indexes[scupageKeyAttr(kv.Key, valStr)], docIDKey)
+				indexes[eanpageKeyAttr(kv.Key, valStr)] = append(indexes[eanpageKeyAttr(kv.Key, valStr)], docIDKey)
 			}
 		}
 
 		// Text index
-		for _, tok := range tokenizeSCUPage(&sp) {
-			indexes[scupageKeyText(tok)] = append(indexes[scupageKeyText(tok)], docIDKey)
+		for _, tok := range tokenizeEANPage(&sp) {
+			indexes[eanpageKeyText(tok)] = append(indexes[eanpageKeyText(tok)], docIDKey)
 		}
 
 		if (i+1)%batchSize == 0 {
@@ -889,9 +889,9 @@ func (s *SCUPageSearch) RebuildAllIndexes() error {
 	return nil
 }
 
-// clearAllIndexes removes all indexable keys for SCUPageSearch.
+// clearAllIndexes removes all indexable keys for EANPageSearch.
 // This ensures no stale indexes remain after rebuild.
-func (s *SCUPageSearch) clearAllIndexes() error {
+func (s *EANPageSearch) clearAllIndexes() error {
 	fmt.Println("[SCUPAGE] clearAllIndexes: clearing sort/numSort indexes...")
 
 	// Clear per-category sort and numSort indexes
@@ -902,26 +902,26 @@ func (s *SCUPageSearch) clearAllIndexes() error {
 	}
 
 	// Clear global (catID=0) indexes
-	for _, sortType := range []string{scupageSortTypePriceAsc, scupageSortTypePriceDesc, scupageSortTypeCreatedAtDesc} {
-		if err := s.db.TurboClearIndex(scupageSortKey(0, sortType)); err != nil {
-			fmt.Printf("WARN: clear sort index %s: %v\n", scupageSortKey(0, sortType), err)
+	for _, sortType := range []string{eanpageSortTypePriceAsc, eanpageSortTypePriceDesc, eanpageSortTypeCreatedAtDesc} {
+		if err := s.db.TurboClearIndex(eanpageSortKey(0, sortType)); err != nil {
+			fmt.Printf("WARN: clear sort index %s: %v\n", eanpageSortKey(0, sortType), err)
 		}
 	}
-	if _, err := s.db.TurboPutNumSortBatch(scupageNumSortPriceKey(0), nil); err != nil {
-		fmt.Printf("WARN: clear numSort %s: %v\n", scupageNumSortPriceKey(0), err)
+	if _, err := s.db.TurboPutNumSortBatch(eanpageNumSortPriceKey(0), nil); err != nil {
+		fmt.Printf("WARN: clear numSort %s: %v\n", eanpageNumSortPriceKey(0), err)
 	}
 
 	// Clear per-category indexes
 	for _, cat := range categories {
-		for _, sortType := range []string{scupageSortTypePriceAsc, scupageSortTypePriceDesc, scupageSortTypeCreatedAtDesc} {
-			if err := s.db.TurboClearIndex(scupageSortKey(cat.ID, sortType)); err != nil {
-				fmt.Printf("WARN: clear sort index %s: %v\n", scupageSortKey(cat.ID, sortType), err)
+		for _, sortType := range []string{eanpageSortTypePriceAsc, eanpageSortTypePriceDesc, eanpageSortTypeCreatedAtDesc} {
+			if err := s.db.TurboClearIndex(eanpageSortKey(cat.ID, sortType)); err != nil {
+				fmt.Printf("WARN: clear sort index %s: %v\n", eanpageSortKey(cat.ID, sortType), err)
 			}
 		}
-		if _, err := s.db.TurboPutNumSortBatch(scupageNumSortPriceKey(cat.ID), nil); err != nil {
-			fmt.Printf("WARN: clear numSort %s: %v\n", scupageNumSortPriceKey(cat.ID), err)
+		if _, err := s.db.TurboPutNumSortBatch(eanpageNumSortPriceKey(cat.ID), nil); err != nil {
+			fmt.Printf("WARN: clear numSort %s: %v\n", eanpageNumSortPriceKey(cat.ID), err)
 		}
-		if err := s.db.TurboClearIndex(scupageKeyCategoryUnion(cat.ID)); err != nil {
+		if err := s.db.TurboClearIndex(eanpageKeyCategoryUnion(cat.ID)); err != nil {
 			fmt.Printf("WARN: clear cat union index %d: %v\n", cat.ID, err)
 		}
 	}

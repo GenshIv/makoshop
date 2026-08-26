@@ -18,7 +18,7 @@ type ProductRepo struct {
 	promoPlanRepo     *PromoPlanRepo
 	promoLogRepo      *PromoLogRepo
 	turboSearch       *TurboProductSearch
-	scuPageSearch     *SCUPageSearch
+	eanPageSearch     *EANPageSearch
 
 	// Single-writer channel for batch operations
 	batchChan chan batchTask
@@ -59,9 +59,9 @@ func (r *ProductRepo) SetTurboSearch(t *TurboProductSearch) {
 	r.turboSearch = t
 }
 
-// SetSCUPageSearch attaches a SCUPageSearch instance to this repo.
-func (r *ProductRepo) SetSCUPageSearch(s *SCUPageSearch) {
-	r.scuPageSearch = s
+// SetEANPageSearch attaches a EANPageSearch instance to this repo.
+func (r *ProductRepo) SetEANPageSearch(s *EANPageSearch) {
+	r.eanPageSearch = s
 }
 
 // TurboSearch returns the attached TurboProductSearch (may be nil).
@@ -383,6 +383,122 @@ func (r *ProductRepo) GetOrCreateByKey(p *model.Product) (int64, bool, error) {
 	return p.ID, true, nil
 }
 
+// productEANKeyPrefix — префикс для индекса уникальности оффера (EAN+Name+Company).
+const productEANKeyPrefix = "product_ean:"
+
+// productEANKey строит ключ уникальности оффера: EAN + нормализованное имя + CompanyID.
+// Если EAN пустой (нет штрихкода), используется только имя + компания.
+func productEANKey(ean, normalizedName string, companyID int64) string {
+	return fmt.Sprintf("%s%s|%s|%d", productEANKeyPrefix, ean, normalizedName, companyID)
+}
+
+// GetOrCreateByEAN находит оффер по ключу (EAN, нормализованное имя, компания)
+// либо создаёт новый. Если найден — обновляет цену, старую цену, остаток,
+// изображения и статус (task 5: обновление, а не дублирование).
+// Возвращает (productID, isNew, error).
+func (r *ProductRepo) GetOrCreateByEAN(p *model.Product, normalizedName string) (int64, bool, error) {
+	if p.CompanyID == 0 {
+		if err := r.Create(p); err != nil {
+			return 0, false, err
+		}
+		return p.ID, true, nil
+	}
+
+	keyPath := productEANKey(p.EAN, normalizedName, p.CompanyID)
+
+	// Проверяем, есть ли уже такой оффер
+	data, err := r.store.db.TurboRawRead(keyPath)
+	if err == nil && len(data) > 0 {
+		var existingID int64
+		_, _ = fmt.Sscanf(string(data), "%d", &existingID)
+
+		existing, err := r.Get(existingID)
+		if err == nil {
+			// Обновляем поля из нового прайса
+			changed := false
+			if existing.Price != p.Price {
+				existing.Price = p.Price
+				changed = true
+			}
+			if existing.PreviousPrice != p.PreviousPrice {
+				existing.PreviousPrice = p.PreviousPrice
+				changed = true
+			}
+			if p.StockQty != 0 {
+				existing.StockQty = p.StockQty
+				changed = true
+			}
+			if len(p.Images) > 0 {
+				existing.Images = p.Images
+				changed = true
+			}
+			if p.Status != "" {
+				existing.Status = p.Status
+				changed = true
+			}
+			if p.Description != "" {
+				existing.Description = p.Description
+				changed = true
+			}
+			if p.Brand != "" {
+				existing.Brand = p.Brand
+				changed = true
+			}
+			// Обновляем EAN и имя (могли поправиться в прайсе)
+			if p.EAN != "" && p.EAN != existing.EAN {
+				existing.EAN = p.EAN
+				changed = true
+			}
+			if p.Name != "" && p.Name != existing.Name {
+				existing.Name = p.Name
+				changed = true
+			}
+			if len(p.Attributes) > 0 {
+				existing.Attributes = mergeAttributesOverwrite(existing.Attributes, p.Attributes)
+				changed = true
+			}
+			if changed {
+				existing.UpdatedAt = time.Now().Unix()
+				_ = r.store.DocPut(KeyProduct(existingID), MarshalProduct(*existing))
+			}
+			return existingID, false, nil
+		}
+	}
+
+	// Оффера нет — создаём новый
+	if err := r.Create(p); err != nil {
+		return 0, false, err
+	}
+
+	// Записываем уникальный ключ
+	_ = r.store.TurboWrite(keyPath, []byte(fmt.Sprintf("%d", p.ID)))
+
+	return p.ID, true, nil
+}
+
+// mergeAttributesOverwrite объединяет существующие атрибуты с новыми (новые переопределяют).
+func mergeAttributesOverwrite(existing, incoming []model.KeyValue) []model.KeyValue {
+	if len(incoming) == 0 {
+		return existing
+	}
+	if len(existing) == 0 {
+		return incoming
+	}
+	idx := make(map[string]int, len(existing))
+	for i, kv := range existing {
+		idx[kv.Key] = i
+	}
+	for _, kv := range incoming {
+		if i, ok := idx[kv.Key]; ok {
+			existing[i].Value = kv.Value
+		} else {
+			existing = append(existing, kv)
+			idx[kv.Key] = len(existing) - 1
+		}
+	}
+	return existing
+}
+
 func (r *ProductRepo) Delete(id int64) error {
 	p, err := r.Get(id)
 	if err != nil {
@@ -401,7 +517,7 @@ func (r *ProductRepo) Delete(id int64) error {
 	return nil
 }
 
-// DeleteProductByID deletes a product by ID, removing it from all indexes and its SCUPage.
+// DeleteProductByID deletes a product by ID, removing it from all indexes and its EANPage.
 // Returns error if product not found.
 func (r *ProductRepo) DeleteProductByID(id int64) error {
 	p, err := r.Get(id)
@@ -417,10 +533,10 @@ func (r *ProductRepo) DeleteProductByID(id int64) error {
 	// Remove from product_list
 	_, _ = r.store.db.TurboDeleteIndexString(TurboKeyProductList, KeyProduct(id))
 
-	// Remove from SCUPage if linked
-	if r.scuPageSearch != nil && p.SCU != "" {
-		if sp, err := r.scuPageSearch.repo.GetBySCU(p.SCU); err == nil {
-			_ = r.scuPageSearch.repo.RemoveProduct(sp.ID, id)
+	// Remove from EANPage if linked
+	if r.eanPageSearch != nil && p.EAN != "" {
+		if sp, err := r.eanPageSearch.repo.GetByEAN(p.EAN); err == nil {
+			_ = r.eanPageSearch.repo.RemoveProduct(sp.ID, id)
 		}
 	}
 
@@ -479,21 +595,21 @@ func (r *ProductRepo) DeleteAllProducts() error {
 	_ = r.store.TurboWrite(TurboKeyProductList, []byte{})
 
 	// Now delete all SCU pages (they become empty without products)
-	if r.scuPageSearch != nil {
-		_ = r.deleteAllSCUPages()
+	if r.eanPageSearch != nil {
+		_ = r.deleteAllEANPages()
 	}
 
 	fmt.Println("[DELETE-ALL] All products and SCU pages deleted.")
 	return nil
 }
 
-// deleteAllSCUPages removes all SCU pages and their indexes.
-func (r *ProductRepo) deleteAllSCUPages() error {
-	if r.scuPageSearch == nil {
+// deleteAllEANPages removes all SCU pages and their indexes.
+func (r *ProductRepo) deleteAllEANPages() error {
+	if r.eanPageSearch == nil {
 		return nil
 	}
 
-	tokens, err := r.store.db.TurboGetIndexTokens(TurboKeySCUPageList)
+	tokens, err := r.store.db.TurboGetIndexTokens(TurboKeyEANPageList)
 	if err != nil || len(tokens) == 0 {
 		return nil
 	}
@@ -503,24 +619,24 @@ func (r *ProductRepo) deleteAllSCUPages() error {
 	// Get all SCU pages at once
 	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
-		return fmt.Errorf("multi get scupages: %w", err)
+		return fmt.Errorf("multi get eanpages: %w", err)
 	}
 
 	for _, doc := range docs {
 		if len(doc) == 0 {
 			continue
 		}
-		sp, err := UnmarshalSCUPage(doc)
+		sp, err := UnmarshalEANPage(doc)
 		if err != nil {
 			continue
 		}
 		id := sp.ID
-		// Unindex from SCUPageSearch turbo indexes
-		if err := r.scuPageSearch.UnindexSCUPage(sp); err != nil {
-			fmt.Printf("[DELETE-ALL] WARN: unindex scupage %d: %v\n", id, err)
+		// Unindex from EANPageSearch turbo indexes
+		if err := r.eanPageSearch.UnindexEANPage(sp); err != nil {
+			fmt.Printf("[DELETE-ALL] WARN: unindex eanpage %d: %v\n", id, err)
 		}
 		// Delete SCU page doc and its indexes
-		_ = r.scuPageSearch.repo.Delete(id)
+		_ = r.eanPageSearch.repo.Delete(id)
 	}
 
 	fmt.Println("[DELETE-ALL] All SCU pages deleted.")
@@ -575,7 +691,7 @@ type (
 		IsFilterable bool     `json:"is_filterable,omitempty"`
 	}
 
-	SCUListRespData struct {
+	EANListRespData struct {
 		Items         []silentjson.RawMessage `json:"items,omitempty"`
 		Total         int64                   `json:"total"`
 		Page          int                     `json:"page"`
@@ -587,7 +703,7 @@ type (
 		Subcategories silentjson.RawMessage   `json:"subcategories,omitempty"` // precomputed JSON []byte, no struct->json
 		Facets        *Facets                 `json:"facets,omitempty"`
 		Products      []model.Product         `json:"products,omitempty"`
-		SCUPage       *model.SCUPage          `json:"scu_page,omitempty"`
+		EANPage       *model.EANPage          `json:"scu_page,omitempty"`
 		TreePathFull  []CategoryTreeNode      `json:"tree_path_full,omitempty"`
 		SEOURL        string                  `json:"seo_url,omitempty"`
 	}
@@ -638,8 +754,8 @@ func (r *ProductRepo) List(params ListParams) ([]silentjson.RawMessage, int64, e
 }
 
 // ListWithFacets returns paginated list with optional facets.
-// Now uses SCUPageSearch as primary backend (catalog shows SCU pages, not individual products).
-func (r *ProductRepo) ListWithFacets(params ListParams) (*SCUListRespData, error) {
+// Now uses EANPageSearch as primary backend (catalog shows SCU pages, not individual products).
+func (r *ProductRepo) ListWithFacets(params ListParams) (*EANListRespData, error) {
 	if params.Page < 1 {
 		params.Page = 1
 	}
@@ -650,9 +766,9 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*SCUListRespData, error
 		params.Limit = 200
 	}
 
-	// Primary: use SCUPageSearch (catalog shows SCU pages)
-	if r.scuPageSearch != nil {
-		scuParams := SCUPageListParams{
+	// Primary: use EANPageSearch (catalog shows SCU pages)
+	if r.eanPageSearch != nil {
+		eanParams := EANPageListParams{
 			Q:           params.Q,
 			CategoryID:  params.CategoryID,
 			CompanyID:   params.CompanyID,
@@ -663,12 +779,12 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*SCUListRespData, error
 			Limit:       params.Limit,
 		}
 
-		result, err := r.scuPageSearch.ListWithTurbo(scuParams)
+		result, err := r.eanPageSearch.ListWithTurbo(eanParams)
 		if err != nil {
-			return nil, fmt.Errorf("scupage list: %w", err)
+			return nil, fmt.Errorf("eanpage list: %w", err)
 		}
 
-		// Return raw SCUPage JSON directly (front-end will parse it)
+		// Return raw EANPage JSON directly (front-end will parse it)
 		//items := make([]ProductListItem, 0, len(result.Items))
 		//for _, raw := range result.Items {
 		//	var m map[string]any
@@ -678,7 +794,7 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*SCUListRespData, error
 		//	item := ProductListItem{
 		//		ID:       toInt64(m["id"]),
 		//		Name:     toString(m["title"]),
-		//		SKU:      toString(m["scu"]),
+		//		SKU:      toString(m["ean"]),
 		//		Brand:    toString(m["brand"]),
 		//		Currency: toString(m["currency"]),
 		//		Status:   model.ProductStatusActive,
@@ -706,7 +822,7 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*SCUListRespData, error
 		//	items = append(items, item)
 		//}
 
-		return &SCUListRespData{
+		return &EANListRespData{
 			Items: result.Items,
 			Total: result.Total,
 			Page:  result.Page,
@@ -756,7 +872,7 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*SCUListRespData, error
 			}
 		}
 
-		return &SCUListRespData{
+		return &EANListRespData{
 			Items:  result.Items,
 			Total:  result.Total,
 			Page:   result.Page,
@@ -765,7 +881,7 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*SCUListRespData, error
 		}, nil
 	}
 
-	return &SCUListRespData{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
+	return &EANListRespData{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 }
 
 func toFloat64(v interface{}) (float64, bool) {

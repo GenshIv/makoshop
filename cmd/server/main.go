@@ -183,6 +183,56 @@ func generateRandomPassword(length int) string {
 	return string(b)
 }
 
+// wantsHTML returns true if the request is from a browser navigation
+// (wants HTML) rather than an API call (wants JSON).
+func wantsHTML(r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	accept := r.Header.Get("Accept")
+	return strings.Contains(accept, "text/html")
+}
+
+// serveSPA serves the frontend index.html for SPA routes.
+func serveSPA(w http.ResponseWriter, r *http.Request) {
+	index, err := os.ReadFile("frontend/dist/index.html")
+	if err != nil {
+		// Fallback to src/index.html in dev mode
+		index, err = os.ReadFile("frontend/index.html")
+		if err != nil {
+			http.Error(w, "frontend not built", http.StatusServiceUnavailable)
+			return
+		}
+	}
+	w.Header().Set("Content-Type", "text/html")
+	// HEAD requests: send headers only, no body
+	if r.Method != http.MethodHead {
+		w.Write(index)
+	}
+}
+
+// spaAware wraps a handler to serve the SPA if the request wants HTML.
+func spaAware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if wantsHTML(r) {
+			serveSPA(w, r)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// spaAwareHandler wraps an http.Handler to serve the SPA if the request wants HTML.
+func spaAwareHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if wantsHTML(r) {
+			serveSPA(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	// Automatically load .env (if present) so the server picks up its
 	// configuration without the operator exporting variables manually.
@@ -321,9 +371,9 @@ func main() {
 	// --- Admin users endpoints (requires admin role) ---
 
 	// GET /admin/users
-	mux.Handle("/admin/users", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/admin/users", spaAwareHandler(jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHandlers.HandleAdminUsersList(w, r)
-	}), model.RoleAdmin))
+	}), model.RoleAdmin)))
 
 	// GET/PATCH /admin/users/{id}
 	mux.Handle("/admin/users/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -340,7 +390,7 @@ func main() {
 	// --- Admin companies endpoints ---
 
 	// GET/POST /admin/companies
-	mux.Handle("/admin/companies", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/admin/companies", spaAwareHandler(jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			authHandlers.HandleAdminCompaniesList(w, r)
@@ -349,7 +399,7 @@ func main() {
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
-	}), model.RoleAdmin))
+	}), model.RoleAdmin)))
 
 	// POST /admin/companies/create-test — create test companies
 	mux.Handle("/admin/companies/create-test", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -377,16 +427,62 @@ func main() {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
+			if strings.HasSuffix(path, "/export") {
+				if r.Method == http.MethodGet {
+					authHandlers.HandleAdminCompanyExport(w, r)
+					return
+				}
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
 			switch r.Method {
 			case http.MethodGet:
 				authHandlers.HandleAdminCompanyGet(w, r)
 			case http.MethodPatch:
 				authHandlers.HandleAdminCompanyUpdate(w, r)
+			case http.MethodDelete:
+				authHandlers.HandleAdminCompanyDelete(w, r)
 			default:
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
 		}), model.RoleAdmin).ServeHTTP(w, r)
 	})
+
+	// POST /admin/companies/import — import company config from JSON
+	mux.Handle("/admin/companies/import", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		authHandlers.HandleAdminCompanyImport(w, r)
+	}), model.RoleAdmin))
+
+	// GET /admin/companies/export-all — export all companies as JSON
+	mux.Handle("/admin/companies/export-all", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		authHandlers.HandleAdminCompaniesExportAll(w, r)
+	}), model.RoleAdmin))
+
+	// POST /admin/companies/import-all — import all companies from JSON
+	mux.Handle("/admin/companies/import-all", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		authHandlers.HandleAdminCompaniesImportAll(w, r)
+	}), model.RoleAdmin))
+
+	// GET /admin/price-sources — list price source configs
+	mux.Handle("/admin/price-sources", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		authHandlers.HandleAdminPriceSourcesList(w, r)
+	}), model.RoleAdmin))
 
 	// --- Admin Analytics ---
 
@@ -445,6 +541,15 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}), model.RoleAdmin))
 
+	// POST /admin/import-nokaut — import from Nokaut XML price files in prices/
+	mux.Handle("/admin/import-nokaut", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			h.HandleAdminImportNokaut(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}), model.RoleAdmin))
+
 	// POST /admin/products/import
 	mux.Handle("/admin/products/import", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -463,10 +568,10 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}), model.RoleAdmin))
 
-	// POST /admin/rebuild-scupages — rebuild all SCU pages from products
-	mux.Handle("/admin/rebuild-scupages", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// POST /admin/rebuild-eanpages — rebuild all SCU pages from products
+	mux.Handle("/admin/rebuild-eanpages", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			h.HandleAdminRebuildSCUPages(w, r)
+			h.HandleAdminRebuildEANPages(w, r)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -490,19 +595,19 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}), model.RoleAdmin))
 
-	// POST /admin/rebuild-scupage-indexes — index all SCU pages into SCUPageSearch
-	mux.Handle("/admin/rebuild-scupage-indexes", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// POST /admin/rebuild-eanpage-indexes — index all SCU pages into EANPageSearch
+	mux.Handle("/admin/rebuild-eanpage-indexes", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			h.HandleAdminRebuildSCUPageIndexes(w, r)
+			h.HandleAdminRebuildEANPageIndexes(w, r)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}), model.RoleAdmin))
 
-	// POST /admin/rebuild-scupage-sort-indexes — rebuild sort indexes for SCU pages
-	mux.Handle("/admin/rebuild-scupage-sort-indexes", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// POST /admin/rebuild-eanpage-sort-indexes — rebuild sort indexes for SCU pages
+	mux.Handle("/admin/rebuild-eanpage-sort-indexes", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			h.HandleAdminRebuildSCUPageSortIndexes(w, r)
+			h.HandleAdminRebuildEANPageSortIndexes(w, r)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -565,7 +670,7 @@ func main() {
 	// --- Company settings: Payment Methods (temporarily disabled) ---
 
 	// GET /admin/payment-methods (public)
-	mux.HandleFunc("/admin/payment-methods", paymentsDisabledHandler.ServeHTTP)
+	mux.Handle("/admin/payment-methods", spaAwareHandler(paymentsDisabledHandler))
 
 	// GET /admin/payment-methods/{id} (public), PATCH/DELETE (admin)
 	mux.Handle("/admin/payment-methods/", paymentsDisabledHandler)
@@ -573,7 +678,7 @@ func main() {
 	// --- Company settings: Delivery Times ---
 
 	// GET /admin/delivery-times (public)
-	mux.HandleFunc("/admin/delivery-times", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/admin/delivery-times", spaAwareHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			h.HandleDeliveryTimesList(w, r)
 			return
@@ -586,7 +691,7 @@ func main() {
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	})
+	})))
 
 	// GET /admin/delivery-times/{id} (public), PATCH/DELETE (admin)
 	mux.Handle("/admin/delivery-times/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -609,7 +714,7 @@ func main() {
 	// --- Company settings: Installment Plans ---
 
 	// GET /admin/installment-plans (public)
-	mux.HandleFunc("/admin/installment-plans", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/admin/installment-plans", spaAwareHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			h.HandleInstallmentPlansList(w, r)
 			return
@@ -622,7 +727,7 @@ func main() {
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	})
+	})))
 
 	// GET /admin/installment-plans/{id} (public), PATCH/DELETE (admin)
 	mux.Handle("/admin/installment-plans/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -734,7 +839,7 @@ func main() {
 		h.HandleCategoryGet(w, r)
 	})
 
-	mux.HandleFunc("/admin/categories", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/admin/categories", spaAware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			// GET /admin/categories/export
@@ -753,10 +858,16 @@ func main() {
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}))
 
 	mux.HandleFunc("/admin/categories/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
+
+		// /admin/categories/reorder — bulk drag-and-drop reorder
+		if strings.HasSuffix(path, "/reorder") {
+			h.HandleAdminCategoriesReorder(w, r)
+			return
+		}
 
 		// /admin/categories/{id}/attributes
 		if strings.HasSuffix(path, "/attributes") {
@@ -859,12 +970,12 @@ func main() {
 		}
 
 		// /landing/scu/{scu}
-		if parts[0] == "scu" && len(parts) >= 2 {
+		if parts[0] == "ean" && len(parts) >= 2 {
 			if r.Method != http.MethodGet {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			h.HandleLandingPageBySCU(w, r)
+			h.HandleLandingPageByEAN(w, r)
 			return
 		}
 
@@ -889,6 +1000,16 @@ func main() {
 		}
 
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	// Company landing pages (public)
+	// GET /company/{slug}
+	mux.HandleFunc("/company/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.HandleCompanyLanding(w, r)
 	})
 
 	// Admin landing pages
@@ -918,7 +1039,7 @@ func main() {
 		}
 	}), model.RoleAdmin))
 
-	// SCUPage SEO pages
+	// EANPage SEO pages
 	// GET /shop — root catalog
 	// GET /shop/{category_tree}/{slug}
 	mux.HandleFunc("/shop", func(w http.ResponseWriter, r *http.Request) {
@@ -926,14 +1047,14 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		h.HandleSCUPageByPath(w, r)
+		h.HandleEANPageByPath(w, r)
 	})
 	mux.HandleFunc("/shop/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		h.HandleSCUPageByPath(w, r)
+		h.HandleEANPageByPath(w, r)
 	})
 
 	// Attribute values (turbo-based)
@@ -974,58 +1095,58 @@ func main() {
 		}
 	}), model.RoleAdmin))
 
-	// --- SCUPage Admin ---
+	// --- EANPage Admin ---
 
-	// GET /admin/scupages
-	mux.Handle("/admin/scupages", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// GET /admin/eanpages
+	mux.Handle("/admin/eanpages", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		h.HandleAdminSCUPageList(w, r)
+		h.HandleAdminEANPageList(w, r)
 	}), model.RoleAdmin))
 
-	// GET/PATCH/DELETE /admin/scupages/{id}
-	mux.Handle("/admin/scupages/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// GET/PATCH/DELETE /admin/eanpages/{id}
+	mux.Handle("/admin/eanpages/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
-		// POST /admin/scupages/catalogize-all
-		if path == "/admin/scupages/catalogize-all" && r.Method == http.MethodPost {
-			h.HandleAdminSCUPageCatalogizeAll(w, r)
+		// POST /admin/eanpages/catalogize-all
+		if path == "/admin/eanpages/catalogize-all" && r.Method == http.MethodPost {
+			h.HandleAdminEANPageCatalogizeAll(w, r)
 			return
 		}
 
-		// POST /admin/scupages/rebuild-tokens
-		if path == "/admin/scupages/rebuild-tokens" && r.Method == http.MethodPost {
-			h.HandleAdminSCUPageRebuildTokens(w, r)
+		// POST /admin/eanpages/rebuild-tokens
+		if path == "/admin/eanpages/rebuild-tokens" && r.Method == http.MethodPost {
+			h.HandleAdminEANPageRebuildTokens(w, r)
 			return
 		}
 
-		// POST /admin/scupages/rebuild-tokens/{id}
-		if strings.HasPrefix(path, "/admin/scupages/rebuild-tokens/") && r.Method == http.MethodPost {
-			h.HandleAdminSCUPageRebuildToken(w, r)
+		// POST /admin/eanpages/rebuild-tokens/{id}
+		if strings.HasPrefix(path, "/admin/eanpages/rebuild-tokens/") && r.Method == http.MethodPost {
+			h.HandleAdminEANPageRebuildToken(w, r)
 			return
 		}
 
-		// POST /admin/scupages/recalculate-product-counts
-		if path == "/admin/scupages/recalculate-product-counts" && r.Method == http.MethodPost {
-			h.HandleAdminSCUPageRecalculateCounts(w, r)
+		// POST /admin/eanpages/recalculate-product-counts
+		if path == "/admin/eanpages/recalculate-product-counts" && r.Method == http.MethodPost {
+			h.HandleAdminEANPageRecalculateCounts(w, r)
 			return
 		}
 
-		// POST /admin/scupages/recalculate-min-prices
-		if path == "/admin/scupages/recalculate-min-prices" && r.Method == http.MethodPost {
-			h.HandleAdminSCUPageRecalculateMinPrices(w, r)
+		// POST /admin/eanpages/recalculate-min-prices
+		if path == "/admin/eanpages/recalculate-min-prices" && r.Method == http.MethodPost {
+			h.HandleAdminEANPageRecalculateMinPrices(w, r)
 			return
 		}
 
 		switch r.Method {
 		case http.MethodGet:
-			h.HandleAdminSCUPageGet(w, r)
+			h.HandleAdminEANPageGet(w, r)
 		case http.MethodPatch:
-			h.HandleAdminSCUPageUpdate(w, r)
+			h.HandleAdminEANPageUpdate(w, r)
 		case http.MethodDelete:
-			h.HandleAdminSCUPageDelete(w, r)
+			h.HandleAdminEANPageDelete(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -1250,9 +1371,9 @@ func main() {
 	}), model.RoleAdmin))
 
 	// GET /admin/stats — aggregated request metrics
-	mux.Handle("/admin/stats", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/admin/stats", spaAwareHandler(jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h.HandleAdminStats(w, r)
-	}), model.RoleAdmin))
+	}), model.RoleAdmin)))
 
 	// --- Visit Statistics ---
 
@@ -1372,9 +1493,9 @@ func main() {
 
 	// SPA fallback: for any unmatched path that wants HTML, serve index.html
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Handle /sitemap-scupage-{N}.xml (Go ServeMux doesn't match this pattern directly)
-		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/sitemap-scupage") {
-			h.HandleSitemapSCUPage(w, r)
+		// Handle /sitemap-eanpage-{N}.xml (Go ServeMux doesn't match this pattern directly)
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/sitemap-eanpage") {
+			h.HandleSitemapEANPage(w, r)
 			return
 		}
 

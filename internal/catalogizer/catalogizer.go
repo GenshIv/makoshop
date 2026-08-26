@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/GenshIv/intHache"
 	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/model"
@@ -46,39 +47,44 @@ type CatalogizeResult struct {
 // BuildTokensForCategory builds token index for a single category from its anchor_keywords.
 // Anchor keywords are already stems (root words). Hash each keyword with the same tokenizer.
 func (c *Catalogizer) BuildTokensForCategory(cat *model.Category) error {
-	return nil
-	//if cat == nil || !cat.IsActive || len(cat.AnchorKeywords) == 0 {
-	//	if err := c.store.TurboWrite(turboKeyCatTokens+fmt.Sprintf("%d", cat.ID), []byte{}); err != nil {
-	//		return fmt.Errorf("clear tokens for cat %d: %w", cat.ID, err)
-	//	}
-	//	return nil
-	//}
-	//
-	//// Hash each keyword directly (no double tokenization)
-	//hashSet := make(map[uint64]bool)
-	//for _, kw := range cat.AnchorKeywords {
-	//	if kw == "" {
-	//		continue
-	//	}
-	//	// Use same tokenization as for product names
-	//	tokens := tokenizer.Tokenize(kw)
-	//	for _, t := range tokens {
-	//		hashSet[t.Hash] = true
-	//	}
-	//}
-	//
-	//var hashes []uint64
-	//for h := range hashSet {
-	//	hashes = append(hashes, h)
-	//}
-	//sort.Slice(hashes, func(i, j int) bool { return hashes[i] < hashes[j] })
-	//
-	//if len(hashes) == 0 {
-	//	return c.store.TurboWrite(turboKeyCatTokens+fmt.Sprintf("%d", cat.ID), []byte{})
-	//}
-	//
-	//buf := makodb.TurboBinaryNew(hashes)
-	//return c.store.TurboWrite(turboKeyCatTokens+fmt.Sprintf("%d", cat.ID), buf)
+	if cat == nil || !cat.IsActive || len(cat.AnchorKeywords) == 0 {
+		if err := c.store.TurboWrite(turboKeyCatTokens+fmt.Sprintf("%d", cat.ID), []byte{}); err != nil {
+			return fmt.Errorf("clear tokens for cat %d: %w", cat.ID, err)
+		}
+		return nil
+	}
+
+	// Hash each keyword directly (no double tokenization)
+	hashSet := make(map[uint64]bool)
+	for _, kw := range cat.AnchorKeywords {
+		if kw == "" {
+			continue
+		}
+		// Use same tokenization as for product names
+		tokens := tokenizer.Tokenize(kw)
+		for _, t := range tokens {
+			hashSet[t.Hash] = true
+		}
+	}
+
+	var hashes []uint64
+	for h := range hashSet {
+		hashes = append(hashes, h)
+	}
+	sort.Slice(hashes, func(i, j int) bool { return hashes[i] < hashes[j] })
+
+	if len(hashes) == 0 {
+		return c.store.TurboWrite(turboKeyCatTokens+fmt.Sprintf("%d", cat.ID), []byte{})
+	}
+
+	// Convert uint64 to key128 for makodb
+	key128s := make([]intHache.Key128, len(hashes))
+	for i, h := range hashes {
+		key128s[i] = intHache.Key128{h, 0}
+	}
+
+	buf := makodb.TurboBinaryNew(key128s)
+	return c.store.TurboWrite(turboKeyCatTokens+fmt.Sprintf("%d", cat.ID), buf)
 }
 
 // RebuildAllCategoryTokens rebuilds token indexes for all active categories.
@@ -133,8 +139,14 @@ func (c *Catalogizer) CatalogizeProduct(p *model.Product) (*CatalogizeResult, er
 			continue
 		}
 
-		catTokens := makodb.TurboUnsafeReadTokens(data)
-		overlap := len(catTokens) // tokenizer.CountTokenOverlap(productHashes, catTokens)
+		catTokensKey128 := makodb.TurboUnsafeReadTokens(data)
+		// Convert key128 to uint64
+		catTokens := make([]uint64, len(catTokensKey128))
+		for i, t := range catTokensKey128 {
+			catTokens[i] = t[0]
+		}
+
+		overlap := tokenizer.CountTokenOverlap(productHashes, catTokens)
 
 		if overlap <= 0 {
 			continue
@@ -142,9 +154,9 @@ func (c *Catalogizer) CatalogizeProduct(p *model.Product) (*CatalogizeResult, er
 
 		var matched []string
 		catSet := make(map[uint64]bool)
-		//for _, h := range catTokens {
-		//	catSet[h] = true
-		//}
+		for _, h := range catTokens {
+			catSet[h] = true
+		}
 		for _, h := range productHashes {
 			if catSet[h] && productWords[h] != "" {
 				matched = append(matched, productWords[h])
@@ -200,8 +212,14 @@ func (c *Catalogizer) MatchProductToCategories(name string) []CatalogizeResult {
 			continue
 		}
 
-		catTokens := makodb.TurboUnsafeReadTokens(data)
-		overlap := len(catTokens) // tokenizer.CountTokenOverlap(hashes, catTokens)
+		catTokensKey128 := makodb.TurboUnsafeReadTokens(data)
+		// Convert key128 to uint64
+		catTokens := make([]uint64, len(catTokensKey128))
+		for i, t := range catTokensKey128 {
+			catTokens[i] = t[0]
+		}
+
+		overlap := tokenizer.CountTokenOverlap(hashes, catTokens)
 
 		if overlap <= 0 {
 			continue
@@ -209,9 +227,9 @@ func (c *Catalogizer) MatchProductToCategories(name string) []CatalogizeResult {
 
 		var matched []string
 		catSet := make(map[uint64]bool)
-		//for _, h := range catTokens {
-		//	catSet[h] = true
-		//}
+		for _, h := range catTokens {
+			catSet[h] = true
+		}
 		for _, h := range hashes {
 			if catSet[h] && words[h] != "" {
 				matched = append(matched, words[h])
@@ -284,10 +302,10 @@ func StemWord(word string) string {
 	return word
 }
 
-// BuildSCUTokens builds a Turbo index of tokens for an SCU page.
+// BuildEANTokens builds a Turbo index of tokens for an SCU page.
 // This is used with TurboTopNByIntersection for fast catalogization.
 // Uses Title + Description + Content + Attributes for better token coverage.
-func (c *Catalogizer) BuildSCUTokens(scuPageID int64, name string) error {
+func (c *Catalogizer) BuildEANTokens(scuPageID int64, name string) error {
 	tokens := tokenizer.Tokenize(name)
 	if len(tokens) == 0 {
 		return nil
@@ -311,11 +329,11 @@ func (c *Catalogizer) BuildSCUTokens(scuPageID int64, name string) error {
 	return nil
 }
 
-// CatalogizeSCUPageByIntersection uses TurboTopNByIntersection to find the best category
+// CatalogizeEANPageByIntersection uses TurboTopNByIntersection to find the best category
 // for an SCU page based on token overlap with category anchor_keywords.
 // Returns the best category ID or 0 if no match. Returns no error for missing keys.
-func (c *Catalogizer) CatalogizeSCUPageByIntersection(scuPageID int64) (int64, error) {
-	scuKey := turboKeySCUTokens + fmt.Sprintf("%d", scuPageID)
+func (c *Catalogizer) CatalogizeEANPageByIntersection(scuPageID int64) (int64, error) {
+	eanKey := turboKeySCUTokens + fmt.Sprintf("%d", scuPageID)
 
 	// Collect all active category token keys
 	categories, err := c.categoryRepo.ListAll()
@@ -339,7 +357,7 @@ func (c *Catalogizer) CatalogizeSCUPageByIntersection(scuPageID int64) (int64, e
 	}
 
 	// Use TurboTopNByIntersection to find categories with most overlapping tokens
-	results, err := c.store.DB().TurboTopNByIntersection(scuKey, candidateKeys, 10)
+	results, err := c.store.DB().TurboTopNByIntersection(eanKey, candidateKeys, 10)
 	if err != nil {
 		// Missing key (no tokens for this SCU page) is not an error
 		if strings.Contains(err.Error(), "key not found") {

@@ -38,19 +38,19 @@ func TestBenchListWithTurbo(t *testing.T) {
 	}
 	defer store.Close()
 
-	repo := NewSCUPageRepo(store)
+	repo := NewEANPageRepo(store)
 	categoryRepo := NewCategoryRepo(store)
 	promoCampaignRepo := NewPromoCampaignRepo(store)
 	promoPlanRepo := NewPromoPlanRepo(store)
 	promoLogRepo := NewPromoLogRepo(store)
 	productRepo := NewProductRepo(store, promoCampaignRepo, promoPlanRepo, promoLogRepo)
 
-	search := NewSCUPageSearch(store.DB(), repo, productRepo, categoryRepo, true)
+	search := NewEANPageSearch(store.DB(), repo, productRepo, categoryRepo, true)
 
 	// Запускаем профилирование
 
 	// CPU profile
-	cpuPath := filepath.Join(pprofDir, "scupage_list_cpu.prof")
+	cpuPath := filepath.Join(pprofDir, "eanpage_list_cpu.prof")
 	cpuFile, err := os.Create(cpuPath)
 	if err != nil {
 		t.Fatalf("create cpu profile: %v", err)
@@ -71,7 +71,7 @@ func TestBenchListWithTurbo(t *testing.T) {
 	cpuFile.Close()
 
 	// Memory profile
-	memPath := filepath.Join(pprofDir, "scupage_list_mem.prof")
+	memPath := filepath.Join(pprofDir, "eanpage_list_mem.prof")
 	memFile, err := os.Create(memPath)
 	if err != nil {
 		t.Fatalf("create mem profile: %v", err)
@@ -81,7 +81,7 @@ func TestBenchListWithTurbo(t *testing.T) {
 	memFile.Close()
 
 	// Mutex profile
-	mutexPath := filepath.Join(pprofDir, "scupage_list_mutex.prof")
+	mutexPath := filepath.Join(pprofDir, "eanpage_list_mutex.prof")
 	mutexFile, err := os.Create(mutexPath)
 	if err != nil {
 		t.Fatalf("create mutex profile: %v", err)
@@ -93,7 +93,7 @@ func TestBenchListWithTurbo(t *testing.T) {
 	mutexFile.Close()
 
 	// Block profile
-	blockPath := filepath.Join(pprofDir, "scupage_list_block.prof")
+	blockPath := filepath.Join(pprofDir, "eanpage_list_block.prof")
 	blockFile, err := os.Create(blockPath)
 	if err != nil {
 		t.Fatalf("create block profile: %v", err)
@@ -112,7 +112,7 @@ func TestBenchListWithTurbo(t *testing.T) {
 	fmt.Printf("\nView with: go tool pprof -http=:8080 %s\n", cpuPath)
 }
 
-func benchListWithTurbo(t *testing.T, search *SCUPageSearch) {
+func benchListWithTurbo(t *testing.T, search *EANPageSearch) {
 	// Сначала узнаем, какие категории есть
 	cats, err := search.categoryRepo.ListAll()
 	if err != nil {
@@ -132,12 +132,12 @@ func benchListWithTurbo(t *testing.T, search *SCUPageSearch) {
 	// Пытаемся разные варианты запросов
 	testCases := []struct {
 		name   string
-		params SCUPageListParams
+		params EANPageListParams
 	}{
-		{"no_filters", SCUPageListParams{Sort: "price_asc", Page: 1, Limit: 50}},
-		{"text_only", SCUPageListParams{Q: "телефон", Sort: "price_asc", Page: 1, Limit: 50}},
-		{"cat_1", SCUPageListParams{CategoryID: 1, Sort: "price_asc", Page: 1, Limit: 50}},
-		{"cat_1_text", SCUPageListParams{CategoryID: 1, Q: "телефон", Sort: "price_asc", Page: 1, Limit: 50}},
+		{"no_filters", EANPageListParams{Sort: "price_asc", Page: 1, Limit: 50}},
+		{"text_only", EANPageListParams{Q: "телефон", Sort: "price_asc", Page: 1, Limit: 50}},
+		{"cat_1", EANPageListParams{CategoryID: 1, Sort: "price_asc", Page: 1, Limit: 50}},
+		{"cat_1_text", EANPageListParams{CategoryID: 1, Q: "телефон", Sort: "price_asc", Page: 1, Limit: 50}},
 	}
 
 	for _, tc := range testCases {
@@ -150,7 +150,7 @@ func benchListWithTurbo(t *testing.T, search *SCUPageSearch) {
 	}
 
 	// Если есть результаты — запускаем бенчмарк на самом быстром запросе
-	var bestParams SCUPageListParams
+	var bestParams EANPageListParams
 	var bestTotal int64 = -1
 
 	for _, tc := range testCases {

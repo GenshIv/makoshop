@@ -1,0 +1,1094 @@
+# Полная структура каталогов (дерево категорий)
+
+Дерево категорий из прайсов Nokaut. Число в скобках — количество товаров в этой категории.
+
+## Сводка
+
+| Компания | Офферов | Категорий (узлов) | Разделитель |
+|----------|---------|-------------------|-------------|
+| Diablo Chairs | 162 | 26 | ` > ` |
+| Nexus | 43 | 6 | `— (плоский)` |
+| RoboJet | 51 | 14 | `— (плоский)` |
+| elektroguru.com  | 661 | 58 | `\\` |
+| eta-sklep.pl | 378 | 42 | `\\` |
+| hdwr.pl | 356 | 57 | `&gt;` |
+| www.taniaksiazka.pl | 121710 | 186 | ` / ` |
+| zabudowa-agd.pl | 32686 | 599 | ` / ` |
+
+---
+
+# Diablo Chairs
+
+- **Офферов**: 162
+- **Категорий (узлов)**: 26
+- **Разделитель**: ` > `
+
+## Дерево категорий
+
+```
+- Akcesoria Gamingowe
+  - Akcesoria do foteli (5)
+  - Gadżety dla gracza (14)
+  - Pufy Gamingowe (8)
+- Biurka Komputerowe
+  - Biurka gamingowe (9)
+- Fotele Biurowe
+  - Diablo V-Basic (6)
+  - Diablo V-Commander (4)
+  - Diablo V-Kinetic (2)
+  - Diablo V-Light (3)
+  - Diablo V-Master (3)
+  - Diablo V-Modular (3)
+- Fotele Gamingowe (41)
+  - Części zamienne (1)
+  - Diablo X-One (21)
+  - Diablo X-Player (1)
+  - Diablo X-Ray (1)
+  - Fotele Simracing (1)
+- Fotele Prime
+  - Diablo X.Eye Prime (11)
+  - Diablo X.One Prime (10)
+- Gadżety dla dzieci (3)
+- Prezent do 100 zł (7)
+- Prezent do 300 zł (4)
+- Prezent powyżej 1000 zł (1)
+```
+
+# Nexus
+
+- **Офферов**: 43
+- **Категорий (узлов)**: 6
+- **Разделитель**: `— (плоский)`
+
+## Дерево категорий
+
+```
+- Akcesoria (4)
+- NEXONE - podgrzewacze kompatybilne z HEETS i FIIT (4)
+- NEXUS - wkłady z nikotyną (12)
+- NEXUS FREE - wkłady bez nikotyny (16)
+- Zestawy degustacyjne (3)
+- ZESTAWY PREZENTOWE - podgrzewacz + 5 szt. wkładów (4)
+```
+
+# RoboJet
+
+- **Офферов**: 51
+- **Категорий (узлов)**: 14
+- **Разделитель**: `— (плоский)`
+
+## Дерево категорий
+
+```
+- Akcesoria RoboJet Handy (7)
+- Mop elektryczny bezprzewodowo (2)
+- Odkurzacze pionowe bezprzewodowe (1)
+- RoboJet Speed 2 Pro (9)
+- RoboJet Speed Up Easy (2)
+- RoboJet Washer 2 (5)
+- RoboJet WR2 (1)
+- Roboty do mycia okien (2)
+- Roboty kuchenne (1)
+- Roboty sprzątające (6)
+- Strona główna (7)
+- Summer Sale (4)
+- VisionLite (2)
+- VisionMax (2)
+```
+
+# elektroguru.com 
+
+- **Офферов**: 661
+- **Категорий (узлов)**: 58
+- **Разделитель**: `\`
+
+## Дерево категорий
+
+```
+- Biuro i firma
+  - Utrzymanie czystości
+    - Urządzenia sprzątające (8)
+- Dla dziecka
+  - Zabawki (10)
+- Dom i wnętrze
+  - Wyposażenie kuchni
+    - Garnki i patelnie
+      - Garnki (3)
+- Sport i rekreacja
+  - Turystyka
+    - Lodówki turystyczne (5)
+- Sprzęt AGD (117)
+  - AGD wolnostojące (47)
+    - Płyty wolnostojące (4)
+  - Akcesoria i zestawy AGD
+    - Akcesoria i części do AGD (17)
+  - Małe AGD do domu
+    - Stacje pogody i mierniki ozdobne (30)
+  - Małe AGD do kuchni (6)
+    - Czajniki elektryczne (43)
+    - Ekspresy do kawy (20)
+    - Frytownice (10)
+    - Grille elektryczne (3)
+    - Krajalnice (3)
+    - Kuchenki mikrofalowe (15)
+    - Maszynki do mielenia (3)
+    - Mini piekarniki (8)
+    - Opiekacze (11)
+    - Parowary i kombiwary (1)
+    - Pozostałe małe AGD do kuchni (21)
+    - Roboty kuchenne (37)
+    - Sokowirówki (4)
+    - Suszarki do warzyw i owoców (2)
+    - Wagi kuchenne (14)
+    - Wypiekacze do chleba (6)
+  - Urządzenia do pielęgnacji ciała
+    - Depilatory i golarki damskie (84)
+- Sprzęt RTV (48)
+  - Audio
+    - Gramofony (1)
+    - Odtwarzacze CD (19)
+    - Radiobudziki (4)
+    - Słuchawki (13)
+  - Sprzęt car audio video
+    - Akcesoria car audio video (1)
+  - Sprzęt przenośny
+    - Głośniki przenośne i stacje dokujące (5)
+    - Pozostały sprzęt przenośny (4)
+  - Telewizory
+    - Telewizory LED (12)
+  - Video
+    - Sprzęt naziemny i satelitarny
+      - Anteny naziemne i satelitarne (2)
+- Telefony i akcesoria
+  - Akcesoria telefoniczne
+    - Powerbanki (11)
+    - Ładowarki do telefonów (9)
+```
+
+# eta-sklep.pl
+
+- **Офферов**: 378
+- **Категорий (узлов)**: 42
+- **Разделитель**: `\`
+
+## Дерево категорий
+
+```
+- Budowa i remont
+  - Ogrzewanie
+    - Ogrzewanie przenośne (2)
+- Dom i wnętrze
+  - Oświetlenie (1)
+- Sprzęt AGD
+  - AGD wolnostojące
+    - Lodówki (24)
+    - Płyty wolnostojące (1)
+    - Zmywarki (3)
+  - Akcesoria i zestawy AGD
+    - Akcesoria i części do AGD (2)
+  - Małe AGD do domu
+    - Domowe uzdatniacze powietrza (12)
+    - Mopy parowe (9)
+    - Odkurzacze i akcesoria (57)
+      - Odkurzacze (11)
+    - Wagi łazienkowe (7)
+    - Wentylatory przenośne (1)
+    - Żelazka (6)
+  - Małe AGD do kuchni
+    - Czajniki elektryczne (28)
+    - Ekspresy do kawy (19)
+    - Frytownice (7)
+    - Grille elektryczne (2)
+    - Krajalnice (2)
+    - Kuchenki mikrofalowe (12)
+    - Opiekacze (6)
+    - Pozostałe małe AGD do kuchni (18)
+    - Roboty kuchenne (85)
+    - Sokowirówki (3)
+    - Tostery (5)
+  - Urządzenia do pielęgnacji ciała
+    - Elektryczne szczoteczki do zębów (12)
+    - Maszynki do strzyżenia (9)
+    - Prostownice i karbownice (3)
+    - Suszarki do włosów (10)
+    - Suszarko-lokówki (9)
+    - Trymery (9)
+- Zdrowie
+  - Artykuły medyczne i rehabilitacyjne
+    - Poduszki koce i materace lecznicze (3)
+```
+
+# hdwr.pl
+
+- **Офферов**: 356
+- **Категорий (узлов)**: 57
+- **Разделитель**: `&gt;`
+
+## Дерево категорий
+
+```
+- Artykuły biurowe
+  - Artykuły różne
+    - Etykiety i przekładki indeksujące
+      - Taśmy do etykietowania (6)
+  - Sortowanie i utrzymanie porządku
+    - Kasety na pieniądze (51)
+  - Sprzęt biurowy
+    - Drukarki do etykiet (16)
+    - Rejestratory czasu pracy (6)
+- Biznes i przemysł
+  - Handel detaliczny
+    - Obrót środkami pieniężnymi
+      - Liczarki do pieniędzy (3)
+      - Testery do banknotów (2)
+- Dom i ogród
+  - Bezpieczeństwo domu i biura
+    - Sejfy (8)
+  - Oświetlenie
+    - Lampy (5)
+- Elektronika
+  - Akcesoria elektroniczne
+    - Akcesoria komputerowe
+      - Podnośniki do monitorów i stoliki na laptopy (2)
+      - Podstawki pod klawiaturę i myszkę (5)
+    - Czyste nośniki (28)
+    - Elementy komputera
+      - Urządzenia wejściowe
+        - Klawiatury komputerowe (6)
+        - Klawiatury numeryczne (1)
+        - Skanery kodów kreskowych (57)
+  - Komputery
+    - Palmtopy
+      - Urządzenia PDA (4)
+  - Telekomunikacja
+    - Urządzenia radiowe
+      - Skanery radiowe (6)
+  - Wideo
+    - Akcesoria do wideo
+      - Akcesoria i części do telewizorów
+        - Uchwyty do telewizorów i monitorów (28)
+    - Projektory
+      - Projektory multimedialne (3)
+- Meble
+  - Akcesoria do mebli biurowych
+    - Akcesoria do stanowisk pracy i boksów (7)
+  - Meble biurowe
+    - Biurka (2)
+- Sprzęt
+  - Narzędzia
+    - Narzędzia pomiarowe i czujniki
+      - Wagi (44)
+  - Zamki i klucze
+    - Systemy kart wejściowych (26)
+- Zdrowie i uroda
+  - Opieka zdrowotna
+    - Monitory funkcji życiowych
+      - Wagi osobowe (3)
+```
+
+# www.taniaksiazka.pl
+
+- **Офферов**: 121710
+- **Категорий (узлов)**: 186
+- **Разделитель**: ` / `
+
+## Дерево категорий
+
+```
+- Artykuły papiernicze
+  - Akcesoria kreślarskie (187)
+  - Artykuły kreatywne (1404)
+  - Bloki i wycinanki (302)
+  - Dziurkacze i zszywacze (81)
+  - Długopisy i akcesoria (795)
+  - Etykiety (29)
+  - Farby i akcesoria (578)
+  - Flamastry i markery (1131)
+  - Globusy i mapy (46)
+  - Gumki do ścierania (103)
+  - Kalendarze (834)
+  - Kalkulatory (85)
+  - Kleje (149)
+  - Korektory (96)
+  - Kreda (35)
+  - Kredki (546)
+  - Lunchboxy, bidony (357)
+  - Masy plastyczne (217)
+  - Notatniki, pamiętniki (884)
+  - Nożyczki (126)
+  - Okładki i skoroszyty (208)
+  - Ołówki i akcesoria (380)
+  - Papier (476)
+  - Pióra i akcesoria (324)
+  - Piórniki szkolne i etui (738)
+  - Plany lekcji (32)
+  - Plecaki, torby, worki (726)
+  - Podkładki na biurko (194)
+  - Pozostałe (32)
+  - Przyborniki i organizery (47)
+  - Przyjęcia i pakowanie prezentów (4846)
+  - Segregatory i akcesoria (115)
+  - Spinacze i klipsy (52)
+  - Tablice na ścianę i akcesoria (81)
+  - Taśmy klejące (129)
+  - Teczki (675)
+  - Temperówki (104)
+  - Zestawy przyborów szkolnych (98)
+  - Zeszyty (905)
+- Czasopisma (63)
+- Delikatesy
+  - Bakalie i suszone owoce (9)
+  - Cukier i zamienniki cukru (4)
+  - Desery (23)
+  - Dżemy i przetwory owocowe (1)
+  - Kremy orzechowe i inne (2)
+  - Makarony (14)
+  - Mąki i skrobia (8)
+  - Nabiał i zamienniki, jaja (7)
+  - Napoje i soki (61)
+  - Napoje roślinne (59)
+  - Olej, oliwa (2)
+  - Orzechy (1)
+  - Pestki, ziarna, nasiona (5)
+  - Produkty do pieczenia i gotowania (11)
+  - Przetwory warzywne (8)
+  - Sól, zioła i przyprawy (2)
+  - Słodycze (50)
+  - Słone przekąski (5)
+  - Zupy i dania gotowe (1)
+- Dom
+  - Chemia i detergenty (55)
+  - Dekoracje do domu (34)
+  - Dla zwierząt (3)
+  - Ogród i rośliny (5)
+  - Oświetlenie (6)
+  - Pozostałe artykuły do domu (5)
+  - Sport i turystyka (4)
+  - Warsztat (10)
+  - Wyposażenie dodatkowe (34)
+  - Wyposażenie kuchni (83)
+- Ebooki i audiobooki
+  - Audiobooki (767)
+  - eBooki (1511)
+- Filmy
+  - Akcja, sensacja (1)
+  - Dokumentalne (15)
+  - Dramaty (3)
+  - Familijne, dla dzieci (3)
+  - Horrory, thrillery (1)
+  - Komedie (1)
+  - Obyczajowe (1)
+  - Science Fiction, fantasy (2)
+- Gadżety i hobby
+  - Biżuteria i talizmany (12)
+  - Elektronika (106)
+  - Figurki kolekcjonerskie (43)
+  - Gadżety do domu i biura (502)
+  - Modele do składania i sklejania (17)
+  - Ubrania i akcesoria (35)
+  - Zestawy kreatywne i DIY (502)
+- Gry planszowe i karciane
+  - Akcesoria do gier (24)
+  - Domino (41)
+  - Gry fabularne (21)
+  - Gry karciane i karty (304)
+  - Gry paragrafowe (23)
+  - Gry planszowe i towarzyskie (2890)
+  - Pozostałe gry (7)
+  - Szachy i warcaby (49)
+- Książki
+  - Biografie (2260)
+  - Biznes (871)
+  - Ezoteryka i parapsychologia (682)
+  - Fantastyka (3025)
+  - Historia (2442)
+  - Komiksy (4072)
+  - Kryminał, sensacja, thriller (4592)
+  - Książki dla dzieci (21921)
+  - Książki dla młodzieży (2569)
+  - Kuchnia i diety (812)
+  - Kultura i sztuka (927)
+  - Lektury i pomoce szkolne (2332)
+  - Literatura faktu, reportaż (2584)
+  - Literatura obcojęzyczna (4397)
+  - Literatura obyczajowa (7047)
+  - Literatura piękna (4120)
+  - Nauka języków (1246)
+  - Nauki humanistyczne (3110)
+  - Nauki ścisłe, medycyna (1631)
+  - Podróże i turystyka (1886)
+  - Podręczniki akademickie (1061)
+  - Poezja i dramat (915)
+  - Popularnonaukowe (357)
+  - Poradniki (4514)
+  - Prawo (461)
+  - Religia (1718)
+  - Sport (328)
+- Mama i dziecko
+  - Akcesoria do karmienia niemowląt (51)
+  - Pielęgnacja i higiena dziecka (5)
+  - Pokój dziecięcy (13)
+  - Ubrania i buty (5)
+  - Żywienie dziecka (65)
+- Muzyka
+  - Alternatywna (5)
+  - Country (1)
+  - Dla dzieci (6)
+  - Etniczna (3)
+  - Filmowa (1)
+  - Jazz, Blues (7)
+  - Klasyczna (4)
+  - Metal (2)
+  - Poezja śpiewana (2)
+  - Pop, Dance (17)
+  - Pozostała muzyka (4)
+  - Rap, Hip-Hop (9)
+  - Religijna (10)
+  - Rock (9)
+- Podręczniki szkolne
+  - Liceum i Technikum (566)
+  - Podręczniki dla nauczycieli - metodyka (367)
+  - Podręczniki do nauki języków (3170)
+  - Przedmioty zawodowe (343)
+  - Szkoła branżowa (102)
+  - Szkoła muzyczna (19)
+  - Szkoła podstawowa (1055)
+  - Wychowanie przedszkolne (159)
+- Prezenty
+  - Bony podarunkowe (5)
+- Rowery
+  - Akcesoria rowerowe (2)
+- Uroda i zdrowie
+  - Artykuły higieniczne (3)
+  - Kosmetyki dla dzieci (4)
+  - Kosmetyki do ciała (2)
+  - Kosmetyki do kąpieli (7)
+  - Kosmetyki do makijażu (8)
+  - Kosmetyki do twarzy (1)
+  - Kosmetyki do włosów (5)
+  - Suplementy diety (8)
+- Zabawki
+  - Dla najmłodszych (420)
+  - Edukacja i nauka (601)
+  - Figurki (416)
+  - Klocki (1101)
+  - Lalki (110)
+  - Odgrywanie ról (154)
+  - Pluszaki (309)
+  - Pojazdy (295)
+  - Pozostałe zabawki (17)
+  - Puzzle (3106)
+  - Zabawki antystresowe (33)
+  - Zabawki kreatywne (1440)
+  - Zabawki outdoorowe (180)
+```
+
+# zabudowa-agd.pl
+
+- **Офферов**: 32686
+- **Категорий (узлов)**: 599
+- **Разделитель**: ` / `
+
+## Дерево категорий
+
+```
+- AGD do zabudowy
+  - Chłodnictwo do zabudowy
+    - Chłodziarki (8)
+    - Chłodziarko-zamrażarki (28)
+    - Podblatowe (7)
+    - Winiarki do zabudowy (54)
+    - Zamrażarki (18)
+  - Komplety AGD (3)
+    - Akcesoria (1)
+      - Akcesoria i dodatki (1)
+  - Okapy kuchenne (6)
+    - Akcesoria do okapów kuchennych (1)
+      - Filtry do okapów (17)
+      - Turbiny zewnętrzne (2)
+    - Blatowe (11)
+    - Okapy Kompaktowe (179)
+    - Okapy przyścienne
+      - Okapy przyścienne 120cm (10)
+      - Okapy Przyścienne 60 cm (47)
+      - Okapy przyścienne 70 cm (5)
+      - Okapy przyścienne 80cm (12)
+      - Okapy przyścienne 90 cm (53)
+      - Okapy Przyścienne Kwadratowe (18)
+      - Okapy Przyścienne Okrągłe (31)
+      - Okapy przyścienne retro (16)
+    - Sufitowe (49)
+    - Teleskopowe (19)
+    - Wentylacja (1)
+      - Rekuperatory (1)
+      - Wentylatory (1)
+      - Wentylatory łazienkowe (27)
+    - Wyspowe (2)
+      - Tuby wyspowe kwadrat (1)
+      - Tuby wyspowe okrągłe (58)
+      - Wyspowe bardzo szerokie (13)
+      - Wyspowe kwadratowe (33)
+      - Wyspowe na linkach (28)
+  - Piekarniki do zabudowy (164)
+    - Akcesoria do piekarników (1)
+    - Piekarnik 45cm (1)
+    - Piekarnik 60cm (47)
+    - Piekarnik 90cm (3)
+  - Pralnictwo do zabudowy (3)
+    - Pralka do zabudowy (1)
+    - Pralko-suszarka dozabudwy (1)
+  - Płyty grzewcze (1)
+    - Płyta indukcyjna z okapem (63)
+    - Płyty ceramiczne (4)
+    - Płyty domino do zabudowe (6)
+    - Płyty gazowe do zabudowy (73)
+    - Płyty indukcyjne do zabudowy (188)
+    - Płyty indukcyjno-gazowe (3)
+    - Płyty modułowe do zabudowy (2)
+    - Teppan yaki (1)
+  - Urządzenia kompaktowe (13)
+    - Ekspresy do kawy (16)
+    - Kompaktowe urządzenia do gotowania na parze (1)
+    - Mikrofale do zabudowy (43)
+    - Mikrofale kompaktowe do zabudowy (6)
+    - Piekarniki kompaktowe do zabudowy (16)
+    - Szuflady próżniowe/grzewcze (27)
+  - Zmywarki do zabudowy (4)
+    - Zmywarki 45 cm (12)
+    - Zmywarki 60 cm zo zabudowy (61)
+- AGD duże
+  - Akcesoria AGD (32)
+    - Akcesoria do AGD (5)
+    - Akcesoria do okapów kuchennych (2)
+  - Chłodnictwo profesjonalne
+    - Chłodziarki (31)
+    - Chłodziarki do piwa/napojów (55)
+    - Stoły chłodnicze (4)
+    - Winiarki (6)
+    - Zamrażarki skrzyniowe (35)
+    - Zamrażarki słupkowe (43)
+  - Chłodnictwo wolnostojące (42)
+    - Chłodziarki do piwa (1)
+    - Chłodziarki wolnostojące (1)
+    - Chłodziarko-zamrażarki (17)
+    - Ckłodziarki podblatowe (1)
+    - Lodówki retro (72)
+    - SBS (17)
+    - Winiarki (11)
+    - Zamrażarki skrzyniowe (6)
+    - Zamrażarki szufladowe (4)
+    - Zamrażarki Słupkowe (1)
+  - Kuchenki gazowe i elektryczne (51)
+  - Minikuchnie i szafki (13)
+  - Pralnictwo
+    - Pralki (22)
+    - Pralko-suszarki (5)
+    - Suszarki wolnostojące (24)
+    - Łączniki (1)
+  - Zmywarki wolnostojące (1)
+- Armatura
+  - Kuchnia (4)
+    - Akcesoria kuchenne
+      - Akcesoria (32)
+        - Akcesoria do baterii (5)
+        - Akcesoria do zlewozmywaków (8)
+        - Akcesoria kuchenne (11)
+        - Deski do zlewozmywaków (8)
+        - Dodatki do zlewozmywaków (1)
+        - Elementy korka automatycznego (11)
+        - Koszyki do zlewozmywaków (2)
+        - Odsączarki do zlewozmywaków (14)
+        - Rollmaty (9)
+        - Suszarki i ociekacze (5)
+        - Syfony (45)
+    - Baterie kuchenne (145)
+      - Baterie (133)
+      - Baterie 3-drożne (94)
+      - Baterie 4-drożne (11)
+      - Filtry do wody (13)
+      - Grohe Blue Home (2)
+      - Podokienne (6)
+      - Retro (4)
+      - Z elastyczną wylewką (3)
+        - Bateria kuchenna z elastyczną wylewką (1)
+        - silikon (15)
+        - sprężyna (5)
+      - Z wyciąganą wylewką (154)
+      - Ze stałą wylewką (149)
+      - Ścienne (5)
+    - Chemia kuchenna (5)
+    - Dozowniki (70)
+    - Rozdrabniacze kuchenne (10)
+      - Akcesoria do rozdrabniaczy odpadów (2)
+    - Selektory odpadków (55)
+    - Zlewozmywaki (29)
+      - Zlewozmywaki ceramiczne (9)
+        - Zlewozmywaki ceramiczne farmerskie (43)
+        - Zlewozmywaki ceramiczne podwieszane pod blatem (108)
+        - Zlewozmywaki ceramiczne wpuszczane w blat (543)
+      - Zlewozmywaki gospodarcze (4)
+      - Zlewozmywaki Granitowe (582)
+        - 1 komora (129)
+        - 1 komora + Krótki ociekacz (20)
+        - 1 komora + ociekacz (159)
+        - 1 Komora XL + ociekacz (24)
+        - 1,5 komory (6)
+        - 1,5 komory + ociekacz (24)
+        - 2 komory (16)
+        - 2 komory + ociekacz (3)
+        - Granitowe komory podwieszane (192)
+        - Nakładane (9)
+        - narożne (4)
+      - Zlewozmywaki hybrydowe (4)
+      - Zlewozmywaki stalowe (60)
+        - Phantom Base (2)
+        - Phantom Edge (3)
+        - Zlewozmywaki stal 1 komora (94)
+        - Zlewozmywaki stal 1 komora + ociekacz (37)
+        - Zlewozmywaki stal 1,5 komory (4)
+        - Zlewozmywaki stal 1,5 komory + ociekacz (9)
+        - Zlewozmywaki stal 2 komory (8)
+        - Zlewozmywaki stalowe podwieszane (162)
+    - Zlewozmywaki z baterią
+      - Zlewozmywaki granitowe z baterią (135)
+  - Łazienka (34)
+    - Akcesoria (1)
+      - Dozowniki (14)
+      - Haczyki, wieszaki (16)
+      - Koszyki, tacki, półki (21)
+      - Kubki, stojaki (9)
+      - Lustra i lusterka (8)
+      - Poręcze (13)
+      - Relingi (22)
+      - Siedziska (5)
+      - Szczotki WC (31)
+      - Uchwyty na papier (19)
+      - Ściągaczki do wody (6)
+    - Baterie
+      - Baterie bidetowe (74)
+      - Baterie pisuarowe (1)
+      - Baterie podtynkowe (46)
+      - Baterie prysznicowe (143)
+      - Baterie umywalkowe (236)
+      - Baterie wannowe (103)
+      - Baterie łazienkowe (3)
+    - Instalacje
+      - Akcesoria do kabin i drzwi (19)
+      - Grzałki elektryczne (12)
+      - Grzejniki łazienkowe (24)
+      - Odpływy (6)
+      - Syfony do brodzików (10)
+      - Syfony do umywalek (3)
+      - Zawory grzejnikowe (10)
+    - Kabiny prysznicowe (57)
+      - Kabiny (83)
+        - Brodziki prysznicowe (72)
+        - Drzwi prysznicowe (19)
+        - Odpływy (12)
+        - Ścianki prysznicowe (80)
+    - Meble
+      - Blaty i półki do konsol (1)
+      - Konsole z umywalką (1)
+      - Konsole łazienkowe (6)
+      - Szafki pod umywalkę (28)
+      - Słupki łazienkowe (3)
+    - Prysznice
+      - Deszczownice (40)
+      - Drążki prysznicowe (7)
+      - Dysze prysznicowe (4)
+      - Głowice prysznicowe (15)
+      - Panele prysznicowe (29)
+      - Przyłącza kątowe (12)
+      - Słuchawki prysznicowe (12)
+      - Uchwyty prysznicowe (5)
+      - Wylewki prysznicowe (9)
+      - Węże prysznicowe (3)
+      - Zestawy prysznicowe (20)
+      - Zestawy prysznicowe podtynkowe (87)
+    - Toalety (1)
+      - Bidety (3)
+      - Deski sedesowe (6)
+      - Miski WC - wiszące (8)
+      - Pisuary (3)
+      - Przyciski do spłuczki (3)
+      - Stelaże podtynkowe (10)
+      - Zestawy WC podtynkowe (7)
+    - Umywalki (20)
+      - Korki Click-Clack (8)
+      - Umywalki ceramiczne (59)
+      - Umywalki granitowe (51)
+      - Umywalki kompozytowe (147)
+    - Wanny
+      - Parawany nawannowe (7)
+      - Syfony do wanien (11)
+      - Wanny akrylowe (42)
+      - Wylewki wannowe (15)
+- Kuchnia
+  - Akcesoria kuchenne (1)
+    - Deski do krojenia (47)
+    - Do pieczenia (21)
+    - Korkociąg/otwieracz do wina (2)
+    - Przechowywanie żywności (9)
+    - Przybory kuchenne (14)
+    - Siekacze tarki i szatkownice (10)
+    - Stojak na butelki (1)
+    - Szatkownice , mandoliny (3)
+    - Wózek kuchenny (4)
+  - Czajniki tradycyjne (8)
+  - Garnki (19)
+    - Garnek 20cm (2)
+    - Garnek 24cm (2)
+    - Rondel (3)
+    - Szybkowar (7)
+    - Zestawy garnków (9)
+  - HoReCa
+    - Noże profesjonalne HoReCa
+      - Komplety noży (4)
+  - Kawiarki (8)
+  - Noże kuchenne (1)
+    - Akcesoria (10)
+      - Listwy magnetyczne (2)
+      - Obieraczki (2)
+      - Szpatuły, szczypce, pensety, widelce (2)
+    - Bloki i listwy magnetyczne (2)
+      - Bloki na noże kuchenne (1)
+    - Deba (36)
+    - Komplet noży w Bloku (1)
+    - Komplety noży (179)
+    - Noże do sera (4)
+    - Noże do steków (8)
+    - Nożyce kuchenne (1)
+    - Nóż Bunka (11)
+    - Nóż Deba (16)
+    - Nóż do filetowania (8)
+    - Nóż do luzowania (boning) (24)
+    - Nóż do mrożonek (1)
+    - Nóż do obierania (54)
+    - Nóż do ostryg (2)
+    - Nóż do pieczywa (39)
+    - Nóż do plastrowania (Slicer) (23)
+    - Nóż do pomidorów (2)
+    - Nóż do porcjowania (9)
+    - Nóż do sera (1)
+    - Nóż do siekania (3)
+    - Nóż do sushi i sashimi (35)
+    - Nóż do trybowania (1)
+    - Nóż Funayuki (1)
+    - Nóż Nakiri (57)
+    - Nóż Paring (14)
+    - Nóż Petty (25)
+    - Nóż Santoku (148)
+    - Nóż Sujihiki (21)
+    - Nóż szefa (166)
+      - Duże noże szefa (3)
+      - Nóż Szefa 18 cm (3)
+      - Nóż szefa 19cm (1)
+      - Nóż szefa 20cm (8)
+      - Nóż szefa 21 cm (2)
+      - Nóż szefa 24cm (1)
+    - Nóż uniwersalny (77)
+    - Obieraczka (5)
+    - OCHRONA OSTRZY (1)
+    - Ostrze ząbkowane (1)
+    - Ostrzenie (1)
+      - Kamienie do ostrzenia (51)
+      - Ostrzałki
+        - Akcesoria do ostrzenia (2)
+        - Ostrzałki do noży (4)
+        - Ostrzałki, Elektryczne (1)
+    - Satake Cutlery Mfg (20)
+    - Tasak (11)
+    - Widelec do mięsa (1)
+  - Ostrzenie
+    - Kamienie wodne (47)
+    - Musaki (6)
+    - Urządzenia do ostrzenia (1)
+  - Patelnie (5)
+    - Patelnie 20 cm (8)
+    - Patelnie 24cm (12)
+    - Patelnie 26cm (5)
+    - Patelnie 28cm (14)
+    - Patelnie 32cm (2)
+    - Wok (2)
+    - Zestawy patelni (2)
+  - Porclana kuchenna
+    - Naczynia do serwowania (1)
+    - Talerze (85)
+  - Sztućce (2)
+- Liebherr
+  - Chłodziarki
+    - Chłodziarki do zabudowy (60)
+    - Chłodziarki wolnostojące (39)
+  - Chłodziarki do wina
+    - Chłodziarki do wina do zabudowy (11)
+    - Wolnostojące chlodziarki do wina (25)
+  - Chłodziarko-zamrażarki
+    - Chłodziarko-zamrażarki do zabudowy (36)
+    - Chłodziarko-zamrażarki wolnostojące (68)
+      - SBS Wolnostojące (15)
+  - Zamrażarki
+    - Zamrażarki do zabudowy (6)
+    - Zamrażarki wolnostojące (43)
+- Małe AGD
+  - Czajnik elektryczny (21)
+  - Dystrybutor wody (2)
+  - Ekspresy do kawy i akcesoria
+    - Ekspres do kawy (8)
+    - Młynki do kawy (4)
+    - Spieniacze do mleka (2)
+  - Filtry do wody (41)
+  - Kuchenka mikrofalowa (1)
+  - Saturator (4)
+  - Suszarki do warzyw i owoców (1)
+  - Urządzenia do pieczenia
+    - Grill (1)
+    - Piekarnik nablatowy (4)
+    - Tostery (26)
+  - Urządzenia do przygotowania jedzenia
+    - Blender (41)
+    - Krajalnice do chleba i wędlin (18)
+    - Krajalnice do warzyw (3)
+    - Maszynka do mielenia (1)
+    - Miksery ręczne (7)
+    - Pakowarka próżniowa (3)
+    - Robot kuchenny (8)
+    - Wagi kuchenne (10)
+    - Wyciskarki (6)
+  - Zaparzacze French Press (4)
+  - Zmiękczacze wody (2)
+- Moda
+  - Akcesoria
+    - Plecaki (57)
+  - Beauty
+    - Zestawy (2)
+  - Biżuteria (995)
+    - Bransoletki damskie (364)
+    - Bransoletki i charmsy Pandora (1)
+      - Bransoletki na charmsy (71)
+      - Charmsy (1)
+    - Bransoletki męskie (227)
+    - Bransoletki unisex (7)
+    - Kolczyki (277)
+    - Naszyjnik damski (479)
+    - Naszyjnik męski (86)
+    - Naszyjnik Unisex (4)
+    - Ozdoby (18)
+    - Pierścionki (1295)
+  - Okulary (691)
+    - Okulary przeciwsłoneczne damskie (2831)
+    - Okulary przeciwsłoneczne męskie (1582)
+    - Okulary przeciwsłoneczne unisex (2522)
+    - Oprawki do okularów (2070)
+  - Zegarki (751)
+    - Zegarki damskie (2095)
+    - Zegarki męskie (2080)
+    - Zegarki młodzieżowe (6)
+    - Zegarki unisex (443)
+- Ogród
+  - Domki ogrodowe
+    - szopy narzędziowe (23)
+    - Wiaty i garaże (6)
+      - Wiaty (5)
+  - Garaż
+    - Meble warsztatowe (24)
+  - GRILLOWANIE
+    - Akcesoria do grillowania (15)
+    - BBQ (48)
+    - Grille węglowe (6)
+    - Kociołki (10)
+    - Patelnie (19)
+    - Zestawy sztućców (3)
+  - Huśtawki i bujaki (2)
+  - Meble ogrodowe
+    - huśtawki na taras (5)
+  - Namioty pastwiskowe (6)
+  - Ogród i rozrywka
+    - Akcesoria do grilla (7)
+    - Grill ogrodowy (7)
+    - Kominki grillowe (6)
+    - wyposażenie placów zabaw
+      - domki do zabawy (9)
+      - ramy do wspinaczki (1)
+  - Pawilony (22)
+    - pawilony ogrodowe (24)
+  - Pokrycia tarasów (11)
+    - Ogrzewanie pawilonu ogrodowego (2)
+  - Porządek w ogrodzie (2)
+    - Boxy na śmieci (44)
+      - Box na śmieci wykonane z drewna (3)
+      - Stalowy box na śmieci (4)
+    - Boxy, szopy (3)
+      - Boxy na poduszki i narzędzia (5)
+    - Skrzynki ogrodowe (6)
+    - taczka (5)
+    - Wszystko dla ogrodnika
+      - kompostownik (2)
+  - Sprzęt ogrodowy (4)
+    - Sekatory (5)
+  - Szklarnie (49)
+    - Grządki podniesione (16)
+      - Grządki podniesione Metalowe (9)
+  - Trampoliny (4)
+- Outdoor
+  - Kemping
+    - Plecaki i torby
+      - Torebki (1)
+      - Worki, torby i saszetki wodoszczelne (1)
+    - Przygotowanie jedzenia
+      - Duże termosy (2)
+      - Kubki i Butelki (1)
+      - Kuchenka polowa (2)
+      - Naczynia polowe (5)
+      - Termosy, butelki, bidony i lunch boxy (49)
+  - Multitoole (17)
+  - Narzędzia
+    - Etui (3)
+    - Piły ręczne (3)
+    - Saperki, szpadle, łopaty (1)
+    - Siekiery (33)
+    - Systemy mocowania (1)
+  - Noże świata (1786)
+  - Noże, maczety
+    - Codzienny użytek (229)
+    - Do zbierania grzybów (3)
+    - Filetowanie (12)
+    - Karambit (2)
+    - Kiridashi (2)
+    - Maczety (16)
+    - Myślistwo
+      - Noże myśliwskie (2)
+        - Polowanie (40)
+    - Noże składane kieszonkowe (143)
+    - Noże stałe (53)
+    - Noże survival (3)
+    - Ratunek (2)
+    - Rzeźbienie (2)
+    - Scyzoryk (137)
+    - Taktyczne
+      - Ratownictwo (1)
+        - Taktyczne i Wojskowe (67)
+    - Trening taktyczny (2)
+  - Odzież
+    - Rękawice (6)
+  - Ostrzenie
+    - Akcesoria do ostrzenia (3)
+    - Kamienie szlifierskie. (1)
+    - Ostrzałki elektryczne (2)
+    - Pielęgnacja noży (1)
+  - Oświetlenie awaryjne i latarki
+    - Baterie i ładowarki (1)
+    - Latarki czołowe (10)
+    - Latarki do broni (2)
+    - Latarki outdoor (3)
+    - Latarki rysikowe (1)
+    - Latarki ręczne (8)
+    - Latarki taktyczne (8)
+    - Latarnie (18)
+    - Mini latarki i breloki (5)
+    - Oświetlenie awaryjne (2)
+    - Oświetlenie robocze (1)
+  - Palenie
+    - Cygaro
+      - Acesoria do cygar (2)
+      - Etui na cygara (16)
+      - Obcinarka do cygar (17)
+    - Fajka
+      - Fajki (2)
+      - Filtr do fajki (1)
+      - Torebka na tytoń do fajki (1)
+    - Popielnice (2)
+    - Zapalniczki (1)
+      - Zapalniczka (1)
+      - Zapalniczki do cygar (15)
+  - Repliki historyczne (1)
+  - Sprzęt do survivalu i bushcraftu (1)
+    - Krzesiwo (1)
+  - Zwierzęta domowe
+    - Bezpieczeństwo i widoczność
+      - Świecące naszyjniki (4)
+  - Żywność/woda
+    - Filtrowanie wody (1)
+    - Piersiówki
+      - manierki (1)
+    - Racje żywnościowe (18)
+- Wnętrze
+  - Bielizna stołowa i pościelowa
+    - Ściereczki kuchenne (3)
+  - Fartuchy (3)
+  - Meble
+    - Drabiny domowe (4)
+    - Inne meble (4)
+    - Krzesła składane (2)
+    - Wieszaki stojące (7)
+    - Wózki domowe (3)
+  - Praktyczne dodatki do domu (8)
+    - Ozdoby
+      - Dewocjonalia (11)
+      - Figurki, ozdoby (68)
+      - Lampy (29)
+      - Ozdoby świąteczne (3)
+      - Świece (10)
+      - Świeczniki (26)
+  - Sprzątanie domu
+    - Do pralni i suszarni (24)
+    - Do sprzątania (5)
+  - Szkło użytkowe
+    - Bomboniery (5)
+    - Dzbanki (1)
+    - Karafki (10)
+    - Kieliszki (5)
+      - Kieliszki do likieru (2)
+      - Kieliszki do szampana (37)
+      - Kieliszki do wina (42)
+      - Kieliszki do wódki (2)
+    - Pojemniki (1)
+    - Szklanki (61)
+    - Wazony (43)
+  - Zastawy stołowe
+    - Dzbanki do kawy i herbaty (5)
+    - Kawa i herbata (5)
+    - Miski i półmiski ceramiczne (173)
+    - Misy (1)
+    - Naczynia do napojów
+      - Kieliszki i szklanki do alkoholu
+        - Kryształowe
+          - Kieliszki do sherry likieru (4)
+          - Kieliszki do szampana martini (13)
+          - Kieliszki do szampana prosecco (1)
+          - Kieliszki do wina (24)
+          - Szklanki do whisky soku wody (20)
+          - Szklanki long drink (2)
+      - Kubki (23)
+    - Naczynia do serwowania żywności
+      - Dzbanki i karafki (4)
+        - Do whisky (8)
+        - do wina (5)
+      - Owocarki, miseczki i pucharki (10)
+      - Patery (12)
+      - Tace (2)
+    - Podkładki (6)
+    - Porcelana
+      - Filiżanki i spodki (17)
+      - Zestawy obiadowe (3)
+    - Serwetniki (1)
+    - Tace (50)
+    - Talerze na przystawki (2)
+    - Wyroby szklane
+      - Cukiernice (3)
+      - Dzbanki (3)
+      - Karafki (24)
+      - Kieliszki (26)
+      - Kufle do piwa (3)
+        - Pokale do piwa (1)
+      - Miodownice (2)
+      - Miski kryształowe (68)
+      - Mleczniki (2)
+      - Patery (1)
+      - Pojemniki (13)
+      - Pucharki (1)
+      - Statuetki i puchary (12)
+      - Szklanki (51)
+        - Szklanki do whisky (1)
+    - Zastawy obiadowe (65)
+    - Zestawy (76)
+```

@@ -378,6 +378,16 @@ const currentPrice = computed(() => {
   return selectedProduct.value?.price || page.value?.min_price || 0;
 });
 
+// Previous (old) price for discount display: shown when higher than current price.
+const previousPrice = computed(() => {
+  const pp = Number(selectedProduct.value?.previous_price);
+  const cur = Number(currentPrice.value);
+  if (Number.isFinite(pp) && Number.isFinite(cur) && pp > cur) {
+    return pp;
+  }
+  return null;
+});
+
 const minPrice = computed(() => {
   if (products.value.length === 0) return page.value?.min_price || 0;
   return Math.min(...products.value.map(p => p.price));
@@ -701,7 +711,12 @@ watch(
             <div class="flex items-end justify-between gap-4">
               <div>
                 <div class="text-sm font-medium text-orange-700 dark:text-orange-300">{{ t('scupage.best_price') }}</div>
-                <div class="text-3xl font-bold mt-0.5 text-orange-900 dark:text-white">{{ formatPrice(currentPrice) }}</div>
+                <div class="flex items-baseline gap-2 mt-0.5 flex-wrap">
+                  <span v-if="previousPrice" class="text-sm text-orange-700/70 dark:text-orange-300/70 line-through">
+                    {{ formatPrice(previousPrice) }}
+                  </span>
+                  <span class="text-3xl font-bold text-orange-900 dark:text-white">{{ formatPrice(currentPrice) }}</span>
+                </div>
                 <div class="text-xs text-orange-700 dark:text-orange-300 mt-1">
                   {{ isInStock(selectedProduct) ? t('scupage.in_stock') : t('scupage.out_of_stock') }}
                 </div>

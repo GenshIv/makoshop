@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -30,7 +31,7 @@ func KeyPromoPlan(id int64) string     { return fmt.Sprintf("promo_plan:%d", id)
 func KeyPromoCampaign(id int64) string { return fmt.Sprintf("promo_campaign:%d", id) }
 func KeyPromoLog(id int64) string      { return fmt.Sprintf("promo_log:%d", id) }
 func KeyLandingPage(id int64) string   { return fmt.Sprintf("landing:%d", id) }
-func KeySCUPage(id int64) string       { return fmt.Sprintf("scupage:%d", id) }
+func KeyEANPage(id int64) string       { return fmt.Sprintf("eanpage:%d", id) }
 
 // Index keys — all turbo-based. Helpers for hashing used by turbo_search.go.
 
@@ -145,8 +146,11 @@ func UnmarshalCompany(data []byte) (*model.Company, error) {
 }
 
 func MarshalCategory(c model.Category) []byte {
-	b, _ := json.Marshal(c)
-	return b
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(c)
+	return buf.Bytes()
 }
 
 func UnmarshalCategory(data []byte) (*model.Category, error) {
@@ -168,7 +172,10 @@ func UnmarshalCategory(data []byte) (*model.Category, error) {
 }
 
 func fixUnicodeEscapes(s string) string {
-	return strings.ReplaceAll(s, "u0026", "&")
+	// Fix both escaped and unescaped unicode sequences
+	s = strings.ReplaceAll(s, `\u0026`, "&")
+	s = strings.ReplaceAll(s, "u0026", "&")
+	return s
 }
 
 func MarshalAttrDef(a model.AttributeDefinition) []byte {
@@ -314,13 +321,13 @@ func UnmarshalLandingPage(data []byte) (*model.LandingPage, error) {
 	return &l, nil
 }
 
-func MarshalSCUPage(s model.SCUPage) []byte {
+func MarshalEANPage(s model.EANPage) []byte {
 	b, _ := json.Marshal(s)
 	return b
 }
 
-func UnmarshalSCUPage(data []byte) (*model.SCUPage, error) {
-	var s model.SCUPage
+func UnmarshalEANPage(data []byte) (*model.EANPage, error) {
+	var s model.EANPage
 	if err := json.Unmarshal(data, &s); err != nil {
 		return nil, err
 	}

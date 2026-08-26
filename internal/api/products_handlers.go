@@ -130,7 +130,7 @@ func (h *Handlers) HandleAttributeValues(w http.ResponseWriter, r *http.Request)
 
 type CreateProductRequest struct {
 	SKU         string           `json:"sku"`
-	SCU         string           `json:"scu,omitempty"` // Standard Catalog Unit — links to landing page
+	EAN         string           `json:"ean,omitempty"` // Standard Catalog Unit — links to landing page
 	Name        string           `json:"name"`
 	Description string           `json:"description,omitempty"`
 	CategoryID  int64            `json:"category_id"`
@@ -251,7 +251,7 @@ func (h *Handlers) HandleProductsList(w http.ResponseWriter, r *http.Request) {
 		result.Items = []silentjson.RawMessage{}
 	}
 
-	writeJSONSCUList(w, r, http.StatusOK, *result)
+	writeJSONEANList(w, r, http.StatusOK, *result)
 }
 
 func (h *Handlers) HandleProductGet(w http.ResponseWriter, r *http.Request) {
@@ -289,7 +289,7 @@ func (h *Handlers) HandleProductCreate(w http.ResponseWriter, r *http.Request) {
 
 	p := &model.Product{
 		SKU:         req.SKU,
-		SCU:         req.SCU,
+		EAN:         req.EAN,
 		Name:        req.Name,
 		Description: req.Description,
 		CategoryID:  req.CategoryID,

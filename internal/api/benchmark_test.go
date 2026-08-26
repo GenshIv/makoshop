@@ -39,7 +39,7 @@ func BenchmarkShopRoot(b *testing.B) {
 	w := httptest.NewRecorder()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		testHandlers.HandleSCUPageByPath(w, req)
+		testHandlers.HandleEANPageByPath(w, req)
 		_ = w.Result()
 		w = httptest.NewRecorder()
 	}
@@ -51,7 +51,7 @@ func BenchmarkShopRootHEAD(b *testing.B) {
 	w := httptest.NewRecorder()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		testHandlers.HandleSCUPageByPath(w, req)
+		testHandlers.HandleEANPageByPath(w, req)
 		_ = w.Result()
 		w = httptest.NewRecorder()
 	}
@@ -64,7 +64,7 @@ func BenchmarkShopRootJSON(b *testing.B) {
 	w := httptest.NewRecorder()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		testHandlers.HandleSCUPageByPath(w, req)
+		testHandlers.HandleEANPageByPath(w, req)
 		_ = w.Result()
 		w = httptest.NewRecorder()
 	}
@@ -76,7 +76,7 @@ func BenchmarkShopCategory(b *testing.B) {
 	w := httptest.NewRecorder()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		testHandlers.HandleSCUPageByPath(w, req)
+		testHandlers.HandleEANPageByPath(w, req)
 		_ = w.Result()
 		w = httptest.NewRecorder()
 	}
@@ -88,7 +88,7 @@ func BenchmarkShopCategoryDeep(b *testing.B) {
 	w := httptest.NewRecorder()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		testHandlers.HandleSCUPageByPath(w, req)
+		testHandlers.HandleEANPageByPath(w, req)
 		_ = w.Result()
 		w = httptest.NewRecorder()
 	}
@@ -100,25 +100,25 @@ func BenchmarkShopCategoryWithFilters(b *testing.B) {
 	w := httptest.NewRecorder()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		testHandlers.HandleSCUPageByPath(w, req)
+		testHandlers.HandleEANPageByPath(w, req)
 		_ = w.Result()
 		w = httptest.NewRecorder()
 	}
 }
 
-// BenchmarkShopSlug — страница SCUPage по slug
+// BenchmarkShopSlug — страница EANPage по slug
 func BenchmarkShopSlug(b *testing.B) {
 	req := httptest.NewRequest(http.MethodGet, "/shop/elektronika/telefony/samsung-galaxy-s7", nil)
 	w := httptest.NewRecorder()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		testHandlers.HandleSCUPageByPath(w, req)
+		testHandlers.HandleEANPageByPath(w, req)
 		_ = w.Result()
 		w = httptest.NewRecorder()
 	}
 }
 
-// BenchmarkShopSlugWithHTML — страница SCUPage с HTML (SSR)
+// BenchmarkShopSlugWithHTML — страница EANPage с HTML (SSR)
 func BenchmarkShopSlugWithHTML(b *testing.B) {
 	req := httptest.NewRequest(http.MethodGet, "/shop/elektronika/telefony/samsung-galaxy-s7", nil)
 	req.Header.Set("Accept", "text/html")
@@ -126,7 +126,7 @@ func BenchmarkShopSlugWithHTML(b *testing.B) {
 	w := httptest.NewRecorder()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		testHandlers.HandleSCUPageByPath(w, req)
+		testHandlers.HandleEANPageByPath(w, req)
 		_ = w.Result()
 		w = httptest.NewRecorder()
 	}
@@ -216,13 +216,13 @@ func BenchmarkSitemapIndex(b *testing.B) {
 	}
 }
 
-// BenchmarkSitemapSCUPage — sitemap SCUPage
-func BenchmarkSitemapSCUPage(b *testing.B) {
-	req := httptest.NewRequest(http.MethodGet, "/sitemap-scupage-1.xml", nil)
+// BenchmarkSitemapEANPage — sitemap EANPage
+func BenchmarkSitemapEANPage(b *testing.B) {
+	req := httptest.NewRequest(http.MethodGet, "/sitemap-eanpage-1.xml", nil)
 	w := httptest.NewRecorder()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		testHandlers.HandleSitemapSCUPage(w, req)
+		testHandlers.HandleSitemapEANPage(w, req)
 		_ = w.Result()
 		w = httptest.NewRecorder()
 	}
@@ -242,15 +242,15 @@ func TestConcurrentRequests(t *testing.T) {
 				case 0:
 					req := httptest.NewRequest(http.MethodGet, "/shop", nil)
 					w := httptest.NewRecorder()
-					testHandlers.HandleSCUPageByPath(w, req)
+					testHandlers.HandleEANPageByPath(w, req)
 				case 1:
 					req := httptest.NewRequest(http.MethodGet, "/shop/elektronika", nil)
 					w := httptest.NewRecorder()
-					testHandlers.HandleSCUPageByPath(w, req)
+					testHandlers.HandleEANPageByPath(w, req)
 				case 2:
 					req := httptest.NewRequest(http.MethodGet, "/shop/elektronika/telefony/samsung-galaxy-s7", nil)
 					w := httptest.NewRecorder()
-					testHandlers.HandleSCUPageByPath(w, req)
+					testHandlers.HandleEANPageByPath(w, req)
 				case 3:
 					req := httptest.NewRequest(http.MethodGet, "/categories/tree", nil)
 					w := httptest.NewRecorder()

@@ -157,12 +157,12 @@ func (h *Handlers) HandleAdminAttrDefDelete(w http.ResponseWriter, r *http.Reque
 	httpres.WriteJSON(w, http.StatusOK, map[string]string{"message": "deleted", "code": code})
 }
 
-// ================= SCUPage Admin handlers =================
+// ================= EANPage Admin handlers =================
 
-// HandleAdminSCUPageList returns a paginated list of SCU pages.
-// GET /admin/scupages?page=1&limit=50&q=search
+// HandleAdminEANPageList returns a paginated list of SCU pages.
+// GET /admin/eanpages?page=1&limit=50&q=search
 
-func (h *Handlers) HandleAdminSCUPageList(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleAdminEANPageList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
@@ -187,14 +187,14 @@ func (h *Handlers) HandleAdminSCUPageList(w http.ResponseWriter, r *http.Request
 		limit = 50
 	}
 
-	// Use SCUPageSearch for listing with optional search
-	params := db.SCUPageListParams{
+	// Use EANPageSearch for listing with optional search
+	params := db.EANPageListParams{
 		Q:     q,
 		Page:  page,
 		Limit: limit,
 	}
 
-	result, err := h.scuPageSearch.ListWithTurbo(params)
+	result, err := h.eanPageSearch.ListWithTurbo(params)
 	if err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
@@ -218,10 +218,10 @@ func (h *Handlers) HandleAdminSCUPageList(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// HandleAdminSCUPageGet returns a single SCU page by ID.
-// GET /admin/scupages/{id}
+// HandleAdminEANPageGet returns a single SCU page by ID.
+// GET /admin/eanpages/{id}
 
-func (h *Handlers) HandleAdminSCUPageGet(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleAdminEANPageGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
@@ -238,7 +238,7 @@ func (h *Handlers) HandleAdminSCUPageGet(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	sp, err := h.scuPageRepo.Get(id)
+	sp, err := h.eanPageRepo.Get(id)
 	if err != nil {
 		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 		return
@@ -247,11 +247,11 @@ func (h *Handlers) HandleAdminSCUPageGet(w http.ResponseWriter, r *http.Request)
 	httpres.WriteJSON(w, http.StatusOK, sp)
 }
 
-// HandleAdminSCUPageUpdate updates a SCU page.
-// PATCH /admin/scupages/{id}
-// Body: any subset of SCUPage fields
+// HandleAdminEANPageUpdate updates a SCU page.
+// PATCH /admin/eanpages/{id}
+// Body: any subset of EANPage fields
 
-func (h *Handlers) HandleAdminSCUPageUpdate(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleAdminEANPageUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPatch {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
@@ -274,7 +274,7 @@ func (h *Handlers) HandleAdminSCUPageUpdate(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Apply updates
-	updater := func(sp *model.SCUPage) {
+	updater := func(sp *model.EANPage) {
 		if v, ok := updates["title"]; ok {
 			if s, ok := v.(string); ok {
 				sp.Title = s
@@ -331,25 +331,25 @@ func (h *Handlers) HandleAdminSCUPageUpdate(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	if err := h.scuPageRepo.Update(id, updater); err != nil {
+	if err := h.eanPageRepo.Update(id, updater); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	// Reindex SCU page
-	sp, _ := h.scuPageRepo.Get(id)
+	sp, _ := h.eanPageRepo.Get(id)
 	if sp != nil {
-		_ = h.scuPageSearch.UnindexSCUPage(sp)
-		_ = h.scuPageSearch.IndexSCUPage(sp)
+		_ = h.eanPageSearch.UnindexEANPage(sp)
+		_ = h.eanPageSearch.IndexEANPage(sp)
 	}
 
 	httpres.WriteJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
-// HandleAdminSCUPageDelete deletes a SCU page.
-// DELETE /admin/scupages/{id}
+// HandleAdminEANPageDelete deletes a SCU page.
+// DELETE /admin/eanpages/{id}
 
-func (h *Handlers) HandleAdminSCUPageDelete(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleAdminEANPageDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
@@ -366,17 +366,17 @@ func (h *Handlers) HandleAdminSCUPageDelete(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	sp, err := h.scuPageRepo.Get(id)
+	sp, err := h.eanPageRepo.Get(id)
 	if err != nil {
 		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 		return
 	}
 
 	// Unindex
-	_ = h.scuPageSearch.UnindexSCUPage(sp)
+	_ = h.eanPageSearch.UnindexEANPage(sp)
 
 	// Delete
-	if err := h.scuPageRepo.Delete(id); err != nil {
+	if err := h.eanPageRepo.Delete(id); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
@@ -705,7 +705,7 @@ func (h *Handlers) HandleAdminCatalogizerTest(w http.ResponseWriter, r *http.Req
 	})
 }
 
-func (h *Handlers) HandleAdminSCUPageCatalogizeAll(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleAdminEANPageCatalogizeAll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
@@ -723,7 +723,7 @@ func (h *Handlers) HandleAdminSCUPageCatalogizeAll(w http.ResponseWriter, r *htt
 	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Starting (apply=%v force=%v rebuildAllIndexes=%v)...\n", body.Apply, body.Force, rebuildAllIndexes)
 
 	// Get all SCU pages
-	all, err := h.scuPageRepo.List()
+	all, err := h.eanPageRepo.List()
 	if err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
@@ -743,9 +743,9 @@ func (h *Handlers) HandleAdminSCUPageCatalogizeAll(w http.ResponseWriter, r *htt
 
 		// Build tokens for this SCU page using all available text
 		//todo need remove and add to insert|update only
-		fullText := tokenizer.BuildSCUTokensFullText(sp.Title, sp.Description, sp.Content, sp.Attributes)
-		if err := catz.BuildSCUTokens(sp.ID, fullText); err != nil {
-			fmt.Printf("WARN: build tokens for scupage %d: %v\n", sp.ID, err)
+		fullText := tokenizer.BuildEANTokensFullText(sp.Title, sp.Description, sp.Content, sp.Attributes)
+		if err := catz.BuildEANTokens(sp.ID, fullText); err != nil {
+			fmt.Printf("WARN: build tokens for eanpage %d: %v\n", sp.ID, err)
 			continue
 		}
 
@@ -754,29 +754,29 @@ func (h *Handlers) HandleAdminSCUPageCatalogizeAll(w http.ResponseWriter, r *htt
 		}
 
 		// Catalogize using TurboTopNByIntersection
-		newCatID, err := catz.CatalogizeSCUPageByIntersection(sp.ID)
+		newCatID, err := catz.CatalogizeEANPageByIntersection(sp.ID)
 		if err != nil {
-			fmt.Printf("WARN: catalogize scupage %d: %v\n", sp.ID, err)
+			fmt.Printf("WARN: catalogize eanpage %d: %v\n", sp.ID, err)
 			continue
 		}
 
-		newUrl := h.scuPageRepo.ComputeSeoURL(sp.Slug, sp.CategoryID, catCache)
+		newUrl := h.eanPageRepo.ComputeSeoURL(sp.Slug, sp.CategoryID, catCache)
 
 		if (newCatID > 0 && newCatID != sp.CategoryID) || newUrl != sp.SeoURL {
 			sp.SeoURL = newUrl
 			if body.Apply {
-				if err := h.scuPageRepo.Update(sp.ID, func(s *model.SCUPage) {
+				if err := h.eanPageRepo.Update(sp.ID, func(s *model.EANPage) {
 					s.CategoryID = newCatID
 					s.SeoURL = newUrl
 				}); err != nil {
-					fmt.Printf("WARN: update scupage %d: %v\n", sp.ID, err)
+					fmt.Printf("WARN: update eanpage %d: %v\n", sp.ID, err)
 					continue
 				}
 			}
 			catalogized++
 			results = append(results, map[string]interface{}{
-				"scupage_id":      sp.ID,
-				"scu":             sp.SCU,
+				"eanpage_id":      sp.ID,
+				"ean":             sp.EAN,
 				"old_category_id": sp.CategoryID,
 				"new_category_id": newCatID,
 			})
@@ -786,12 +786,12 @@ func (h *Handlers) HandleAdminSCUPageCatalogizeAll(w http.ResponseWriter, r *htt
 	// Full rebuild of all SCU page indexes if Apply or Force.
 	// RebuildAllIndexes:
 	//   1) clears all indexable keys (cat, brand, vendor, sort, numSort)
-	//   2) streams all SCUPage and rebuilds indexes in batches
+	//   2) streams all EANPage and rebuilds indexes in batches
 	//   3) rebuilds sort/numSort indexes
 	// This avoids per-document deletes (vacuum) and ensures no stale indexes.
 	if rebuildAllIndexes {
 		fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Starting full index rebuild...\n")
-		if err := h.scuPageSearch.RebuildAllIndexes(); err != nil {
+		if err := h.eanPageSearch.RebuildAllIndexes(); err != nil {
 			fmt.Printf("WARN: rebuild all indexes: %v\n", err)
 		}
 		fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Full index rebuild done.\n")
@@ -807,11 +807,11 @@ func (h *Handlers) HandleAdminSCUPageCatalogizeAll(w http.ResponseWriter, r *htt
 	})
 }
 
-// HandleAdminSCUPageRebuildTokens rebuilds token indexes for all SCU pages.
-// POST /admin/scupages/rebuild-tokens
+// HandleAdminEANPageRebuildTokens rebuilds token indexes for all SCU pages.
+// POST /admin/eanpages/rebuild-tokens
 // Body: { "limit": 0 } (0 = all)
 
-func (h *Handlers) HandleAdminSCUPageRebuildTokens(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleAdminEANPageRebuildTokens(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
@@ -826,7 +826,7 @@ func (h *Handlers) HandleAdminSCUPageRebuildTokens(w http.ResponseWriter, r *htt
 
 	fmt.Printf("[SCUPAGE-REBUILD-TOKENS] Starting (limit=%d)...\n", body.Limit)
 
-	all, err := h.scuPageRepo.List()
+	all, err := h.eanPageRepo.List()
 	if err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
@@ -841,8 +841,8 @@ func (h *Handlers) HandleAdminSCUPageRebuildTokens(w http.ResponseWriter, r *htt
 
 	for i := range all {
 		sp := &all[i]
-		fullText := tokenizer.BuildSCUTokensFullText(sp.Title, sp.Description, sp.Content, sp.Attributes)
-		if err := catz.BuildSCUTokens(sp.ID, fullText); err != nil {
+		fullText := tokenizer.BuildEANTokensFullText(sp.Title, sp.Description, sp.Content, sp.Attributes)
+		if err := catz.BuildEANTokens(sp.ID, fullText); err != nil {
 			continue
 		}
 		rebuilt++
@@ -856,7 +856,7 @@ func (h *Handlers) HandleAdminSCUPageRebuildTokens(w http.ResponseWriter, r *htt
 	})
 }
 
-func (h *Handlers) HandleAdminSCUPageRebuildToken(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleAdminEANPageRebuildToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
@@ -864,47 +864,47 @@ func (h *Handlers) HandleAdminSCUPageRebuildToken(w http.ResponseWriter, r *http
 
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) < 6 || parts[4] == "" {
-		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "scupage id is required")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "eanpage id is required")
 		return
 	}
 
 	id, err := strconv.ParseInt(parts[4], 10, 64)
 	if err != nil {
-		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid scupage id")
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid eanpage id")
 		return
 	}
 
-	sp, err := h.scuPageRepo.Get(id)
+	sp, err := h.eanPageRepo.Get(id)
 	if err != nil {
 		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 		return
 	}
 
 	catz := h.catalogizer
-	fullText := tokenizer.BuildSCUTokensFullText(sp.Title, sp.Description, sp.Content, sp.Attributes)
-	if err := catz.BuildSCUTokens(sp.ID, fullText); err != nil {
+	fullText := tokenizer.BuildEANTokensFullText(sp.Title, sp.Description, sp.Content, sp.Attributes)
+	if err := catz.BuildEANTokens(sp.ID, fullText); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":     "rebuilt",
-		"scupage_id": sp.ID,
-		"scu":        sp.SCU,
+		"eanpage_id": sp.ID,
+		"ean":        sp.EAN,
 		"full_text":  fullText[:min(len(fullText), 200)],
 	})
 }
 
-// POST /admin/scupages/recalculate-product-counts
+// POST /admin/eanpages/recalculate-product-counts
 // Recalculates ProductCount for all SCU pages based on actual products.
 
-func (h *Handlers) HandleAdminSCUPageRecalculateCounts(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleAdminEANPageRecalculateCounts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
-	if err := h.scuPageRepo.RecalculateProductCounts(); err != nil {
+	if err := h.eanPageRepo.RecalculateProductCounts(); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
@@ -915,24 +915,24 @@ func (h *Handlers) HandleAdminSCUPageRecalculateCounts(w http.ResponseWriter, r 
 	})
 }
 
-// POST /admin/scupages/recalculate-min-prices
+// POST /admin/eanpages/recalculate-min-prices
 // Recalculates MinPrice for all SCU pages based on actual product prices.
 // Also rebuilds sort indexes to ensure price filters work correctly.
 
-func (h *Handlers) HandleAdminSCUPageRecalculateMinPrices(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleAdminEANPageRecalculateMinPrices(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
-	if err := h.scuPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
+	if err := h.eanPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	// Rebuild sort indexes to reflect updated prices
-	if h.scuPageSearch != nil {
-		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
 			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("min prices recalculated but failed to rebuild sort indexes: %v", err))
 			return
 		}

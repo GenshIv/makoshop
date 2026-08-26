@@ -117,13 +117,13 @@ func (h *Handlers) HandleLandingPageCreate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if req.SCU == "" {
+	if req.EAN == "" {
 		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "scu is required")
 		return
 	}
 
 	lp := &model.LandingPage{
-		SCU:         req.SCU,
+		EAN:         req.EAN,
 		Slug:        req.Slug,
 		Title:       req.Title,
 		Description: req.Description,
@@ -160,8 +160,8 @@ func (h *Handlers) HandleLandingPageUpdate(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.landingRepo.Update(id, func(lp *model.LandingPage) {
-		if req.SCU != nil {
-			lp.SCU = *req.SCU
+		if req.EAN != nil {
+			lp.EAN = *req.EAN
 		}
 		if req.Slug != nil {
 			lp.Slug = *req.Slug
@@ -242,7 +242,7 @@ func (h *Handlers) HandleLandingPageBySlug(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Get products with this SCU
-	products, _ := h.turboSearch.GetProductsBySCU(lp.SCU)
+	products, _ := h.turboSearch.GetProductsByEAN(lp.EAN)
 	if products == nil {
 		products = []model.Product{}
 	}
@@ -253,35 +253,35 @@ func (h *Handlers) HandleLandingPageBySlug(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// HandleLandingPageBySCU returns a landing page by SCU (public).
-// GET /landing/scu/{scu}
-func (h *Handlers) HandleLandingPageBySCU(w http.ResponseWriter, r *http.Request) {
+// HandleLandingPageByEAN returns a landing page by EAN (public).
+// GET /landing/ean/{ean}
+func (h *Handlers) HandleLandingPageByEAN(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
-	// Extract SCU from path: /landing/scu/{scu}
+	// Extract EAN from path: /landing/ean/{ean}
 	path := r.URL.Path
-	prefix := "/landing/scu/"
+	prefix := "/landing/ean/"
 	if !strings.HasPrefix(path, prefix) {
 		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid path")
 		return
 	}
-	scu := strings.TrimPrefix(path, prefix)
-	if scu == "" {
-		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "missing scu")
+	ean := strings.TrimPrefix(path, prefix)
+	if ean == "" {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "missing ean")
 		return
 	}
 
-	lp, err := h.landingRepo.GetBySCU(scu)
+	lp, err := h.landingRepo.GetByEAN(ean)
 	if err != nil {
 		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "landing page not found")
 		return
 	}
 
 	// Get products with this SCU
-	products, _ := h.turboSearch.GetProductsBySCU(lp.SCU)
+	products, _ := h.turboSearch.GetProductsByEAN(lp.EAN)
 	if products == nil {
 		products = []model.Product{}
 	}
@@ -326,7 +326,7 @@ func (h *Handlers) HandleLandingPageProducts(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Get products with this SCU
-	products, _ := h.turboSearch.GetProductsBySCU(lp.SCU)
+	products, _ := h.turboSearch.GetProductsByEAN(lp.EAN)
 	if products == nil {
 		products = []model.Product{}
 	}
@@ -403,15 +403,15 @@ func (h *Handlers) HandleLandingPageProducts(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// --- SCUPage handlers (SEO pages) ---
+// --- EANPage handlers (SEO pages) ---
 
-// HandleSCUPageByPath handles SEO page requests.
+// HandleEANPageByPath handles SEO page requests.
 // GET /shop — all SCU pages (root catalog)
 // GET /shop/{category_tree} — SCU pages in category (category catalog)
 // GET /shop/{category_tree}/{slug} — single SCU page
 // Example: /shop/elektronika/telefony/samsung-galaxy-s7
 // Priority: category first, then SCU page, then redirect to referer/home.
-func (h *Handlers) HandleSCUPageByPath(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleEANPageByPath(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
@@ -432,7 +432,7 @@ func (h *Handlers) HandleSCUPageByPath(w http.ResponseWriter, r *http.Request) {
 
 	if len(cleanParts) == 0 {
 		// /shop — root catalog (all SCU pages)
-		h.handleSCUPageCatalog(w, r, 0)
+		h.handleEANPageCatalog(w, r, 0)
 		return
 	}
 
@@ -442,7 +442,7 @@ func (h *Handlers) HandleSCUPageByPath(w http.ResponseWriter, r *http.Request) {
 	// We check SCU page first if it's a single part to allow redirects.
 	if len(cleanParts) == 1 {
 		slug := cleanParts[0]
-		sp, err := h.scuPageRepo.GetBySlug(slug)
+		sp, err := h.eanPageRepo.GetBySlug(slug)
 		if err == nil {
 			canonical := "/shop/" + sp.Slug
 			if sp.CategoryID != 0 {
@@ -456,7 +456,7 @@ func (h *Handlers) HandleSCUPageByPath(w http.ResponseWriter, r *http.Request) {
 				http.Redirect(w, r, canonical, http.StatusMovedPermanently)
 				return
 			}
-			h.writeSCUPageResponse(w, r, sp)
+			h.writeEANPageResponse(w, r, sp)
 			return
 		}
 	}
@@ -464,15 +464,15 @@ func (h *Handlers) HandleSCUPageByPath(w http.ResponseWriter, r *http.Request) {
 	// Step 2: Try to find category by full path
 	catID, err := h.findCategoryByPath(cleanParts)
 	if err == nil {
-		h.handleSCUPageCatalog(w, r, catID)
+		h.handleEANPageCatalog(w, r, catID)
 		return
 	}
 
 	// Step 3: Try SCU page by last part as slug (for deep paths that didn't match category)
 	slug := cleanParts[len(cleanParts)-1]
-	sp, err := h.scuPageRepo.GetBySlug(slug)
+	sp, err := h.eanPageRepo.GetBySlug(slug)
 	if err == nil {
-		// Build canonical URL for this SCUPage
+		// Build canonical URL for this EANPage
 		canonical := "/shop/" + sp.Slug
 		if sp.CategoryID != 0 {
 			treePath, tpErr := h.categoryRepo.GetTreePath(sp.CategoryID)
@@ -487,7 +487,7 @@ func (h *Handlers) HandleSCUPageByPath(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Exact match — render page
-		h.writeSCUPageResponse(w, r, sp)
+		h.writeEANPageResponse(w, r, sp)
 		return
 	}
 
@@ -495,10 +495,10 @@ func (h *Handlers) HandleSCUPageByPath(w http.ResponseWriter, r *http.Request) {
 	httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "page not found")
 }
 
-var scuListRespRegistry = silentjson.BuildRegistry(reflect.TypeOf(db.SCUListRespData{}))
+var eanListRespRegistry = silentjson.BuildRegistry(reflect.TypeOf(db.EANListRespData{}))
 
-// handleSCUPageCatalog returns a paginated list of SCU pages for a category.
-func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, catID int64) {
+// handleEANPageCatalog returns a paginated list of SCU pages for a category.
+func (h *Handlers) handleEANPageCatalog(w http.ResponseWriter, r *http.Request, catID int64) {
 	ctx := r.Context()
 
 	q := r.URL.Query().Get("q")
@@ -556,9 +556,9 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 	// Build category filter attributes (cached)
 	categoryAttrs := h.GetCategoryAttrs(catID)
 
-	// Use SCUPageSearch for catalog listing
-	if h.scuPageSearch != nil {
-		params := db.SCUPageListParams{
+	// Use EANPageSearch for catalog listing
+	if h.eanPageSearch != nil {
+		params := db.EANPageListParams{
 			Q:           q,
 			CategoryID:  catID,
 			AttrFilters: attrFilters,
@@ -568,7 +568,7 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 			Page:        page,
 			Limit:       limit,
 		}
-		result, err := h.scuPageSearch.ListWithTurbo(params)
+		result, err := h.eanPageSearch.ListWithTurbo(params)
 		if err != nil {
 			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 			return
@@ -589,7 +589,7 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 		//	items = append(items, injectSeoURLCached(raw, h.categoryRepo, treePathCache))
 		//}
 
-		respData := db.SCUListRespData{
+		respData := db.EANListRespData{
 			Items:         result.Items,
 			Total:         result.Total,
 			Page:          result.Page,
@@ -614,10 +614,10 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 		}
 
 		if wantsHTML(r) {
-			writeHTMLResponseSCUList(w, r, i18n.T("ui.catalog_title"), respData)
+			writeHTMLResponseEANList(w, r, i18n.T("ui.catalog_title"), respData)
 			return
 		}
-		writeJSONSCUList(w, r, http.StatusOK, respData)
+		writeJSONEANList(w, r, http.StatusOK, respData)
 		return
 	}
 
@@ -635,15 +635,15 @@ func (h *Handlers) handleSCUPageCatalog(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	writeJSONSCUList(w, r, http.StatusOK, *result)
+	writeJSONEANList(w, r, http.StatusOK, *result)
 }
 
-// writeSCUPageResponse writes the SCU page with its products.
-func (h *Handlers) writeSCUPageResponse(w http.ResponseWriter, r *http.Request, sp *model.SCUPage) {
+// writeEANPageResponse writes the SCU page with its products.
+func (h *Handlers) writeEANPageResponse(w http.ResponseWriter, r *http.Request, sp *model.EANPage) {
 	ctx := r.Context()
 
-	// Get products with this SCU via turbo index "scu:{scu}"
-	products, err := h.turboSearch.GetProductsBySCU(sp.SCU)
+	// Get products with this SCU via turbo index "ean:{scu}"
+	products, err := h.turboSearch.GetProductsByEAN(sp.EAN)
 	if err != nil || products == nil {
 		products = []model.Product{}
 	}
@@ -665,9 +665,9 @@ func (h *Handlers) writeSCUPageResponse(w http.ResponseWriter, r *http.Request, 
 
 	seoURL := buildSEOURL(sp, treePath)
 
-	// writeJSONSCUList
-	respData := db.SCUListRespData{
-		SCUPage:      sp,
+	// writeJSONEANList
+	respData := db.EANListRespData{
+		EANPage:      sp,
 		Products:     products,
 		TreePath:     treePath,
 		TreePathFull: treePathFull,
@@ -687,10 +687,10 @@ func (h *Handlers) writeSCUPageResponse(w http.ResponseWriter, r *http.Request, 
 
 	title := sp.Title + " — MakoShop"
 	if wantsHTML(r) {
-		writeHTMLResponseSCUList(w, r, title, respData)
+		writeHTMLResponseEANList(w, r, title, respData)
 		return
 	}
-	writeJSONSCUList(w, r, http.StatusOK, respData)
+	writeJSONEANList(w, r, http.StatusOK, respData)
 }
 
 // isBot checks if the request is from a search engine bot
@@ -731,14 +731,14 @@ func wantsHTML(r *http.Request) bool {
 
 // writeHTMLResponse writes an HTML page with embedded data for SSR
 // For bots: full SSR with inline content. For browsers: minimal HTML + JS.
-func writeHTMLResponseSCUList(w http.ResponseWriter, r *http.Request, title string, data db.SCUListRespData) {
+func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title string, data db.EANListRespData) {
 	ctx := r.Context()
 	headOnly := r.Method == http.MethodHead
 
 	// For bots: need jsonData for SSR content. For browsers: write directly to avoid copy.
 	var jsonData []byte
 	if isBot(r) {
-		jsonData = marshalWithPool(&data, scuListRespRegistry)
+		jsonData = marshalWithPool(&data, eanListRespRegistry)
 		// Check if client disconnected after marshaling
 		select {
 		case <-ctx.Done():
@@ -831,13 +831,13 @@ func writeHTMLResponseSCUList(w http.ResponseWriter, r *http.Request, title stri
 		w.Write(stringToBytes(canonicalTag))
 	}
 	w.Write(htmlBodyStart)
-	writeSafeJSONWithPool(w, &data, scuListRespRegistry)
+	writeSafeJSONWithPool(w, &data, eanListRespRegistry)
 	w.Write(htmlScriptEnd)
 }
 
 // writeSafeJSONWithPool marshals data and writes escaped JSON directly to w.
 // Optimized for hot paths: no extra copy, escapes '<' inline.
-func writeSafeJSONWithPool(w http.ResponseWriter, data *db.SCUListRespData, reg *silentjson.Registry) {
+func writeSafeJSONWithPool(w http.ResponseWriter, data *db.EANListRespData, reg *silentjson.Registry) {
 	bufPtr := jsonBufPool.Get().(*[]byte)
 	buf := (*bufPtr)[:0]
 	buf = silentjson.Marshal(data, reg, buf)
@@ -962,7 +962,7 @@ func writeHTMLResponse(w http.ResponseWriter, r *http.Request, title string, dat
 	desc := "MakoShop — маркетплейс товаров по лучшим ценам от проверенных поставщиков."
 	image := ""
 
-	if page, ok := data["page"].(*model.SCUPage); ok {
+	if page, ok := data["page"].(*model.EANPage); ok {
 		seoURL = data["seo_url"].(string)
 		if page.Description != "" {
 			desc = page.Description
@@ -1171,15 +1171,15 @@ func renderSSRContent(jsonData []byte) string {
 		}
 	}
 
-	// Check if this is a single SCUPage (has "page")
+	// Check if this is a single EANPage (has "page")
 	if raw, ok := data["page"]; ok {
-		var page model.SCUPage
+		var page model.EANPage
 		if err := json.Unmarshal(raw, &page); err == nil {
 			var products []model.Product
 			if rawProds, ok := data["products"]; ok {
 				json.Unmarshal(rawProds, &products)
 			}
-			buf.WriteString(`<div class="ssr-scupage">`)
+			buf.WriteString(`<div class="ssr-eanpage">`)
 			buf.WriteString(fmt.Sprintf(`<h1>%s</h1>`, html.EscapeString(page.Title)))
 			if page.Description != "" {
 				buf.WriteString(fmt.Sprintf(`<p class="ssr-desc">%s</p>`, html.EscapeString(page.Description)))
@@ -1311,12 +1311,12 @@ func (h *Handlers) findCategoryByPath(slugs []string) (int64, error) {
 }
 
 // buildSEOURL builds the SEO URL for a SCU page.
-func buildSEOURL(sp *model.SCUPage, treePath []string) string {
+func buildSEOURL(sp *model.EANPage, treePath []string) string {
 	parts := append(treePath, sp.Slug)
 	return "/shop/" + strings.Join(parts, "/")
 }
 
-type SeoSlugSCU struct {
+type SeoSlugEAN struct {
 	Slug       string `json:"slug"`
 	CategoryID int64  `json:"category_id"`
 }
@@ -1324,7 +1324,7 @@ type SeoSlugSCU struct {
 // --- Request types ---
 
 type CreateLandingRequest struct {
-	SCU         string   `json:"scu"`
+	EAN         string   `json:"ean"`
 	Slug        string   `json:"slug,omitempty"`
 	Title       string   `json:"title"`
 	Description string   `json:"description,omitempty"`
@@ -1335,7 +1335,7 @@ type CreateLandingRequest struct {
 }
 
 type UpdateLandingRequest struct {
-	SCU         *string   `json:"scu,omitempty"`
+	EAN         *string   `json:"ean,omitempty"`
 	Slug        *string   `json:"slug,omitempty"`
 	Title       *string   `json:"title,omitempty"`
 	Description *string   `json:"description,omitempty"`
@@ -1345,10 +1345,10 @@ type UpdateLandingRequest struct {
 	ProductIDs  *[]int64  `json:"product_ids,omitempty"`
 }
 
-// HandleAdminRebuildSCUPages rebuilds all SCU pages from existing products.
-// POST /admin/rebuild-scupages
+// HandleAdminRebuildEANPages rebuilds all SCU pages from existing products.
+// POST /admin/rebuild-eanpages
 // Uses the same logic as import: BatchUpsertFromProducts for consistent seo_url generation.
-func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleAdminRebuildEANPages(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
@@ -1413,10 +1413,10 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 	// Phase 1: Batch upsert SCU pages (uses same logic as import, including seo_url)
 	fmt.Printf("[REBUILD-SCUPAGES] Phase 1: BatchUpsertFromProducts %d products...\n", len(allProducts))
 	phase1Start := time.Now()
-	_ = h.scuPageRepo.BatchUpsertFromProducts(allProducts)
+	_ = h.eanPageRepo.BatchUpsertFromProducts(allProducts)
 	fmt.Printf("[REBUILD-SCUPAGES] Phase 1: SCU pages upserted in %v\n", time.Since(phase1Start))
 
-	// Phase 2: Index all products (creates scu:{scu} indexes for SCU→Products lookup)
+	// Phase 2: Index all products (creates ean:{scu} indexes for SCU→Products lookup)
 	fmt.Printf("[REBUILD-SCUPAGES] Phase 2: Indexing %d products...\n", len(allProducts))
 	phase2Start := time.Now()
 	if h.productRepo.TurboSearch() != nil {
@@ -1442,13 +1442,13 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 	// Phase 3: Index all SCU pages
 	fmt.Println("[REBUILD-SCUPAGES] Phase 3: Indexing SCU pages...")
 	phase3Start := time.Now()
-	if h.scuPageSearch != nil {
-		allSCUs, _ := h.scuPageRepo.ListAll()
-		scuPtrs := make([]*model.SCUPage, len(allSCUs))
+	if h.eanPageSearch != nil {
+		allSCUs, _ := h.eanPageRepo.ListAll()
+		eanPtrs := make([]*model.EANPage, len(allSCUs))
 		for i := range allSCUs {
-			scuPtrs[i] = &allSCUs[i]
+			eanPtrs[i] = &allSCUs[i]
 		}
-		if err := h.scuPageSearch.IndexSCUPageBatch(scuPtrs); err != nil {
+		if err := h.eanPageSearch.IndexEANPageBatch(eanPtrs); err != nil {
 			fmt.Printf("[REBUILD-SCUPAGES] WARN: index SCU pages: %v\n", err)
 		}
 	}
@@ -1457,8 +1457,8 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 	// Phase 4: Build sort indexes for SCU pages
 	fmt.Println("[REBUILD-SCUPAGES] Phase 4: Building SCU page sort indexes...")
 	phase4Start := time.Now()
-	if h.scuPageSearch != nil {
-		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
 			fmt.Printf("[REBUILD-SCUPAGES] WARN: build sort indexes: %v\n", err)
 		}
 	}
@@ -1477,7 +1477,7 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 	// Phase 6: Recalculate SCU page product counts
 	fmt.Println("[REBUILD-SCUPAGES] Phase 6: Recalculating SCU page product counts...")
 	phase6Start := time.Now()
-	if err := h.scuPageRepo.RecalculateProductCounts(); err != nil {
+	if err := h.eanPageRepo.RecalculateProductCounts(); err != nil {
 		fmt.Printf("[REBUILD-SCUPAGES] WARN: recalculate product counts: %v\n", err)
 	}
 	fmt.Printf("[REBUILD-SCUPAGES] Phase 6: Product counts recalculated in %v\n", time.Since(phase6Start))
@@ -1485,7 +1485,7 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 	// Phase 7: Recalculate SCU page min prices
 	fmt.Println("[REBUILD-SCUPAGES] Phase 7: Recalculating SCU page min prices...")
 	phase7Start := time.Now()
-	if err := h.scuPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
+	if err := h.eanPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
 		fmt.Printf("[REBUILD-SCUPAGES] WARN: recalculate min prices: %v\n", err)
 	}
 	fmt.Printf("[REBUILD-SCUPAGES] Phase 7: Min prices recalculated in %v\n", time.Since(phase7Start))
@@ -1493,8 +1493,8 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 	// Phase 8: Rebuild SCU page sort indexes (to reflect updated min prices)
 	fmt.Println("[REBUILD-SCUPAGES] Phase 8: Rebuilding SCU page sort indexes...")
 	phase8Start := time.Now()
-	if h.scuPageSearch != nil {
-		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
 			fmt.Printf("[REBUILD-SCUPAGES] WARN: rebuild SCU page sort indexes: %v\n", err)
 		}
 	}
@@ -1510,22 +1510,22 @@ func (h *Handlers) HandleAdminRebuildSCUPages(w http.ResponseWriter, r *http.Req
 	})
 }
 
-// HandleAdminRebuildSCUPageSortIndexes rebuilds sort indexes for SCU pages.
-func (h *Handlers) HandleAdminRebuildSCUPageSortIndexes(w http.ResponseWriter, r *http.Request) {
+// HandleAdminRebuildEANPageSortIndexes rebuilds sort indexes for SCU pages.
+func (h *Handlers) HandleAdminRebuildEANPageSortIndexes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
-	if h.scuPageSearch == nil {
-		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "scupage search not initialized")
+	if h.eanPageSearch == nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "eanpage search not initialized")
 		return
 	}
 
 	fmt.Println("[REBUILD-SCUPAGE-SORT-INDEXES] Starting...")
 	startTime := time.Now()
 
-	if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+	if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
@@ -1547,15 +1547,15 @@ func (h *Handlers) HandleAdminRebuildProductCounts(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if h.scuPageRepo == nil {
-		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "scupage repo not initialized")
+	if h.eanPageRepo == nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "eanpage repo not initialized")
 		return
 	}
 
 	fmt.Println("[REBUILD-PRODUCT-COUNTS] Starting...")
 	startTime := time.Now()
 
-	if err := h.scuPageRepo.RecalculateProductCounts(); err != nil {
+	if err := h.eanPageRepo.RecalculateProductCounts(); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
@@ -1569,15 +1569,15 @@ func (h *Handlers) HandleAdminRebuildProductCounts(w http.ResponseWriter, r *htt
 	})
 }
 
-// HandleAdminRebuildSCUPageIndexes indexes all SCU pages into SCUPageSearch.
-func (h *Handlers) HandleAdminRebuildSCUPageIndexes(w http.ResponseWriter, r *http.Request) {
+// HandleAdminRebuildEANPageIndexes indexes all SCU pages into EANPageSearch.
+func (h *Handlers) HandleAdminRebuildEANPageIndexes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
-	if h.scuPageSearch == nil {
-		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "scupage search not initialized")
+	if h.eanPageSearch == nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "eanpage search not initialized")
 		return
 	}
 
@@ -1585,18 +1585,18 @@ func (h *Handlers) HandleAdminRebuildSCUPageIndexes(w http.ResponseWriter, r *ht
 	startTime := time.Now()
 
 	// Get all SCU pages
-	all, err := h.scuPageRepo.ListAll()
+	all, err := h.eanPageRepo.ListAll()
 	if err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	// Use batch indexing for speed
-	allPtrs := make([]*model.SCUPage, len(all))
+	allPtrs := make([]*model.EANPage, len(all))
 	for i := range all {
 		allPtrs[i] = &all[i]
 	}
-	if err := h.scuPageSearch.IndexSCUPageBatch(allPtrs); err != nil {
+	if err := h.eanPageSearch.IndexEANPageBatch(allPtrs); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
@@ -1604,7 +1604,7 @@ func (h *Handlers) HandleAdminRebuildSCUPageIndexes(w http.ResponseWriter, r *ht
 	errors := 0
 
 	// Build sort indexes ONCE after all pages are indexed
-	if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+	if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
 		fmt.Printf("[REBUILD-SCUPAGE-INDEXES] WARN: build sort indexes: %v\n", err)
 	}
 
@@ -1711,8 +1711,8 @@ func (h *Handlers) HandleAdminRebuildAttrDefIndexes(w http.ResponseWriter, r *ht
 	}
 
 	// Rebuild attr_values from SCU pages
-	if h.scuPageRepo != nil {
-		if err := h.attrDefRepo.RebuildAttrValuesFromSCUPages(h.scuPageRepo); err != nil {
+	if h.eanPageRepo != nil {
+		if err := h.attrDefRepo.RebuildAttrValuesFromEANPages(h.eanPageRepo); err != nil {
 			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 			return
 		}

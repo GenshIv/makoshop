@@ -216,21 +216,21 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 	// ============================================
 	fmt.Println("[IMPORT-CSV] Phase 3: SCU pages...")
 	phase3Start := time.Now()
-	if err := h.scuPageRepo.LoadCatalogizerCache(); err != nil {
+	if err := h.eanPageRepo.LoadCatalogizerCache(); err != nil {
 		fmt.Printf("[IMPORT-CSV] WARN: load catalogizer cache: %v\n", err)
 	}
-	h.scuPageRepo.BatchUpsertFromProducts(allProducts)
-	if h.scuPageSearch != nil {
-		allSCUs, _ := h.scuPageRepo.ListAll()
-		scuPtrs := make([]*model.SCUPage, len(allSCUs))
+	h.eanPageRepo.BatchUpsertFromProducts(allProducts)
+	if h.eanPageSearch != nil {
+		allSCUs, _ := h.eanPageRepo.ListAll()
+		eanPtrs := make([]*model.EANPage, len(allSCUs))
 		for i := range allSCUs {
-			scuPtrs[i] = &allSCUs[i]
+			eanPtrs[i] = &allSCUs[i]
 		}
-		if err := h.scuPageSearch.IndexSCUPageBatch(scuPtrs); err != nil {
+		if err := h.eanPageSearch.IndexEANPageBatch(eanPtrs); err != nil {
 			fmt.Printf("[IMPORT-CSV] WARN: index SCU pages: %v\n", err)
 		}
 		// Build sort indexes for SCU pages (required for catalog/SCU pages to show products)
-		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
 			fmt.Printf("[IMPORT-CSV] WARN: build SCU page sort indexes: %v\n", err)
 		}
 	}
@@ -251,7 +251,7 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 	// Phase 5: Recalculate SCU page product counts
 	fmt.Println("[IMPORT-CSV] Phase 5: Recalculating SCU page product counts...")
 	phase5Start := time.Now()
-	if err := h.scuPageRepo.RecalculateProductCounts(); err != nil {
+	if err := h.eanPageRepo.RecalculateProductCounts(); err != nil {
 		fmt.Printf("[IMPORT-CSV] WARN: recalculate product counts: %v\n", err)
 	}
 	fmt.Printf("[IMPORT-CSV] Phase 5: Product counts recalculated in %v\n", time.Since(phase5Start))
@@ -259,7 +259,7 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 	// Phase 6: Recalculate SCU page min prices
 	fmt.Println("[IMPORT-CSV] Phase 6: Recalculating SCU page min prices...")
 	phase6Start := time.Now()
-	if err := h.scuPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
+	if err := h.eanPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
 		fmt.Printf("[IMPORT-CSV] WARN: recalculate min prices: %v\n", err)
 	}
 	fmt.Printf("[IMPORT-CSV] Phase 6: Min prices recalculated in %v\n", time.Since(phase6Start))
@@ -267,8 +267,8 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 	// Phase 7: Rebuild SCU page sort indexes (to reflect updated min prices)
 	fmt.Println("[IMPORT-CSV] Phase 7: Rebuilding SCU page sort indexes...")
 	phase7Start := time.Now()
-	if h.scuPageSearch != nil {
-		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
 			fmt.Printf("[IMPORT-CSV] WARN: rebuild SCU page sort indexes: %v\n", err)
 		}
 	}
@@ -427,11 +427,11 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 	phase2Start := time.Now()
 
 	// Load catalogizer cache ONCE before batch upsert
-	if err := h.scuPageRepo.LoadCatalogizerCache(); err != nil {
+	if err := h.eanPageRepo.LoadCatalogizerCache(); err != nil {
 		fmt.Printf("[IMPORT-NORMALIZED] WARN: load catalogizer cache: %v (will use slow path)\n", err)
 	}
 
-	productToSCU := h.scuPageRepo.BatchUpsertFromProducts(createdProducts)
+	productToSCU := h.eanPageRepo.BatchUpsertFromProducts(createdProducts)
 	fmt.Printf("[IMPORT-NORMALIZED] Phase 2: SCU pages processed in %v (mapped %d products)\n",
 		time.Since(phase2Start), len(productToSCU))
 
@@ -449,17 +449,17 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Index SCU pages in batch
-	if h.scuPageSearch != nil {
-		allSCUs, _ := h.scuPageRepo.ListAll()
-		scuPtrs := make([]*model.SCUPage, len(allSCUs))
+	if h.eanPageSearch != nil {
+		allSCUs, _ := h.eanPageRepo.ListAll()
+		eanPtrs := make([]*model.EANPage, len(allSCUs))
 		for i := range allSCUs {
-			scuPtrs[i] = &allSCUs[i]
+			eanPtrs[i] = &allSCUs[i]
 		}
-		if err := h.scuPageSearch.IndexSCUPageBatch(scuPtrs); err != nil {
+		if err := h.eanPageSearch.IndexEANPageBatch(eanPtrs); err != nil {
 			fmt.Printf("[IMPORT-NORMALIZED] WARN: index SCU pages: %v\n", err)
 		}
 		// Build sort indexes for SCU pages (required for catalog/SCU pages to show products)
-		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
 			fmt.Printf("[IMPORT-NORMALIZED] WARN: build SCU page sort indexes: %v\n", err)
 		}
 	}
@@ -468,7 +468,7 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 	// Phase 4: Recalculate SCU page product counts
 	fmt.Println("[IMPORT-NORMALIZED] Phase 4: Recalculating SCU page product counts...")
 	phase4Start := time.Now()
-	if err := h.scuPageRepo.RecalculateProductCounts(); err != nil {
+	if err := h.eanPageRepo.RecalculateProductCounts(); err != nil {
 		fmt.Printf("[IMPORT-NORMALIZED] WARN: recalculate product counts: %v\n", err)
 	}
 	fmt.Printf("[IMPORT-NORMALIZED] Phase 4: Product counts recalculated in %v\n", time.Since(phase4Start))
@@ -476,7 +476,7 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 	// Phase 5: Recalculate SCU page min prices
 	fmt.Println("[IMPORT-NORMALIZED] Phase 5: Recalculating SCU page min prices...")
 	phase5Start := time.Now()
-	if err := h.scuPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
+	if err := h.eanPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
 		fmt.Printf("[IMPORT-NORMALIZED] WARN: recalculate min prices: %v\n", err)
 	}
 	fmt.Printf("[IMPORT-NORMALIZED] Phase 5: Min prices recalculated in %v\n", time.Since(phase5Start))
@@ -484,8 +484,8 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 	// Phase 6: Rebuild SCU page sort indexes (to reflect updated min prices)
 	fmt.Println("[IMPORT-NORMALIZED] Phase 6: Rebuilding SCU page sort indexes...")
 	phase6Start := time.Now()
-	if h.scuPageSearch != nil {
-		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
 			fmt.Printf("[IMPORT-NORMALIZED] WARN: rebuild SCU page sort indexes: %v\n", err)
 		}
 	}
@@ -560,7 +560,7 @@ func (h *Handlers) parseProductsFile(file string, companyID int64, companyName s
 
 	type productRow struct {
 		SKU         string           `json:"sku"`
-		SCU         string           `json:"scu"`
+		EAN         string           `json:"ean"`
 		Name        string           `json:"name"`
 		Description string           `json:"description"`
 		CategoryID  int64            `json:"category_id"`
@@ -599,8 +599,8 @@ func (h *Handlers) parseProductsFile(file string, companyID int64, companyName s
 			continue
 		}
 
-		// SCU: use explicit SCU or derive from SKU
-		scu := row.SCU
+		// EAN: use explicit SCU or derive from SKU
+		scu := row.EAN
 		if scu == "" {
 			parts := strings.SplitN(row.SKU, "-", 2)
 			scu = parts[0]
@@ -628,7 +628,7 @@ func (h *Handlers) parseProductsFile(file string, companyID int64, companyName s
 
 		p := &model.Product{
 			SKU:         row.SKU,
-			SCU:         scu,
+			EAN:         scu,
 			Name:        name,
 			Description: row.Description,
 			CategoryID:  0, // handled by catalogizer
@@ -906,7 +906,7 @@ func (h *Handlers) importNormalizedFileBatched(
 
 	type productRow struct {
 		SKU         string           `json:"sku"`
-		SCU         string           `json:"scu"`
+		EAN         string           `json:"ean"`
 		Name        string           `json:"name"`
 		Description string           `json:"description"`
 		CategoryID  int64            `json:"category_id"`
@@ -975,8 +975,8 @@ func (h *Handlers) importNormalizedFileBatched(
 					}
 
 					// SCU index
-					if prod.SCU != "" {
-						(*batchAccum).AddIndex("scu:"+prod.SCU, docID)
+					if prod.EAN != "" {
+						(*batchAccum).AddIndex("ean:"+prod.EAN, docID)
 					}
 				}
 				imported++
@@ -1025,8 +1025,8 @@ func (h *Handlers) importNormalizedFileBatched(
 		// Category handled by catalogizer only
 		catID := int64(0)
 
-		// SCU: use explicit SCU from JSONL, or derive from SKU (base without option)
-		scu := row.SCU
+		// EAN: use explicit SCU from JSONL, or derive from SKU (base without option)
+		scu := row.EAN
 		if scu == "" {
 			// Try to extract base SKU (before first dash/underscore)
 			parts := strings.SplitN(row.SKU, "-", 2)
@@ -1055,7 +1055,7 @@ func (h *Handlers) importNormalizedFileBatched(
 
 		p := &model.Product{
 			SKU:         row.SKU,
-			SCU:         scu,
+			EAN:         scu,
 			Name:        name,
 			Description: row.Description,
 			CategoryID:  catID,
@@ -1096,7 +1096,7 @@ func (h *Handlers) importNormalizedFileBatched(
 	// Batch upsert SCU pages from all created products (category via catalogizer only for new SCU pages)
 	if len(allCreated) > 0 {
 		fmt.Printf("[IMPORT-NORMALIZED] Batch upserting SCU pages for %d products...\n", len(allCreated))
-		_ = h.scuPageRepo.BatchUpsertFromProducts(allCreated)
+		_ = h.eanPageRepo.BatchUpsertFromProducts(allCreated)
 		fmt.Printf("[IMPORT-NORMALIZED] SCU pages batch upsert done.\n")
 	}
 
@@ -1188,7 +1188,7 @@ func (h *Handlers) importNormalizedFile(file string, limit, globalImported, batc
 
 	type productRow struct {
 		SKU         string           `json:"sku"`
-		SCU         string           `json:"scu"`
+		EAN         string           `json:"ean"`
 		Name        string           `json:"name"`
 		Description string           `json:"description"`
 		CategoryID  int64            `json:"category_id"`
@@ -1598,7 +1598,7 @@ func streamImportCSVFile(
 		// Add to batch
 		product := &model.Product{
 			SKU:         uniqueSku,
-			SCU:         scu,
+			EAN:         scu,
 			Name:        name,
 			Description: description,
 			CategoryID:  catID,
@@ -2041,7 +2041,7 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ============================================
-	// Phase 2: Batch index all products (creates scu:{scu} indexes)
+	// Phase 2: Batch index all products (creates ean:{scu} indexes)
 	// ============================================
 	fmt.Printf("[IMPORT-MULTI] Phase 2: Indexing %d products...\n", len(allProducts))
 	phase2Start := time.Now()
@@ -2057,20 +2057,20 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 	// ============================================
 	fmt.Println("[IMPORT-MULTI] Phase 3: SCU pages...")
 	phase3Start := time.Now()
-	if err := h.scuPageRepo.LoadCatalogizerCache(); err != nil {
+	if err := h.eanPageRepo.LoadCatalogizerCache(); err != nil {
 		fmt.Printf("[IMPORT-MULTI] WARN: load catalogizer cache: %v\n", err)
 	}
-	h.scuPageRepo.BatchUpsertFromProducts(allProducts)
-	if h.scuPageSearch != nil {
-		allSCUs, _ := h.scuPageRepo.ListAll()
-		scuPtrs := make([]*model.SCUPage, len(allSCUs))
+	h.eanPageRepo.BatchUpsertFromProducts(allProducts)
+	if h.eanPageSearch != nil {
+		allSCUs, _ := h.eanPageRepo.ListAll()
+		eanPtrs := make([]*model.EANPage, len(allSCUs))
 		for i := range allSCUs {
-			scuPtrs[i] = &allSCUs[i]
+			eanPtrs[i] = &allSCUs[i]
 		}
-		if err := h.scuPageSearch.IndexSCUPageBatch(scuPtrs); err != nil {
+		if err := h.eanPageSearch.IndexEANPageBatch(eanPtrs); err != nil {
 			fmt.Printf("[IMPORT-MULTI] WARN: index SCU pages: %v\n", err)
 		}
-		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
 			fmt.Printf("[IMPORT-MULTI] WARN: build SCU page sort indexes: %v\n", err)
 		}
 	}
@@ -2079,7 +2079,7 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 	// Phase 4: Recalculate SCU page product counts
 	fmt.Println("[IMPORT-MULTI] Phase 4: Recalculating SCU page product counts...")
 	phase4Start := time.Now()
-	if err := h.scuPageRepo.RecalculateProductCounts(); err != nil {
+	if err := h.eanPageRepo.RecalculateProductCounts(); err != nil {
 		fmt.Printf("[IMPORT-MULTI] WARN: recalculate product counts: %v\n", err)
 	}
 	fmt.Printf("[IMPORT-MULTI] Phase 4: Product counts recalculated in %v\n", time.Since(phase4Start))
@@ -2087,7 +2087,7 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 	// Phase 5: Recalculate SCU page min prices
 	fmt.Println("[IMPORT-MULTI] Phase 5: Recalculating SCU page min prices...")
 	phase5Start := time.Now()
-	if err := h.scuPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
+	if err := h.eanPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
 		fmt.Printf("[IMPORT-MULTI] WARN: recalculate min prices: %v\n", err)
 	}
 	fmt.Printf("[IMPORT-MULTI] Phase 5: Min prices recalculated in %v\n", time.Since(phase5Start))
@@ -2095,8 +2095,8 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 	// Phase 6: Rebuild SCU page sort indexes (to reflect updated min prices)
 	fmt.Println("[IMPORT-MULTI] Phase 6: Rebuilding SCU page sort indexes...")
 	phase6Start := time.Now()
-	if h.scuPageSearch != nil {
-		if err := h.scuPageSearch.BuildSortIndexes(); err != nil {
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
 			fmt.Printf("[IMPORT-MULTI] WARN: rebuild SCU page sort indexes: %v\n", err)
 		}
 	}

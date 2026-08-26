@@ -22,9 +22,9 @@ type Handlers struct {
 	attrDefRepo       *db.AttrDefRepo
 	productRepo       *db.ProductRepo
 	turboSearch       *db.TurboProductSearch
-	scuPageSearch     *db.SCUPageSearch
+	eanPageSearch     *db.EANPageSearch
 	landingRepo       *db.LandingRepo
-	scuPageRepo       *db.SCUPageRepo
+	eanPageRepo       *db.EANPageRepo
 	companyRepo       *db.CompanyRepo
 	userRepo          *db.UserRepo
 	cartRepo          *db.CartRepo
@@ -82,18 +82,18 @@ func NewHandlers(store *db.Store) *Handlers {
 	landingRepo := db.NewLandingRepo(store)
 	turboSearch.SetLandingRepo(landingRepo)
 
-	scuPageRepo := db.NewSCUPageRepo(store)
-	scuPageRepo.SetCategoryRepo(categoryRepo)
-	scuPageRepo.EnableCatalogizeNew(false) // disabled: categories come from price files
-	turboSearch.SetSCUPageRepo(scuPageRepo)
+	eanPageRepo := db.NewEANPageRepo(store)
+	eanPageRepo.SetCategoryRepo(categoryRepo)
+	eanPageRepo.EnableCatalogizeNew(false) // disabled: categories come from price files
+	turboSearch.SetEANPageRepo(eanPageRepo)
 
-	// SCUPage search (catalog works on SCU pages)
-	scuPageSearch := db.NewSCUPageSearch(store.DB(), scuPageRepo, productRepo, categoryRepo, turboEnabled)
-	productRepo.SetSCUPageSearch(scuPageSearch)
+	// EANPage search (catalog works on SCU pages)
+	eanPageSearch := db.NewEANPageSearch(store.DB(), eanPageRepo, productRepo, categoryRepo, turboEnabled)
+	productRepo.SetEANPageSearch(eanPageSearch)
 
 	// Catalogizer
 	catz := catalogizer.New(store, categoryRepo, productRepo)
-	scuPageRepo.Catalogizer = catz // for TurboTopNByIntersection catalogization
+	eanPageRepo.Catalogizer = catz // for TurboTopNByIntersection catalogization
 
 	// Stats collector with persistence
 	statsConfig := stats.DefaultStatsConfig()
@@ -120,9 +120,9 @@ func NewHandlers(store *db.Store) *Handlers {
 		promoLogRepo:      promoLogRepo,
 		productRepo:       productRepo,
 		turboSearch:       turboSearch,
-		scuPageSearch:     scuPageSearch,
+		eanPageSearch:     eanPageSearch,
 		landingRepo:       landingRepo,
-		scuPageRepo:       scuPageRepo,
+		eanPageRepo:       eanPageRepo,
 		catalogizer:       catz,
 		catAttrs:          make(map[int64]cachedCatAttrs),
 		statsCollector:    statsCollector,
@@ -272,21 +272,21 @@ func writeJSONWithPool[T any](w http.ResponseWriter, data *T, reg *silentjson.Re
 	jsonBufPool.Put(bufPtr)
 }
 
-func writeJSONSCUList(w http.ResponseWriter, r *http.Request, status int, data db.SCUListRespData) {
+func writeJSONEANList(w http.ResponseWriter, r *http.Request, status int, data db.EANListRespData) {
 	w.Header().Set("Content-Type", "application/json")
 	if r != nil && r.Method == http.MethodHead {
 		// For HEAD, we want the Content-Length but no body.
 		// However, marshalWithPool/writeJSONWithPool is needed to know the length.
 		bufPtr := jsonBufPool.Get().(*[]byte)
 		buf := (*bufPtr)[:0]
-		buf = silentjson.Marshal(&data, scuListRespRegistry, buf)
+		buf = silentjson.Marshal(&data, eanListRespRegistry, buf)
 		w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
 		w.WriteHeader(status)
 		*bufPtr = buf[:64*1024]
 		jsonBufPool.Put(bufPtr)
 		return
 	}
-	writeJSONWithPool(w, &data, scuListRespRegistry)
+	writeJSONWithPool(w, &data, eanListRespRegistry)
 }
 
 // HandleTurboProducts handles GET /products/turbo (turbo-index based search).

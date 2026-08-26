@@ -1,5 +1,43 @@
 # Makoshop — Changelog
 
+## 2025-08-26 — Импорт прайсов Nokaut + система управления ценами
+
+### Импорт прайсов Nokaut (XML)
+
+- Новый эндпоинт `POST /admin/import-nokaut` — импорт офферов из Nokaut XML-файлов в `prices/{ImportFolder}/*.xml`.
+- Идемпотентный импорт: уникальность = **EAN + нормализованное имя + компания**. Повторный импорт обновляет существующие товары, не создавая дубликаты.
+- Стриминг-парсер (`internal/pricesrc/nokaut.go`) — эффективен для файлов до 200 МБ / 120 000+ офферов.
+- Конфигурируемая маппинг-функция полей через `PriceSourceConfig` (разные компании предоставляют атрибуты по-разному):
+  - `ean_field`, `previous_price_field`, `image_field`, `product_url_field`, `brand_field`, `shop_category_field`
+  - `availability_map` — маппинг сырых значений наличия → `in_stock`/`out_of_stock`
+  - `attr_fields` — дополнительные атрибуты из XML-пропёрти
+- Валидация EAN: извлекает чистый цифровой код (8/12/13/14 или 6–20 цифр).
+- Разбор цен с польской запятой: `139,9`, `1.234,56` → корректный float.
+
+### Система управления ценами в админке
+
+- `PATCH /admin/companies/{id}` — поддержка новых полей: `import_folder`, `price_source`, `desc_ru/ua/pl/en`, `hero_image`, `is_visible`.
+- `GET /admin/companies/{id}/export` — экспорт конфигурации компании в JSON.
+- `POST /admin/companies/import` — импорт конфигурации компании из JSON.
+- `GET /admin/price-sources` — список конфигураций источников цен по всем компаниям.
+- Админ-UI: модальное окно «Prices» в `AdminCompaniesView.vue` — настройка импорта, запуск импорта, экспорт.
+
+### Лендинг компании
+
+- `GET /company/{slug}` — публичная страница компании с мультиязычным описанием, hero-изображением и live-статистикой (кол-во товаров, образцы).
+- Фронтенд: `CompanyView.vue` (роут `/company/:slug`).
+
+### Оранжевая цена (скидка)
+
+- Если `previous_price > price` — текущая цена показывается **оранжевым**, старая — с зачёркиванием.
+- Применено в `ProductCard.vue` (grid + list) и на страницах EAN.
+
+### Модели
+
+- `Product`: `SCU` → `EAN`, добавлено `PreviousPrice`.
+- `Company`: добавлены `ImportFolder`, `PriceSource`, `DescRu/Ua/Pl/En`, `HeroImage`, `IsVisible`.
+- Новые типы: `PriceSourceConfig`, `AttrFieldMap`.
+
 ## 2025-08-06 — Монетизация: продвигаемые товары в результатах поиска
 
 ### Встраивание промо-товаров в каталог

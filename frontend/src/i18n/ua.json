@@ -178,6 +178,11 @@
     "view_grid": "Сітка",
     "view_list": "Список"
   },
+  "company": {
+    "not_found": "Компанію не знайдено",
+    "products_count": "{count} товарів",
+    "latest_products": "Останні товари"
+  },
   "cart": {
     "title": "Кошик",
     "empty": "Кошик порожній",
@@ -415,7 +420,7 @@
     "parent": "Батько",
     "active": "Активна",
     "inactive": "Неактивна",
-    "edit": "Редагувати",
+    "edit": "Змінити",
     "attributes": "Атрибути",
     "delete": "Видалити",
     "delete_confirm": "Видалити категорію \"{name}\"? Це не видалить товари.",
@@ -644,7 +649,25 @@
     "anchor_keywords_placeholder": "напр., ноутбук, телефон...",
     "catalogizer_desc_title": "Опис каталогізатора",
     "catalogizer_desc": "Опис каталогізатора",
-    "back_to_dashboard": "← Повернутися на панель"
+    "back_to_dashboard": "← Повернутися на панель",
+    "add_company": "Додати компанію",
+    "import_company": "Імпорт",
+    "company_created": "Компанію створено",
+    "company_imported": "Компанію імпортовано",
+    "company_deleted": "Компанію видалено",
+    "delete_company_confirm": "Видалити цю компанію? Цю дію неможливо скасувати.",
+    "name_and_owner_required": "Назва та власник обов’язкові",
+    "import_failed": "Помилка імпорту",
+    "export_all": "Експорт усіх",
+    "import_all": "Імпорт усіх",
+    "companies_imported": "Імпортовано",
+    "edit_company": "Редагувати компанію",
+    "name_translations": "Переклади назви",
+    "images": "Зображення",
+    "logo_url": "URL логотипу",
+    "hero_image": "URL hero-зображення",
+    "description_translations": "Переклади опису",
+    "website_url": "URL сайту компанії"
   },
   "privacy": {
     "title": "Політика конфіденційності",

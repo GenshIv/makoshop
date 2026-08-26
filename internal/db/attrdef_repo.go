@@ -226,7 +226,7 @@ func minLen(a, b int) int {
 }
 
 // GetAttrValuesForCategory returns all values for an attribute code in a specific category.
-// Reads attr_values_cat:{code}:{catID} as a JSON map {value: true} (written by IndexSCUPageBatch).
+// Reads attr_values_cat:{code}:{catID} as a JSON map {value: true} (written by IndexEANPageBatch).
 func (r *AttrDefRepo) GetAttrValuesForCategory(code string, catID int64) ([]string, error) {
 	if catID == 0 {
 		return nil, nil
@@ -646,8 +646,8 @@ func (r *AttrDefRepo) BatchUpsertCodes(codeCats map[string]map[int64]struct{}) e
 }
 
 // BatchWriteAttrValues batch-writes attr value references.
-// Writes attr_values_cat:{code}:{catID} as JSON map {value: true} (consistent with IndexSCUPageBatch).
-// Writes attr_label:{code}:{value} with raw value (consistent with IndexSCUPageBatch).
+// Writes attr_values_cat:{code}:{catID} as JSON map {value: true} (consistent with IndexEANPageBatch).
+// Writes attr_label:{code}:{value} with raw value (consistent with IndexEANPageBatch).
 func (r *AttrDefRepo) BatchWriteAttrValues(codeValues map[string]map[string]struct{}, codeCatValues map[string]map[int64]map[string]struct{}) error {
 	if len(codeValues) == 0 {
 		return nil
@@ -671,7 +671,7 @@ func (r *AttrDefRepo) BatchWriteAttrValues(codeValues map[string]map[string]stru
 				if len(catValSet) == 0 {
 					continue
 				}
-				// Write as JSON map {value: true} (consistent with IndexSCUPageBatch)
+				// Write as JSON map {value: true} (consistent with IndexEANPageBatch)
 				catKey := turboKeyAttrValuesCat + code + ":" + fmt.Sprintf("%d", catID)
 				valuesMap := make(map[string]bool, len(catValSet))
 				for val := range catValSet {
@@ -830,16 +830,16 @@ func (r *AttrDefRepo) AddCodeToCategory(code string, catID int64) error {
 	})
 }
 
-// RebuildAttrValuesFromSCUPages rebuilds attr_values_cat and attr_label indexes
+// RebuildAttrValuesFromEANPages rebuilds attr_values_cat and attr_label indexes
 // from all SCU pages in the database.
-func (r *AttrDefRepo) RebuildAttrValuesFromSCUPages(scuPageRepo *SCUPageRepo) error {
-	fmt.Println("[ATTRDEF] RebuildAttrValuesFromSCUPages: starting...")
+func (r *AttrDefRepo) RebuildAttrValuesFromEANPages(eanPageRepo *EANPageRepo) error {
+	fmt.Println("[ATTRDEF] RebuildAttrValuesFromEANPages: starting...")
 	startTime := time.Now()
 
 	// Get all SCU pages
-	pages, err := scuPageRepo.List()
+	pages, err := eanPageRepo.List()
 	if err != nil {
-		return fmt.Errorf("list scupages: %w", err)
+		return fmt.Errorf("list eanpages: %w", err)
 	}
 
 	// Accumulate attr values per code and category
@@ -906,7 +906,7 @@ func (r *AttrDefRepo) RebuildAttrValuesFromSCUPages(scuPageRepo *SCUPageRepo) er
 		_ = r.addToAttrDefList(code)
 	}
 
-	fmt.Printf("[ATTRDEF] RebuildAttrValuesFromSCUPages: done in %v (%d pages, %d codes)\n",
+	fmt.Printf("[ATTRDEF] RebuildAttrValuesFromEANPages: done in %v (%d pages, %d codes)\n",
 		time.Since(startTime), len(pages), len(attrValues))
 	return nil
 }

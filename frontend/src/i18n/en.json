@@ -178,6 +178,11 @@
     "view_grid": "Grid",
     "view_list": "List"
   },
+  "company": {
+    "not_found": "Company not found",
+    "products_count": "{count} products",
+    "latest_products": "Latest products"
+  },
   "cart": {
     "title": "Cart",
     "empty": "Your cart is empty",
@@ -400,6 +405,10 @@
     "block": "Block",
     "block_confirm": "Block this company?",
     "categories_title": "Categories",
+    "tab_list": "List",
+    "tab_tree": "Tree (Drag & Drop)",
+    "tree_hint": "Drag categories to reorder or change parent. Drop in the middle to make a child, top/bottom to reorder siblings.",
+    "categories_reordered": "Categories reordered",
     "add_category": "+ Category",
     "edit_category": "Edit category",
     "new_category": "New category",
@@ -644,7 +653,25 @@
     "coverage_load_error": "Failed to load coverage",
     "user_status_active": "Active",
     "user_status_pending": "Pending",
-    "user_status_blocked": "Blocked"
+    "user_status_blocked": "Blocked",
+    "add_company": "Add Company",
+    "import_company": "Import",
+    "company_created": "Company created",
+    "company_imported": "Company imported",
+    "company_deleted": "Company deleted",
+    "delete_company_confirm": "Delete this company? This cannot be undone.",
+    "name_and_owner_required": "Name and owner are required",
+    "import_failed": "Import failed",
+    "export_all": "Export All",
+    "import_all": "Import All",
+    "companies_imported": "Imported",
+    "edit_company": "Edit Company",
+    "name_translations": "Name Translations",
+    "images": "Images",
+    "logo_url": "Logo URL",
+    "hero_image": "Hero Image URL",
+    "description_translations": "Description Translations",
+    "website_url": "Company Website URL"
   },
   "privacy": {
     "title": "Privacy Policy",

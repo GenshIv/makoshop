@@ -20,7 +20,7 @@ type TurboProductSearch struct {
 	repo         *ProductRepo
 	categoryRepo *CategoryRepo
 	landingRepo  *LandingRepo
-	scuPageRepo  *SCUPageRepo
+	eanPageRepo  *EANPageRepo
 	mu           sync.RWMutex
 	enabled      bool
 }
@@ -39,9 +39,9 @@ func (t *TurboProductSearch) SetLandingRepo(lr *LandingRepo) {
 	t.landingRepo = lr
 }
 
-// SetSCUPageRepo attaches a SCUPageRepo for SEO page management.
-func (t *TurboProductSearch) SetSCUPageRepo(sr *SCUPageRepo) {
-	t.scuPageRepo = sr
+// SetEANPageRepo attaches a EANPageRepo for SEO page management.
+func (t *TurboProductSearch) SetEANPageRepo(sr *EANPageRepo) {
+	t.eanPageRepo = sr
 }
 
 // DB returns the underlying ShardedDB for direct turbo operations (reads only).
@@ -134,28 +134,28 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 	t.indexPriceRanges(p.Price, docID)
 
 	// SCU index: links product to landing page
-	if p.SCU != "" {
-		scuKey := "scu:" + p.SCU
-		if _, err := t.store.db.TurboPutIndexString(scuKey, docID); err != nil {
+	if p.EAN != "" {
+		eanKey := "ean:" + p.EAN
+		if _, err := t.store.db.TurboPutIndexString(eanKey, docID); err != nil {
 			return fmt.Errorf("turbo scu index: %w", err)
 		}
 		// Update landing page product list
 		if t.landingRepo != nil {
-			_, _ = t.landingRepo.UpsertBySCU(p.SCU, func(lp *model.LandingPage) {
-				if lp.Title == p.SCU {
+			_, _ = t.landingRepo.UpsertByEAN(p.EAN, func(lp *model.LandingPage) {
+				if lp.Title == p.EAN {
 					lp.Title = p.Name
 				}
 				if lp.Description == "" {
 					lp.Description = p.Description
 				}
 			})
-			if lp, err := t.landingRepo.GetBySCU(p.SCU); err == nil {
+			if lp, err := t.landingRepo.GetByEAN(p.EAN); err == nil {
 				_ = t.landingRepo.AddProduct(lp.ID, p.ID)
 			}
 		}
-		// Link to SCUPage (SEO page)
-		if t.scuPageRepo != nil {
-			_ = t.scuPageRepo.LinkProductBySCU(p.SCU, p)
+		// Link to EANPage (SEO page)
+		if t.eanPageRepo != nil {
+			_ = t.eanPageRepo.LinkProductByEAN(p.EAN, p)
 		}
 	}
 
@@ -307,19 +307,19 @@ func (t *TurboProductSearch) UnindexProduct(p *model.Product) error {
 	}
 
 	// Remove SCU index
-	if p.SCU != "" {
-		scuKey := "scu:" + p.SCU
-		t.store.db.TurboDeleteIndexString(scuKey, docID)
+	if p.EAN != "" {
+		eanKey := "ean:" + p.EAN
+		t.store.db.TurboDeleteIndexString(eanKey, docID)
 		// Remove product from landing page
 		if t.landingRepo != nil {
-			if lp, err := t.landingRepo.GetBySCU(p.SCU); err == nil {
+			if lp, err := t.landingRepo.GetByEAN(p.EAN); err == nil {
 				_ = t.landingRepo.RemoveProduct(lp.ID, p.ID)
 			}
 		}
-		// Remove product from SCUPage
-		if t.scuPageRepo != nil {
-			if sp, err := t.scuPageRepo.GetBySCU(p.SCU); err == nil {
-				_ = t.scuPageRepo.RemoveProduct(sp.ID, p.ID)
+		// Remove product from EANPage
+		if t.eanPageRepo != nil {
+			if sp, err := t.eanPageRepo.GetByEAN(p.EAN); err == nil {
+				_ = t.eanPageRepo.RemoveProduct(sp.ID, p.ID)
 			}
 		}
 	}
@@ -389,9 +389,9 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 		}
 
 		// SCU index
-		if p.SCU != "" {
-			scuKey := "scu:" + p.SCU
-			indexes[scuKey] = append(indexes[scuKey], docID)
+		if p.EAN != "" {
+			eanKey := "ean:" + p.EAN
+			indexes[eanKey] = append(indexes[eanKey], docID)
 		}
 	}
 
@@ -1003,14 +1003,14 @@ func (t *TurboProductSearch) GetAllProducts() ([]model.Product, error) {
 	return result, nil
 }
 
-// GetProductsBySCU returns all products with a given SCU.
-func (t *TurboProductSearch) GetProductsBySCU(scu string) ([]model.Product, error) {
+// GetProductsByEAN returns all products with a given SCU.
+func (t *TurboProductSearch) GetProductsByEAN(scu string) ([]model.Product, error) {
 	if !t.enabled || scu == "" {
 		return nil, nil
 	}
 
-	scuKey := "scu:" + scu
-	tokens, err := t.store.db.TurboGetIndexTokens(scuKey)
+	eanKey := "ean:" + scu
+	tokens, err := t.store.db.TurboGetIndexTokens(eanKey)
 	if err != nil || len(tokens) == 0 {
 		return nil, nil
 	}
@@ -1018,7 +1018,7 @@ func (t *TurboProductSearch) GetProductsBySCU(scu string) ([]model.Product, erro
 	// Use MultiGetByDocIDsWithPrefix to get all products at once
 	docs, err := t.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
-		return nil, fmt.Errorf("multi get products by SCU: %w", err)
+		return nil, fmt.Errorf("multi get products by EAN: %w", err)
 	}
 
 	var result []model.Product

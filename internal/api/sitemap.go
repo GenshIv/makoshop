@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	sitemapSCUPageSize = 50000 // max URLs per sitemap file (XML spec safe limit)
+	sitemapEANPageSize = 50000 // max URLs per sitemap file (XML spec safe limit)
 )
 
 // ---------- robots.txt ----------
@@ -75,13 +75,13 @@ func (h *Handlers) HandleSitemapIndex(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	// Count SCU pages to determine how many sitemap files we need
-	scupageCount, err := h.getSCUPageCount()
+	eanpageCount, err := h.getEANPageCount()
 	if err != nil {
 		http.Error(w, "failed to count SCU pages: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	numSCUSitemaps := (scupageCount + sitemapSCUPageSize - 1) / sitemapSCUPageSize
+	numSCUSitemaps := (eanpageCount + sitemapEANPageSize - 1) / sitemapEANPageSize
 	if numSCUSitemaps < 1 {
 		numSCUSitemaps = 1 // always have at least one
 	}
@@ -96,10 +96,10 @@ func (h *Handlers) HandleSitemapIndex(w http.ResponseWriter, r *http.Request) {
 		LastMod: now,
 	})
 
-	// SCUPage sitemaps
+	// EANPage sitemaps
 	for i := 0; i < numSCUSitemaps; i++ {
 		sitemaps = append(sitemaps, SitemapRef{
-			Loc:     fmt.Sprintf("%s/sitemap-scupage-%d.xml", baseURL, i),
+			Loc:     fmt.Sprintf("%s/sitemap-eanpage-%d.xml", baseURL, i),
 			LastMod: now,
 		})
 	}
@@ -185,26 +185,26 @@ func (h *Handlers) HandleSitemapCategories(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-// ---------- sitemap-scupage-{N}.xml ----------
+// ---------- sitemap-eanpage-{N}.xml ----------
 
-// HandleSitemapSCUPage serves a paginated SCUPage sitemap
-func (h *Handlers) HandleSitemapSCUPage(w http.ResponseWriter, r *http.Request) {
+// HandleSitemapEANPage serves a paginated EANPage sitemap
+func (h *Handlers) HandleSitemapEANPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Extract page number from path: /sitemap-scupage-{N}.xml
+	// Extract page number from path: /sitemap-eanpage-{N}.xml
 	path := r.URL.Path
 	var pageNum int
 	var err error
 
-	// Handle /sitemap-scupage (no page number) -> default to page 0
-	if path == "/sitemap-scupage" || path == "/sitemap-scupage/" {
+	// Handle /sitemap-eanpage (no page number) -> default to page 0
+	if path == "/sitemap-eanpage" || path == "/sitemap-eanpage/" {
 		pageNum = 0
 	} else {
-		// Remove prefix /sitemap-scupage- and suffix .xml
-		pageStr := strings.TrimPrefix(path, "/sitemap-scupage-")
+		// Remove prefix /sitemap-eanpage- and suffix .xml
+		pageStr := strings.TrimPrefix(path, "/sitemap-eanpage-")
 		pageStr = strings.TrimSuffix(pageStr, ".xml")
 
 		pageNum, err = strconv.Atoi(pageStr)
@@ -216,14 +216,14 @@ func (h *Handlers) HandleSitemapSCUPage(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 
-	// Get all SCUPage IDs from turbo index
-	scupageIDs, err := h.getAllSCUPageIDs()
+	// Get all EANPage IDs from turbo index
+	eanpageIDs, err := h.getAllEANPageIDs()
 	if err != nil {
 		http.Error(w, "failed to read SCU page index: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	total := len(scupageIDs)
+	total := len(eanpageIDs)
 	if total == 0 {
 		// Return empty sitemap
 		sitemap := Sitemap{
@@ -238,8 +238,8 @@ func (h *Handlers) HandleSitemapSCUPage(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Calculate offset and limit
-	offset := pageNum * sitemapSCUPageSize
-	limit := sitemapSCUPageSize
+	offset := pageNum * sitemapEANPageSize
+	limit := sitemapEANPageSize
 
 	if offset >= total {
 		// Page out of range, return empty sitemap
@@ -259,21 +259,21 @@ func (h *Handlers) HandleSitemapSCUPage(w http.ResponseWriter, r *http.Request) 
 		end = total
 	}
 
-	pageIDs := scupageIDs[offset:end]
+	pageIDs := eanpageIDs[offset:end]
 
-	// Build URLs from SCUPage documents (streaming to avoid loading all into memory)
+	// Build URLs from EANPage documents (streaming to avoid loading all into memory)
 	urls := make([]SitemapURL, 0, len(pageIDs))
 
 	res, _ := h.store.DB().MultiGetByKey128(pageIDs)
 	for _, data := range res {
-		sp, err := db.UnmarshalSCUPage(data)
-		// sp, err := h.scuPageRepo.Get(id)
+		sp, err := db.UnmarshalEANPage(data)
+		// sp, err := h.eanPageRepo.Get(id)
 		if err != nil || !sp.IsActive {
 			continue
 		}
 
 		// Build canonical SEO URL: /shop/{breadcrumbs}/{slug}
-		loc := h.buildSCUPageURL(sp)
+		loc := h.buildEANPageURL(sp)
 
 		urls = append(urls, SitemapURL{
 			Loc:        h.siteBaseURL() + loc,
@@ -299,9 +299,9 @@ func (h *Handlers) HandleSitemapSCUPage(w http.ResponseWriter, r *http.Request) 
 
 // ---------- helpers ----------
 
-// getSCUPageCount returns the total number of SCU pages from turbo index
-func (h *Handlers) getSCUPageCount() (int, error) {
-	data, err := h.scuPageRepo.Store.DB().TurboRawRead(db.TurboKeySCUPageList)
+// getEANPageCount returns the total number of SCU pages from turbo index
+func (h *Handlers) getEANPageCount() (int, error) {
+	data, err := h.eanPageRepo.Store.DB().TurboRawRead(db.TurboKeyEANPageList)
 	if err != nil || len(data) == 0 {
 		return 0, nil
 	}
@@ -309,9 +309,9 @@ func (h *Handlers) getSCUPageCount() (int, error) {
 	return len(ids), nil
 }
 
-// getAllSCUPageIDs returns all SCUPage IDs from turbo index as sorted slice
-func (h *Handlers) getAllSCUPageIDs() ([]any, error) {
-	tokens128, err := h.scuPageRepo.Store.DB().TurboGetIndexTokens(db.TurboKeySCUPageList)
+// getAllEANPageIDs returns all EANPage IDs from turbo index as sorted slice
+func (h *Handlers) getAllEANPageIDs() ([]any, error) {
+	tokens128, err := h.eanPageRepo.Store.DB().TurboGetIndexTokens(db.TurboKeyEANPageList)
 	if err != nil || len(tokens128) == 0 {
 		return nil, nil
 	}
@@ -324,8 +324,8 @@ func (h *Handlers) getAllSCUPageIDs() ([]any, error) {
 	return ids, nil
 }
 
-// buildSCUPageURL builds canonical SEO URL for a SCU page
-func (h *Handlers) buildSCUPageURL(sp *model.SCUPage) string {
+// buildEANPageURL builds canonical SEO URL for a SCU page
+func (h *Handlers) buildEANPageURL(sp *model.EANPage) string {
 	if sp.CategoryID != 0 {
 		treePath, err := h.categoryRepo.GetTreePath(sp.CategoryID)
 		if err == nil && len(treePath) > 0 {

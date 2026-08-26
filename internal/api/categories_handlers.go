@@ -908,6 +908,145 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 	})
 }
 
-// HandleAdminSCUPageCatalogizeAll re-catalogizes all SCU pages using TurboTopNByIntersection.
-// POST /admin/scupages/catalogize-all
+// HandleAdminCategoriesReorder handles bulk reordering of categories (drag-and-drop).
+// POST /admin/categories/reorder
+// Body: { "items": [ { "id": 5, "parent_id": 2, "sort_order": 0 }, ... ] }
+// Validates no cycles, applies all updates, rebuilds trees.
+
+func (h *Handlers) HandleAdminCategoriesReorder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	var req struct {
+		Items []struct {
+			ID        int64  `json:"id"`
+			ParentID  *int64 `json:"parent_id"`
+			SortOrder int    `json:"sort_order"`
+		} `json:"items"`
+	}
+
+	if !httpres.ReadJSON(w, r, &req) {
+		return
+	}
+
+	if len(req.Items) == 0 {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "no items provided")
+		return
+	}
+
+	// Build map of current categories for validation
+	allCats, err := h.categoryRepo.ListAll()
+	if err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	catByID := make(map[int64]model.Category)
+	for _, c := range allCats {
+		catByID[c.ID] = c
+	}
+
+	// Build proposed parent map: id -> new parent_id (or nil for root)
+	proposedParent := make(map[int64]*int64)
+	for _, item := range req.Items {
+		if _, exists := catByID[item.ID]; !exists {
+			httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", fmt.Sprintf("category %d not found", item.ID))
+			return
+		}
+		proposedParent[item.ID] = item.ParentID
+	}
+
+	// Validate: no cycles allowed
+	// A category cannot be moved into its own subtree
+	for _, item := range req.Items {
+		if item.ParentID == nil {
+			continue
+		}
+
+		// Check if parent exists
+		if _, exists := catByID[*item.ParentID]; !exists {
+			httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", fmt.Sprintf("parent category %d not found", *item.ParentID))
+			return
+		}
+
+		// Check if parent is the category itself
+		if *item.ParentID == item.ID {
+			httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "cannot set category as its own parent")
+			return
+		}
+
+		// Check if parent is in the category's subtree (would create cycle)
+		// We need to check if currentParent is a descendant of item.ID
+		if isDescendant(catByID, *item.ParentID, item.ID) {
+			httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "cycle detected: cannot move category into its own subtree")
+			return
+		}
+
+		// Also check for cycles in the proposed changes
+		// Walk up from proposed parent using proposed parents to detect cycles
+		currentParent := *item.ParentID
+		for currentParent != 0 {
+			// Check if this parent is being moved to become a child of the current category
+			if proposedParent[currentParent] != nil && *proposedParent[currentParent] == item.ID {
+				httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "cycle detected: cannot move category into its own subtree")
+				return
+			}
+			// Move up using proposed parent if available, otherwise current parent
+			if proposedParent[currentParent] != nil {
+				currentParent = *proposedParent[currentParent]
+			} else if cat, exists := catByID[currentParent]; exists {
+				if cat.ParentID != nil {
+					currentParent = *cat.ParentID
+				} else {
+					break
+				}
+			} else {
+				break
+			}
+		}
+	}
+
+	// Apply all updates
+	updated := 0
+	for _, item := range req.Items {
+		err := h.categoryRepo.Update(item.ID, func(c *model.Category) {
+			c.ParentID = item.ParentID
+			c.SortOrder = item.SortOrder
+		})
+		if err != nil {
+			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("failed to update category %d: %v", item.ID, err))
+			return
+		}
+		updated++
+	}
+
+	// Rebuild trees and indexes
+	h.categoryRepo.RebuildTrees()
+
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "ok",
+		"updated": updated,
+	})
+}
+
+// isDescendant checks if catID is a descendant of ancestorID (or equal).
+func isDescendant(catByID map[int64]model.Category, catID, ancestorID int64) bool {
+	current := catID
+	for current != 0 {
+		if current == ancestorID {
+			return true
+		}
+		cat, exists := catByID[current]
+		if !exists || cat.ParentID == nil {
+			return false
+		}
+		current = *cat.ParentID
+	}
+	return false
+}
+
+// HandleAdminEANPageCatalogizeAll re-catalogizes all SCU pages using TurboTopNByIntersection.
+// POST /admin/eanpages/catalogize-all
 // Body: { "apply": true }

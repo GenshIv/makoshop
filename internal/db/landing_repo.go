@@ -12,7 +12,7 @@ import (
 
 const (
 	turboKeyLandingList = "landing_list"
-	turboKeyLandingSCU  = "landing_scu:" // prefix for SCU lookup
+	turboKeyLandingSCU  = "landing_ean:" // prefix for SCU lookup
 )
 
 type LandingRepo struct {
@@ -25,7 +25,7 @@ func NewLandingRepo(store *Store) *LandingRepo {
 
 // Create creates a new landing page.
 func (r *LandingRepo) Create(l *model.LandingPage) error {
-	if l.SCU == "" {
+	if l.EAN == "" {
 		return fmt.Errorf("scu is required")
 	}
 
@@ -37,7 +37,7 @@ func (r *LandingRepo) Create(l *model.LandingPage) error {
 	l.CreatedAt = time.Now().Unix()
 	l.UpdatedAt = time.Now().Unix()
 	if l.Slug == "" {
-		l.Slug = toLandingSlug(l.SCU)
+		l.Slug = toLandingSlug(l.EAN)
 	}
 
 	data := MarshalLandingPage(*l)
@@ -51,12 +51,12 @@ func (r *LandingRepo) Create(l *model.LandingPage) error {
 		return fmt.Errorf("turbo index landing_list: %w", err)
 	}
 
-	// Turbo index: landing_scu:<scu>
-	scuKey := turboKeyLandingSCU + l.SCU
-	if err := r.Store.TurboWrite(scuKey, []byte(KeyLandingPage(l.ID))); err != nil {
+	// Turbo index: landing_ean:<scu>
+	eanKey := turboKeyLandingSCU + l.EAN
+	if err := r.Store.TurboWrite(eanKey, []byte(KeyLandingPage(l.ID))); err != nil {
 		_, _ = r.Store.db.TurboDeleteIndexString(turboKeyLandingList, KeyLandingPage(l.ID))
 		_ = r.Store.DocDelete(KeyLandingPage(l.ID))
-		return fmt.Errorf("turbo index landing_scu: %w", err)
+		return fmt.Errorf("turbo index landing_ean: %w", err)
 	}
 
 	return nil
@@ -75,12 +75,12 @@ func (r *LandingRepo) Get(id int64) (*model.LandingPage, error) {
 }
 
 // GetBySCU returns a landing page by SCU.
-func (r *LandingRepo) GetBySCU(scu string) (*model.LandingPage, error) {
+func (r *LandingRepo) GetByEAN(scu string) (*model.LandingPage, error) {
 	if scu == "" {
 		return nil, fmt.Errorf("scu is empty")
 	}
-	scuKey := turboKeyLandingSCU + scu
-	data, err := r.Store.db.TurboRawRead(scuKey)
+	eanKey := turboKeyLandingSCU + scu
+	data, err := r.Store.db.TurboRawRead(eanKey)
 	if err != nil || len(data) == 0 {
 		return nil, fmt.Errorf("landing page with scu %q not found", scu)
 	}
@@ -93,7 +93,7 @@ func (r *LandingRepo) GetBySCU(scu string) (*model.LandingPage, error) {
 func (r *LandingRepo) GetBySlug(slug string) (*model.LandingPage, error) {
 	// Slugs are derived from SCU, so we can lookup via SCU
 	scu := slugToSCU(slug)
-	return r.GetBySCU(scu)
+	return r.GetByEAN(scu)
 }
 
 // Update updates a landing page.
@@ -103,7 +103,7 @@ func (r *LandingRepo) Update(id int64, updater func(*model.LandingPage)) error {
 		return err
 	}
 
-	oldSCU := l.SCU
+	oldSCU := l.EAN
 	updater(l)
 	l.UpdatedAt = time.Now().Unix()
 
@@ -113,10 +113,10 @@ func (r *LandingRepo) Update(id int64, updater func(*model.LandingPage)) error {
 	}
 
 	// Update SCU index if changed
-	if oldSCU != l.SCU {
+	if oldSCU != l.EAN {
 		_ = r.Store.TurboWrite(turboKeyLandingSCU+oldSCU, []byte{}) // clear old
-		if l.SCU != "" {
-			if err := r.Store.TurboWrite(turboKeyLandingSCU+l.SCU, []byte(strconv.FormatInt(id, 10))); err != nil {
+		if l.EAN != "" {
+			if err := r.Store.TurboWrite(turboKeyLandingSCU+l.EAN, []byte(strconv.FormatInt(id, 10))); err != nil {
 				return fmt.Errorf("update landing_scu index: %w", err)
 			}
 		}
@@ -159,8 +159,8 @@ func (r *LandingRepo) Delete(id int64) error {
 
 	// Remove turbo indexes
 	_, _ = r.Store.db.TurboDeleteIndexString(turboKeyLandingList, KeyLandingPage(id))
-	if l.SCU != "" {
-		_ = r.Store.TurboWrite(turboKeyLandingSCU+l.SCU, []byte{})
+	if l.EAN != "" {
+		_ = r.Store.TurboWrite(turboKeyLandingSCU+l.EAN, []byte{})
 	}
 
 	if err := r.Store.DocDelete(KeyLandingPage(id)); err != nil {
@@ -214,13 +214,13 @@ func (r *LandingRepo) RemoveProduct(id int64, productID int64) error {
 // UpsertBySCU creates or updates a landing page by SCU.
 // If a landing page with this SCU exists, updates it.
 // If not, creates a new one.
-func (r *LandingRepo) UpsertBySCU(scu string, updater func(*model.LandingPage)) (*model.LandingPage, error) {
+func (r *LandingRepo) UpsertByEAN(scu string, updater func(*model.LandingPage)) (*model.LandingPage, error) {
 	if scu == "" {
 		return nil, fmt.Errorf("scu is required")
 	}
 
 	// Try to get existing
-	l, err := r.GetBySCU(scu)
+	l, err := r.GetByEAN(scu)
 	if err == nil {
 		// Update existing
 		updater(l)
@@ -234,7 +234,7 @@ func (r *LandingRepo) UpsertBySCU(scu string, updater func(*model.LandingPage)) 
 
 	// Create new
 	l = &model.LandingPage{
-		SCU:      scu,
+		EAN:      scu,
 		Slug:     toLandingSlug(scu),
 		Title:    scu,
 		IsActive: true,

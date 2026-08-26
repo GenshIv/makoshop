@@ -24,20 +24,20 @@ func main() {
 	}
 	defer store.Close()
 
-	repo := db.NewSCUPageRepo(store)
+	repo := db.NewEANPageRepo(store)
 	categoryRepo := db.NewCategoryRepo(store)
 	promoCampaignRepo := db.NewPromoCampaignRepo(store)
 	promoPlanRepo := db.NewPromoPlanRepo(store)
 	promoLogRepo := db.NewPromoLogRepo(store)
 	productRepo := db.NewProductRepo(store, promoCampaignRepo, promoPlanRepo, promoLogRepo)
 
-	search := db.NewSCUPageSearch(store.DB(), repo, productRepo, categoryRepo, true)
+	search := db.NewEANPageSearch(store.DB(), repo, productRepo, categoryRepo, true)
 
 	// Warmup
 	for i := 0; i < 10; i++ {
-		_, _ = search.ListWithTurbo(db.SCUPageListParams{Sort: "price_asc", Page: 1, Limit: 50})
-		_, _ = search.ListWithTurbo(db.SCUPageListParams{PriceMin: 100, PriceMax: 10000, Sort: "price_asc", Page: 1, Limit: 50})
-		_, _ = search.ListWithTurbo(db.SCUPageListParams{PriceMin: 100, PriceMax: 10000, Sort: "price_desc", Page: 1, Limit: 50})
+		_, _ = search.ListWithTurbo(db.EANPageListParams{Sort: "price_asc", Page: 1, Limit: 50})
+		_, _ = search.ListWithTurbo(db.EANPageListParams{PriceMin: 100, PriceMax: 10000, Sort: "price_asc", Page: 1, Limit: 50})
+		_, _ = search.ListWithTurbo(db.EANPageListParams{PriceMin: 100, PriceMax: 10000, Sort: "price_desc", Page: 1, Limit: 50})
 	}
 
 	const iterations = 200
@@ -46,7 +46,7 @@ func main() {
 	var totalFast time.Duration
 	for i := 0; i < iterations; i++ {
 		start := time.Now()
-		_, _ = search.ListWithTurbo(db.SCUPageListParams{Sort: "price_asc", Page: 1, Limit: 50})
+		_, _ = search.ListWithTurbo(db.EANPageListParams{Sort: "price_asc", Page: 1, Limit: 50})
 		totalFast += time.Since(start)
 	}
 
@@ -54,7 +54,7 @@ func main() {
 	var totalPRAsc time.Duration
 	for i := 0; i < iterations; i++ {
 		start := time.Now()
-		_, _ = search.ListWithTurbo(db.SCUPageListParams{PriceMin: 100, PriceMax: 10000, Sort: "price_asc", Page: 1, Limit: 50})
+		_, _ = search.ListWithTurbo(db.EANPageListParams{PriceMin: 100, PriceMax: 10000, Sort: "price_asc", Page: 1, Limit: 50})
 		totalPRAsc += time.Since(start)
 	}
 
@@ -62,7 +62,7 @@ func main() {
 	var totalPRDesc time.Duration
 	for i := 0; i < iterations; i++ {
 		start := time.Now()
-		_, _ = search.ListWithTurbo(db.SCUPageListParams{PriceMin: 100, PriceMax: 10000, Sort: "price_desc", Page: 1, Limit: 50})
+		_, _ = search.ListWithTurbo(db.EANPageListParams{PriceMin: 100, PriceMax: 10000, Sort: "price_desc", Page: 1, Limit: 50})
 		totalPRDesc += time.Since(start)
 	}
 
@@ -70,7 +70,7 @@ func main() {
 	var totalPRText time.Duration
 	for i := 0; i < iterations; i++ {
 		start := time.Now()
-		_, _ = search.ListWithTurbo(db.SCUPageListParams{PriceMin: 100, PriceMax: 10000, Q: "телефон", Sort: "price_asc", Page: 1, Limit: 50})
+		_, _ = search.ListWithTurbo(db.EANPageListParams{PriceMin: 100, PriceMax: 10000, Q: "телефон", Sort: "price_asc", Page: 1, Limit: 50})
 		totalPRText += time.Since(start)
 	}
 
@@ -78,7 +78,7 @@ func main() {
 	var totalPRMin time.Duration
 	for i := 0; i < iterations; i++ {
 		start := time.Now()
-		_, _ = search.ListWithTurbo(db.SCUPageListParams{PriceMin: 100, Sort: "price_asc", Page: 1, Limit: 50})
+		_, _ = search.ListWithTurbo(db.EANPageListParams{PriceMin: 100, Sort: "price_asc", Page: 1, Limit: 50})
 		totalPRMin += time.Since(start)
 	}
 

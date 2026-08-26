@@ -178,6 +178,11 @@
     "search_time": "Wyniki w {ms} ms",
     "filters": "Filtry"
   },
+  "company": {
+    "not_found": "Nie znaleziono firmy",
+    "products_count": "{count} produktów",
+    "latest_products": "Ostatnie produkty"
+  },
   "cart": {
     "title": "Koszyk",
     "empty": "Twój koszyk jest pusty",
@@ -644,7 +649,25 @@
     "anchor_keywords_placeholder": "np. laptop, telefon...",
     "catalogizer_desc_title": "Opis katalogizatora",
     "catalogizer_desc": "Opis katalogizatora",
-    "back_to_dashboard": "← Wróć do panelu"
+    "back_to_dashboard": "← Wróć do panelu",
+    "add_company": "Dodaj firmę",
+    "import_company": "Importuj",
+    "company_created": "Firma utworzona",
+    "company_imported": "Firma zaimportowana",
+    "company_deleted": "Firma usunięta",
+    "delete_company_confirm": "Usunąć tę firmę? Tej operacji nie można cofnąć.",
+    "name_and_owner_required": "Nazwa i właściciel są wymagane",
+    "import_failed": "Błąd importu",
+    "export_all": "Eksportuj wszystkie",
+    "import_all": "Importuj wszystkie",
+    "companies_imported": "Zaimportowano",
+    "edit_company": "Edytuj firmę",
+    "name_translations": "Tłumaczenia nazwy",
+    "images": "Obrazy",
+    "logo_url": "URL logo",
+    "hero_image": "URL obrazu hero",
+    "description_translations": "Tłumaczenia opisu",
+    "website_url": "URL strony firmy"
   },
   "privacy": {
     "title": "Polityka prywatności",

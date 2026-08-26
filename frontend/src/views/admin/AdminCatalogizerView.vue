@@ -250,7 +250,21 @@ const fetchCoverage = async () => {
 
 // --- Train ---
 
+const trainLoading = ref(false);
 
+const trainCatalogizer = async () => {
+  trainLoading.value = true;
+  try {
+    const res = await api.post('/admin/catalogizer/train');
+    addLog(`Catalogizer trained: ${res.data.message}`);
+    toast.success(t('admin.catalogizer_train_success', { count: res.data.trained_categories || 0 }));
+  } catch (e) {
+    console.error('Train error:', e);
+    toast.error(t('admin.catalogizer_train_failed', { error: e.response?.data?.message || e.message }));
+  } finally {
+    trainLoading.value = false;
+  }
+};
 
 onMounted(() => {
   fetchCategories();
@@ -307,6 +321,13 @@ onMounted(() => {
           class="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
         >
           {{ t('admin.catalogizer_catalogize_all_scupages') || 'Catalogize All SCU Pages' }}
+        </button>
+        <button
+          @click="trainCatalogizer"
+          :disabled="trainLoading"
+          class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+        >
+          {{ trainLoading ? t('admin.catalogizer_training') || 'Training...' : t('admin.catalogizer_train') || 'Train Catalogizer' }}
         </button>
       </div>
     </div>

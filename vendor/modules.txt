@@ -4,7 +4,7 @@ github.com/GenshIv/intHache
 # github.com/GenshIv/makodb/v2 v2.1.17 => /home/ihar/IdeaProjects/makodb
 ## explicit; go 1.26.3
 github.com/GenshIv/makodb/v2
-# github.com/GenshIv/silentjson/v2 v2.0.6 => /home/ihar/IdeaProjects/silentjson
+# github.com/GenshIv/silentjson/v2 v2.0.8 => /home/ihar/IdeaProjects/silentjson
 ## explicit; go 1.26.3
 github.com/GenshIv/silentjson/v2
 # github.com/cespare/ryu v0.0.1
