@@ -130,7 +130,7 @@ const resolveActiveCategory = () => {
   const pathSlugs = route.path.slice(6).split('/').filter(Boolean);
   // Try full path first
   let found = findCategoryBySlugs(pathSlugs, rootCategories.value);
-  // If not found, last slug might be product/SCU - try without it
+  // If not found, last slug might be product/EAN - try without it
   if (!found && pathSlugs.length > 1) {
     found = findCategoryBySlugs(pathSlugs.slice(0, -1), rootCategories.value);
   }

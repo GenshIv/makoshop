@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/makoshop/internal/slug"
 	"github.com/GenshIv/makoshop/internal/tokenizer"
@@ -14,10 +15,10 @@ import (
 
 const (
 	TurboKeyEANPageList = "eanpage_list"
-	turboKeyEANPageEAN  = "eanpage_ean:"  // prefix for SCU lookup
+	turboKeyEANPageEAN  = "eanpage_ean:"  // prefix for EAN lookup
 	turboKeyEANPageSlug = "eanpage_slug:" // prefix for slug lookup
 
-	// Limits to prevent SCU pages from growing too large in DB
+	// Limits to prevent EAN pages from growing too large in DB
 	maxEANPageProductIDs = 500 // max product IDs to store in EANPage
 	maxEANPageImages     = 50  // max images to store in EANPage
 )
@@ -25,9 +26,10 @@ const (
 type EANPageRepo struct {
 	Store            *Store
 	CategoryRepo     *CategoryRepo
-	CatalogizeNew    bool                             // if true, auto-catalogize new SCU pages
+	CatalogizeNew    bool                             // if true, auto-catalogize new EAN pages
 	Catalogizer      interface{}                      // *catalogizer.Catalogizer (interface to avoid import cycle)
 	catalogizerCache []tokenizer.CachedCategoryTokens // pre-loaded for batch operations
+	txn              *makodb.Transaction              // active transaction (nil if not in transaction)
 }
 
 func NewEANPageRepo(store *Store) *EANPageRepo {
@@ -39,9 +41,20 @@ func (r *EANPageRepo) SetCategoryRepo(cr *CategoryRepo) {
 	r.CategoryRepo = cr
 }
 
-// EnableCatalogizeNew enables auto-catalogization for new SCU pages.
+// EnableCatalogizeNew enables auto-catalogization for new EAN pages.
 func (r *EANPageRepo) EnableCatalogizeNew(enabled bool) {
 	r.CatalogizeNew = enabled
+}
+
+// SetTransaction sets the active transaction for this repo.
+// When set, all operations will use the transaction.
+func (r *EANPageRepo) SetTransaction(txn *makodb.Transaction) {
+	r.txn = txn
+}
+
+// ClearTransaction clears the active transaction.
+func (r *EANPageRepo) ClearTransaction() {
+	r.txn = nil
 }
 
 // LoadCatalogizerCache loads category token indexes for fast batch auto-catalogization.
@@ -85,11 +98,11 @@ func (r *EANPageRepo) LoadCatalogizerCache() error {
 	return nil
 }
 
-// CreateNoListIndex creates a new SCU page WITHOUT adding to eanpage_list index.
+// CreateNoListIndex creates a new EAN page WITHOUT adding to eanpage_list index.
 // Used in batch operations where list index is updated once after all creations.
 func (r *EANPageRepo) CreateNoListIndex(s *model.EANPage) error {
 	if s.EAN == "" {
-		return fmt.Errorf("scu is required")
+		return fmt.Errorf("ean is required")
 	}
 
 	id, err := r.Store.NextID("eanpage")
@@ -108,7 +121,7 @@ func (r *EANPageRepo) CreateNoListIndex(s *model.EANPage) error {
 		return fmt.Errorf("save eanpage: %w", err)
 	}
 
-	// Turbo index: eanpage_ean:<scu>
+	// Turbo index: eanpage_ean:<ean>
 	eanKey := turboKeyEANPageEAN + s.EAN
 	if err := r.Store.TurboWrite(eanKey, []byte(strconv.FormatInt(id, 10))); err != nil {
 		_ = r.Store.DocDelete(KeyEANPage(s.ID))
@@ -126,10 +139,10 @@ func (r *EANPageRepo) CreateNoListIndex(s *model.EANPage) error {
 	return nil
 }
 
-// Create creates a new SCU page.
+// Create creates a new EAN page.
 func (r *EANPageRepo) Create(s *model.EANPage) error {
 	if s.EAN == "" {
-		return fmt.Errorf("scu is required")
+		return fmt.Errorf("ean is required")
 	}
 
 	id, err := r.Store.NextID("eanpage")
@@ -154,7 +167,7 @@ func (r *EANPageRepo) Create(s *model.EANPage) error {
 		return fmt.Errorf("turbo index eanpage_list: %w", err)
 	}
 
-	// Turbo index: eanpage_ean:<scu>
+	// Turbo index: eanpage_ean:<ean>
 	eanKey := turboKeyEANPageEAN + s.EAN
 	if err := r.Store.TurboWrite(eanKey, []byte(strconv.FormatInt(id, 10))); err != nil {
 		_, _ = r.Store.db.TurboDeleteIndexString(TurboKeyEANPageList, KeyEANPage(id))
@@ -174,34 +187,34 @@ func (r *EANPageRepo) Create(s *model.EANPage) error {
 	return nil
 }
 
-// Get returns a SCU page by ID.
+// Get returns a EAN page by ID.
 func (r *EANPageRepo) Get(id int64) (*model.EANPage, error) {
 	data, err := r.Store.DocGet(KeyEANPage(id))
 	if err != nil {
 		if errors.Is(err, ErrKeyNotFound) {
-			return nil, fmt.Errorf("scu page %d not found", id)
+			return nil, fmt.Errorf("ean page %d not found", id)
 		}
 		return nil, fmt.Errorf("get eanpage %d: %w", id, err)
 	}
 	return UnmarshalEANPage(data)
 }
 
-// GetBySCU returns a SCU page by SCU.
-func (r *EANPageRepo) GetByEAN(scu string) (*model.EANPage, error) {
-	if scu == "" {
-		return nil, fmt.Errorf("scu is empty")
+// GetBySCU returns a EAN page by EAN.
+func (r *EANPageRepo) GetByEAN(ean string) (*model.EANPage, error) {
+	if ean == "" {
+		return nil, fmt.Errorf("ean is empty")
 	}
-	eanKey := turboKeyEANPageEAN + scu
+	eanKey := turboKeyEANPageEAN + ean
 	data, err := r.Store.db.TurboRawRead(eanKey)
 	if err != nil || len(data) == 0 {
-		return nil, fmt.Errorf("scu page with scu %q not found", scu)
+		return nil, fmt.Errorf("ean page with ean %q not found", ean)
 	}
 	var id int64
 	_, _ = fmt.Sscanf(string(data), "%d", &id)
 	return r.Get(id)
 }
 
-// GetBySlug returns a SCU page by slug.
+// GetBySlug returns a EAN page by slug.
 func (r *EANPageRepo) GetBySlug(slug string) (*model.EANPage, error) {
 	if slug == "" {
 		return nil, fmt.Errorf("slug is empty")
@@ -209,7 +222,7 @@ func (r *EANPageRepo) GetBySlug(slug string) (*model.EANPage, error) {
 	slugKey := turboKeyEANPageSlug + slug
 	data, err := r.Store.db.TurboRawRead(slugKey)
 	if err != nil || len(data) == 0 {
-		return nil, fmt.Errorf("scu page with slug %q not found", slug)
+		return nil, fmt.Errorf("ean page with slug %q not found", slug)
 	}
 	// Data is stored as KeyEANPage(id), e.g. "eanpage:73"
 	// Extract the ID from the key
@@ -225,7 +238,7 @@ func (r *EANPageRepo) GetBySlug(slug string) (*model.EANPage, error) {
 	return r.Get(id)
 }
 
-// Update updates a SCU page.
+// Update updates a EAN page.
 func (r *EANPageRepo) Update(id int64, updater func(*model.EANPage)) error {
 	s, err := r.Get(id)
 	if err != nil {
@@ -242,7 +255,7 @@ func (r *EANPageRepo) Update(id int64, updater func(*model.EANPage)) error {
 		return fmt.Errorf("update eanpage: %w", err)
 	}
 
-	// Update SCU index if changed
+	// Update EAN index if changed
 	if oldSCU != s.EAN {
 		_ = r.Store.TurboWrite(turboKeyEANPageEAN+oldSCU, []byte{})
 		if s.EAN != "" {
@@ -265,7 +278,7 @@ func (r *EANPageRepo) Update(id int64, updater func(*model.EANPage)) error {
 	return nil
 }
 
-// List returns all SCU pages via turbo index.
+// List returns all EAN pages via turbo index.
 func (r *EANPageRepo) List() ([]model.EANPage, error) {
 	tokens, err := r.Store.db.TurboGetIndexTokens(TurboKeyEANPageList)
 	if err != nil || len(tokens) == 0 {
@@ -291,12 +304,12 @@ func (r *EANPageRepo) List() ([]model.EANPage, error) {
 	return result, nil
 }
 
-// ListAll returns all SCU pages (alias for List).
+// ListAll returns all EAN pages (alias for List).
 func (r *EANPageRepo) ListAll() ([]model.EANPage, error) {
 	return r.List()
 }
 
-// Delete removes a SCU page.
+// Delete removes a EAN page.
 func (r *EANPageRepo) Delete(id int64) error {
 	s, err := r.Get(id)
 	if err != nil {
@@ -318,9 +331,9 @@ func (r *EANPageRepo) Delete(id int64) error {
 	return nil
 }
 
-// AddProduct increments product count for this SCU page.
-// NOTE: Product→SCU link is stored in Product.EAN field.
-// SCU→Products query via turbo index "ean:{scu}" in TurboProductSearch.
+// AddProduct increments product count for this EAN page.
+// NOTE: Product→EAN link is stored in Product.EAN field.
+// EAN→Products query via turbo index "ean:{ean}" in TurboProductSearch.
 func (r *EANPageRepo) AddProduct(id int64, productID int64) error {
 	s, err := r.Get(id)
 	if err != nil {
@@ -332,9 +345,9 @@ func (r *EANPageRepo) AddProduct(id int64, productID int64) error {
 	return r.Store.DocPut(KeyEANPage(s.ID), data)
 }
 
-// RemoveProduct decrements product count for this SCU page.
-// NOTE: Product→SCU link is stored in Product.EAN field.
-// SCU→Products query via turbo index "ean:{scu}" in TurboProductSearch.
+// RemoveProduct decrements product count for this EAN page.
+// NOTE: Product→EAN link is stored in Product.EAN field.
+// EAN→Products query via turbo index "ean:{ean}" in TurboProductSearch.
 func (r *EANPageRepo) RemoveProduct(id int64, productID int64) error {
 	s, err := r.Get(id)
 	if err != nil {
@@ -348,16 +361,16 @@ func (r *EANPageRepo) RemoveProduct(id int64, productID int64) error {
 	return r.Store.DocPut(KeyEANPage(s.ID), data)
 }
 
-// UpsertBySCU creates or updates a SCU page by SCU.
+// UpsertBySCU creates or updates a EAN page by EAN.
 // If exists: updates fields if new values are provided.
 // If not: creates new.
-func (r *EANPageRepo) UpsertByEAN(scu string, updater func(*model.EANPage)) (*model.EANPage, error) {
-	if scu == "" {
-		return nil, fmt.Errorf("scu is required")
+func (r *EANPageRepo) UpsertByEAN(ean string, updater func(*model.EANPage)) (*model.EANPage, error) {
+	if ean == "" {
+		return nil, fmt.Errorf("ean is required")
 	}
 
 	// Try to get existing
-	s, err := r.GetByEAN(scu)
+	s, err := r.GetByEAN(ean)
 	if err == nil {
 		// Update existing
 		updater(s)
@@ -371,7 +384,7 @@ func (r *EANPageRepo) UpsertByEAN(scu string, updater func(*model.EANPage)) (*mo
 
 	// Create new
 	s = &model.EANPage{
-		EAN:      scu,
+		EAN:      ean,
 		IsActive: true,
 	}
 	updater(s)
@@ -387,7 +400,7 @@ func (r *EANPageRepo) UpsertByEAN(scu string, updater func(*model.EANPage)) (*mo
 	return s, nil
 }
 
-// UpsertFromProduct creates or updates a SCU page from a product.
+// UpsertFromProduct creates or updates a EAN page from a product.
 // This is the main entry point for import-time indexing.
 // Merges attributes, images, and updates min_price.
 func (r *EANPageRepo) UpsertFromProduct(product *model.Product) error {
@@ -395,14 +408,14 @@ func (r *EANPageRepo) UpsertFromProduct(product *model.Product) error {
 		return nil
 	}
 
-	// Try to get existing SCU page
+	// Try to get existing EAN page
 	s, err := r.GetByEAN(product.EAN)
 	if err == nil {
 		// Update existing: merge data
 		return r.updateEANPageFromProduct(s, product)
 	}
 
-	// Create new SCU page from product
+	// Create new EAN page from product
 	// Category is determined ONLY by catalogizer (anchor keywords), ignoring product.CategoryID.
 	categoryID := int64(0)
 	if r.CatalogizeNew && r.CategoryRepo != nil {
@@ -435,7 +448,7 @@ func (r *EANPageRepo) UpsertFromProduct(product *model.Product) error {
 	return r.Create(s)
 }
 
-// updateEANPageFromProduct merges product data into an existing SCU page.
+// updateEANPageFromProduct merges product data into an existing EAN page.
 func (r *EANPageRepo) updateEANPageFromProduct(s *model.EANPage, product *model.Product) error {
 	// Increment product count (link is in Product.EAN, not stored here)
 	s.ProductCount++
@@ -457,6 +470,13 @@ func (r *EANPageRepo) updateEANPageFromProduct(s *model.EANPage, product *model.
 		s.Content = product.Description
 	}
 
+	// Update category if not set and catalogizer is enabled
+	if s.CategoryID == 0 && r.CatalogizeNew && r.CategoryRepo != nil {
+		if catID, err := r.autoCatalogize(product); err == nil && catID > 0 {
+			s.CategoryID = catID
+		}
+	}
+
 	// Ensure SeoURL is set
 	if s.SeoURL == "" {
 		s.SeoURL = r.ComputeSeoURL(s.Slug, s.CategoryID, nil)
@@ -469,22 +489,22 @@ func (r *EANPageRepo) updateEANPageFromProduct(s *model.EANPage, product *model.
 	return r.Store.DocPut(KeyEANPage(s.ID), data)
 }
 
-// LinkProductBySCU finds or creates a SCU page for the given SCU and links the product.
+// LinkProductBySCU finds or creates a EAN page for the given EAN and links the product.
 // This is the main entry point for import-time linking.
-func (r *EANPageRepo) LinkProductByEAN(scu string, product *model.Product) error {
-	if scu == "" {
+func (r *EANPageRepo) LinkProductByEAN(ean string, product *model.Product) error {
+	if ean == "" {
 		return nil
 	}
 
-	// Try to find existing SCU page
-	s, err := r.GetByEAN(scu)
+	// Try to find existing EAN page
+	s, err := r.GetByEAN(ean)
 	if err == nil {
 		// Exists — just link product
 		return r.AddProduct(s.ID, product.ID)
 	}
 
-	// Create new SCU page from product data
-	s, err = r.UpsertByEAN(scu, func(s *model.EANPage) {
+	// Create new EAN page from product data
+	s, err = r.UpsertByEAN(ean, func(s *model.EANPage) {
 		s.Title = product.Name
 		s.Description = product.Description
 		s.Content = product.Description
@@ -507,6 +527,7 @@ func (r *EANPageRepo) LinkProductByEAN(scu string, product *model.Product) error
 // autoCatalogize determines the best category for a product based on anchor keywords.
 // Uses pre-built token indexes from catalogizer (cat_tokens:{catID}).
 // Returns category ID or 0 if no match found.
+// Uses product name + shop_category (last element only) for matching.
 func (r *EANPageRepo) autoCatalogize(p *model.Product) (int64, error) {
 	if r.CategoryRepo == nil || r.Store == nil {
 		return 0, nil
@@ -515,11 +536,17 @@ func (r *EANPageRepo) autoCatalogize(p *model.Product) (int64, error) {
 	// Tokenize product name (same as catalogizer)
 	productTokens := tokenizer.Tokenize(p.Name)
 
-	// Also tokenize shop_category attribute if present
+	// Also tokenize shop_category attribute if present (use only last element)
 	for _, attr := range p.Attributes {
 		if attr.Key == "shop_category" && attr.Value != "" {
-			catTokens := tokenizer.Tokenize(attr.Value)
-			productTokens = append(productTokens, catTokens...)
+			// Split by backslash or forward slash and take last element
+			parts := strings.Split(attr.Value, "\\")
+			last := parts[len(parts)-1]
+			last = strings.TrimSpace(last)
+			if last != "" {
+				catTokens := tokenizer.Tokenize(last)
+				productTokens = append(productTokens, catTokens...)
+			}
 			break
 		}
 	}
@@ -588,12 +615,12 @@ func eanPageKeyForProduct(p *model.Product) string {
 	return "nm:" + strings.ToLower(strings.Join(strings.Fields(p.Name), " "))
 }
 
-// toEANPageSlug creates a URL-friendly slug from SCU and title.
-func toEANPageSlug(scu, title string) string {
-	// Prefer title if available, otherwise use SCU
+// toEANPageSlug creates a URL-friendly slug from EAN and title.
+func toEANPageSlug(ean, title string) string {
+	// Prefer title if available, otherwise use EAN
 	base := title
 	if base == "" {
-		base = scu
+		base = ean
 	}
 	return slug.SlugKeepCase(base)
 }
@@ -723,7 +750,7 @@ func cloneKeyValueSlice(src []model.KeyValue) []model.KeyValue {
 	return result
 }
 
-// ComputeSeoURL builds seo_url for a SCU page: "/shop/{treePath}/{slug}"
+// ComputeSeoURL builds seo_url for a EAN page: "/shop/{treePath}/{slug}"
 // Uses treePathCache to avoid repeated DB calls.
 func (r *EANPageRepo) ComputeSeoURL(slug string, categoryID int64, treePathCache map[int64][]string) string {
 	if categoryID == 0 || r.CategoryRepo == nil {
@@ -743,11 +770,11 @@ func (r *EANPageRepo) ComputeSeoURL(slug string, categoryID int64, treePathCache
 	return "/shop/" + strings.Join(treePath, "/") + "/" + slug
 }
 
-// BatchUpsertFromProducts creates or updates SCU pages from a batch of products.
+// BatchUpsertFromProducts creates or updates EAN pages from a batch of products.
 // Returns a map of productID -> EANPageID for linking.
 // This is much faster than calling UpsertFromProduct in a loop because:
-// - Reads all existing SCU pages once (batch)
-// - Writes all new/updated SCU pages in batch
+// - Reads all existing EAN pages once (batch)
+// - Writes all new/updated EAN pages in batch
 // - Uses cached catalogizer tokens (call LoadCatalogizerCache() first)
 // - Computes seo_url with cached category tree paths
 func (r *EANPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int64]int64 {
@@ -788,10 +815,10 @@ func (r *EANPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 		}
 	}
 
-	// Group products by SCU and merge into EANPage objects
-	// New SCU pages
+	// Group products by EAN and merge into EANPage objects
+	// New EAN pages
 	newPages := make(map[string]*model.EANPage)
-	// Existing SCU pages to update
+	// Existing EAN pages to update
 	updatedPages := make(map[string]*model.EANPage)
 
 	for _, p := range products {
@@ -870,16 +897,16 @@ func (r *EANPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 	// Create new pages
 	created := make(map[string]int64)
 	var newEANPageIDs []string
-	for scu, s := range newPages {
+	for ean, s := range newPages {
 		if err := r.CreateNoListIndex(s); err != nil {
-			fmt.Printf("WARN: create eanpage for SCU %s: %v\n", scu, err)
+			fmt.Printf("WARN: create eanpage for EAN %s: %v\n", ean, err)
 			continue
 		}
-		created[scu] = s.ID
+		created[ean] = s.ID
 		newEANPageIDs = append(newEANPageIDs, KeyEANPage(s.ID))
 	}
 
-	// Batch add all new SCU pages to eanpage_list index (single write)
+	// Batch add all new EAN pages to eanpage_list index (single write)
 	if len(newEANPageIDs) > 0 {
 		if _, err := r.Store.db.TurboPutBatchIndexString(TurboKeyEANPageList, newEANPageIDs); err != nil {
 			fmt.Printf("WARN: batch add to eanpage_list: %v\n", err)
@@ -887,17 +914,17 @@ func (r *EANPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 	}
 
 	// Update existing pages
-	for scu, s := range updatedPages {
+	for ean, s := range updatedPages {
 		data := MarshalEANPage(*s)
 		if err := r.Store.DocPut(KeyEANPage(s.ID), data); err != nil {
-			fmt.Printf("WARN: update eanpage for SCU %s: %v\n", scu, err)
+			fmt.Printf("WARN: update eanpage for EAN %s: %v\n", ean, err)
 			continue
 		}
-		created[scu] = s.ID // reuse ID for mapping
+		created[ean] = s.ID // reuse ID for mapping
 	}
 
 	fmt.Printf("[SCUPAGE]: start catologizator")
-	// Catalogize new SCU pages using TurboTopNByIntersection
+	// Catalogize new EAN pages using TurboTopNByIntersection
 	if r.CatalogizeNew && r.Catalogizer != nil {
 		// Get catalogizer via type assertion
 		if catz, ok := r.Catalogizer.(interface {
@@ -905,14 +932,14 @@ func (r *EANPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 			CatalogizeEANPageByIntersection(scuPageID int64) (int64, error)
 		}); ok {
 			catalogized := 0
-			for scu, s := range newPages {
+			for ean, s := range newPages {
 				if s.CategoryID != 0 {
 					continue
 				}
-				// Build tokens for this SCU page using all available text
+				// Build tokens for this EAN page using all available text
 				fullText := tokenizer.BuildEANTokensFullText(s.Title, s.Description, s.Content, s.Attributes)
 				if err := catz.BuildEANTokens(s.ID, fullText); err != nil {
-					fmt.Printf("WARN: build scu tokens for %s (id=%d): %v\n", scu, s.ID, err)
+					fmt.Printf("WARN: build ean tokens for %s (id=%d): %v\n", ean, s.ID, err)
 					continue
 				}
 				// Catalogize using TurboTopNByIntersection
@@ -920,14 +947,14 @@ func (r *EANPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 					s.CategoryID = catID
 					data := MarshalEANPage(*s)
 					if err := r.Store.DocPut(KeyEANPage(s.ID), data); err != nil {
-						fmt.Printf("WARN: update eanpage category for %s (id=%d): %v\n", scu, s.ID, err)
+						fmt.Printf("WARN: update eanpage category for %s (id=%d): %v\n", ean, s.ID, err)
 					} else {
 						catalogized++
 					}
 				}
 			}
 			if catalogized > 0 {
-				fmt.Printf("[SCUPAGE] Catalogized %d new SCU pages via TurboTopNByIntersection\n", catalogized)
+				fmt.Printf("[SCUPAGE] Catalogized %d new EAN pages via TurboTopNByIntersection\n", catalogized)
 			}
 		}
 	}
@@ -946,8 +973,8 @@ func (r *EANPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 	return result
 }
 
-// RecalculateProductCounts recalculates ProductCount for all SCU pages
-// based on actual products linked via SCU.
+// RecalculateProductCounts recalculates ProductCount for all EAN pages
+// based on actual products linked via EAN.
 // This fixes inconsistencies after bulk imports.
 func (r *EANPageRepo) RecalculateProductCounts() error {
 	if r.Store == nil {
@@ -965,7 +992,7 @@ func (r *EANPageRepo) RecalculateProductCounts() error {
 			continue
 		}
 
-		// Count products with this SCU via turbo index
+		// Count products with this EAN via turbo index
 		key := "ean:" + sp.EAN
 		tokens, err := r.Store.db.TurboGetIndexTokens(key)
 		if err != nil || len(tokens) == 0 {
@@ -990,12 +1017,12 @@ func (r *EANPageRepo) RecalculateProductCounts() error {
 		}
 	}
 
-	fmt.Printf("[SCUPAGE] RecalculateProductCounts: done. Updated %d SCU pages.\n", updated)
+	fmt.Printf("[SCUPAGE] RecalculateProductCounts: done. Updated %d EAN pages.\n", updated)
 	return nil
 }
 
-// RecalculateMinPrices recalculates MinPrice for all SCU pages
-// based on actual product prices linked via SCU.
+// RecalculateMinPrices recalculates MinPrice for all EAN pages
+// based on actual product prices linked via EAN.
 // This fixes inconsistencies after bulk imports or price updates.
 // productRepo is required to fetch product prices.
 func (r *EANPageRepo) RecalculateMinPrices(productRepo *ProductRepo) error {
@@ -1016,7 +1043,7 @@ func (r *EANPageRepo) RecalculateMinPrices(productRepo *ProductRepo) error {
 			continue
 		}
 
-		// Get products with this SCU via turbo index
+		// Get products with this EAN via turbo index
 		key := "ean:" + sp.EAN
 		tokens, err := r.Store.db.TurboGetIndexTokens(key)
 		if err != nil || len(tokens) == 0 {
@@ -1066,6 +1093,279 @@ func (r *EANPageRepo) RecalculateMinPrices(productRepo *ProductRepo) error {
 		}
 	}
 
-	fmt.Printf("[SCUPAGE] RecalculateMinPrices: done. Updated %d SCU pages.\n", updated)
+	fmt.Printf("[SCUPAGE] RecalculateMinPrices: done. Updated %d EAN pages.\n", updated)
+	return nil
+}
+
+// BatchUpsertFromProductsTx is the transactional version of BatchUpsertFromProducts.
+// It buffers all writes in the transaction instead of writing directly to the DB.
+func (r *EANPageRepo) BatchUpsertFromProductsTx(txn *Transaction, products []*model.Product) map[int64]int64 {
+	if len(products) == 0 {
+		return nil
+	}
+
+	// Collect all page keys and unique category IDs
+	pageKeySet := make(map[string]struct{})
+	catIDs := make(map[int64]struct{})
+	for _, p := range products {
+		if pk := eanPageKeyForProduct(p); pk != "" {
+			pageKeySet[pk] = struct{}{}
+		}
+		if p.CategoryID != 0 {
+			catIDs[p.CategoryID] = struct{}{}
+		}
+	}
+
+	// Batch load existing pages
+	existing := make(map[string]*model.EANPage)
+	for pk := range pageKeySet {
+		if s, err := r.GetByEAN(pk); err == nil {
+			existing[pk] = s
+			if s.CategoryID != 0 {
+				catIDs[s.CategoryID] = struct{}{}
+			}
+		}
+	}
+
+	// Pre-compute tree paths for all category IDs (single pass)
+	treePathCache := make(map[int64][]string)
+	for catID := range catIDs {
+		if r.CategoryRepo != nil {
+			if tp, err := r.CategoryRepo.GetTreePath(catID); err == nil && len(tp) > 0 {
+				treePathCache[catID] = tp
+			}
+		}
+	}
+
+	// Group products by EAN and merge into EANPage objects
+	newPages := make(map[string]*model.EANPage)
+	updatedPages := make(map[string]*model.EANPage)
+
+	for _, p := range products {
+		pk := eanPageKeyForProduct(p)
+		if pk == "" {
+			continue
+		}
+
+		if s, ok := existing[pk]; ok {
+			updatedPages[pk] = s
+		} else {
+			if _, ok := newPages[pk]; !ok {
+				slug := toEANPageSlug(pk, p.Name)
+				newPages[pk] = &model.EANPage{
+					EAN:          pk,
+					Slug:         slug,
+					Title:        parseTitleFromProductName(p.Name),
+					Description:  p.Description,
+					Content:      p.Description,
+					Images:       limitStrings(deduplicateStrings(p.Images), maxEANPageImages),
+					CategoryID:   p.CategoryID,
+					Brand:        p.Brand,
+					BrandID:      p.BrandID,
+					IsActive:     true,
+					MinPrice:     p.Price,
+					Currency:     p.Currency,
+					Attributes:   mergeAttributes(nil, p.Attributes),
+					ProductCount: 1,
+					SeoURL:       r.ComputeSeoURL(slug, p.CategoryID, treePathCache),
+					CreatedAt:    time.Now().Unix(),
+					UpdatedAt:    time.Now().Unix(),
+				}
+			}
+		}
+	}
+
+	// Merge updates for existing pages
+	for _, p := range products {
+		pk := eanPageKeyForProduct(p)
+		if pk == "" {
+			continue
+		}
+		if s, ok := updatedPages[pk]; ok {
+			s.ProductCount++
+
+			if p.Price < s.MinPrice || s.MinPrice == 0 {
+				s.MinPrice = p.Price
+			}
+
+			s.Images = limitStrings(mergeUniqueStrings(s.Images, p.Images), maxEANPageImages)
+			s.Attributes = mergeAttributes(s.Attributes, p.Attributes)
+
+			if s.Description == "" && p.Description != "" {
+				s.Description = p.Description
+				s.Content = p.Description
+			}
+
+			if s.SeoURL == "" || s.CategoryID != p.CategoryID {
+				s.CategoryID = p.CategoryID
+				s.SeoURL = r.ComputeSeoURL(s.Slug, s.CategoryID, treePathCache)
+			}
+
+			s.UpdatedAt = time.Now().Unix()
+		}
+	}
+
+	// Create new pages (buffered in transaction)
+	created := make(map[string]int64)
+	var newEANPageIDs []string
+	for ean, s := range newPages {
+		if err := r.CreateNoListIndexTx(txn, s); err != nil {
+			fmt.Printf("WARN: create eanpage for EAN %s: %v\n", ean, err)
+			continue
+		}
+		created[ean] = s.ID
+		newEANPageIDs = append(newEANPageIDs, KeyEANPage(s.ID))
+	}
+
+	// Batch add all new EAN pages to eanpage_list index (buffered in transaction)
+	if len(newEANPageIDs) > 0 {
+		if _, err := txn.TurboPutBatchIndexString(TurboKeyEANPageList, newEANPageIDs); err != nil {
+			fmt.Printf("WARN: batch add to eanpage_list: %v\n", err)
+		}
+	}
+
+	// Update existing pages (buffered in transaction)
+	for ean, s := range updatedPages {
+		data := MarshalEANPage(*s)
+		if err := txn.DocPut(KeyEANPage(s.ID), data); err != nil {
+			fmt.Printf("WARN: update eanpage for EAN %s: %v\n", ean, err)
+			continue
+		}
+		created[ean] = s.ID
+	}
+
+	// Build productID -> EANPageID map
+	result := make(map[int64]int64)
+	for _, p := range products {
+		if p.EAN == "" {
+			continue
+		}
+		if id, ok := created[p.EAN]; ok {
+			result[p.ID] = id
+		}
+	}
+
+	return result
+}
+
+// CreateNoListIndexTx creates an EAN page without adding to list index (transactional version).
+func (r *EANPageRepo) CreateNoListIndexTx(txn *Transaction, s *model.EANPage) error {
+	if s.ID == 0 {
+		id, err := r.Store.NextID("scupage")
+		if err != nil {
+			return fmt.Errorf("next_id scupage: %w", err)
+		}
+		s.ID = id
+	}
+
+	data := MarshalEANPage(*s)
+	return txn.DocPut(KeyEANPage(s.ID), data)
+}
+
+// RecalculateProductCountsTx is the transactional version of RecalculateProductCounts.
+func (r *EANPageRepo) RecalculateProductCountsTx(txn *Transaction) error {
+	if r.Store == nil {
+		return nil
+	}
+
+	all, err := r.List()
+	if err != nil {
+		return fmt.Errorf("list eanpages: %w", err)
+	}
+
+	updated := 0
+	for i, sp := range all {
+		if sp.EAN == "" {
+			continue
+		}
+
+		key := "ean:" + sp.EAN
+		tokens, err := r.Store.db.TurboGetIndexTokens(key)
+		if err != nil || len(tokens) == 0 {
+			continue
+		}
+
+		newCount := len(tokens)
+		if newCount != sp.ProductCount {
+			sp.ProductCount = newCount
+			sp.UpdatedAt = time.Now().Unix()
+			data := MarshalEANPage(sp)
+			if err := txn.DocPut(KeyEANPage(sp.ID), data); err != nil {
+				fmt.Printf("WARN: update product_count for eanpage %d: %v\n", sp.ID, err)
+				continue
+			}
+			updated++
+		}
+
+		if (i+1)%10000 == 0 {
+			fmt.Printf("[SCUPAGE] RecalculateProductCountsTx: processed %d / %d (updated %d)\n", i+1, len(all), updated)
+		}
+	}
+
+	fmt.Printf("[SCUPAGE] RecalculateProductCountsTx: done. Updated %d EAN pages.\n", updated)
+	return nil
+}
+
+// RecalculateMinPricesTx is the transactional version of RecalculateMinPrices.
+func (r *EANPageRepo) RecalculateMinPricesTx(txn *Transaction, productRepo *ProductRepo) error {
+	if r.Store == nil {
+		return nil
+	}
+
+	all, err := r.List()
+	if err != nil {
+		return fmt.Errorf("list eanpages: %w", err)
+	}
+
+	updated := 0
+	for i, sp := range all {
+		if sp.EAN == "" {
+			continue
+		}
+
+		key := "ean:" + sp.EAN
+		tokens, err := r.Store.db.TurboGetIndexTokens(key)
+		if err != nil || len(tokens) == 0 {
+			continue
+		}
+
+		docs, err := r.Store.db.MultiGetByDocIDs(tokens)
+		if err != nil || len(docs) == 0 {
+			continue
+		}
+
+		var minPrice float64
+		found := false
+		for _, doc := range docs {
+			if len(doc) == 0 {
+				continue
+			}
+			p, err := UnmarshalProduct(doc)
+			if err != nil {
+				continue
+			}
+			if !found || p.Price < minPrice {
+				minPrice = p.Price
+				found = true
+			}
+		}
+
+		if found && minPrice != sp.MinPrice {
+			sp.MinPrice = minPrice
+			sp.UpdatedAt = time.Now().Unix()
+			data := MarshalEANPage(sp)
+			if err := txn.DocPut(KeyEANPage(sp.ID), data); err != nil {
+				fmt.Printf("WARN: update min_price for eanpage %d: %v\n", sp.ID, err)
+				continue
+			}
+			updated++
+		}
+
+		if (i+1)%10000 == 0 {
+			fmt.Printf("[SCUPAGE] RecalculateMinPricesTx: processed %d / %d (updated %d)\n", i+1, len(all), updated)
+		}
+	}
+
+	fmt.Printf("[SCUPAGE] RecalculateMinPricesTx: done. Updated %d EAN pages.\n", updated)
 	return nil
 }

@@ -12,7 +12,7 @@ import (
 
 const (
 	turboKeyLandingList = "landing_list"
-	turboKeyLandingSCU  = "landing_ean:" // prefix for SCU lookup
+	turboKeyLandingSCU  = "landing_ean:" // prefix for EAN lookup
 )
 
 type LandingRepo struct {
@@ -26,7 +26,7 @@ func NewLandingRepo(store *Store) *LandingRepo {
 // Create creates a new landing page.
 func (r *LandingRepo) Create(l *model.LandingPage) error {
 	if l.EAN == "" {
-		return fmt.Errorf("scu is required")
+		return fmt.Errorf("ean is required")
 	}
 
 	id, err := r.Store.NextID("landing")
@@ -51,7 +51,7 @@ func (r *LandingRepo) Create(l *model.LandingPage) error {
 		return fmt.Errorf("turbo index landing_list: %w", err)
 	}
 
-	// Turbo index: landing_ean:<scu>
+	// Turbo index: landing_ean:<ean>
 	eanKey := turboKeyLandingSCU + l.EAN
 	if err := r.Store.TurboWrite(eanKey, []byte(KeyLandingPage(l.ID))); err != nil {
 		_, _ = r.Store.db.TurboDeleteIndexString(turboKeyLandingList, KeyLandingPage(l.ID))
@@ -74,15 +74,15 @@ func (r *LandingRepo) Get(id int64) (*model.LandingPage, error) {
 	return UnmarshalLandingPage(data)
 }
 
-// GetBySCU returns a landing page by SCU.
-func (r *LandingRepo) GetByEAN(scu string) (*model.LandingPage, error) {
-	if scu == "" {
-		return nil, fmt.Errorf("scu is empty")
+// GetBySCU returns a landing page by EAN.
+func (r *LandingRepo) GetByEAN(ean string) (*model.LandingPage, error) {
+	if ean == "" {
+		return nil, fmt.Errorf("ean is empty")
 	}
-	eanKey := turboKeyLandingSCU + scu
+	eanKey := turboKeyLandingSCU + ean
 	data, err := r.Store.db.TurboRawRead(eanKey)
 	if err != nil || len(data) == 0 {
-		return nil, fmt.Errorf("landing page with scu %q not found", scu)
+		return nil, fmt.Errorf("landing page with ean %q not found", ean)
 	}
 	var id int64
 	_, _ = fmt.Sscanf(string(data), "%d", &id)
@@ -91,9 +91,9 @@ func (r *LandingRepo) GetByEAN(scu string) (*model.LandingPage, error) {
 
 // GetBySlug returns a landing page by slug.
 func (r *LandingRepo) GetBySlug(slug string) (*model.LandingPage, error) {
-	// Slugs are derived from SCU, so we can lookup via SCU
-	scu := slugToSCU(slug)
-	return r.GetByEAN(scu)
+	// Slugs are derived from EAN, so we can lookup via EAN
+	ean := slugToSCU(slug)
+	return r.GetByEAN(ean)
 }
 
 // Update updates a landing page.
@@ -112,7 +112,7 @@ func (r *LandingRepo) Update(id int64, updater func(*model.LandingPage)) error {
 		return fmt.Errorf("update landing: %w", err)
 	}
 
-	// Update SCU index if changed
+	// Update EAN index if changed
 	if oldSCU != l.EAN {
 		_ = r.Store.TurboWrite(turboKeyLandingSCU+oldSCU, []byte{}) // clear old
 		if l.EAN != "" {
@@ -211,16 +211,16 @@ func (r *LandingRepo) RemoveProduct(id int64, productID int64) error {
 	return r.Store.DocPut(KeyLandingPage(l.ID), data)
 }
 
-// UpsertBySCU creates or updates a landing page by SCU.
-// If a landing page with this SCU exists, updates it.
+// UpsertBySCU creates or updates a landing page by EAN.
+// If a landing page with this EAN exists, updates it.
 // If not, creates a new one.
-func (r *LandingRepo) UpsertByEAN(scu string, updater func(*model.LandingPage)) (*model.LandingPage, error) {
-	if scu == "" {
-		return nil, fmt.Errorf("scu is required")
+func (r *LandingRepo) UpsertByEAN(ean string, updater func(*model.LandingPage)) (*model.LandingPage, error) {
+	if ean == "" {
+		return nil, fmt.Errorf("ean is required")
 	}
 
 	// Try to get existing
-	l, err := r.GetByEAN(scu)
+	l, err := r.GetByEAN(ean)
 	if err == nil {
 		// Update existing
 		updater(l)
@@ -234,9 +234,9 @@ func (r *LandingRepo) UpsertByEAN(scu string, updater func(*model.LandingPage)) 
 
 	// Create new
 	l = &model.LandingPage{
-		EAN:      scu,
-		Slug:     toLandingSlug(scu),
-		Title:    scu,
+		EAN:      ean,
+		Slug:     toLandingSlug(ean),
+		Title:    ean,
 		IsActive: true,
 	}
 	updater(l)
@@ -248,9 +248,9 @@ func (r *LandingRepo) UpsertByEAN(scu string, updater func(*model.LandingPage)) 
 
 // --- helpers ---
 
-// toLandingSlug creates a URL-friendly slug from SCU.
-func toLandingSlug(scu string) string {
-	s := strings.ToLower(scu)
+// toLandingSlug creates a URL-friendly slug from EAN.
+func toLandingSlug(ean string) string {
+	s := strings.ToLower(ean)
 	s = strings.ReplaceAll(s, "_", "-")
 	s = strings.ReplaceAll(s, " ", "-")
 	// Remove non-alphanumeric except hyphens
@@ -279,7 +279,7 @@ func toLandingSlug(scu string) string {
 	return string(collapsed[start:end])
 }
 
-// slugToSCU reverses the slug back to SCU (approximate).
+// slugToSCU reverses the slug back to EAN (approximate).
 func slugToSCU(slug string) string {
 	return strings.ReplaceAll(slug, "-", "_")
 }

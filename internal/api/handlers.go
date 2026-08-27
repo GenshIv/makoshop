@@ -87,7 +87,7 @@ func NewHandlers(store *db.Store) *Handlers {
 	eanPageRepo.EnableCatalogizeNew(false) // disabled: categories come from price files
 	turboSearch.SetEANPageRepo(eanPageRepo)
 
-	// EANPage search (catalog works on SCU pages)
+	// EANPage search (catalog works on EAN pages)
 	eanPageSearch := db.NewEANPageSearch(store.DB(), eanPageRepo, productRepo, categoryRepo, turboEnabled)
 	productRepo.SetEANPageSearch(eanPageSearch)
 

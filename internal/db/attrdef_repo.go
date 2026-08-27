@@ -23,6 +23,7 @@ const (
 	turboKeyAttrDefCats     = "attrdef_cats:"
 	turboKeyAttrDefCatCodes = "attrdef_cat_codes:" // catID -> [codes]
 	turboKeyAttrValuesCat   = "attr_values_cat:"
+	turboKeyAttrDefKey      = "attrdef_key:" // raw key from HTML -> code
 )
 
 type AttrDefRepo struct {
@@ -74,6 +75,94 @@ func (r *AttrDefRepo) GetByCode(code string) (*model.AttrDef, error) {
 	_ = r.store.DocPut(fmt.Sprintf("attrdef:%d", ad.ID), buf)
 
 	return ad, nil
+}
+
+// GetOrCreateByKey finds an AttrDef by raw key (e.g. "Moc", "Power") or creates one.
+// Used by HTMLAttrKeyParser to map raw keys from HTML to attribute codes.
+func (r *AttrDefRepo) GetOrCreateByKey(rawKey string) (*model.AttrDef, error) {
+	if rawKey == "" {
+		return nil, ErrKeyNotFound
+	}
+
+	// Normalize key
+	key := strings.TrimSpace(rawKey)
+	keyLower := strings.ToLower(key)
+
+	// Check if key is already mapped to a code
+	keyIndex := turboKeyAttrDefKey + keyLower
+	codeData, err := r.store.DB().TurboRawRead(keyIndex)
+	if err == nil && len(codeData) > 0 {
+		code := string(codeData)
+		return r.GetByCode(code)
+	}
+
+	// Generate code from key
+	code := r.generateCodeFromKey(key)
+
+	// Check if code already exists
+	existing, err := r.GetByCode(code)
+	if err == nil {
+		// Code exists, add key to it
+		existing.Keys = append(existing.Keys, key)
+		buf, _ := json.Marshal(existing)
+		r.store.DocPut(fmt.Sprintf("attrdef:%d", existing.ID), buf)
+		// Update key index
+		r.store.DB().TurboRawWrite(keyIndex, []byte(code))
+		return existing, nil
+	}
+
+	// Create new AttrDef with temp ID (will be assigned by DocPut)
+	ad := &model.AttrDef{
+		ID:           time.Now().UnixNano(), // temp unique ID
+		Code:         code,
+		NameRu:       key,
+		Categories:   []int64{},
+		Type:         "string",
+		IsActive:     true,
+		IsFilterable: true,
+		IsSortable:   false,
+		SortOrder:    0,
+		Keys:         []string{key},
+		CreatedAt:    time.Now().Unix(),
+	}
+
+	// Save
+	docKey := fmt.Sprintf("attrdef:%d", ad.ID)
+	buf, _ := json.Marshal(ad)
+	if err := r.store.DocPut(docKey, buf); err != nil {
+		return nil, err
+	}
+
+	// Update indexes
+	r.store.DB().TurboRawWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", ad.ID)))
+	r.store.DB().TurboRawWrite(keyIndex, []byte(code))
+
+	// Add to list
+	listData, _ := r.store.DB().TurboRawRead(turboKeyAttrDefList)
+	var codes []string
+	if len(listData) > 0 {
+		json.Unmarshal(listData, &codes)
+	}
+	codes = append(codes, code)
+	listBytes, _ := json.Marshal(codes)
+	r.store.DB().TurboRawWrite(turboKeyAttrDefList, listBytes)
+
+	return ad, nil
+}
+
+// generateCodeFromKey creates a normalized code from a raw key.
+func (r *AttrDefRepo) generateCodeFromKey(key string) string {
+	code := strings.ToLower(key)
+	code = strings.ReplaceAll(code, " ", "_")
+	code = strings.ReplaceAll(code, "-", "_")
+	// Remove non-alphanumeric chars (except underscore)
+	var result []rune
+	for _, ch := range code {
+		if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' {
+			result = append(result, ch)
+		}
+	}
+	return string(result)
 }
 
 func (r *AttrDefRepo) Get(id int64) (*model.AttrDef, error) {
@@ -831,12 +920,12 @@ func (r *AttrDefRepo) AddCodeToCategory(code string, catID int64) error {
 }
 
 // RebuildAttrValuesFromEANPages rebuilds attr_values_cat and attr_label indexes
-// from all SCU pages in the database.
+// from all EAN pages in the database.
 func (r *AttrDefRepo) RebuildAttrValuesFromEANPages(eanPageRepo *EANPageRepo) error {
 	fmt.Println("[ATTRDEF] RebuildAttrValuesFromEANPages: starting...")
 	startTime := time.Now()
 
-	// Get all SCU pages
+	// Get all EAN pages
 	pages, err := eanPageRepo.List()
 	if err != nil {
 		return fmt.Errorf("list eanpages: %w", err)

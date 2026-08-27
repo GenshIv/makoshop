@@ -159,7 +159,7 @@ func (h *Handlers) HandleAdminAttrDefDelete(w http.ResponseWriter, r *http.Reque
 
 // ================= EANPage Admin handlers =================
 
-// HandleAdminEANPageList returns a paginated list of SCU pages.
+// HandleAdminEANPageList returns a paginated list of EAN pages.
 // GET /admin/eanpages?page=1&limit=50&q=search
 
 func (h *Handlers) HandleAdminEANPageList(w http.ResponseWriter, r *http.Request) {
@@ -218,7 +218,7 @@ func (h *Handlers) HandleAdminEANPageList(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// HandleAdminEANPageGet returns a single SCU page by ID.
+// HandleAdminEANPageGet returns a single EAN page by ID.
 // GET /admin/eanpages/{id}
 
 func (h *Handlers) HandleAdminEANPageGet(w http.ResponseWriter, r *http.Request) {
@@ -247,7 +247,7 @@ func (h *Handlers) HandleAdminEANPageGet(w http.ResponseWriter, r *http.Request)
 	httpres.WriteJSON(w, http.StatusOK, sp)
 }
 
-// HandleAdminEANPageUpdate updates a SCU page.
+// HandleAdminEANPageUpdate updates a EAN page.
 // PATCH /admin/eanpages/{id}
 // Body: any subset of EANPage fields
 
@@ -336,7 +336,7 @@ func (h *Handlers) HandleAdminEANPageUpdate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Reindex SCU page
+	// Reindex EAN page
 	sp, _ := h.eanPageRepo.Get(id)
 	if sp != nil {
 		_ = h.eanPageSearch.UnindexEANPage(sp)
@@ -346,7 +346,7 @@ func (h *Handlers) HandleAdminEANPageUpdate(w http.ResponseWriter, r *http.Reque
 	httpres.WriteJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
-// HandleAdminEANPageDelete deletes a SCU page.
+// HandleAdminEANPageDelete deletes a EAN page.
 // DELETE /admin/eanpages/{id}
 
 func (h *Handlers) HandleAdminEANPageDelete(w http.ResponseWriter, r *http.Request) {
@@ -722,14 +722,14 @@ func (h *Handlers) HandleAdminEANPageCatalogizeAll(w http.ResponseWriter, r *htt
 	rebuildAllIndexes := body.Apply || body.Force
 	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Starting (apply=%v force=%v rebuildAllIndexes=%v)...\n", body.Apply, body.Force, rebuildAllIndexes)
 
-	// Get all SCU pages
+	// Get all EAN pages
 	all, err := h.eanPageRepo.List()
 	if err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
-	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Total SCU pages to process: %d\n", len(all))
+	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Total EAN pages to process: %d\n", len(all))
 
 	// Get catalogizer interface
 	catz := h.catalogizer
@@ -741,7 +741,7 @@ func (h *Handlers) HandleAdminEANPageCatalogizeAll(w http.ResponseWriter, r *htt
 	for i := range all {
 		sp := &all[i]
 
-		// Build tokens for this SCU page using all available text
+		// Build tokens for this EAN page using all available text
 		//todo need remove and add to insert|update only
 		fullText := tokenizer.BuildEANTokensFullText(sp.Title, sp.Description, sp.Content, sp.Attributes)
 		if err := catz.BuildEANTokens(sp.ID, fullText); err != nil {
@@ -750,7 +750,7 @@ func (h *Handlers) HandleAdminEANPageCatalogizeAll(w http.ResponseWriter, r *htt
 		}
 
 		if i%20000 == 0 {
-			fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Processed %d SCU pages from total %d. Catalogized %d...\n", i, len(all), catalogized)
+			fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Processed %d EAN pages from total %d. Catalogized %d...\n", i, len(all), catalogized)
 		}
 
 		// Catalogize using TurboTopNByIntersection
@@ -783,7 +783,7 @@ func (h *Handlers) HandleAdminEANPageCatalogizeAll(w http.ResponseWriter, r *htt
 		}
 	}
 
-	// Full rebuild of all SCU page indexes if Apply or Force.
+	// Full rebuild of all EAN page indexes if Apply or Force.
 	// RebuildAllIndexes:
 	//   1) clears all indexable keys (cat, brand, vendor, sort, numSort)
 	//   2) streams all EANPage and rebuilds indexes in batches
@@ -797,7 +797,7 @@ func (h *Handlers) HandleAdminEANPageCatalogizeAll(w http.ResponseWriter, r *htt
 		fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Full index rebuild done.\n")
 	}
 
-	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Done. Catalogized %d SCU pages.\n", catalogized)
+	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Done. Catalogized %d EAN pages.\n", catalogized)
 
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"processed":   len(all),
@@ -807,7 +807,7 @@ func (h *Handlers) HandleAdminEANPageCatalogizeAll(w http.ResponseWriter, r *htt
 	})
 }
 
-// HandleAdminEANPageRebuildTokens rebuilds token indexes for all SCU pages.
+// HandleAdminEANPageRebuildTokens rebuilds token indexes for all EAN pages.
 // POST /admin/eanpages/rebuild-tokens
 // Body: { "limit": 0 } (0 = all)
 
@@ -848,7 +848,7 @@ func (h *Handlers) HandleAdminEANPageRebuildTokens(w http.ResponseWriter, r *htt
 		rebuilt++
 	}
 
-	fmt.Printf("[SCUPAGE-REBUILD-TOKENS] Done. Rebuilt %d SCU page tokens.\n", rebuilt)
+	fmt.Printf("[SCUPAGE-REBUILD-TOKENS] Done. Rebuilt %d EAN page tokens.\n", rebuilt)
 
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"processed": len(all),
@@ -896,7 +896,7 @@ func (h *Handlers) HandleAdminEANPageRebuildToken(w http.ResponseWriter, r *http
 }
 
 // POST /admin/eanpages/recalculate-product-counts
-// Recalculates ProductCount for all SCU pages based on actual products.
+// Recalculates ProductCount for all EAN pages based on actual products.
 
 func (h *Handlers) HandleAdminEANPageRecalculateCounts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -916,7 +916,7 @@ func (h *Handlers) HandleAdminEANPageRecalculateCounts(w http.ResponseWriter, r 
 }
 
 // POST /admin/eanpages/recalculate-min-prices
-// Recalculates MinPrice for all SCU pages based on actual product prices.
+// Recalculates MinPrice for all EAN pages based on actual product prices.
 // Also rebuilds sort indexes to ensure price filters work correctly.
 
 func (h *Handlers) HandleAdminEANPageRecalculateMinPrices(w http.ResponseWriter, r *http.Request) {

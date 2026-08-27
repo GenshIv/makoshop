@@ -290,6 +290,10 @@ onMounted(() => {
 
       <!-- Quick links -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <router-link to="/admin/settings" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">{{ t('admin.settings') || 'Settings' }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('admin.settings_desc') || 'Global settings: currency, etc.' }}</div>
+        </router-link>
         <router-link to="/admin/users" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
           <div class="font-medium">{{ t('admin.users_manage') }}</div>
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.users_manage_desc') }}</div>
@@ -311,7 +315,7 @@ onMounted(() => {
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.promo_desc') }}</div>
         </router-link>
         <router-link to="/admin/eanpages" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
-          <div class="font-medium">{{ t('admin.eanpage_title') || 'SCU Pages' }}</div>
+          <div class="font-medium">{{ t('admin.eanpage_title') || 'EAN Pages' }}</div>
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.eanpage_manage_desc') || 'Manage SEO product pages' }}</div>
         </router-link>
         <router-link to="/admin/catalogizer" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">

@@ -14,15 +14,15 @@ The `MinPrice` field on SCUPage was not matching the actual minimum price among 
    - **Sequential imports**: Company A imports with price 100, then Company B imports with price 50 → MinPrice = 50 ✓
    - **Price increases**: If all products increase in price, MinPrice stays at the old low value ✗
    - **Product deletion**: If the cheapest product is deleted, MinPrice doesn't update ✗
-   - **Multi-company with idOffset**: Products from different companies with same SCU may have different price ranges
+   - **Multi-company with idOffset**: Products from different companies with same EAN may have different price ranges
 
 ## Solution
 
 Added a new method `RecalculateMinPrices()` that:
-1. Reads all SCU pages
-2. For each SCU page, gets all linked products via turbo index `scu:{scu}`
+1. Reads all EAN pages
+2. For each EAN page, gets all linked products via turbo index `ean:{ean}`
 3. Calculates the actual minimum price from all products
-4. Updates the SCU page if the price changed
+4. Updates the EAN page if the price changed
 5. **Rebuilds sort indexes** to ensure price filters work correctly
 
 ### Files Modified
@@ -51,18 +51,18 @@ Min prices are automatically recalculated after every import operation, and sort
 
 ### Manual (admin)
 ```bash
-# Recalculate min prices for all SCU pages and rebuild sort indexes
+# Recalculate min prices for all EAN pages and rebuild sort indexes
 curl -X POST http://localhost:8080/admin/scupages/recalculate-min-prices \
   -H "Authorization: Bearer <token>"
 ```
 
-Or use the "Recalculate Min Prices" button in the admin panel (SCU Pages section).
+Or use the "Recalculate Min Prices" button in the admin panel (EAN Pages section).
 
 ## Performance
 
-- **Time complexity**: O(N * M) where N = number of SCU pages, M = average products per SCU
+- **Time complexity**: O(N * M) where N = number of EAN pages, M = average products per EAN
 - **Database reads**: One read per product to get its price
-- **Database writes**: Only for SCU pages where MinPrice actually changed
-- **Sort index rebuild**: O(N log N) where N = number of SCU pages
+- **Database writes**: Only for EAN pages where MinPrice actually changed
+- **Sort index rebuild**: O(N log N) where N = number of EAN pages
 
 For large datasets (100k+ products), this may take a few seconds but ensures data consistency and correct price filtering.

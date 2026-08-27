@@ -810,6 +810,10 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 				IsActive:       ic.IsActive,
 				SortOrder:      ic.SortOrder,
 				AnchorKeywords: ic.AnchorKeywords,
+				ParentID:       ic.ParentID,
+			}
+			if ic.ParentID != nil && *ic.ParentID != 0 {
+				cat.ParentID = ic.ParentID
 			}
 			if err := h.categoryRepo.Create(cat); err != nil {
 				fmt.Printf("WARN: create category %s: %v\n", slugString, err)
@@ -831,7 +835,7 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 			// Find the category we just created/updated
 			if catID, ok := oldIDToNewID[ic.ID]; ok {
 				// Find the parent's new ID
-				if parentID, ok := oldIDToNewID[*ic.ParentID]; ok {
+				if parentID, ok := oldIDToNewID[*ic.ParentID]; ok && (ic.ParentID == nil || (*ic.ParentID != parentID && parentID > 0)) {
 					h.categoryRepo.Update(catID, func(c *model.Category) {
 						c.ParentID = &parentID
 					})
@@ -1028,6 +1032,6 @@ func isDescendant(catByID map[int64]model.Category, catID, ancestorID int64) boo
 	return false
 }
 
-// HandleAdminEANPageCatalogizeAll re-catalogizes all SCU pages using TurboTopNByIntersection.
+// HandleAdminEANPageCatalogizeAll re-catalogizes all EAN pages using TurboTopNByIntersection.
 // POST /admin/eanpages/catalogize-all
 // Body: { "apply": true }

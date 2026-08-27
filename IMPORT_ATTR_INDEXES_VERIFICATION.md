@@ -15,15 +15,15 @@ Will attribute indexes be correctly recalculated when prices are imported?
 All three price import methods call `IndexSCUPageBatch`:
 
 1. **`importCSV`** (line 227)
-   - Phase 3: Batch upsert SCU pages + index
+   - Phase 3: Batch upsert EAN pages + index
    - Calls `h.scuPageSearch.IndexSCUPageBatch(scuPtrs)`
 
 2. **`importNormalized`** (line 456)
-   - Phase 3: Batch index products + SCU pages
+   - Phase 3: Batch index products + EAN pages
    - Calls `h.scuPageSearch.IndexSCUPageBatch(scuPtrs)`
 
 3. **`importMulti`** (line 2068)
-   - Phase 3: Batch upsert SCU pages + index
+   - Phase 3: Batch upsert EAN pages + index
    - Calls `h.scuPageSearch.IndexSCUPageBatch(scuPtrs)`
 
 ### IndexSCUPageBatch Function
@@ -75,7 +75,7 @@ key := "attrdef_cat_codes:" + strconv.FormatInt(catID, 10)
 ```
 Price Import
 ├── Phase 1: Parse products
-├── Phase 2: Upsert SCU pages from products
+├── Phase 2: Upsert EAN pages from products
 ├── Phase 3: IndexSCUPageBatch
 │   ├── Writes scupage_attr:{code}:{value} (filtering)
 │   ├── Writes attr_values_cat:{code}:{catID} (UI options)

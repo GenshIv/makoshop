@@ -51,7 +51,7 @@ const userRole = computed(() => {
 });
 
 // SEO page titles (computed to react to locale changes).
-// Product and SCU pages override title/description from their own data
+// Product and EAN pages override title/description from their own data
 // via useSeo() in the respective views, so we skip them here.
 const pageTitles = computed(() => ({
   catalog: t('pages.catalog_title'),

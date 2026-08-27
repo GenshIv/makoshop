@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -379,5 +380,81 @@ func (h *Handlers) HandleCompanyGetWithSettings(w http.ResponseWriter, r *http.R
 		"payment_methods":   paymentMethods,
 		"delivery_times":    deliveryTimes,
 		"installment_plans": installmentPlans,
+	})
+}
+
+// HandleGlobalSettingsGet returns global settings including default currency.
+// GET /admin/settings
+func (h *Handlers) HandleGlobalSettingsGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	defaultCurrency := "PLN" // default currency
+	if h.Store != nil {
+		store := h.Store()
+		if val, err := store.DocGet("global_settings"); err == nil && len(val) > 0 {
+			var settings map[string]interface{}
+			if err := json.Unmarshal(val, &settings); err == nil {
+				if cur, ok := settings["default_currency"].(string); ok && cur != "" {
+					defaultCurrency = cur
+				}
+			}
+		}
+	}
+
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"default_currency": defaultCurrency,
+	})
+}
+
+// HandleGlobalSettingsUpdate updates global settings including default currency.
+// PATCH /admin/settings
+func (h *Handlers) HandleGlobalSettingsUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	var req struct {
+		DefaultCurrency string `json:"default_currency,omitempty"`
+	}
+	if !httpres.ReadJSON(w, r, &req) {
+		return
+	}
+
+	if h.Store == nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "store not available")
+		return
+	}
+
+	store := h.Store()
+
+	// Load existing settings or create new
+	settings := map[string]interface{}{}
+	if val, err := store.DocGet("global_settings"); err == nil && len(val) > 0 {
+		json.Unmarshal(val, &settings)
+	}
+
+	// Update currency if provided
+	if req.DefaultCurrency != "" {
+		settings["default_currency"] = req.DefaultCurrency
+	}
+
+	// Save
+	data, err := json.Marshal(settings)
+	if err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	if err := store.DocPut("global_settings", data); err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"default_currency": settings["default_currency"],
 	})
 }

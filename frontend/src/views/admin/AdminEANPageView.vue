@@ -28,7 +28,7 @@ const fetchEANPages = async () => {
     eanpages.value = res.data.items || [];
     total.value = res.data.total || 0;
   } catch (e) {
-    console.error('Failed to fetch SCU pages:', e);
+    console.error('Failed to fetch EAN pages:', e);
   } finally {
     loading.value = false;
   }
@@ -37,7 +37,7 @@ const fetchEANPages = async () => {
 const recalculateMinPrices = () => {
   console.log('Recalculate button clicked! Function exists:', typeof recalculateMinPrices);
   
-  if (!confirm('Recalculate min prices for all SCU pages? This may take a while.')) {
+  if (!confirm('Recalculate min prices for all EAN pages? This may take a while.')) {
     console.log('User cancelled');
     return;
   }
@@ -87,7 +87,7 @@ const saveEdit = async () => {
     editing.value = null;
     await fetchEANPages();
   } catch (e) {
-    console.error('Failed to update SCU page:', e);
+    console.error('Failed to update EAN page:', e);
     toast.error(t('admin.eanpage_save_error') || 'Failed to save');
   }
 };
@@ -107,7 +107,7 @@ const doDelete = async () => {
     deleteConfirm.value = null;
     await fetchEANPages();
   } catch (e) {
-    console.error('Failed to delete SCU page:', e);
+    console.error('Failed to delete EAN page:', e);
     toast.error(t('admin.eanpage_delete_error') || 'Failed to delete');
   }
 };
@@ -133,7 +133,7 @@ onMounted(fetchEANPages);
 <template>
   <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold text-purple-700">{{ t('admin.eanpage_title') || 'SCU Pages' }}</h1>
+      <h1 class="text-2xl font-bold text-purple-700">{{ t('admin.eanpage_title') || 'EAN Pages' }}</h1>
       <div class="flex items-center gap-3">
         <button
           @click="recalculateMinPrices"
@@ -156,7 +156,7 @@ onMounted(fetchEANPages);
         v-model="searchQuery"
         type="text"
         class="w-full max-w-md px-4 py-2 border border-line rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-        :placeholder="t('admin.eanpage_search_placeholder') || 'Search by SCU, title...'"
+        :placeholder="t('admin.eanpage_search_placeholder') || 'Search by EAN, title...'"
       />
     </div>
 
@@ -172,7 +172,7 @@ onMounted(fetchEANPages);
           <thead class="bg-surface-2">
             <tr>
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_id') || 'ID' }}</th>
-              <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_scu') || 'SCU' }}</th>
+              <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_scu') || 'EAN' }}</th>
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_title') || 'Title' }}</th>
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_slug') || 'Slug' }}</th>
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_products') || 'Products' }}</th>
@@ -187,7 +187,7 @@ onMounted(fetchEANPages);
               class="border-t hover:bg-surface-2"
             >
               <td class="px-4 py-2">{{ sp.id }}</td>
-              <td class="px-4 py-2 max-w-xs truncate" :title="sp.scu">{{ sp.scu }}</td>
+              <td class="px-4 py-2 max-w-xs truncate" :title="sp.ean">{{ sp.ean }}</td>
               <td class="px-4 py-2 max-w-xs truncate" :title="sp.title">{{ sp.title }}</td>
               <td class="px-4 py-2 max-w-xs truncate" :title="sp.slug">{{ sp.slug }}</td>
               <td class="px-4 py-2">{{ sp.product_count || sp.product_ids?.length || 0 }}</td>
@@ -215,7 +215,7 @@ onMounted(fetchEANPages);
             </tr>
             <tr v-if="eanpages.length === 0">
               <td colspan="7" class="px-4 py-8 text-center text-ink-3">
-                {{ t('admin.eanpage_no_results') || 'No SCU pages found' }}
+                {{ t('admin.eanpage_no_results') || 'No EAN pages found' }}
               </td>
             </tr>
           </tbody>
@@ -255,7 +255,7 @@ onMounted(fetchEANPages);
     >
       <div role="dialog" aria-modal="true" class="bg-surface rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <h2 class="text-xl font-bold mb-4 text-purple-700">
-          {{ t('admin.eanpage_edit_title') || 'Edit SCU Page' }} #{{ editing.id }}
+          {{ t('admin.eanpage_edit_title') || 'Edit EAN Page' }} #{{ editing.id }}
         </h2>
 
         <div class="space-y-4">
@@ -353,13 +353,13 @@ onMounted(fetchEANPages);
     >
       <div role="dialog" aria-modal="true" class="bg-surface rounded-lg shadow-xl p-6 w-full max-w-md">
         <h2 class="text-xl font-bold mb-4 text-red-600">
-          {{ t('admin.eanpage_delete_confirm_title') || 'Delete SCU Page?' }}
+          {{ t('admin.eanpage_delete_confirm_title') || 'Delete EAN Page?' }}
         </h2>
         <p class="text-sm text-ink-2 mb-2">
-          {{ t('admin.eanpage_delete_confirm_msg') || 'Are you sure you want to delete this SCU page?' }}
+          {{ t('admin.eanpage_delete_confirm_msg') || 'Are you sure you want to delete this EAN page?' }}
         </p>
         <p class="text-xs text-ink-3 mb-4">
-          SCU: {{ deleteConfirm.scu }}<br>
+          EAN: {{ deleteConfirm.ean }}<br>
           Title: {{ deleteConfirm.title }}
         </p>
         <div class="flex justify-end space-x-2">

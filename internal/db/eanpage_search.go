@@ -28,6 +28,9 @@ type EANPageSearch struct {
 	descMu       sync.Mutex
 	descCache    map[int64][]int64
 	descCacheTTL time.Duration
+
+	// Active transaction (nil if not in transaction)
+	txn *makodb.Transaction
 }
 
 func NewEANPageSearch(db *makodb.ShardedDB, repo *EANPageRepo, productRepo *ProductRepo, categoryRepo *CategoryRepo, enabled bool) *EANPageSearch {
@@ -42,6 +45,16 @@ func NewEANPageSearch(db *makodb.ShardedDB, repo *EANPageRepo, productRepo *Prod
 	}
 }
 
+// SetTransaction sets the active transaction for this search.
+func (s *EANPageSearch) SetTransaction(txn *makodb.Transaction) {
+	s.txn = txn
+}
+
+// ClearTransaction clears the active transaction.
+func (s *EANPageSearch) ClearTransaction() {
+	s.txn = nil
+}
+
 // ---------- key helpers ----------
 
 func eanpageKeyBrand(brandID int64) string { return "eanpage_brand:" + strconv.FormatInt(brandID, 10) }
@@ -54,7 +67,7 @@ func eanpageKeyAttr(code string, value string) string {
 func eanpageKeyText(token string) string { return "eanpage_text:" + token }
 
 // eanpageKeyCategoryUnion returns the key for a category union index.
-// Contains all SCU pages of this category and all descendants.
+// Contains all EAN pages of this category and all descendants.
 func eanpageKeyCategoryUnion(catID int64) string {
 	return "eanpage_cat_union:" + strconv.FormatInt(catID, 10)
 }
@@ -84,7 +97,7 @@ const (
 
 // ---------- indexing ----------
 
-// IndexEANPage indexes a single SCU page into turbo indexes.
+// IndexEANPage indexes a single EAN page into turbo indexes.
 // Collects all indexes in memory, then writes in batch (no repeated writes to same key).
 func (s *EANPageSearch) IndexEANPage(sp *model.EANPage) error {
 	if !s.enabled {
@@ -177,7 +190,73 @@ func (s *EANPageSearch) IndexEANPage(sp *model.EANPage) error {
 	return nil
 }
 
-// IndexEANPageBatch indexes many SCU pages using batch turbo writes.
+// IndexEANPageBatchTx is the transactional version of IndexEANPageBatch.
+func (s *EANPageSearch) IndexEANPageBatchTx(txn *Transaction, pages []*model.EANPage) error {
+	if !s.enabled || len(pages) == 0 {
+		return nil
+	}
+
+	// Collect all indexes in memory
+	indexes := make(map[string][]string)
+	attrCatRef := make(map[string]map[int64]map[string]string)
+	catCodes := make(map[int64]map[string]struct{})
+
+	for _, sp := range pages {
+		docID := KeyEANPage(sp.ID)
+
+		if sp.CategoryID != 0 {
+			ancestors, err := s.getCategoryAncestors(sp.CategoryID)
+			if err != nil {
+				ancestors = []int64{sp.CategoryID}
+			}
+			for _, cid := range ancestors {
+				indexes[eanpageKeyCategoryUnion(cid)] = append(indexes[eanpageKeyCategoryUnion(cid)], docID)
+			}
+		}
+
+		if sp.BrandID != 0 {
+			indexes[eanpageKeyBrand(sp.BrandID)] = append(indexes[eanpageKeyBrand(sp.BrandID)], docID)
+		}
+
+		for _, kv := range sp.Attributes {
+			valStr := kv.Value
+			if valStr != "" {
+				indexes[eanpageKeyAttr(kv.Key, valStr)] = append(indexes[eanpageKeyAttr(kv.Key, valStr)], docID)
+				if sp.CategoryID != 0 {
+					if attrCatRef[kv.Key] == nil {
+						attrCatRef[kv.Key] = make(map[int64]map[string]string)
+					}
+					if attrCatRef[kv.Key][sp.CategoryID] == nil {
+						attrCatRef[kv.Key][sp.CategoryID] = make(map[string]string)
+					}
+					attrCatRef[kv.Key][sp.CategoryID][valStr] = valStr
+					if catCodes[sp.CategoryID] == nil {
+						catCodes[sp.CategoryID] = make(map[string]struct{})
+					}
+					catCodes[sp.CategoryID][kv.Key] = struct{}{}
+				}
+			}
+		}
+
+		for _, tok := range tokenizeEANPage(sp) {
+			indexes[eanpageKeyText(tok)] = append(indexes[eanpageKeyText(tok)], docID)
+		}
+	}
+
+	// Write all indexes in batch (buffered in transaction)
+	for key, docIDs := range indexes {
+		if len(docIDs) == 0 {
+			continue
+		}
+		if _, err := txn.TurboPutBatchIndexString(key, docIDs); err != nil {
+			fmt.Printf("WARN: eanpage batch index %s: %v\n", key, err)
+		}
+	}
+
+	return nil
+}
+
+// IndexEANPageBatch indexes many EAN pages using batch turbo writes.
 // ~10x faster than calling IndexEANPage in a loop.
 func (s *EANPageSearch) IndexEANPageBatch(pages []*model.EANPage) error {
 	if !s.enabled || len(pages) == 0 {
@@ -270,7 +349,7 @@ func (s *EANPageSearch) IndexEANPageBatch(pages []*model.EANPage) error {
 		}
 	}
 
-	// Update attrdef_cat_codes:{catID} with codes used by SCU pages
+	// Update attrdef_cat_codes:{catID} with codes used by EAN pages
 	for catID, codes := range catCodes {
 		key := "attrdef_cat_codes:" + strconv.FormatInt(catID, 10)
 		// Read existing codes
@@ -297,7 +376,7 @@ func (s *EANPageSearch) IndexEANPageBatch(pages []*model.EANPage) error {
 	return nil
 }
 
-// UnindexEANPage removes a SCU page from all turbo indexes.
+// UnindexEANPage removes a EAN page from all turbo indexes.
 func (s *EANPageSearch) UnindexEANPage(sp *model.EANPage) error {
 	if !s.enabled {
 		return nil
@@ -332,7 +411,7 @@ func (s *EANPageSearch) UnindexEANPage(sp *model.EANPage) error {
 	return nil
 }
 
-// BuildSortIndexes rebuilds all sort indexes for SCU pages per category.
+// BuildSortIndexes rebuilds all sort indexes for EAN pages per category.
 // Each category has its own sort indexes: eanpage_sort:{catID}:{type}
 // and numSort price index: eanpage_price:{catID}
 func (s *EANPageSearch) BuildSortIndexes() error {
@@ -475,7 +554,7 @@ type EANPageListResult struct {
 	Limit int                     `json:"limit"`
 }
 
-// ListWithTurbo returns paginated SCU pages with filters and sorting.
+// ListWithTurbo returns paginated EAN pages with filters and sorting.
 // Uses per-category sort indexes — no union index, no candidates for category filter.
 func (s *EANPageSearch) ListWithTurbo(params EANPageListParams) (*EANPageListResult, error) {
 	if !s.enabled {
@@ -852,7 +931,7 @@ func (s *EANPageSearch) RebuildAllIndexes() error {
 			indexes[eanpageKeyBrand(sp.BrandID)] = append(indexes[eanpageKeyBrand(sp.BrandID)], docIDKey)
 		}
 
-		// Vendor index (min company ID among products with this SCU)
+		// Vendor index (min company ID among products with this EAN)
 		// For rebuild we approximate: use first product's company if available.
 		// In current model EANPage doesn't store companyID directly;
 		// vendor index is usually not critical for catalog.

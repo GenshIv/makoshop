@@ -6,6 +6,9 @@ import api from '../api';
 import { useCartStore } from '../stores/cart';
 import { useToast } from '../composables/useToast';
 import { useSeo } from '../composables/useSeo';
+import { useSettings } from '../composables/useSettings';
+
+const { defaultCurrency } = useSettings();
 import Breadcrumbs from '../components/Breadcrumbs.vue';
 import PriceSparkline from '../components/PriceSparkline.vue';
 
@@ -21,6 +24,53 @@ const props = defineProps({
 const route = useRoute();
 const router = useRouter();
 const cart = useCartStore();
+
+// Sanitize HTML description for safe rendering with v-html
+function sanitizeHtml(html) {
+  if (!html) return '';
+  
+  // Create a temporary element to parse and clean HTML
+  try {
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    
+    // Remove script tags
+    temp.querySelectorAll('script').forEach(el => el.remove());
+    
+    // Remove style tags
+    temp.querySelectorAll('style').forEach(el => el.remove());
+    
+    // Remove event handlers from all elements
+    temp.querySelectorAll('[on*]').forEach(el => {
+      Array.from(el.attributes).forEach(attr => {
+        if (attr.name.startsWith('on')) {
+          el.removeAttribute(attr.name);
+        }
+      });
+    });
+    
+    // Remove javascript: URLs
+    temp.querySelectorAll('[href^="javascript:"], [src^="javascript:"]').forEach(el => {
+      el.removeAttribute('href');
+      el.removeAttribute('src');
+    });
+    
+    return temp.innerHTML;
+  } catch (e) {
+    // Fallback: simple regex-based sanitization
+    let clean = html;
+    clean = clean.replace(/<script[\s\S]*?<\/script>/gi, '');
+    clean = clean.replace(/<style[\s\S]*?<\/style>/gi, '');
+    clean = clean.replace(/\s+on\w+="[^"]*"/gi, '');
+    clean = clean.replace(/\s+on\w+='[^']*'/gi, '');
+    clean = clean.replace(/\s+on\w+=\w+/gi, '');
+    clean = clean.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, '');
+    clean = clean.replace(/src\s*=\s*["']javascript:[^"']*["']/gi, '');
+    return clean;
+  }
+}
+
+
 
 const goBack = () => {
   // Go back to referrer, or to parent category, or to root catalog
@@ -120,8 +170,8 @@ const fetchEANPage = async () => {
     const response = await api.get(route.path);
     const data = response.data;
     // console.log('EANPageView fetched data:', data);
-    page.value = data.scu_page;
-    category.value = data.category || (data.scu_page ? data.scu_page.category : null);
+    page.value = data.ean_page;
+    category.value = data.category || (data.ean_page ? data.ean_page.category : null);
     subcategories.value = data.subcategories || [];
     products.value = data.products || [];
     treePath.value = data.tree_path || [];
@@ -177,11 +227,11 @@ const isInStock = (product) => {
   return product.status === 'active' && (product.stock_qty || 0) > 0;
 };
 
-const formatPrice = (price) => {
-  const currency = t('eanpage.currency', 'EUR');
+const formatPrice = (price, currency) => {
+  const cur = currency || defaultCurrency.value || 'PLN';
   const localeMap = { ru: 'ru-RU', en: 'en-US', ua: 'uk-UA', pl: 'pl-PL' };
   const loc = localeMap[locale.value] || 'en-US';
-  return new Intl.NumberFormat(loc, { style: 'currency', currency }).format(price);
+  return new Intl.NumberFormat(loc, { style: 'currency', currency: cur }).format(price);
 };
 
 // Get localized attribute label
@@ -378,6 +428,10 @@ const currentPrice = computed(() => {
   return selectedProduct.value?.price || page.value?.min_price || 0;
 });
 
+const currentCurrency = computed(() => {
+  return selectedProduct.value?.currency || 'EUR';
+});
+
 // Previous (old) price for discount display: shown when higher than current price.
 const previousPrice = computed(() => {
   const pp = Number(selectedProduct.value?.previous_price);
@@ -514,7 +568,7 @@ const selectProduct = (product) => {
 
 // Initialize from props.data if available
 if (props.data) {
-  page.value = props.data.scu_page;
+  page.value = props.data.ean_page;
   products.value = props.data.products || [];
   category.value = props.data.category;
   subcategories.value = props.data.subcategories || [];
@@ -536,8 +590,8 @@ watch(
   () => props.data,
   (newData) => {
     if (newData) {
-      page.value = newData.scu_page;
-      category.value = newData.category || (newData.scu_page ? newData.scu_page.category : null);
+      page.value = newData.ean_page;
+      category.value = newData.category || (newData.ean_page ? newData.ean_page.category : null);
       subcategories.value = newData.subcategories || [];
       products.value = newData.products || [];
       treePath.value = newData.tree_path || [];
@@ -573,7 +627,7 @@ watch(
       </div>
     </div>
 
-    <!-- SCU Page -->
+    <!-- EAN Page -->
     <div v-else-if="page" class="space-y-6">
       <!-- Top section: breadcrumbs + category info -->
       <div>
@@ -613,14 +667,14 @@ watch(
         <!-- Left column (~5 cols): photo -->
         <div class="lg:col-span-5">
           <div class="sticky top-4 space-y-3">
-            <div class="bg-surface-2 rounded-2xl overflow-hidden aspect-square">
+            <div class="bg-white rounded-2xl overflow-hidden aspect-square">
               <img
                 v-if="currentImages.length"
                 :src="currentImages[currentImageIndex]"
                 :alt="page.title"
                 loading="lazy"
                 decoding="async"
-                class="w-full h-full object-cover"
+                class="w-full h-full object-contain"
               />
               <div v-else class="w-full h-full flex items-center justify-center text-ink-3">
                 {{ t('common.no_photo') }}
@@ -688,10 +742,12 @@ watch(
                     >→</button>
                   </div>
                 </div>
-                <div class="text-sm text-ink-2">
-                  <p class="whitespace-pre-line">
-                    {{ modifications[activeTab].suppliers[descSupplierIndex]?.description || t('product.no_description') }}
-                  </p>
+                <div class="text-sm text-ink-2 prose prose-sm max-w-none">
+                  <div v-if="modifications[activeTab].suppliers[descSupplierIndex]?.description"
+                       v-html="sanitizeHtml(modifications[activeTab].suppliers[descSupplierIndex].description)"
+                       class="prose-ul:list-disc prose-ul:pl-5 prose-ol:list-decimal prose-ol:pl-5 prose-p:my-1 prose-li:my-0.5 prose-strong:font-semibold prose-ul:my-2 prose-ol:my-2">
+                  </div>
+                  <p v-else class="text-ink-3">{{ t('product.no_description') }}</p>
                 </div>
               </template>
             </div>
@@ -722,9 +778,9 @@ watch(
                 <div class="text-sm font-medium text-orange-700 dark:text-orange-300">{{ t('eanpage.best_price') }}</div>
                 <div class="flex items-baseline gap-2 mt-0.5 flex-wrap">
                   <span v-if="previousPrice" class="text-sm text-orange-700/70 dark:text-orange-300/70 line-through">
-                    {{ formatPrice(previousPrice) }}
+                    {{ formatPrice(previousPrice, currentCurrency) }}
                   </span>
-                  <span class="text-3xl font-bold text-orange-900 dark:text-white">{{ formatPrice(currentPrice) }}</span>
+                  <span class="text-3xl font-bold text-orange-900 dark:text-white">{{ formatPrice(currentPrice, currentCurrency) }}</span>
                 </div>
                 <div class="text-xs text-orange-700 dark:text-orange-300 mt-1">
                   {{ isInStock(selectedProduct) ? t('eanpage.in_stock') : t('eanpage.out_of_stock') }}
@@ -786,7 +842,7 @@ watch(
               >
                 <input
                   type="radio"
-                  name="scu-product"
+                  name="ean-product"
                   :value="product.id"
                   :checked="selectedProduct?.id === product.id"
                   @change="selectProduct(product)"
@@ -810,12 +866,12 @@ watch(
                   </template>
                 </div>
                 <!-- Right: description (wide, multi-line) -->
-                <div v-if="product.description" class="flex-1 min-w-0 text-xs text-ink-3 leading-relaxed line-clamp-2 break-words">
-                  {{ product.description }}
+                <div v-if="product.description" class="flex-1 min-w-0 text-xs text-ink-3 leading-relaxed break-words overflow-hidden" style="max-height: 2.5em;">
+                  <div v-html="sanitizeHtml(product.description)" class="[&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4 [&>p]:my-0 [&>li]:my-0 [&>div]:my-0 [&>span]:my-0 [&>strong]:font-semibold"></div>
                 </div>
                 <!-- Far right: price -->
                 <div class="font-semibold text-orange-600 whitespace-nowrap text-sm flex-shrink-0 mt-1">
-                  {{ formatPrice(product.price) }}
+                  {{ formatPrice(product.price, product.currency) }}
                 </div>
               </label>
             </template>

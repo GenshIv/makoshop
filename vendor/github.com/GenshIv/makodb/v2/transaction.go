@@ -296,6 +296,16 @@ func (t *Transaction) Abort() error {
 	return nil
 }
 
+// IsCommitted returns true if the transaction has been committed
+func (t *Transaction) IsCommitted() bool {
+	return t.isCommitted
+}
+
+// IsAborted returns true if the transaction has been aborted
+func (t *Transaction) IsAborted() bool {
+	return t.isAborted
+}
+
 // GetTokenDoc получает документ с учётом транзакции
 // docID может быть any (string, uint64, key128, []byte)
 func (s *ShardedDB) GetTokenDoc(token string, docID any) ([]byte, error) {

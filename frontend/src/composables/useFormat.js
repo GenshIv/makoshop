@@ -1,4 +1,5 @@
 import { useI18n } from 'vue-i18n';
+import { useSettings } from './useSettings';
 
 const LOCALE_MAP = {
   ru: 'ru-RU',
@@ -10,16 +11,17 @@ const LOCALE_MAP = {
 /**
  * Shared formatters so every view formats prices/dates consistently.
  *
- * Currency: taken from i18n key `eanpage.currency` (default 'EUR'),
- * matching what the catalog already does.
+ * Currency: taken from global settings (default 'PLN'),
+ * or from the product's currency if provided.
  */
 export function useFormat() {
-  const { t, locale } = useI18n();
+  const { locale } = useI18n();
+  const { defaultCurrency } = useSettings();
 
   const formatPrice = (price, currency) => {
     const value = Number(price);
     if (!Number.isFinite(value)) return '—';
-    const cur = currency || t('eanpage.currency', 'EUR');
+    const cur = currency || defaultCurrency.value || 'PLN';
     const loc = LOCALE_MAP[locale.value] || 'en-US';
     try {
       return new Intl.NumberFormat(loc, {

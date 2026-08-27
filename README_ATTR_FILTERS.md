@@ -35,7 +35,7 @@ curl -X POST http://localhost:8080/admin/rebuild-attrdef-indexes
 
 This will:
 - Rebuild `attrdef_cat_codes` indexes
-- Rebuild `attr_values_cat` and `attr_label` from all SCU pages
+- Rebuild `attr_values_cat` and `attr_label` from all EAN pages
 - Invalidate the cache
 
 ### Step 3: Verify
@@ -92,7 +92,7 @@ POST /admin/rebuild-attrdef-indexes
 - **After:** Uses real numeric IDs (correct)
 
 ### 4. `RebuildAttrValuesFromSCUPages` - NEW
-- Rebuilds all attribute value indexes from SCU pages
+- Rebuilds all attribute value indexes from EAN pages
 - Called by the admin rebuild endpoint
 
 ## Troubleshooting
@@ -110,7 +110,7 @@ POST /admin/rebuild-attrdef-indexes
 
 ### Performance issues?
 1. Attribute indexes are built during `IndexSCUPageBatch`
-2. Rebuilding is O(n) where n = number of SCU pages
+2. Rebuilding is O(n) where n = number of EAN pages
 3. Consider incremental updates for large datasets
 
 ## Documentation

@@ -61,6 +61,7 @@ type AttrDef struct {
 	SortOrder    int      `json:"sort_order"`
 	RangeParams  []string `json:"range_params,omitempty"`
 	Unit         string   `json:"unit,omitempty"`
+	Keys         []string `json:"keys,omitempty"` // raw keys from HTML (e.g. "Moc", "Power")
 	CreatedAt    int64    `json:"created_at"`
 }
 
@@ -278,7 +279,7 @@ type LandingPage struct {
 	Content     string   `json:"content"`     // HTML/markdown content
 	Images      []string `json:"images"`      // page images
 	IsActive    bool     `json:"is_active"`
-	ProductIDs  []int64  `json:"product_ids"` // cached list of product IDs with this SCU
+	ProductIDs  []int64  `json:"product_ids"` // cached list of product IDs with this EAN
 	CreatedAt   int64    `json:"created_at"`
 	UpdatedAt   int64    `json:"updated_at"`
 }

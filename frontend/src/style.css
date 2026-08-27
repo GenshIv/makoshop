@@ -205,7 +205,7 @@ body {
   color: #fed7aa !important;
 }
 
-/* SCU product selection cards (bg-orange-50 labels) */
+/* EAN product selection cards (bg-orange-50 labels) */
 .theme-dark label.bg-orange-50 {
   background-color: #111827 !important;
   border-color: var(--border-color) !important;

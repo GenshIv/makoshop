@@ -302,7 +302,7 @@ func StemWord(word string) string {
 	return word
 }
 
-// BuildEANTokens builds a Turbo index of tokens for an SCU page.
+// BuildEANTokens builds a Turbo index of tokens for an EAN page.
 // This is used with TurboTopNByIntersection for fast catalogization.
 // Uses Title + Description + Content + Attributes for better token coverage.
 func (c *Catalogizer) BuildEANTokens(scuPageID int64, name string) error {
@@ -324,13 +324,13 @@ func (c *Catalogizer) BuildEANTokens(scuPageID int64, name string) error {
 		strHashes[i] = fmt.Sprintf("%d", h)
 	}
 	if _, err := c.store.DB().TurboPutBatchIndexString(key, strHashes); err != nil {
-		return fmt.Errorf("turbo index scu_tokens for scu %d: %w", scuPageID, err)
+		return fmt.Errorf("turbo index scu_tokens for ean %d: %w", scuPageID, err)
 	}
 	return nil
 }
 
 // CatalogizeEANPageByIntersection uses TurboTopNByIntersection to find the best category
-// for an SCU page based on token overlap with category anchor_keywords.
+// for an EAN page based on token overlap with category anchor_keywords.
 // Returns the best category ID or 0 if no match. Returns no error for missing keys.
 func (c *Catalogizer) CatalogizeEANPageByIntersection(scuPageID int64) (int64, error) {
 	eanKey := turboKeySCUTokens + fmt.Sprintf("%d", scuPageID)
@@ -359,7 +359,7 @@ func (c *Catalogizer) CatalogizeEANPageByIntersection(scuPageID int64) (int64, e
 	// Use TurboTopNByIntersection to find categories with most overlapping tokens
 	results, err := c.store.DB().TurboTopNByIntersection(eanKey, candidateKeys, 10)
 	if err != nil {
-		// Missing key (no tokens for this SCU page) is not an error
+		// Missing key (no tokens for this EAN page) is not an error
 		if strings.Contains(err.Error(), "key not found") {
 			return 0, nil
 		}

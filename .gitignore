@@ -17,3 +17,5 @@
 
 # Build artifacts
 /makoshop
+/loadtest/cmd/pprof_out/
+/frontend/.vscode/extensions.json

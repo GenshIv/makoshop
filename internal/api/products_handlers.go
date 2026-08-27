@@ -272,7 +272,7 @@ func (h *Handlers) HandleProductGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// No redirect — return product directly.
-	// SCU pages are accessed via /shop/{tree}/{slug}, not via product redirect.
+	// EAN pages are accessed via /shop/{tree}/{slug}, not via product redirect.
 	httpres.WriteJSON(w, http.StatusOK, p)
 }
 

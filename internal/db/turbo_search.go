@@ -23,6 +23,9 @@ type TurboProductSearch struct {
 	eanPageRepo  *EANPageRepo
 	mu           sync.RWMutex
 	enabled      bool
+
+	// Active transaction (nil if not in transaction)
+	txn *makodb.Transaction
 }
 
 func NewTurboProductSearch(store *Store, repo *ProductRepo, categoryRepo *CategoryRepo, enabled bool) *TurboProductSearch {
@@ -34,9 +37,19 @@ func NewTurboProductSearch(store *Store, repo *ProductRepo, categoryRepo *Catego
 	}
 }
 
-// SetLandingRepo attaches a LandingRepo for SCU/landing page management.
+// SetLandingRepo attaches a LandingRepo for EAN/landing page management.
 func (t *TurboProductSearch) SetLandingRepo(lr *LandingRepo) {
 	t.landingRepo = lr
+}
+
+// SetTransaction sets the active transaction for this search.
+func (t *TurboProductSearch) SetTransaction(txn *makodb.Transaction) {
+	t.txn = txn
+}
+
+// ClearTransaction clears the active transaction.
+func (t *TurboProductSearch) ClearTransaction() {
+	t.txn = nil
 }
 
 // SetEANPageRepo attaches a EANPageRepo for SEO page management.
@@ -133,11 +146,11 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 	// Диапазоны цен (по доке, вариант 1)
 	t.indexPriceRanges(p.Price, docID)
 
-	// SCU index: links product to landing page
+	// EAN index: links product to landing page
 	if p.EAN != "" {
 		eanKey := "ean:" + p.EAN
 		if _, err := t.store.db.TurboPutIndexString(eanKey, docID); err != nil {
-			return fmt.Errorf("turbo scu index: %w", err)
+			return fmt.Errorf("turbo ean index: %w", err)
 		}
 		// Update landing page product list
 		if t.landingRepo != nil {
@@ -306,7 +319,7 @@ func (t *TurboProductSearch) UnindexProduct(p *model.Product) error {
 		t.store.db.TurboDeleteIndexString(turboKeyText(tok), docID)
 	}
 
-	// Remove SCU index
+	// Remove EAN index
 	if p.EAN != "" {
 		eanKey := "ean:" + p.EAN
 		t.store.db.TurboDeleteIndexString(eanKey, docID)
@@ -388,7 +401,7 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 			indexes[turboKeyText(tok)] = append(indexes[turboKeyText(tok)], docID)
 		}
 
-		// SCU index
+		// EAN index
 		if p.EAN != "" {
 			eanKey := "ean:" + p.EAN
 			indexes[eanKey] = append(indexes[eanKey], docID)
@@ -508,6 +521,106 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 
 // BuildSortIndexes перестраивает все sort-индексы из turbo-индексов price и created.
 // Вызывается один раз после импорта или по расписанию.
+// BuildSortIndexesTx is the transactional version of BuildSortIndexes.
+func (t *TurboProductSearch) BuildSortIndexesTx(txn *Transaction) error {
+	if !t.enabled {
+		return nil
+	}
+
+	start := time.Now().Unix()
+	fmt.Println("[TURBO] Building sort indexes (transactional)...")
+
+	tokens, err := t.store.db.TurboGetIndexTokens(TurboKeyProductList)
+	if err != nil || len(tokens) == 0 {
+		fmt.Println("[TURBO] No products in product_list")
+		return nil
+	}
+
+	docs, err := t.store.db.MultiGetByDocIDs(tokens)
+	if err != nil {
+		return fmt.Errorf("multi get products: %w", err)
+	}
+
+	type productSort struct {
+		key     string
+		price   float64
+		created uint64
+	}
+
+	var products []productSort
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		p, err := UnmarshalProduct(doc)
+		if err != nil {
+			continue
+		}
+		products = append(products, productSort{
+			key:     KeyProduct(p.ID),
+			price:   p.Price,
+			created: uint64(p.CreatedAt),
+		})
+	}
+
+	priceAsc := make([]productSort, len(products))
+	copy(priceAsc, products)
+	sort.Slice(priceAsc, func(i, j int) bool {
+		if priceAsc[i].price != priceAsc[j].price {
+			return priceAsc[i].price < priceAsc[j].price
+		}
+		if priceAsc[i].created != priceAsc[j].created {
+			return priceAsc[i].created > priceAsc[j].created
+		}
+		return priceAsc[i].key[0] < priceAsc[j].key[0] || (priceAsc[i].key[0] == priceAsc[j].key[0] && priceAsc[i].key[1] < priceAsc[j].key[1])
+	})
+
+	priceDesc := make([]productSort, len(products))
+	copy(priceDesc, products)
+	sort.Slice(priceDesc, func(i, j int) bool {
+		if priceDesc[i].price != priceDesc[j].price {
+			return priceDesc[i].price > priceDesc[j].price
+		}
+		if priceDesc[i].created != priceDesc[j].created {
+			return priceDesc[i].created > priceDesc[j].created
+		}
+		return priceDesc[i].key[0] < priceDesc[j].key[0] || (priceDesc[i].key[0] == priceDesc[j].key[0] && priceDesc[i].key[1] < priceDesc[j].key[1])
+	})
+
+	createdDesc := make([]productSort, len(products))
+	copy(createdDesc, products)
+	sort.Slice(createdDesc, func(i, j int) bool {
+		if createdDesc[i].created != createdDesc[j].created {
+			return createdDesc[i].created > createdDesc[j].created
+		}
+		return createdDesc[i].key[0] < createdDesc[j].key[0] || (createdDesc[i].key[0] == createdDesc[j].key[0] && createdDesc[i].key[1] < createdDesc[j].key[1])
+	})
+
+	priceAscKeys := make([]string, len(priceAsc))
+	priceDescKeys := make([]string, len(priceDesc))
+	createdDescKeys := make([]string, len(createdDesc))
+
+	for i := range products {
+		priceAscKeys[i] = priceAsc[i].key
+		priceDescKeys[i] = priceDesc[i].key
+		createdDescKeys[i] = createdDesc[i].key
+	}
+
+	// Write sort indexes (buffered in transaction)
+	if err := txn.TurboPutSortIndexString(turboSortPriceAsc, priceAscKeys); err != nil {
+		return fmt.Errorf("turbo put sort index %s: %w", turboSortPriceAsc, err)
+	}
+	if err := txn.TurboPutSortIndexString(turboSortPriceDesc, priceDescKeys); err != nil {
+		return fmt.Errorf("turbo put sort index %s: %w", turboSortPriceDesc, err)
+	}
+	if err := txn.TurboPutSortIndexString(turboSortCreatedAtDesc, createdDescKeys); err != nil {
+		return fmt.Errorf("turbo put sort index %s: %w", turboSortCreatedAtDesc, err)
+	}
+
+	fmt.Printf("[TURBO] Sort indexes built (transactional): %d products, %v\n", len(products), time.Since(time.Unix(start, 0)))
+	return nil
+}
+
 func (t *TurboProductSearch) BuildSortIndexes() error {
 	if !t.enabled {
 		return nil
@@ -1003,13 +1116,13 @@ func (t *TurboProductSearch) GetAllProducts() ([]model.Product, error) {
 	return result, nil
 }
 
-// GetProductsByEAN returns all products with a given SCU.
-func (t *TurboProductSearch) GetProductsByEAN(scu string) ([]model.Product, error) {
-	if !t.enabled || scu == "" {
+// GetProductsByEAN returns all products with a given EAN.
+func (t *TurboProductSearch) GetProductsByEAN(ean string) ([]model.Product, error) {
+	if !t.enabled || ean == "" {
 		return nil, nil
 	}
 
-	eanKey := "ean:" + scu
+	eanKey := "ean:" + ean
 	tokens, err := t.store.db.TurboGetIndexTokens(eanKey)
 	if err != nil || len(tokens) == 0 {
 		return nil, nil

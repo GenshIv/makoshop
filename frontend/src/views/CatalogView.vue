@@ -8,6 +8,9 @@ import SkeletonCard from '../components/SkeletonCard.vue';
 import ViewToggle from '../components/ViewToggle.vue';
 import EmptyState from '../components/EmptyState.vue';
 import { useAnimation } from '../composables/useAnimation';
+import { useSettings } from '../composables/useSettings';
+
+const { defaultCurrency } = useSettings();
 
 // Lazy-load EANPageView to avoid circular imports
 const EANPageView = defineAsyncComponent(() => import('../views/EANPageView.vue'));
@@ -94,10 +97,12 @@ const showMobileFilters = ref(false); // mobile filters panel
 const eanPageData = ref(null);
 // Flag to prevent route watch from re-fetching when we're about to set eanPageData from cache
 const isInlineScuTransition = ref(false);
+// Flag to prevent filters watch from triggering applyFilters when syncing from route
+const isSyncingFiltersFromRoute = ref(false);
 
 // EANPage cache: key -> data (to avoid re-fetching on hover/return)
 // Uses sessionStorage so it survives SPA navigation but is cleared on page reload
-const SCU_CACHE_KEY = 'makoshop_scu_page_cache';
+const SCU_CACHE_KEY = 'makoshop_ean_page_cache';
 
 const loadScuPageCacheFromStorage = () => {
   try {
@@ -200,7 +205,7 @@ const scuPreviewTimer = ref(null); // delay timer for showing popup
 const scuPreviewFetchTimer = ref(null); // delay timer for fetching data
 const PREVIEW_DELAY_MS = 500; // must hover 500ms before showing popup / fetching
 
-// Build the canonical cache/URL key for a product's SCU page.
+// Build the canonical cache/URL key for a product's EAN page.
 // Must stay in sync with goToEANPage and fetchProducts (route.path based).
 const getScuKey = (product) => {
   if (!product) return null;
@@ -211,7 +216,7 @@ const getScuKey = (product) => {
 
 const showScuPreview = (product) => {
   if (!product || (!product.seo_url && !product.slug)) return;
-  if (product.product_count && product.product_count <= 1) return; // Only for SCU pages
+  if (product.product_count && product.product_count <= 1) return; // Only for EAN pages
   // Respect animation setting: don't show popup or fetch data when animations are off
   if (!animationEnabled.value) return;
 
@@ -248,12 +253,12 @@ const showScuPreview = (product) => {
       const response = await api.get(url);
       const data = response.data;
       
-      if (data.scu_page && typeof data.scu_page === 'object' && data.scu_page.id) {
-        if (!data.category && (data.scu_page.category || currentCategory.value)) {
-          data.category = data.scu_page.category || currentCategory.value;
+      if (data.ean_page && typeof data.ean_page === 'object' && data.ean_page.id) {
+        if (!data.category && (data.ean_page.category || currentCategory.value)) {
+          data.category = data.ean_page.category || currentCategory.value;
         }
-        if (!data.subcategories && (data.scu_page.subcategories || rootCategories.value.length > 0)) {
-          data.subcategories = data.scu_page.subcategories || [];
+        if (!data.subcategories && (data.ean_page.subcategories || rootCategories.value.length > 0)) {
+          data.subcategories = data.ean_page.subcategories || [];
         }
         
         eanPageCache.value.set(cacheKey, data);
@@ -264,7 +269,7 @@ const showScuPreview = (product) => {
         }
       }
     } catch (e) {
-      console.error('Failed to fetch SCU preview:', e);
+      console.error('Failed to fetch EAN preview:', e);
     } finally {
       scuPreviewLoading.value = false;
     }
@@ -382,25 +387,25 @@ const fetchProducts = async () => {
   loading.value = true;
   error.value = null;
   lastSearchMs.value = null;
-  // Do not reset eanPageData if already on an SCU page with data
+  // Do not reset eanPageData if already on an EAN page with data
   const isOnEANPage = eanPageData.value != null;
 
   // Check cache for EANPage data before making API call
   if (route.path && !route.query.page) {
     const cached = eanPageCache.value.get(route.path);
-    if (cached && cached.scu_page && typeof cached.scu_page === 'object' && cached.scu_page.id) {
+    if (cached && cached.ean_page && typeof cached.ean_page === 'object' && cached.ean_page.id) {
       // Use cached EANPage data
-      if (!cached.category && (cached.scu_page.category || currentCategory.value)) {
-        cached.category = cached.scu_page.category || currentCategory.value;
+      if (!cached.category && (cached.ean_page.category || currentCategory.value)) {
+        cached.category = cached.ean_page.category || currentCategory.value;
       }
-      if (!cached.subcategories && (cached.scu_page.subcategories || rootCategories.value.length > 0)) {
-        cached.subcategories = cached.scu_page.subcategories || [];
+      if (!cached.subcategories && (cached.ean_page.subcategories || rootCategories.value.length > 0)) {
+        cached.subcategories = cached.ean_page.subcategories || [];
       }
       eanPageData.value = cached;
-      if (cached.category_id || cached.scu_page.category_id) {
-        const catId = cached.category_id || cached.scu_page.category_id;
+      if (cached.category_id || cached.ean_page.category_id) {
+        const catId = cached.category_id || cached.ean_page.category_id;
         fetchCategoryPath(catId);
-        currentCategory.value = cached.category || cached.scu_page.category || null;
+        currentCategory.value = cached.category || cached.ean_page.category || null;
       }
       loading.value = false;
       return;
@@ -426,7 +431,8 @@ const fetchProducts = async () => {
     }
 
     const response = await api.get(url, { params });
-    // console.log('CatalogView fetched products:', response.data);
+    console.log('[CatalogView] fetchProducts: URL:', url, 'Status:', response.status, 'ContentType:', response.headers['content-type']);
+    console.log('[CatalogView] fetchProducts: data type:', typeof response.data, 'is string:', typeof response.data === 'string');
 
     // Read server-side timing from header: X-Response-Time-Ms
     // Axios normalizes header names to lowercase, but we'll search defensively
@@ -450,18 +456,32 @@ const fetchProducts = async () => {
       }
     }
 
-    const data = response.data;
+    function parseJSON(value) {
+      if (typeof value !== "string") {
+        return value;
+      }
+
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+
+    const data = parseJSON(response.data);
+    console.log('[CatalogView] Fetched data:', data);
+    console.log('[CatalogView] data.ean_page:', data.ean_page);
 
     // If the response is an EANPage, store it and render EANPageView
-    if (data.scu_page && typeof data.scu_page === 'object' && data.scu_page.id) {
-      // console.log('CatalogView detected EANPage, preparing data for sub-view');
+    if (data.ean_page && typeof data.ean_page === 'object' && data.ean_page.id) {
+      console.log('[CatalogView] Detected EANPage, setting eanPageData for path:', route.path);
       // Ensure category info is present in the data passed to EANPageView
-      if (!data.category && (data.scu_page.category || currentCategory.value)) {
-        data.category = data.scu_page.category || currentCategory.value;
+      if (!data.category && (data.ean_page.category || currentCategory.value)) {
+        data.category = data.ean_page.category || currentCategory.value;
       }
-      if (!data.subcategories && (data.scu_page.subcategories || rootCategories.value.length > 0)) {
-        // subcategories might be in scu_page or we might have them from browsing
-        data.subcategories = data.scu_page.subcategories || [];
+      if (!data.subcategories && (data.ean_page.subcategories || rootCategories.value.length > 0)) {
+        // subcategories might be in ean_page or we might have them from browsing
+        data.subcategories = data.ean_page.subcategories || [];
       }
       
       eanPageData.value = data;
@@ -472,17 +492,18 @@ const fetchProducts = async () => {
         persistScuPageCache();
       }
       // Build category path via API for proper localized names
-      if (data.category_id || data.scu_page.category_id) {
-        const catId = data.category_id || data.scu_page.category_id;
+      if (data.category_id || data.ean_page.category_id) {
+        const catId = data.category_id || data.ean_page.category_id;
         fetchCategoryPath(catId);
         // Store the current category with description
-        currentCategory.value = data.category || data.scu_page.category || null;
+        currentCategory.value = data.category || data.ean_page.category || null;
       }
       return;
     }
 
     // If we were on an EANPage but the API returned a regular catalog, reset EANPage
     if (isOnEANPage) {
+      console.log('[CatalogView] Resetting eanPageData (API returned catalog for path:', route.path, ')');
       eanPageData.value = null;
     }
 
@@ -495,14 +516,14 @@ const fetchProducts = async () => {
     // console.log('CatalogView processing regular products, data.category:', data.category);
 
     // Build category path via API for proper localized names
-    if (data.category_id || (data.scu_page && data.scu_page.category_id)) {
-      const catId = data.category_id || data.scu_page.category_id;
+    if (data.category_id || (data.ean_page && data.ean_page.category_id)) {
+      const catId = data.category_id || data.ean_page.category_id;
       fetchCategoryPath(catId);
     // Store the current category with description
     if (data.category) {
       currentCategory.value = data.category;
-    } else if (data.scu_page && data.scu_page.category) {
-      currentCategory.value = data.scu_page.category;
+    } else if (data.ean_page && data.ean_page.category) {
+      currentCategory.value = data.ean_page.category;
     }
   } else {
     categoryPath.value = [];
@@ -804,6 +825,7 @@ const hasAttrsOrBrands = computed(() => {
 });
 
 const applyFilters = () => {
+  console.log('[CatalogView] applyFilters called, current path:', route.path);
   pagination.page = 1;
   const query = { ...route.query };
   delete query.category_id;
@@ -821,8 +843,15 @@ const applyFilters = () => {
     }
   }
 
-  // Always preserve current route path (category slugs)
-  router.replace({ path: route.path, query });
+  // Only replace route if query actually changed (prevents interfering with navigation)
+  const oldQueryStr = JSON.stringify(route.query);
+  const newQueryStr = JSON.stringify(query);
+  if (oldQueryStr !== newQueryStr) {
+    console.log('[CatalogView] applyFilters: query changed, replacing route');
+    router.replace({ path: route.path, query });
+  } else {
+    console.log('[CatalogView] applyFilters: query unchanged, skipping router.replace');
+  }
 };
 
 const resetFilters = () => {
@@ -835,11 +864,11 @@ const resetFilters = () => {
   applyFilters();
 };
 
-const formatPrice = (price) => {
-  const currency = t('eanpage.currency', 'EUR');
+const formatPrice = (price, currency) => {
+  const cur = currency || defaultCurrency.value || 'PLN';
   const localeMap = { ru: 'ru-RU', en: 'en-US', ua: 'uk-UA', pl: 'pl-PL' };
   const loc = localeMap[locale.value] || 'en-US';
-  return new Intl.NumberFormat(loc, { style: 'currency', currency }).format(price);
+  return new Intl.NumberFormat(loc, { style: 'currency', currency: cur }).format(price);
 };
 
 // Convert []KeyValue to {key: value} map.
@@ -878,7 +907,7 @@ const pageTitle = computed(() => {
 });
 
 // Show the hero intro only on the clean home state:
-// no search query, no selected category, and not on an SCU page.
+// no search query, no selected category, and not on an EAN page.
 const showHero = computed(() => {
   return !eanPageData.value && !filters.q && !currentCategory.value;
 });
@@ -887,11 +916,16 @@ const showHero = computed(() => {
 
 // Sync filters from route
 const syncFiltersFromRoute = () => {
+  isSyncingFiltersFromRoute.value = true;
+  const oldQ = filters.q;
   filters.q = route.query.q || '';
   filters.price_min = route.query.price_min || '';
   filters.price_max = route.query.price_max || '';
   filters.sort = route.query.sort || 'relevance';
   if (route.query.page) pagination.page = parseInt(route.query.page, 10);
+  if (oldQ !== filters.q) {
+    console.log('[CatalogView] syncFiltersFromRoute: q changed from', oldQ, 'to', filters.q);
+  }
 
   // Load attribute filters from URL
   Object.keys(route.query).forEach(key => {
@@ -901,6 +935,10 @@ const syncFiltersFromRoute = () => {
       attrFilters[attrCode] = values;
     }
   });
+  // Reset flag after next tick to allow Vue to process the changes
+  setTimeout(() => {
+    isSyncingFiltersFromRoute.value = false;
+  }, 0);
 };
 
 onMounted(async () => {
@@ -923,14 +961,14 @@ onMounted(async () => {
     delete window.__INITIAL_DATA__; // consume once
 
     // If it's an EANPage
-    if (data.scu_page && typeof data.scu_page === 'object' && data.scu_page.id) {
+    if (data.ean_page && typeof data.ean_page === 'object' && data.ean_page.id) {
       eanPageData.value = data;
       // Build category path via API for proper localized names
-      if (data.category_id || data.scu_page.category_id) {
-        const catId = data.category_id || data.scu_page.category_id;
+      if (data.category_id || data.ean_page.category_id) {
+        const catId = data.category_id || data.ean_page.category_id;
         fetchCategoryPath(catId);
         // Store the current category with description
-        currentCategory.value = data.category || data.scu_page.category || null;
+        currentCategory.value = data.category || data.ean_page.category || null;
       }
       loading.value = false;
       return;
@@ -944,11 +982,11 @@ onMounted(async () => {
     categoryAttrs.value = data.category_attrs || [];
 
     // Build category path via API for proper localized names
-    if (data.category_id || (data.scu_page && data.scu_page.category_id)) {
-      const catId = data.category_id || data.scu_page.category_id;
+    if (data.category_id || (data.ean_page && data.ean_page.category_id)) {
+      const catId = data.category_id || data.ean_page.category_id;
       fetchCategoryPath(catId);
       // Store the current category with description
-      currentCategory.value = data.category || (data.scu_page ? data.scu_page.category : null) || null;
+      currentCategory.value = data.category || (data.ean_page ? data.ean_page.category : null) || null;
     } else {
       categoryPath.value = [];
       currentCategory.value = null;
@@ -966,7 +1004,8 @@ onMounted(async () => {
 watch(
   () => [route.query, route.path],
   async () => {
-    // If we're in the middle of an inline SCU transition, skip everything —
+    console.log('[CatalogView] Route watch fired, path:', route.path, 'eanPageData:', !!eanPageData.value);
+    // If we're in the middle of an inline EAN transition, skip everything —
     // including filter syncing, which could trigger a competing navigation.
     if (isInlineScuTransition.value) {
       return;
@@ -978,12 +1017,20 @@ watch(
     // If we already have EANPage data for this path (from inline expansion), skip re-fetch
     if (eanPageData.value && route.path) {
       const cached = eanPageCache.value.get(route.path);
-      if (cached && cached.scu_page && typeof cached.scu_page === 'object' && cached.scu_page.id) {
+      if (cached && cached.ean_page && typeof cached.ean_page === 'object' && cached.ean_page.id) {
         // Already showing this EANPage inline — no need to re-fetch
         return;
       }
     }
 
+    // Reset EANPage data when navigating to a new path that's not in cache
+    // This ensures we don't show stale EANPage data when clicking on a new product
+    if (eanPageData.value && route.path && !eanPageCache.value.has(route.path)) {
+      console.log('[CatalogView] Route changed, resetting eanPageData for path:', route.path);
+      eanPageData.value = null;
+    }
+
+    console.log('[CatalogView] Calling fetchProducts for path:', route.path);
     fetchProducts();
   },
   { deep: true }
@@ -1042,7 +1089,7 @@ const goToPage = (page) => {
 // (protects against rapid double-clicks racing each other).
 let inlineScuNavToken = 0;
 
-// Navigate to SCU page (landing page for product group)
+// Navigate to EAN page (landing page for product group)
 // When animations are enabled and data is available, render EANPageView inline
 // with a smooth transition instead of a full router navigation.
 const goToEANPage = async (product) => {
@@ -1059,13 +1106,13 @@ const goToEANPage = async (product) => {
   // Try to use cached data for inline expansion (animations enabled only)
   if (animationEnabled.value && cacheKey && eanPageCache.value.has(cacheKey)) {
     const data = eanPageCache.value.get(cacheKey);
-    if (data && data.scu_page && typeof data.scu_page === 'object' && data.scu_page.id) {
+    if (data && data.ean_page && typeof data.ean_page === 'object' && data.ean_page.id) {
       // Ensure category info is present
-      if (!data.category && (data.scu_page.category || currentCategory.value)) {
-        data.category = data.scu_page.category || currentCategory.value;
+      if (!data.category && (data.ean_page.category || currentCategory.value)) {
+        data.category = data.ean_page.category || currentCategory.value;
       }
-      if (!data.subcategories && (data.scu_page.subcategories || rootCategories.value.length > 0)) {
-        data.subcategories = data.scu_page.subcategories || [];
+      if (!data.subcategories && (data.ean_page.subcategories || rootCategories.value.length > 0)) {
+        data.subcategories = data.ean_page.subcategories || [];
       }
       // Set flag to prevent route watch from re-fetching
       isInlineScuTransition.value = true;
@@ -1079,7 +1126,7 @@ const goToEANPage = async (product) => {
         // scrollTo here (it raced the router and caused a visible jump).
         await router.push({ path: cacheKey });
       } catch (e) {
-        console.error('Failed to navigate to SCU page:', e);
+        console.error('Failed to navigate to EAN page:', e);
       } finally {
         // Only the latest navigation resets the guard flag
         if (myToken === inlineScuNavToken) {
@@ -1092,6 +1139,7 @@ const goToEANPage = async (product) => {
 
   // Fallback: regular navigation (animations off or no cached data)
   if (product.seo_url) {
+    console.log('[CatalogView] goToEANPage: navigating to seo_url:', product.seo_url);
     router.push({ path: product.seo_url });
     return;
   }
@@ -1129,7 +1177,7 @@ defineOptions({ name: 'CatalogView' });
     </div>
   </div>
 
-  <!-- Crossfade container: catalog <-> SCU page.
+  <!-- Crossfade container: catalog <-> EAN page.
        The leaving element is taken out of flow (absolute inset-0) so the two
        views crossfade in place instead of stacking vertically. -->
   <div v-else class="relative">
@@ -1142,7 +1190,7 @@ defineOptions({ name: 'CatalogView' });
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <EANPageView v-if="eanPageData" :data="eanPageData" key="scu-page" />
+      <EANPageView v-if="eanPageData" :data="eanPageData" key="ean-page" />
     </Transition>
 
     <Transition
@@ -1657,7 +1705,7 @@ defineOptions({ name: 'CatalogView' });
               :enable-image-fade="animationEnabled"
               @click="goToEANPage(product)"
             />
-            <!-- SCU Preview Popup (only when animations enabled) -->
+            <!-- EAN Preview Popup (only when animations enabled) -->
             <Transition
               v-if="animationEnabled"
               enter-active-class="transition duration-400 ease-out"
@@ -1681,7 +1729,7 @@ defineOptions({ name: 'CatalogView' });
                 <!-- Preview content -->
                 <div v-else-if="scuPreviewData" class="p-4">
                   <h4 class="font-semibold text-sm text-ink mb-3 line-clamp-1">
-                    {{ scuPreviewData.scu_page?.title || product.title || product.name }}
+                    {{ scuPreviewData.ean_page?.title || product.title || product.name }}
                   </h4>
                   <div class="space-y-2 max-h-48 overflow-y-auto">
                     <div
@@ -1728,7 +1776,7 @@ defineOptions({ name: 'CatalogView' });
               :enable-image-fade="animationEnabled"
               @click="goToEANPage(product)"
             />
-            <!-- SCU Preview Popup (List view, only when animations enabled) -->
+            <!-- EAN Preview Popup (List view, only when animations enabled) -->
             <Transition
               v-if="animationEnabled"
               enter-active-class="transition duration-400 ease-out"
@@ -1752,7 +1800,7 @@ defineOptions({ name: 'CatalogView' });
                 <!-- Preview content -->
                 <div v-else-if="scuPreviewData" class="p-4">
                   <h4 class="font-semibold text-sm text-ink mb-3 line-clamp-1">
-                    {{ scuPreviewData.scu_page?.title || product.title || product.name }}
+                    {{ scuPreviewData.ean_page?.title || product.title || product.name }}
                   </h4>
                   <div class="space-y-2 max-h-48 overflow-y-auto">
                     <div

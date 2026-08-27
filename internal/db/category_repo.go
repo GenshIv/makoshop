@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/silentjson/v2"
 )
@@ -38,10 +39,23 @@ const (
 type CategoryRepo struct {
 	store         *Store
 	treePathCache sync.Map // catID int64 → []string
+
+	// Active transaction (nil if not in transaction)
+	txn *makodb.Transaction
 }
 
 func NewCategoryRepo(store *Store) *CategoryRepo {
 	return &CategoryRepo{store: store}
+}
+
+// SetTransaction sets the active transaction for this repo.
+func (r *CategoryRepo) SetTransaction(txn *makodb.Transaction) {
+	r.txn = txn
+}
+
+// ClearTransaction clears the active transaction.
+func (r *CategoryRepo) ClearTransaction() {
+	r.txn = nil
 }
 
 // ---------- CRUD ----------
@@ -324,6 +338,33 @@ func (r *CategoryRepo) rebuildDescendantsCache(catID int64) {
 	}
 }
 
+// rebuildAncestorsCacheTx is the transactional version of rebuildAncestorsCache.
+func (r *CategoryRepo) rebuildAncestorsCacheTx(txn *Transaction, catID int64) {
+	ancestors := r.computeAncestors(catID)
+	key := turboKeyCategoryAncestors + fmt.Sprintf("%d", catID)
+	if len(ancestors) > 0 {
+		ancestorKeys := make([]string, len(ancestors))
+		for i, id := range ancestors {
+			ancestorKeys[i] = KeyCategory(id)
+		}
+		_, _ = txn.TurboPutBatchIndexString(key, ancestorKeys)
+	}
+	r.treePathCache.Delete(catID)
+}
+
+// rebuildDescendantsCacheTx is the transactional version of rebuildDescendantsCache.
+func (r *CategoryRepo) rebuildDescendantsCacheTx(txn *Transaction, catID int64) {
+	descendants := r.computeDescendants(catID)
+	key := turboKeyCategoryChildrenOf + fmt.Sprintf("%d", catID)
+	if len(descendants) > 0 {
+		descendantKeys := make([]string, len(descendants))
+		for i, id := range descendants {
+			descendantKeys[i] = KeyCategory(id)
+		}
+		_, _ = txn.TurboPutBatchIndexString(key, descendantKeys)
+	}
+}
+
 // computeDescendants computes all descendants of a category.
 func (r *CategoryRepo) computeDescendants(catID int64) []int64 {
 	var result []int64
@@ -546,6 +587,13 @@ func (r *CategoryRepo) RebuildTrees() {
 	r.rebuildAllAncestorsAndDescendants()
 }
 
+// RebuildTreesTx is the transactional version of RebuildTrees.
+func (r *CategoryRepo) RebuildTreesTx(txn *Transaction) error {
+	r.rebuildFullTreeJSONTx(txn)
+	r.rebuildAllAncestorsAndDescendantsTx(txn)
+	return nil
+}
+
 // rebuildFullTreeJSON rebuilds the full active category tree and stores it as JSON in turbo.
 // Called on category mutations and at startup.
 func (r *CategoryRepo) rebuildFullTreeJSON() {
@@ -613,6 +661,68 @@ func (r *CategoryRepo) rebuildAllAncestorsAndDescendants() {
 		r.rebuildDescendantsCache(cat.ID)
 	}
 	fmt.Printf("[DEBUG] rebuildAllAncestorsAndDescendants: rebuilt for %d categories\n", len(all))
+}
+
+// rebuildFullTreeJSONTx is the transactional version of rebuildFullTreeJSON.
+func (r *CategoryRepo) rebuildFullTreeJSONTx(txn *Transaction) {
+	tokens, err := r.store.DB().TurboGetIndexTokens(turboKeyCategoryActive)
+	var cats []model.Category
+
+	if err != nil || len(tokens) == 0 {
+		all, err := r.ListAll()
+		if err == nil && all != nil {
+			cats = make([]model.Category, 0, len(all))
+			for _, c := range all {
+				if c.IsActive {
+					cats = append(cats, c)
+				}
+			}
+		}
+	} else {
+		docs, err := r.store.DB().MultiGetByDocIDs(tokens)
+		if err != nil {
+			fmt.Printf("WARN: rebuildFullTreeJSONTx MultiGetByDocIDs: %v\n", err)
+			return
+		}
+		cats = make([]model.Category, 0, len(docs))
+		for _, doc := range docs {
+			if len(doc) == 0 {
+				continue
+			}
+			cat, err := UnmarshalCategory(doc)
+			if err != nil {
+				continue
+			}
+			if cat.IsActive {
+				cats = append(cats, *cat)
+			}
+		}
+	}
+
+	if len(cats) == 0 {
+		_ = txn.TurboWrite(turboKeyCategoryTreeFull, []byte("[]"))
+		return
+	}
+
+	tree, _ := r.buildTree(cats, nil)
+	jsonData := marshalCategoryTree(tree)
+	if len(jsonData) == 0 {
+		jsonData = []byte("[]")
+	}
+	_ = txn.TurboWrite(turboKeyCategoryTreeFull, jsonData)
+}
+
+// rebuildAllAncestorsAndDescendantsTx is the transactional version of rebuildAllAncestorsAndDescendants.
+func (r *CategoryRepo) rebuildAllAncestorsAndDescendantsTx(txn *Transaction) {
+	all, err := r.ListAll()
+	if err != nil {
+		fmt.Printf("WARN: rebuildAllAncestorsAndDescendantsTx: %v\n", err)
+		return
+	}
+	for _, cat := range all {
+		r.rebuildAncestorsCacheTx(txn, cat.ID)
+		r.rebuildDescendantsCacheTx(txn, cat.ID)
+	}
 }
 
 // rebuildParentTreeJSON rebuilds the subtree for a given parentID and stores it as JSON.

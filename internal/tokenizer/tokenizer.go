@@ -194,7 +194,7 @@ type CachedCategoryTokens struct {
 	Tokens   []any
 }
 
-// BuildEANTokensFullText combines all text fields of an SCU page for tokenization.
+// BuildEANTokensFullText combines all text fields of an EAN page for tokenization.
 // Used for better matching during catalogization.
 func BuildEANTokensFullText(title, description, content string, attrs []model.KeyValue) string {
 	var sb strings.Builder

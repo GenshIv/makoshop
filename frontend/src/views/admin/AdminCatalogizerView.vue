@@ -91,7 +91,7 @@ const importCategories = async () => {
   input.click();
 };
 
-// SCU Page catalogize all (TurboTopNByIntersection)
+// EAN Page catalogize all (TurboTopNByIntersection)
 const catalogizeAllOpen = ref(false);
 
 const askCatalogizeAll = () => {
@@ -320,7 +320,7 @@ onMounted(() => {
           :disabled="running"
           class="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
         >
-          {{ t('admin.catalogizer_catalogize_all_eanpages') || 'Catalogize All SCU Pages' }}
+          {{ t('admin.catalogizer_catalogize_all_eanpages') || 'Catalogize All EAN Pages' }}
         </button>
         <button
           @click="trainCatalogizer"

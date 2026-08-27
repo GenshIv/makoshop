@@ -569,7 +569,7 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}), model.RoleAdmin))
 
-	// POST /admin/rebuild-eanpages — rebuild all SCU pages from products
+	// POST /admin/rebuild-eanpages — rebuild all EAN pages from products
 	mux.Handle("/admin/rebuild-eanpages", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			h.HandleAdminRebuildEANPages(w, r)
@@ -596,7 +596,7 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}), model.RoleAdmin))
 
-	// POST /admin/rebuild-eanpage-indexes — index all SCU pages into EANPageSearch
+	// POST /admin/rebuild-eanpage-indexes — index all EAN pages into EANPageSearch
 	mux.Handle("/admin/rebuild-eanpage-indexes", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			h.HandleAdminRebuildEANPageIndexes(w, r)
@@ -605,7 +605,7 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}), model.RoleAdmin))
 
-	// POST /admin/rebuild-eanpage-sort-indexes — rebuild sort indexes for SCU pages
+	// POST /admin/rebuild-eanpage-sort-indexes — rebuild sort indexes for EAN pages
 	mux.Handle("/admin/rebuild-eanpage-sort-indexes", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			h.HandleAdminRebuildEANPageSortIndexes(w, r)
@@ -614,7 +614,7 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}), model.RoleAdmin))
 
-	// POST /admin/rebuild-product-counts — recalculate ProductCount for all SCU pages
+	// POST /admin/rebuild-product-counts — recalculate ProductCount for all EAN pages
 	mux.Handle("/admin/rebuild-product-counts", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			h.HandleAdminRebuildProductCounts(w, r)
@@ -667,6 +667,24 @@ func main() {
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}), model.RoleAdmin))
+
+	// --- Global settings ---
+
+	// GET /admin/settings (public) - get global settings including default currency
+	mux.Handle("/admin/settings", spaAwareHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			h.HandleGlobalSettingsGet(w, r)
+			return
+		}
+		// PATCH only for admin
+		if r.Method == http.MethodPatch {
+			jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h.HandleGlobalSettingsUpdate(w, r)
+			}), model.RoleAdmin).ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})))
 
 	// --- Company settings: Payment Methods (temporarily disabled) ---
 
@@ -970,7 +988,7 @@ func main() {
 			return
 		}
 
-		// /landing/scu/{scu}
+		// /landing/ean/{ean}
 		if parts[0] == "ean" && len(parts) >= 2 {
 			if r.Method != http.MethodGet {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

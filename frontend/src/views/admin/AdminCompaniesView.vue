@@ -498,9 +498,12 @@ const openUnifiedSettings = async (company) => {
     unifiedSettingsForm.value.payment_method_ids = c.payment_method_ids || [];
     unifiedSettingsForm.value.delivery_time_ids = c.delivery_time_ids || [];
     unifiedSettingsForm.value.installment_plan_ids = c.installment_plan_ids || [];
+    // Load import_folder from company root level
+    unifiedSettingsForm.value.price_source.import_folder = c.import_folder || '';
+    // Load currency from settings
+    unifiedSettingsForm.value.price_source.currency = c.settings?.currency || '';
+    // Load html_attr_rules from price_source
     if (c.price_source) {
-      unifiedSettingsForm.value.price_source.import_folder = c.price_source.import_folder || '';
-      unifiedSettingsForm.value.price_source.currency = c.price_source.currency || '';
       unifiedSettingsForm.value.price_source.html_attr_rules = c.price_source.html_attr_rules || [];
     }
   } catch (e) {
@@ -546,6 +549,8 @@ const saveUnifiedSettings = async () => {
   unifiedSettingsSaving.value = true;
   try {
     await api.patch(`/admin/companies/${selectedCompany.value.id}`, {
+      import_folder: unifiedSettingsForm.value.price_source.import_folder,
+      currency: unifiedSettingsForm.value.price_source.currency,
       payment_method_ids: unifiedSettingsForm.value.payment_method_ids,
       delivery_time_ids: unifiedSettingsForm.value.delivery_time_ids,
       installment_plan_ids: unifiedSettingsForm.value.installment_plan_ids,

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/silentjson/v2"
 )
@@ -22,11 +23,24 @@ type ProductRepo struct {
 
 	// Single-writer channel for batch operations
 	batchChan chan batchTask
+
+	// Active transaction (nil if not in transaction)
+	txn *makodb.Transaction
 }
 
 // Store returns the underlying Store for direct access (emergency use only).
 func (r *ProductRepo) Store() *Store {
 	return r.store
+}
+
+// SetTransaction sets the active transaction for this repo.
+func (r *ProductRepo) SetTransaction(txn *makodb.Transaction) {
+	r.txn = txn
+}
+
+// ClearTransaction clears the active transaction.
+func (r *ProductRepo) ClearTransaction() {
+	r.txn = nil
 }
 
 type batchTask struct {
@@ -594,16 +608,16 @@ func (r *ProductRepo) DeleteAllProducts() error {
 	// Clear product_list
 	_ = r.store.TurboWrite(TurboKeyProductList, []byte{})
 
-	// Now delete all SCU pages (they become empty without products)
+	// Now delete all EAN pages (they become empty without products)
 	if r.eanPageSearch != nil {
 		_ = r.deleteAllEANPages()
 	}
 
-	fmt.Println("[DELETE-ALL] All products and SCU pages deleted.")
+	fmt.Println("[DELETE-ALL] All products and EAN pages deleted.")
 	return nil
 }
 
-// deleteAllEANPages removes all SCU pages and their indexes.
+// deleteAllEANPages removes all EAN pages and their indexes.
 func (r *ProductRepo) deleteAllEANPages() error {
 	if r.eanPageSearch == nil {
 		return nil
@@ -614,9 +628,9 @@ func (r *ProductRepo) deleteAllEANPages() error {
 		return nil
 	}
 
-	fmt.Printf("[DELETE-ALL] Deleting %d SCU pages...\n", len(tokens))
+	fmt.Printf("[DELETE-ALL] Deleting %d EAN pages...\n", len(tokens))
 
-	// Get all SCU pages at once
+	// Get all EAN pages at once
 	docs, err := r.store.db.MultiGetByDocIDs(tokens)
 	if err != nil {
 		return fmt.Errorf("multi get eanpages: %w", err)
@@ -635,11 +649,11 @@ func (r *ProductRepo) deleteAllEANPages() error {
 		if err := r.eanPageSearch.UnindexEANPage(sp); err != nil {
 			fmt.Printf("[DELETE-ALL] WARN: unindex eanpage %d: %v\n", id, err)
 		}
-		// Delete SCU page doc and its indexes
+		// Delete EAN page doc and its indexes
 		_ = r.eanPageSearch.repo.Delete(id)
 	}
 
-	fmt.Println("[DELETE-ALL] All SCU pages deleted.")
+	fmt.Println("[DELETE-ALL] All EAN pages deleted.")
 	return nil
 }
 
@@ -703,7 +717,7 @@ type (
 		Subcategories silentjson.RawMessage   `json:"subcategories,omitempty"` // precomputed JSON []byte, no struct->json
 		Facets        *Facets                 `json:"facets,omitempty"`
 		Products      []model.Product         `json:"products,omitempty"`
-		EANPage       *model.EANPage          `json:"scu_page,omitempty"`
+		EANPage       *model.EANPage          `json:"ean_page,omitempty"`
 		TreePathFull  []CategoryTreeNode      `json:"tree_path_full,omitempty"`
 		SEOURL        string                  `json:"seo_url,omitempty"`
 	}
@@ -754,7 +768,7 @@ func (r *ProductRepo) List(params ListParams) ([]silentjson.RawMessage, int64, e
 }
 
 // ListWithFacets returns paginated list with optional facets.
-// Now uses EANPageSearch as primary backend (catalog shows SCU pages, not individual products).
+// Now uses EANPageSearch as primary backend (catalog shows EAN pages, not individual products).
 func (r *ProductRepo) ListWithFacets(params ListParams) (*EANListRespData, error) {
 	if params.Page < 1 {
 		params.Page = 1
@@ -766,7 +780,7 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*EANListRespData, error
 		params.Limit = 200
 	}
 
-	// Primary: use EANPageSearch (catalog shows SCU pages)
+	// Primary: use EANPageSearch (catalog shows EAN pages)
 	if r.eanPageSearch != nil {
 		eanParams := EANPageListParams{
 			Q:           params.Q,

@@ -74,10 +74,10 @@ func (h *Handlers) HandleSitemapIndex(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	// Count SCU pages to determine how many sitemap files we need
+	// Count EAN pages to determine how many sitemap files we need
 	eanpageCount, err := h.getEANPageCount()
 	if err != nil {
-		http.Error(w, "failed to count SCU pages: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to count EAN pages: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -219,7 +219,7 @@ func (h *Handlers) HandleSitemapEANPage(w http.ResponseWriter, r *http.Request) 
 	// Get all EANPage IDs from turbo index
 	eanpageIDs, err := h.getAllEANPageIDs()
 	if err != nil {
-		http.Error(w, "failed to read SCU page index: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to read EAN page index: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -299,7 +299,7 @@ func (h *Handlers) HandleSitemapEANPage(w http.ResponseWriter, r *http.Request) 
 
 // ---------- helpers ----------
 
-// getEANPageCount returns the total number of SCU pages from turbo index
+// getEANPageCount returns the total number of EAN pages from turbo index
 func (h *Handlers) getEANPageCount() (int, error) {
 	data, err := h.eanPageRepo.Store.DB().TurboRawRead(db.TurboKeyEANPageList)
 	if err != nil || len(data) == 0 {
@@ -324,7 +324,7 @@ func (h *Handlers) getAllEANPageIDs() ([]any, error) {
 	return ids, nil
 }
 
-// buildEANPageURL builds canonical SEO URL for a SCU page
+// buildEANPageURL builds canonical SEO URL for a EAN page
 func (h *Handlers) buildEANPageURL(sp *model.EANPage) string {
 	if sp.CategoryID != 0 {
 		treePath, err := h.categoryRepo.GetTreePath(sp.CategoryID)

@@ -49,8 +49,8 @@ Attribute filters in the catalog were not working due to inconsistencies in how 
 
 ### 4. Added `RebuildAttrValuesFromSCUPages` (attrdef_repo.go)
 
-New method that rebuilds `attr_values_cat` and `attr_label` indexes from all SCU pages:
-- Reads all SCU pages from the database
+New method that rebuilds `attr_values_cat` and `attr_label` indexes from all EAN pages:
+- Reads all EAN pages from the database
 - Accumulates attribute values per code and category
 - Writes `attr_values_cat:{code}:{catID}` as JSON maps
 - Writes `attr_label:{code}:{value}` with raw values
@@ -63,12 +63,12 @@ New method that rebuilds `attr_values_cat` and `attr_label` indexes from all SCU
 
 **After:**
 - Rebuilds `attrdef_cat_codes` indexes
-- Rebuilds `attr_values_cat` and `attr_label` from SCU pages
+- Rebuilds `attr_values_cat` and `attr_label` from EAN pages
 - Invalidates the category attributes cache
 
 ## How It Works Now
 
-### Indexing (when SCU pages are indexed)
+### Indexing (when EAN pages are indexed)
 
 `IndexSCUPageBatch` writes:
 - `scupage_attr:{code}:{value}` — turbo index for filtering (raw values)
@@ -102,7 +102,7 @@ curl -X POST http://localhost:8080/admin/rebuild-attrdef-indexes
 
 This will:
 1. Rebuild `attrdef_cat_codes` indexes
-2. Rebuild `attr_values_cat` and `attr_label` from all SCU pages
+2. Rebuild `attr_values_cat` and `attr_label` from all EAN pages
 3. Invalidate the cache
 
 ## Files Changed

@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/httpres"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/makoshop/internal/pricesrc"
@@ -111,6 +113,11 @@ func (h *Handlers) HandleAdminImportNokaut(w http.ResponseWriter, r *http.Reques
 }
 
 // importNokautCompany imports all offers for a single company from its price folder.
+// Uses application-level transactions for EAN page operations to ensure atomicity.
+//
+// NOTE: Product creation/update (GetOrCreateByEAN) happens during parsing phase,
+// before the transaction starts. For full atomicity, this would need to be moved
+// into the transaction as well.
 func (h *Handlers) importNokautCompany(company *model.Company, limit int) NokautImportResult {
 	cfg := company.PriceSource
 	applyPriceSourceDefaults(&cfg)
@@ -175,7 +182,7 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 			result.OffersParsed++
 			fileParsed++
 
-			p := mapOfferToProduct(offer, cfg, company.ID, currency)
+			p := mapOfferToProduct(offer, cfg, company.ID, currency, h.attrDefRepo)
 			if p == nil {
 				fileSkipped++
 				result.ProductsSkipped++
@@ -225,15 +232,30 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 	}
 
 	// ============================================
-	// Phase 2: Batch upsert EAN pages + index
+	// Phase 2: Batch upsert EAN pages + index (IN TRANSACTION)
 	// ============================================
-	fmt.Printf("[IMPORT-NOKAUT] Phase 2: Upserting EAN pages for %d products...\n", len(allProducts))
+	fmt.Printf("[IMPORT-NOKAUT] Phase 2: Upserting EAN pages for %d products (transactional)...\n", len(allProducts))
 	phase2Start := time.Now()
+
+	// Create application-level transaction
+	txn := db.NewTransaction(h.store)
+	if err := txn.Begin(); err != nil {
+		fmt.Printf("[IMPORT-NOKAUT] ERROR: failed to begin transaction: %v\n", err)
+		result.Status = "error_transaction"
+		return result
+	}
+	defer func() {
+		if !txn.IsFinished() {
+			_ = txn.Abort()
+		}
+	}()
 
 	if err := h.eanPageRepo.LoadCatalogizerCache(); err != nil {
 		fmt.Printf("[IMPORT-NOKAUT] WARN: load catalogizer cache: %v\n", err)
 	}
-	h.eanPageRepo.BatchUpsertFromProducts(allProducts)
+
+	// Perform batch upsert within transaction
+	h.eanPageRepo.BatchUpsertFromProductsTx(txn, allProducts)
 
 	if h.eanPageSearch != nil {
 		allPages, _ := h.eanPageRepo.ListAll()
@@ -241,49 +263,66 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 		for i := range allPages {
 			pagePtrs[i] = &allPages[i]
 		}
-		if err := h.eanPageSearch.IndexEANPageBatch(pagePtrs); err != nil {
-			fmt.Printf("[IMPORT-NOKAUT] WARN: index EAN pages: %v\n", err)
-		}
-		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
-			fmt.Printf("[IMPORT-NOKAUT] WARN: build EAN page sort indexes: %v\n", err)
+		if err := h.eanPageSearch.IndexEANPageBatchTx(txn, pagePtrs); err != nil {
+			fmt.Printf("[IMPORT-NOKAUT] ERROR: index EAN pages failed: %v\n", err)
+			_ = txn.Abort()
+			result.Status = "error_index"
+			return result
 		}
 	}
 	fmt.Printf("[IMPORT-NOKAUT] Phase 2: EAN pages done in %v\n", time.Since(phase2Start))
 
 	// ============================================
-	// Phase 3: Recalculate EAN page counts + min prices
+	// Phase 3: Recalculate EAN page counts + min prices (IN TRANSACTION)
 	// ============================================
-	fmt.Println("[IMPORT-NOKAUT] Phase 3: Recalculating EAN page counts and min prices...")
+	fmt.Println("[IMPORT-NOKAUT] Phase 3: Recalculating EAN page counts and min prices (transactional)...")
 	phase3Start := time.Now()
-	if err := h.eanPageRepo.RecalculateProductCounts(); err != nil {
-		fmt.Printf("[IMPORT-NOKAUT] WARN: recalculate product counts: %v\n", err)
+	if err := h.eanPageRepo.RecalculateProductCountsTx(txn); err != nil {
+		fmt.Printf("[IMPORT-NOKAUT] ERROR: recalculate product counts failed: %v\n", err)
+		_ = txn.Abort()
+		result.Status = "error_counts"
+		return result
 	}
-	if err := h.eanPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
-		fmt.Printf("[IMPORT-NOKAUT] WARN: recalculate min prices: %v\n", err)
-	}
-	if h.eanPageSearch != nil {
-		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
-			fmt.Printf("[IMPORT-NOKAUT] WARN: rebuild EAN page sort indexes: %v\n", err)
-		}
+	if err := h.eanPageRepo.RecalculateMinPricesTx(txn, h.productRepo); err != nil {
+		fmt.Printf("[IMPORT-NOKAUT] ERROR: recalculate min prices failed: %v\n", err)
+		_ = txn.Abort()
+		result.Status = "error_prices"
+		return result
 	}
 	fmt.Printf("[IMPORT-NOKAUT] Phase 3: done in %v\n", time.Since(phase3Start))
 
 	// ============================================
-	// Phase 4: Build product sort indexes
+	// Phase 4: Build product sort indexes (IN TRANSACTION)
 	// ============================================
-	fmt.Println("[IMPORT-NOKAUT] Phase 4: Building product sort indexes...")
+	fmt.Println("[IMPORT-NOKAUT] Phase 4: Building product sort indexes (transactional)...")
 	if h.turboSearch != nil {
-		if err := h.turboSearch.BuildSortIndexes(); err != nil {
-			fmt.Printf("[IMPORT-NOKAUT] WARN: build product sort indexes: %v\n", err)
+		if err := h.turboSearch.BuildSortIndexesTx(txn); err != nil {
+			fmt.Printf("[IMPORT-NOKAUT] ERROR: build product sort indexes failed: %v\n", err)
+			_ = txn.Abort()
+			result.Status = "error_sort_indexes"
+			return result
 		}
 	}
 
 	// ============================================
-	// Phase 5: Rebuild category trees
+	// Phase 5: Rebuild category trees (IN TRANSACTION)
 	// ============================================
-	fmt.Println("[IMPORT-NOKAUT] Phase 5: Rebuilding category trees...")
-	h.categoryRepo.RebuildTrees()
+	fmt.Println("[IMPORT-NOKAUT] Phase 5: Rebuilding category trees (transactional)...")
+	if err := h.categoryRepo.RebuildTreesTx(txn); err != nil {
+		fmt.Printf("[IMPORT-NOKAUT] ERROR: rebuild category trees failed: %v\n", err)
+		_ = txn.Abort()
+		result.Status = "error_trees"
+		return result
+	}
 
+	// Commit transaction
+	if err := txn.Commit(); err != nil {
+		fmt.Printf("[IMPORT-NOKAUT] ERROR: commit transaction failed: %v\n", err)
+		result.Status = "error_commit"
+		return result
+	}
+
+	fmt.Println("[IMPORT-NOKAUT] Transaction committed successfully")
 	result.Status = "completed"
 	return result
 }
@@ -312,7 +351,7 @@ func applyPriceSourceDefaults(cfg *model.PriceSourceConfig) {
 
 // mapOfferToProduct maps a parsed Nokaut offer to a model.Product using the
 // company's PriceSourceConfig. Returns nil if the offer has no usable data.
-func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, companyID int64, currency string) *model.Product {
+func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, companyID int64, currency string, attrDefRepo interface{}) *model.Product {
 	name := strings.TrimSpace(offer.Name)
 	if name == "" {
 		return nil
@@ -361,30 +400,32 @@ func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, compan
 	var attrs []model.KeyValue
 	for _, af := range cfg.AttrFields {
 		if val := strings.TrimSpace(offer.Props[af.Field]); val != "" {
-			attrs = append(attrs, model.KeyValue{Key: af.Code, Value: val})
+			attrs = append(attrs, model.KeyValue{Key: af.Code, Value: html.UnescapeString(val)})
 		}
 	}
 	if productURL != "" {
 		attrs = append(attrs, model.KeyValue{Key: "product_url", Value: productURL})
 	}
 	if shopCategory != "" {
-		attrs = append(attrs, model.KeyValue{Key: "shop_category", Value: shopCategory})
+		attrs = append(attrs, model.KeyValue{Key: "shop_category", Value: html.UnescapeString(shopCategory)})
 	}
 
-	// Parse attributes from HTML description using configured rules
-	if len(cfg.HTMLAttrRules) > 0 && offer.Description != "" {
-		htmlParser := pricesrc.NewHTMLAttrParser(cfg.HTMLAttrRules)
-		htmlAttrs := htmlParser.Parse(offer.Description)
-		for code, value := range htmlAttrs {
-			attrs = append(attrs, model.KeyValue{Key: code, Value: value})
+	// Step 1: Clean HTML first — remove scripts, inline styles, unescape entities
+	description := pricesrc.CleanHTMLDescription(strings.TrimSpace(offer.Description))
+
+	// Step 2: Parse attributes from cleaned HTML description
+	if description != "" && attrDefRepo != nil {
+		if repo, ok := attrDefRepo.(*db.AttrDefRepo); ok {
+			keyParser := pricesrc.NewHTMLAttrKeyParser(repo)
+			htmlAttrs := keyParser.Parse(description)
+			for code, value := range htmlAttrs {
+				attrs = append(attrs, model.KeyValue{Key: code, Value: value})
+			}
 		}
 	}
 
-	// Clean HTML from description (strip tags, keep text)
-	description := pricesrc.StripHTMLEntities(strings.TrimSpace(offer.Description))
-	if len(description) > 2000 {
-		description = description[:2000]
-	}
+	// Step 3: Truncate description safely
+	description = pricesrc.TruncateHTML(description, 3000)
 
 	return &model.Product{
 		EAN:           ean,

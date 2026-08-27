@@ -129,7 +129,7 @@ const attrsString = computed(() => {
 
     <!-- Image -->
     <div
-      class="aspect-[4/3] bg-surface-image flex items-center justify-center overflow-hidden"
+      class="aspect-[4/3] bg-white flex items-center justify-center overflow-hidden"
       @mouseenter="onImageMouseEnter"
       @mouseleave="onImageMouseLeave"
     >
@@ -139,7 +139,7 @@ const attrsString = computed(() => {
         :alt="title"
         loading="lazy"
         decoding="async"
-        class="w-full h-full object-cover transition-all duration-500 ease-out group-hover:scale-[1.03]"
+        class="w-full h-full object-contain transition-all duration-500 ease-out group-hover:scale-[1.03]"
         :class="{
           'image-fade': enableImageFade,
           'image-fade-active': enableImageFade && isImageActive
@@ -181,13 +181,13 @@ const attrsString = computed(() => {
               v-if="previousPrice"
               class="text-[11px] sm:text-xs text-ink-3 line-through"
             >
-              {{ formatPrice(previousPrice) }}
+              {{ formatPrice(previousPrice, product.currency) }}
             </span>
             <span
               class="font-bold text-sm sm:text-base"
               :class="hasDiscount ? 'text-orange-600 theme-dark:text-orange-400' : 'text-accent'"
             >
-              {{ formatPrice(price) }}
+              {{ formatPrice(price, product.currency) }}
             </span>
           </div>
           <span
@@ -220,7 +220,7 @@ const attrsString = computed(() => {
     <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 p-3">
       <!-- Image -->
       <div
-        class="relative w-full sm:w-32 h-32 sm:h-32 flex-shrink-0 bg-surface-image rounded-lg overflow-hidden"
+        class="relative w-full sm:w-32 h-32 sm:h-32 flex-shrink-0 bg-white rounded-lg overflow-hidden"
         @mouseenter="onImageMouseEnter"
         @mouseleave="onImageMouseLeave"
       >
@@ -269,13 +269,13 @@ const attrsString = computed(() => {
                 v-if="previousPrice"
                 class="text-xs text-ink-3 line-through"
               >
-                {{ formatPrice(previousPrice) }}
+                {{ formatPrice(previousPrice, product.currency) }}
               </span>
               <span
                 class="font-bold text-base"
                 :class="hasDiscount ? 'text-orange-600 theme-dark:text-orange-400' : 'text-accent'"
               >
-                {{ formatPrice(price) }}
+                {{ formatPrice(price, product.currency) }}
               </span>
             </div>
             <div v-if="product.product_count && product.product_count > 1" class="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-surface-2 text-ink-2 border border-line">

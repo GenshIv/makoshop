@@ -34,7 +34,7 @@
 
 ### Модели
 
-- `Product`: `SCU` → `EAN`, добавлено `PreviousPrice`.
+- `Product`: `EAN` → `EAN`, добавлено `PreviousPrice`.
 - `Company`: добавлены `ImportFolder`, `PriceSource`, `DescRu/Ua/Pl/En`, `HeroImage`, `IsVisible`.
 - Новые типы: `PriceSourceConfig`, `AttrFieldMap`.
 

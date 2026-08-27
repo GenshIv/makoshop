@@ -100,7 +100,7 @@ type AttrFieldMap struct {
 ```go
 type Product struct {
     // ... существующие поля ...
-    EAN             string  // было SCU — европейский штрихкод (task 2)
+    EAN             string  // было EAN — европейский штрихкод (task 2)
     PreviousPrice   float64 // старая цена (task 6)
     // Уникальность: (EAN, NormalizedName, CompanyID)  (task 3, 5)
 }
@@ -163,7 +163,7 @@ SEO-страница на продукт по EAN. Агрегирует оффе
 
 ## 8. План миграции
 
-1. Переименовать SCU -> EAN (backend + frontend).
+1. Переименовать EAN -> EAN (backend + frontend).
 2. Расширить модели (PreviousPrice, PriceSourceConfig, landing-поля).
 3. Новый импорт Nokaut XML (config-driven, upsert).
 4. Admin API.
