@@ -47,11 +47,19 @@ func NewCategoryRepo(store *Store) *CategoryRepo {
 // ---------- CRUD ----------
 
 func (r *CategoryRepo) Create(c *model.Category) error {
-	id, err := r.store.NextID("category")
-	if err != nil {
-		return fmt.Errorf("next_id category: %w", err)
+	// Use provided ID if set, otherwise generate new
+	if c.ID == 0 {
+		id, err := r.store.NextID("category")
+		if err != nil {
+			return fmt.Errorf("next_id category: %w", err)
+		}
+		c.ID = id
+	} else {
+		// Ensure the ID counter is at least this ID + 1
+		if err := r.store.SetNextIDIfGreater("category", c.ID+1); err != nil {
+			fmt.Printf("WARN: failed to update next_id for category %d: %v\n", c.ID, err)
+		}
 	}
-	c.ID = id
 	c.CreatedAt = time.Now().Unix()
 	c.UpdatedAt = time.Now().Unix()
 	if c.IsActive == false {

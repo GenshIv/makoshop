@@ -9,14 +9,14 @@ import ViewToggle from '../components/ViewToggle.vue';
 import EmptyState from '../components/EmptyState.vue';
 import { useAnimation } from '../composables/useAnimation';
 
-// Lazy-load SCUPageView to avoid circular imports
-const SCUPageView = defineAsyncComponent(() => import('../views/SCUPageView.vue'));
+// Lazy-load EANPageView to avoid circular imports
+const EANPageView = defineAsyncComponent(() => import('../views/EANPageView.vue'));
 
-// Preload the SCUPageView chunk eagerly so the inline expansion transition is
+// Preload the EANPageView chunk eagerly so the inline expansion transition is
 // never interrupted by async loading on first use (fixes flaky enter animation).
 // The same module specifier is deduped by the bundler, so this shares the
 // exact chunk/promise used by defineAsyncComponent above.
-import('../views/SCUPageView.vue');
+import('../views/EANPageView.vue');
 
 const { animationEnabled } = useAnimation();
 
@@ -90,12 +90,12 @@ const maintenanceMode = ref(false);
 const lastSearchMs = ref(null); // time in ms of last catalog request
 const showMobileFilters = ref(false); // mobile filters panel
 
-// If API returns SCUPage data, render SCUPageView instead
-const scuPageData = ref(null);
-// Flag to prevent route watch from re-fetching when we're about to set scuPageData from cache
+// If API returns EANPage data, render EANPageView instead
+const eanPageData = ref(null);
+// Flag to prevent route watch from re-fetching when we're about to set eanPageData from cache
 const isInlineScuTransition = ref(false);
 
-// SCUPage cache: key -> data (to avoid re-fetching on hover/return)
+// EANPage cache: key -> data (to avoid re-fetching on hover/return)
 // Uses sessionStorage so it survives SPA navigation but is cleared on page reload
 const SCU_CACHE_KEY = 'makoshop_scu_page_cache';
 
@@ -117,14 +117,14 @@ const loadScuPageCacheFromStorage = () => {
 
 const persistScuPageCache = () => {
   try {
-    const arr = Array.from(scuPageCache.value.entries());
+    const arr = Array.from(eanPageCache.value.entries());
     sessionStorage.setItem(SCU_CACHE_KEY, JSON.stringify(arr));
   } catch {
     // ignore (quota exceeded or private mode)
   }
 };
 
-const scuPageCache = ref(loadScuPageCacheFromStorage());
+const eanPageCache = ref(loadScuPageCacheFromStorage());
 
 // Companies cache: company_id -> { id, name }
 // Uses sessionStorage so it survives SPA navigation but is cleared on page reload
@@ -201,7 +201,7 @@ const scuPreviewFetchTimer = ref(null); // delay timer for fetching data
 const PREVIEW_DELAY_MS = 500; // must hover 500ms before showing popup / fetching
 
 // Build the canonical cache/URL key for a product's SCU page.
-// Must stay in sync with goToSCUPage and fetchProducts (route.path based).
+// Must stay in sync with goToEANPage and fetchProducts (route.path based).
 const getScuKey = (product) => {
   if (!product) return null;
   if (product.seo_url) return product.seo_url;
@@ -236,8 +236,8 @@ const showScuPreview = (product) => {
   const cacheKey = getScuKey(product);
   scuPreviewTimer.value = setTimeout(async () => {
     // Check cache first
-    if (scuPageCache.value.has(cacheKey)) {
-      scuPreviewData.value = scuPageCache.value.get(cacheKey);
+    if (eanPageCache.value.has(cacheKey)) {
+      scuPreviewData.value = eanPageCache.value.get(cacheKey);
       return;
     }
     
@@ -248,7 +248,7 @@ const showScuPreview = (product) => {
       const response = await api.get(url);
       const data = response.data;
       
-      if (data.scu_page && typeof data.scu_page === 'object' && data.scu_page.scu) {
+      if (data.scu_page && typeof data.scu_page === 'object' && data.scu_page.id) {
         if (!data.category && (data.scu_page.category || currentCategory.value)) {
           data.category = data.scu_page.category || currentCategory.value;
         }
@@ -256,7 +256,7 @@ const showScuPreview = (product) => {
           data.subcategories = data.scu_page.subcategories || [];
         }
         
-        scuPageCache.value.set(cacheKey, data);
+        eanPageCache.value.set(cacheKey, data);
         persistScuPageCache();
         // Only show if this product is still hovered
         if (hoveredScuProduct.value?.id === product.id) {
@@ -284,7 +284,7 @@ const hideScuPreview = () => {
 const getScuPreviewSuppliers = (data) => {
   if (!data || !data.products || data.products.length === 0) return [];
   
-  // Group by modification (same logic as SCUPageView)
+  // Group by modification (same logic as EANPageView)
   const groups = new Map();
   for (const p of data.products) {
     const pureName = (p.name || '').replace(/\s*—\s*[^—]+$/, '').trim() || p.sku || 'Unknown';
@@ -308,11 +308,11 @@ const getScuPreviewSuppliers = (data) => {
   return Array.from(groups.values());
 };
 
-// Current category path for tree/breadcrumbs (without SCUPage slug)
+// Current category path for tree/breadcrumbs (without EANPage slug)
 const currentCategoryPath = computed(() => {
-  // If showing SCUPage, use its tree_path
-  if (scuPageData.value && scuPageData.value.tree_path) {
-    return scuPageData.value.tree_path;
+  // If showing EANPage, use its tree_path
+  if (eanPageData.value && eanPageData.value.tree_path) {
+    return eanPageData.value.tree_path;
   }
   // Otherwise derive from route path
   if (route.path.startsWith('/shop/')) {
@@ -382,21 +382,21 @@ const fetchProducts = async () => {
   loading.value = true;
   error.value = null;
   lastSearchMs.value = null;
-  // Do not reset scuPageData if already on an SCU page with data
-  const isOnSCUPage = scuPageData.value != null;
+  // Do not reset eanPageData if already on an SCU page with data
+  const isOnEANPage = eanPageData.value != null;
 
-  // Check cache for SCUPage data before making API call
+  // Check cache for EANPage data before making API call
   if (route.path && !route.query.page) {
-    const cached = scuPageCache.value.get(route.path);
-    if (cached && cached.scu_page && typeof cached.scu_page === 'object' && cached.scu_page.scu) {
-      // Use cached SCUPage data
+    const cached = eanPageCache.value.get(route.path);
+    if (cached && cached.scu_page && typeof cached.scu_page === 'object' && cached.scu_page.id) {
+      // Use cached EANPage data
       if (!cached.category && (cached.scu_page.category || currentCategory.value)) {
         cached.category = cached.scu_page.category || currentCategory.value;
       }
       if (!cached.subcategories && (cached.scu_page.subcategories || rootCategories.value.length > 0)) {
         cached.subcategories = cached.scu_page.subcategories || [];
       }
-      scuPageData.value = cached;
+      eanPageData.value = cached;
       if (cached.category_id || cached.scu_page.category_id) {
         const catId = cached.category_id || cached.scu_page.category_id;
         fetchCategoryPath(catId);
@@ -452,10 +452,10 @@ const fetchProducts = async () => {
 
     const data = response.data;
 
-    // If the response is an SCUPage, store it and render SCUPageView
-    if (data.scu_page && typeof data.scu_page === 'object' && data.scu_page.scu) {
-      // console.log('CatalogView detected SCUPage, preparing data for sub-view');
-      // Ensure category info is present in the data passed to SCUPageView
+    // If the response is an EANPage, store it and render EANPageView
+    if (data.scu_page && typeof data.scu_page === 'object' && data.scu_page.id) {
+      // console.log('CatalogView detected EANPage, preparing data for sub-view');
+      // Ensure category info is present in the data passed to EANPageView
       if (!data.category && (data.scu_page.category || currentCategory.value)) {
         data.category = data.scu_page.category || currentCategory.value;
       }
@@ -464,11 +464,11 @@ const fetchProducts = async () => {
         data.subcategories = data.scu_page.subcategories || [];
       }
       
-      scuPageData.value = data;
-      // Cache the SCUPage data for future hover previews and inline expansion
+      eanPageData.value = data;
+      // Cache the EANPage data for future hover previews and inline expansion
       const cacheKey = route.path;
       if (cacheKey) {
-        scuPageCache.value.set(cacheKey, data);
+        eanPageCache.value.set(cacheKey, data);
         persistScuPageCache();
       }
       // Build category path via API for proper localized names
@@ -481,9 +481,9 @@ const fetchProducts = async () => {
       return;
     }
 
-    // If we were on an SCUPage but the API returned a regular catalog, reset SCUPage
-    if (isOnSCUPage) {
-      scuPageData.value = null;
+    // If we were on an EANPage but the API returned a regular catalog, reset EANPage
+    if (isOnEANPage) {
+      eanPageData.value = null;
     }
 
     products.value = data.items || [];
@@ -836,7 +836,7 @@ const resetFilters = () => {
 };
 
 const formatPrice = (price) => {
-  const currency = t('scupage.currency', 'EUR');
+  const currency = t('eanpage.currency', 'EUR');
   const localeMap = { ru: 'ru-RU', en: 'en-US', ua: 'uk-UA', pl: 'pl-PL' };
   const loc = localeMap[locale.value] || 'en-US';
   return new Intl.NumberFormat(loc, { style: 'currency', currency }).format(price);
@@ -880,7 +880,7 @@ const pageTitle = computed(() => {
 // Show the hero intro only on the clean home state:
 // no search query, no selected category, and not on an SCU page.
 const showHero = computed(() => {
-  return !scuPageData.value && !filters.q && !currentCategory.value;
+  return !eanPageData.value && !filters.q && !currentCategory.value;
 });
 
 
@@ -922,9 +922,9 @@ onMounted(async () => {
     const data = window.__INITIAL_DATA__;
     delete window.__INITIAL_DATA__; // consume once
 
-    // If it's an SCUPage
-    if (data.scu_page && typeof data.scu_page === 'object' && data.scu_page.scu) {
-      scuPageData.value = data;
+    // If it's an EANPage
+    if (data.scu_page && typeof data.scu_page === 'object' && data.scu_page.id) {
+      eanPageData.value = data;
       // Build category path via API for proper localized names
       if (data.category_id || data.scu_page.category_id) {
         const catId = data.category_id || data.scu_page.category_id;
@@ -975,11 +975,11 @@ watch(
     syncFiltersFromRoute();
     buildPathFromUrl();
 
-    // If we already have SCUPage data for this path (from inline expansion), skip re-fetch
-    if (scuPageData.value && route.path) {
-      const cached = scuPageCache.value.get(route.path);
-      if (cached && cached.scu_page && typeof cached.scu_page === 'object' && cached.scu_page.scu) {
-        // Already showing this SCUPage inline — no need to re-fetch
+    // If we already have EANPage data for this path (from inline expansion), skip re-fetch
+    if (eanPageData.value && route.path) {
+      const cached = eanPageCache.value.get(route.path);
+      if (cached && cached.scu_page && typeof cached.scu_page === 'object' && cached.scu_page.id) {
+        // Already showing this EANPage inline — no need to re-fetch
         return;
       }
     }
@@ -1043,9 +1043,9 @@ const goToPage = (page) => {
 let inlineScuNavToken = 0;
 
 // Navigate to SCU page (landing page for product group)
-// When animations are enabled and data is available, render SCUPageView inline
+// When animations are enabled and data is available, render EANPageView inline
 // with a smooth transition instead of a full router navigation.
-const goToSCUPage = async (product) => {
+const goToEANPage = async (product) => {
   const cacheKey = getScuKey(product);
   const myToken = ++inlineScuNavToken;
 
@@ -1057,9 +1057,9 @@ const goToSCUPage = async (product) => {
   scuPreviewLoading.value = false;
 
   // Try to use cached data for inline expansion (animations enabled only)
-  if (animationEnabled.value && cacheKey && scuPageCache.value.has(cacheKey)) {
-    const data = scuPageCache.value.get(cacheKey);
-    if (data && data.scu_page && typeof data.scu_page === 'object' && data.scu_page.scu) {
+  if (animationEnabled.value && cacheKey && eanPageCache.value.has(cacheKey)) {
+    const data = eanPageCache.value.get(cacheKey);
+    if (data && data.scu_page && typeof data.scu_page === 'object' && data.scu_page.id) {
       // Ensure category info is present
       if (!data.category && (data.scu_page.category || currentCategory.value)) {
         data.category = data.scu_page.category || currentCategory.value;
@@ -1070,8 +1070,8 @@ const goToSCUPage = async (product) => {
       // Set flag to prevent route watch from re-fetching
       isInlineScuTransition.value = true;
 
-      // Set SCUPage data BEFORE router.push to ensure it's ready
-      scuPageData.value = data;
+      // Set EANPage data BEFORE router.push to ensure it's ready
+      eanPageData.value = data;
 
       try {
         // Update URL (router.push is async, but we've already set the data).
@@ -1133,7 +1133,7 @@ defineOptions({ name: 'CatalogView' });
        The leaving element is taken out of flow (absolute inset-0) so the two
        views crossfade in place instead of stacking vertically. -->
   <div v-else class="relative">
-    <!-- Render SCUPageView if API returned an SCUPage -->
+    <!-- Render EANPageView if API returned an EANPage -->
     <Transition
       enter-active-class="transition duration-600 ease-out"
       enter-from-class="opacity-0 scale-95"
@@ -1142,7 +1142,7 @@ defineOptions({ name: 'CatalogView' });
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <SCUPageView v-if="scuPageData" :data="scuPageData" key="scu-page" />
+      <EANPageView v-if="eanPageData" :data="eanPageData" key="scu-page" />
     </Transition>
 
     <Transition
@@ -1153,7 +1153,7 @@ defineOptions({ name: 'CatalogView' });
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div v-if="!scuPageData" class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6" key="catalog">
+      <div v-if="!eanPageData" class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6" key="catalog">
 
     <!-- Hero intro (home only) -->
     <div
@@ -1655,7 +1655,7 @@ defineOptions({ name: 'CatalogView' });
               :format-price="formatPrice"
               :view="'grid'"
               :enable-image-fade="animationEnabled"
-              @click="goToSCUPage(product)"
+              @click="goToEANPage(product)"
             />
             <!-- SCU Preview Popup (only when animations enabled) -->
             <Transition
@@ -1726,7 +1726,7 @@ defineOptions({ name: 'CatalogView' });
               :format-price="formatPrice"
               :view="'list'"
               :enable-image-fade="animationEnabled"
-              @click="goToSCUPage(product)"
+              @click="goToEANPage(product)"
             />
             <!-- SCU Preview Popup (List view, only when animations enabled) -->
             <Transition

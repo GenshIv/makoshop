@@ -468,6 +468,112 @@ const exportCompany = async (company) => {
   }
 };
 
+// --- Unified settings management ---
+const showUnifiedSettingsModal = ref(false);
+const unifiedSettingsLoading = ref(false);
+const unifiedSettingsSaving = ref(false);
+const unifiedImporting = ref(false);
+const unifiedImportResult = ref(null);
+const unifiedSettingsForm = ref(null);
+
+const emptyUnifiedSettingsForm = () => ({
+  payment_method_ids: [],
+  delivery_time_ids: [],
+  installment_plan_ids: [],
+  price_source: {
+    import_folder: '',
+    currency: '',
+    html_attr_rules: [],
+  },
+});
+
+const openUnifiedSettings = async (company) => {
+  selectedCompany.value = company;
+  unifiedSettingsLoading.value = true;
+  unifiedImportResult.value = null;
+  unifiedSettingsForm.value = emptyUnifiedSettingsForm();
+  try {
+    const res = await api.get(`/admin/companies/${company.id}`);
+    const c = res.data;
+    unifiedSettingsForm.value.payment_method_ids = c.payment_method_ids || [];
+    unifiedSettingsForm.value.delivery_time_ids = c.delivery_time_ids || [];
+    unifiedSettingsForm.value.installment_plan_ids = c.installment_plan_ids || [];
+    if (c.price_source) {
+      unifiedSettingsForm.value.price_source.import_folder = c.price_source.import_folder || '';
+      unifiedSettingsForm.value.price_source.currency = c.price_source.currency || '';
+      unifiedSettingsForm.value.price_source.html_attr_rules = c.price_source.html_attr_rules || [];
+    }
+  } catch (e) {
+    console.error('load unified settings:', e);
+  } finally {
+    unifiedSettingsLoading.value = false;
+    showUnifiedSettingsModal.value = true;
+  }
+};
+
+const isUnifiedSelected = (field, id) => {
+  return unifiedSettingsForm.value?.[field]?.includes(id) || false;
+};
+
+const toggleUnifiedSelection = (field, id) => {
+  if (!unifiedSettingsForm.value[field]) unifiedSettingsForm.value[field] = [];
+  const idx = unifiedSettingsForm.value[field].indexOf(id);
+  if (idx > -1) {
+    unifiedSettingsForm.value[field].splice(idx, 1);
+  } else {
+    unifiedSettingsForm.value[field].push(id);
+  }
+};
+
+const addParserRule = () => {
+  if (!unifiedSettingsForm.value.price_source.html_attr_rules) {
+    unifiedSettingsForm.value.price_source.html_attr_rules = [];
+  }
+  unifiedSettingsForm.value.price_source.html_attr_rules.push({
+    code: '',
+    pattern: '',
+    group: 1,
+    transform: 'trim',
+  });
+};
+
+const removeParserRule = (idx) => {
+  unifiedSettingsForm.value.price_source.html_attr_rules.splice(idx, 1);
+};
+
+const saveUnifiedSettings = async () => {
+  if (!selectedCompany.value || !unifiedSettingsForm.value) return;
+  unifiedSettingsSaving.value = true;
+  try {
+    await api.patch(`/admin/companies/${selectedCompany.value.id}`, {
+      payment_method_ids: unifiedSettingsForm.value.payment_method_ids,
+      delivery_time_ids: unifiedSettingsForm.value.delivery_time_ids,
+      installment_plan_ids: unifiedSettingsForm.value.installment_plan_ids,
+      price_source: unifiedSettingsForm.value.price_source,
+    });
+    showUnifiedSettingsModal.value = false;
+    toast.success(t('admin.settings_saved') || 'Saved');
+  } catch (e) {
+    toast.error(e.response?.data?.message || 'Save error');
+  } finally {
+    unifiedSettingsSaving.value = false;
+  }
+};
+
+const triggerUnifiedImport = async () => {
+  if (!selectedCompany.value) return;
+  unifiedImporting.value = true;
+  unifiedImportResult.value = null;
+  try {
+    const res = await api.post(`/admin/import-nokaut?company=${selectedCompany.value.id}`);
+    unifiedImportResult.value = res.data;
+  } catch (e) {
+    unifiedImportResult.value = { status: 'error', message: e.response?.data?.message || 'Import failed' };
+  } finally {
+    unifiedImporting.value = false;
+  }
+};
+
 // Lock body scroll while the settings modal is open
 watch(showSettingsModal, (open) => {
   if (typeof document === 'undefined') return;
@@ -543,11 +649,8 @@ onMounted(fetchCompanies);
               <button @click="openEdit(c)" class="text-blue-600 hover:underline text-xs">
                 {{ t('admin.edit') || 'Edit' }}
               </button>
-              <button @click="openSettings(c)" class="text-purple-700 hover:underline text-xs">
+              <button @click="openUnifiedSettings(c)" class="text-purple-700 hover:underline text-xs">
                 {{ t('admin.settings') || 'Settings' }}
-              </button>
-              <button @click="openPriceModal(c)" class="text-orange-600 hover:underline text-xs">
-                {{ t('admin.price_import') || 'Prices' }}
               </button>
               <button @click="exportCompany(c)" class="text-sky-600 hover:underline text-xs">
                 {{ t('admin.export') || 'Export' }}
@@ -765,6 +868,119 @@ onMounted(fetchCompanies);
           </button>
           <button @click="savePriceConfig" :disabled="priceSaving" class="px-3 py-1.5 text-xs rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50">
             {{ priceSaving ? (t('admin.saving') || 'Saving...') : (t('admin.save') || 'Save') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Unified settings modal -->
+    <div v-if="showUnifiedSettingsModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" @click.self="showUnifiedSettingsModal = false">
+      <div role="dialog" aria-modal="true" class="bg-surface rounded-xl shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-semibold text-purple-700">
+            {{ t('admin.unified_settings_title') || 'Company Settings' }}: {{ selectedCompany?.name }}
+          </h2>
+          <button @click="showUnifiedSettingsModal = false" class="text-ink-3 hover:text-ink-2 text-xl" :aria-label="t('common.close')">&times;</button>
+        </div>
+
+        <div v-if="unifiedSettingsLoading" class="text-sm text-ink-3">Loading...</div>
+        <div v-else-if="unifiedSettingsForm" class="space-y-6">
+          <!-- Section: Payment Methods -->
+          <div class="border-b border-line pb-4">
+            <h3 class="text-sm font-semibold text-ink-2 mb-2">{{ t('admin.payment_methods') || 'Payment Methods' }}</h3>
+            <div class="flex flex-wrap gap-2">
+              <label v-for="pm in paymentMethods" :key="pm.id" class="inline-flex items-center gap-1 text-xs cursor-pointer">
+                <input type="checkbox" :checked="isUnifiedSelected('payment_method_ids', pm.id)" @change="toggleUnifiedSelection('payment_method_ids', pm.id)" />
+                {{ pm.name }}
+              </label>
+              <span v-if="paymentMethods.length === 0" class="text-xs text-ink-3">No payment methods defined.</span>
+            </div>
+          </div>
+
+          <!-- Section: Delivery Times -->
+          <div class="border-b border-line pb-4">
+            <h3 class="text-sm font-semibold text-ink-2 mb-2">{{ t('admin.delivery_times') || 'Delivery Times' }}</h3>
+            <div class="flex flex-wrap gap-2">
+              <label v-for="dt in deliveryTimes" :key="dt.id" class="inline-flex items-center gap-1 text-xs cursor-pointer">
+                <input type="checkbox" :checked="isUnifiedSelected('delivery_time_ids', dt.id)" @change="toggleUnifiedSelection('delivery_time_ids', dt.id)" />
+                {{ dt.name }}
+              </label>
+              <span v-if="deliveryTimes.length === 0" class="text-xs text-ink-3">No delivery times defined.</span>
+            </div>
+          </div>
+
+          <!-- Section: Installment Plans -->
+          <div class="border-b border-line pb-4">
+            <h3 class="text-sm font-semibold text-ink-2 mb-2">{{ t('admin.installment_plans') || 'Installment Plans' }}</h3>
+            <div class="flex flex-wrap gap-2">
+              <label v-for="ip in installmentPlans" :key="ip.id" class="inline-flex items-center gap-1 text-xs cursor-pointer">
+                <input type="checkbox" :checked="isUnifiedSelected('installment_plan_ids', ip.id)" @change="toggleUnifiedSelection('installment_plan_ids', ip.id)" />
+                {{ ip.name }}
+              </label>
+              <span v-if="installmentPlans.length === 0" class="text-xs text-ink-3">No installment plans defined.</span>
+            </div>
+          </div>
+
+          <!-- Section: Price Import Settings -->
+          <div class="border-b border-line pb-4">
+            <h3 class="text-sm font-semibold text-ink-2 mb-2">{{ t('admin.price_import_title') || 'Price Import' }}</h3>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-ink-3 block mb-1">{{ t('admin.import_folder') || 'Import Folder' }}</label>
+                <input v-model="unifiedSettingsForm.price_source.import_folder" type="text" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface" />
+              </div>
+              <div>
+                <label class="text-xs text-ink-3 block mb-1">{{ t('admin.currency') || 'Currency' }}</label>
+                <input v-model="unifiedSettingsForm.price_source.currency" type="text" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Section: Parser Rules -->
+          <div class="border-b border-line pb-4">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-sm font-semibold text-ink-2">{{ t('admin.parser_rules') || 'Parser Rules' }}</h3>
+              <button @click="addParserRule" class="text-xs text-purple-700 hover:underline">+ Add Rule</button>
+            </div>
+            <div class="space-y-2">
+              <div v-for="(rule, idx) in unifiedSettingsForm.price_source.html_attr_rules" :key="idx" class="grid grid-cols-2 gap-2 p-2 bg-surface-2 rounded-md">
+                <div>
+                  <label class="text-xs text-ink-3 block mb-1">Code</label>
+                  <input v-model="rule.code" type="text" class="w-full px-2 py-1 text-xs rounded-md border border-line bg-surface" />
+                </div>
+                <div>
+                  <label class="text-xs text-ink-3 block mb-1">Pattern</label>
+                  <input v-model="rule.pattern" type="text" class="w-full px-2 py-1 text-xs rounded-md border border-line bg-surface" />
+                </div>
+                <div class="col-span-2 flex items-center justify-between">
+                  <span class="text-xs text-ink-3">Group: {{ rule.group || 1 }}</span>
+                  <button @click="removeParserRule(idx)" class="text-red-600 text-xs">&times; Remove</button>
+                </div>
+              </div>
+              <p v-if="!unifiedSettingsForm.price_source.html_attr_rules || unifiedSettingsForm.price_source.html_attr_rules.length === 0" class="text-xs text-ink-3">
+                No parser rules defined.
+              </p>
+            </div>
+          </div>
+
+          <!-- Import button -->
+          <div class="flex justify-between items-center">
+            <button @click="triggerUnifiedImport" :disabled="unifiedImporting" class="px-3 py-1.5 text-xs rounded-md bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50">
+              {{ unifiedImporting ? (t('admin.importing') || 'Importing...') : (t('admin.run_import') || 'Run Import') }}
+            </button>
+            <div v-if="unifiedImportResult" class="text-sm text-ink-3">
+              {{ unifiedImportResult.status === 'error' ? unifiedImportResult.message : 
+                 `Parsed: ${unifiedImportResult.offers_parsed} | Created: ${unifiedImportResult.products_created} | Updated: ${unifiedImportResult.products_updated}` }}
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 flex justify-end gap-2">
+          <button @click="showUnifiedSettingsModal = false" class="px-3 py-1.5 text-xs rounded-md border border-line bg-surface hover:bg-surface-2">
+            {{ t('admin.cancel') }}
+          </button>
+          <button @click="saveUnifiedSettings" :disabled="unifiedSettingsSaving" class="px-3 py-1.5 text-xs rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50">
+            {{ unifiedSettingsSaving ? (t('admin.saving') || 'Saving...') : (t('admin.save') || 'Save') }}
           </button>
         </div>
       </div>

@@ -108,7 +108,7 @@ const filterForm = reactive({
   installmentPlanFilters: [], // array of installment plan names
 });
 
-const fetchSCUPage = async () => {
+const fetchEANPage = async () => {
   if (props.data) {
     // Already initialized from props
     return;
@@ -119,7 +119,7 @@ const fetchSCUPage = async () => {
     // Use the full route path: /shop/{tree}/{slug}
     const response = await api.get(route.path);
     const data = response.data;
-    // console.log('SCUPageView fetched data:', data);
+    // console.log('EANPageView fetched data:', data);
     page.value = data.scu_page;
     category.value = data.category || (data.scu_page ? data.scu_page.category : null);
     subcategories.value = data.subcategories || [];
@@ -129,7 +129,7 @@ const fetchSCUPage = async () => {
 
     initFromData();
   } catch (e) {
-    error.value = e.response?.data?.error?.message || t('scupage.not_found');
+    error.value = e.response?.data?.error?.message || t('eanpage.not_found');
     console.error(e);
   } finally {
     loading.value = false;
@@ -178,7 +178,7 @@ const isInStock = (product) => {
 };
 
 const formatPrice = (price) => {
-  const currency = t('scupage.currency', 'EUR');
+  const currency = t('eanpage.currency', 'EUR');
   const localeMap = { ru: 'ru-RU', en: 'en-US', ua: 'uk-UA', pl: 'pl-PL' };
   const loc = localeMap[locale.value] || 'en-US';
   return new Intl.NumberFormat(loc, { style: 'currency', currency }).format(price);
@@ -288,7 +288,7 @@ const modifications = computed(() => {
   const groups = new Map();
   for (const p of filtered) {
     const pureName = stripCompanyFromName(p.name);
-    const key = pureName || p.sku || t('scupage.no_name');
+    const key = pureName || p.sku || t('eanpage.no_name');
     if (!groups.has(key)) {
       groups.set(key, { name: key, suppliers: [] });
     }
@@ -417,18 +417,27 @@ const hasAnyInStock = computed(() => {
 });
 
 // Convert []KeyValue to {key: value} map.
+const INTERNAL_ATTRS = ['product_url', 'shop_category'];
+
 const normalizeAttrs = (attrs) => {
   if (!attrs) return {};
   if (Array.isArray(attrs)) {
     const out = {};
     for (const kv of attrs) {
-      if (kv.key && kv.value != null) {
+      if (kv.key && kv.value != null && !INTERNAL_ATTRS.includes(kv.key)) {
         out[kv.key] = kv.value;
       }
     }
     return out;
   }
-  return attrs;
+  // Filter internal attrs from object format too
+  const filtered = {};
+  for (const [key, value] of Object.entries(attrs)) {
+    if (!INTERNAL_ATTRS.includes(key)) {
+      filtered[key] = value;
+    }
+  }
+  return filtered;
 };
 
 // Attributes to display (from selectedProduct if present, otherwise from page)
@@ -475,7 +484,7 @@ const navigateToCategory = (sub) => {
 // Pluralized word form for "Where to buy (N options)"
 const offersPlural = computed(() => {
   const n = filteredOfferCount.value;
-  return pluralize(n, 'scupage.variant_one', 'scupage.variant_few', 'scupage.variant_many');
+  return pluralize(n, 'eanpage.variant_one', 'eanpage.variant_few', 'eanpage.variant_many');
 });
 
 // Pluralization helper using locale-specific i18n keys
@@ -518,7 +527,7 @@ if (props.data) {
 onMounted(() => {
   // Otherwise fetch from API
   if (!props.data) {
-    fetchSCUPage();
+    fetchEANPage();
   }
 });
 
@@ -576,16 +585,16 @@ watch(
             <div class="mt-1 flex items-center gap-2 text-sm text-ink-3 flex-wrap">
               <span v-if="page.brand">{{ page.brand }}</span>
               <span v-if="uniqueCompanyCount > 1">
-                · {{ uniqueCompanyCount }} {{ pluralize(uniqueCompanyCount, 'scupage.store_one', 'scupage.store_few', 'scupage.store_many') }}
+                · {{ uniqueCompanyCount }} {{ pluralize(uniqueCompanyCount, 'eanpage.store_one', 'eanpage.store_few', 'eanpage.store_many') }}
               </span>
               <span v-if="modifications.length > 1">
-                · {{ modifications.length }} {{ pluralize(modifications.length, 'scupage.mod_one', 'scupage.mod_few', 'scupage.mod_many') }}
+                · {{ modifications.length }} {{ pluralize(modifications.length, 'eanpage.mod_one', 'eanpage.mod_few', 'eanpage.mod_many') }}
               </span>
             </div>
             <!-- Tags -->
             <div v-if="hasAnyInStock" class="mt-2">
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                {{ t('scupage.available') }}
+                {{ t('eanpage.available') }}
               </span>
             </div>
           </div>
@@ -593,7 +602,7 @@ watch(
             @click="goBack"
             class="link-btn text-sm text-orange-600 whitespace-nowrap cursor-pointer shrink-0"
           >
-            {{ t('scupage.to_catalog') }}
+            {{ t('eanpage.to_catalog') }}
           </button>
         </div>
       </div>
@@ -710,7 +719,7 @@ watch(
           >
             <div class="flex items-end justify-between gap-4">
               <div>
-                <div class="text-sm font-medium text-orange-700 dark:text-orange-300">{{ t('scupage.best_price') }}</div>
+                <div class="text-sm font-medium text-orange-700 dark:text-orange-300">{{ t('eanpage.best_price') }}</div>
                 <div class="flex items-baseline gap-2 mt-0.5 flex-wrap">
                   <span v-if="previousPrice" class="text-sm text-orange-700/70 dark:text-orange-300/70 line-through">
                     {{ formatPrice(previousPrice) }}
@@ -718,7 +727,7 @@ watch(
                   <span class="text-3xl font-bold text-orange-900 dark:text-white">{{ formatPrice(currentPrice) }}</span>
                 </div>
                 <div class="text-xs text-orange-700 dark:text-orange-300 mt-1">
-                  {{ isInStock(selectedProduct) ? t('scupage.in_stock') : t('scupage.out_of_stock') }}
+                  {{ isInStock(selectedProduct) ? t('eanpage.in_stock') : t('eanpage.out_of_stock') }}
                 </div>
                 <!-- Mini price trend across offers -->
                 <div v-if="modifications.length > 0" class="mt-2 text-orange-600 dark:text-orange-400">
@@ -753,11 +762,11 @@ watch(
         <div v-if="modifications.length > 0" class="lg:col-span-10 bg-surface rounded-2xl shadow-sm border border-line overflow-hidden">
           <div class="px-4 py-3 border-b border-line">
             <h3 class="font-semibold text-ink">
-              {{ t('scupage.where_to_buy_base') }} ({{ filteredOfferCount }} {{ offersPlural }})
+              {{ t('eanpage.where_to_buy_base') }} ({{ filteredOfferCount }} {{ offersPlural }})
             </h3>
           </div>
           <fieldset class="m-0 p-0 border-0 min-w-0">
-            <legend class="sr-only">{{ t('scupage.where_to_buy_base') }}</legend>
+            <legend class="sr-only">{{ t('eanpage.where_to_buy_base') }}</legend>
             <div class="divide-y divide-line max-h-[400px] overflow-y-auto">
             <template v-for="(mod, modIdx) in modifications" :key="modIdx">
               <!-- Modification header -->
@@ -818,7 +827,7 @@ watch(
         <div v-if="allSuppliers.length >= 1" class="lg:col-span-2 bg-surface rounded-2xl shadow-sm border border-line p-3 space-y-3 text-xs">
           <!-- Companies -->
           <div>
-            <div class="font-semibold text-ink-2 mb-1">{{ t('scupage.filter_by_company') }}</div>
+            <div class="font-semibold text-ink-2 mb-1">{{ t('eanpage.filter_by_company') }}</div>
             <div class="flex flex-col gap-1">
               <label v-for="company in allSuppliers" :key="company" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
                 <input type="checkbox" :value="company" v-model="filterForm.companyFilters" class="rounded text-orange-600 focus:ring-orange-500" />
@@ -828,7 +837,7 @@ watch(
           </div>
 
           <div v-if="allPaymentMethods.length > 0" class="border-t border-line pt-2">
-            <div class="font-semibold text-ink-2 mb-1">{{ t('scupage.filter_by_payment') }}</div>
+            <div class="font-semibold text-ink-2 mb-1">{{ t('eanpage.filter_by_payment') }}</div>
             <div class="flex flex-col gap-1">
               <label v-for="pm in allPaymentMethods" :key="pm" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
                 <input type="checkbox" :value="pm" v-model="filterForm.paymentMethodFilters" class="rounded text-orange-600 focus:ring-orange-500" />
@@ -838,7 +847,7 @@ watch(
           </div>
 
           <div v-if="allDeliveryTimes.length > 0" class="border-t border-line pt-2">
-            <div class="font-semibold text-ink-2 mb-1">{{ t('scupage.filter_by_delivery') }}</div>
+            <div class="font-semibold text-ink-2 mb-1">{{ t('eanpage.filter_by_delivery') }}</div>
             <div class="flex flex-col gap-1">
               <label v-for="dt in allDeliveryTimes" :key="dt" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
                 <input type="checkbox" :value="dt" v-model="filterForm.deliveryTimeFilters" class="rounded text-orange-600 focus:ring-orange-500" />
@@ -848,7 +857,7 @@ watch(
           </div>
 
           <div v-if="allInstallmentPlans.length > 0" class="border-t border-line pt-2">
-            <div class="font-semibold text-ink-2 mb-1">{{ t('scupage.filter_by_installment') }}</div>
+            <div class="font-semibold text-ink-2 mb-1">{{ t('eanpage.filter_by_installment') }}</div>
             <div class="flex flex-col gap-1">
               <label v-for="ip in allInstallmentPlans" :key="ip" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
                 <input type="checkbox" :value="ip" v-model="filterForm.installmentPlanFilters" class="rounded text-orange-600 focus:ring-orange-500" />

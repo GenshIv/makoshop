@@ -103,6 +103,38 @@ func (s *Store) NextID(entityType string) (int64, error) {
 	return id, nil
 }
 
+// SetNextIDIfGreater sets the next ID counter to the given value if it's greater than current.
+func (s *Store) SetNextIDIfGreater(entityType string, newID int64) error {
+	ai, ok := s.nextIDs[entityType]
+	if !ok {
+		// Read last ID from DB
+		key := fmt.Sprintf("state:next_id:%s", entityType)
+		data, _ := s.db.TurboRawRead(key)
+		var lastID int64 = 0
+		if len(data) > 0 {
+			_, _ = fmt.Sscanf(string(data), "%d", &lastID)
+		}
+		ai = new(atomic.Int64)
+		ai.Store(lastID)
+		s.nextIDs[entityType] = ai
+	}
+
+	// Compare and swap until we succeed
+	for {
+		current := ai.Load()
+		if newID <= current {
+			return nil // Already higher, nothing to do
+		}
+		if ai.CompareAndSwap(current, newID) {
+			key := fmt.Sprintf("state:next_id:%s", entityType)
+			if err := s.db.TurboRawWrite(key, []byte(fmt.Sprintf("%d", newID))); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+}
+
 // DocPut stores a document by key using TurboRawWrite.
 func (s *Store) DocPut(key string, value []byte) error {
 	if err := s.db.TurboRawWrite(key, value); err != nil {

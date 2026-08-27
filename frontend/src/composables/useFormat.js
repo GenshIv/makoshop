@@ -10,7 +10,7 @@ const LOCALE_MAP = {
 /**
  * Shared formatters so every view formats prices/dates consistently.
  *
- * Currency: taken from i18n key `scupage.currency` (default 'EUR'),
+ * Currency: taken from i18n key `eanpage.currency` (default 'EUR'),
  * matching what the catalog already does.
  */
 export function useFormat() {
@@ -19,7 +19,7 @@ export function useFormat() {
   const formatPrice = (price, currency) => {
     const value = Number(price);
     if (!Number.isFinite(value)) return '—';
-    const cur = currency || t('scupage.currency', 'EUR');
+    const cur = currency || t('eanpage.currency', 'EUR');
     const loc = LOCALE_MAP[locale.value] || 'en-US';
     try {
       return new Intl.NumberFormat(loc, {

@@ -1,11 +1,14 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
 import api from '../../api';
 import { useToast } from '../../composables/useToast';
 import ConfirmDialog from '../../components/ConfirmDialog.vue';
 import EmptyState from '../../components/EmptyState.vue';
 import AdminCategoryTree from '../../components/AdminCategoryTree.vue';
+
+const router = useRouter();
 
 const { t, locale } = useI18n();
 const { toast } = useToast();
@@ -319,7 +322,7 @@ const toggleActive = async (cat) => {
 };
 
 const goToAttributes = (cat) => {
-  window.open(`/admin/categories/${cat.id}/attributes`, '_blank');
+  router.push(`/admin/categories/${cat.id}/attributes`);
 };
 
 const rebuildOpen = ref(false);

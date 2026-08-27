@@ -714,52 +714,25 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 
 	// Map: oldID -> newID (for relinking later)
 	oldIDToNewID := make(map[int64]int64)
-	// Map: name+parent -> newID (for finding existing)
-	nameParentToID := make(map[string]int64)
+	// Map: name -> newID (for finding existing by name only)
+	slugToID := make(map[string]int64)
 
 	// Build existing categories map (use name_en as primary key; fallback to name_ru)
 	existing, _ := h.categoryRepo.ListAll()
 	for _, cat := range existing {
-		name := cat.NameEn
-		if name == "" {
-			name = cat.NameRu
-		}
-		key := name + "|"
-		if cat.ParentID != nil {
-			key += fmt.Sprintf("%d", *cat.ParentID)
-		}
-		nameParentToID[key] = cat.ID
+		name := cat.Slug
+		slugToID[name] = cat.ID
 	}
 
 	created := 0
 	updated := 0
 
-	// First pass: create/update categories
+	// First pass: create/update categories WITHOUT setting parent_id (to handle any order)
 	for _, ic := range req.Categories {
-		nameEn := ic.NameEn
-		if nameEn == "" && ic.NameRu != "" {
-			nameEn = ic.NameRu
-		}
-		if nameEn == "" {
-			continue
-		}
+		slugString := ic.Slug
 
-		// Determine parent ID
-		var dbParentID *int64
-		if ic.ParentID != nil {
-			// Map old parent ID to new
-			if newParentID, ok := oldIDToNewID[*ic.ParentID]; ok {
-				dbParentID = &newParentID
-			}
-		}
-
-		// Find existing category by name_en+parent
-		key := nameEn + "|"
-		if dbParentID != nil {
-			key += fmt.Sprintf("%d", *dbParentID)
-		}
-
-		if existingID, ok := nameParentToID[key]; ok {
+		// Find existing category by name_en only
+		if existingID, ok := slugToID[slugString]; ok {
 			// Update existing
 			h.categoryRepo.Update(existingID, func(c *model.Category) {
 				if ic.NameRu != "" {
@@ -815,18 +788,18 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 				oldIDToNewID[ic.ID] = existingID
 			}
 		} else {
-			// Create new
+			// Create new (without parent for now)
 			catSlug := ic.Slug
 			if catSlug == "" {
-				catSlug = slug.SlugFromNameEn(nameEn)
+				catSlug = slug.SlugFromNameEn(ic.NameEn)
 			}
 			cat := &model.Category{
+				ID:             ic.ID, // Use ID from import file
 				NameRu:         ic.NameRu,
 				NameUa:         ic.NameUa,
 				NamePl:         ic.NamePl,
-				NameEn:         nameEn,
+				NameEn:         ic.NameEn,
 				Slug:           catSlug,
-				ParentID:       dbParentID,
 				Desc:           ic.Description,
 				DescRu:         ic.DescriptionRu,
 				DescUa:         ic.DescriptionUa,
@@ -839,37 +812,45 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 				AnchorKeywords: ic.AnchorKeywords,
 			}
 			if err := h.categoryRepo.Create(cat); err != nil {
-				fmt.Printf("WARN: create category %s: %v\n", nameEn, err)
+				fmt.Printf("WARN: create category %s: %v\n", slugString, err)
 				continue
 			}
 			created++
 
-			// Map old ID to new ID
-			if ic.ID != 0 {
+			// Map old ID to new ID (they should be the same now)
+			if ic.ID != 0 && cat.ID != ic.ID {
 				oldIDToNewID[ic.ID] = cat.ID
 			}
-			nameParentToID[key] = cat.ID
+			slugToID[slugString] = cat.ID
+		}
+	}
+
+	// Second pass: set parent_id based on mappings
+	for _, ic := range req.Categories {
+		if ic.ParentID != nil && ic.ID != 0 {
+			// Find the category we just created/updated
+			if catID, ok := oldIDToNewID[ic.ID]; ok {
+				// Find the parent's new ID
+				if parentID, ok := oldIDToNewID[*ic.ParentID]; ok {
+					h.categoryRepo.Update(catID, func(c *model.Category) {
+						c.ParentID = &parentID
+					})
+				}
+			}
 		}
 	}
 
 	// Second pass: import attributes
 	for _, ic := range req.Categories {
-		newID := oldIDToNewID[ic.ID]
-		if newID == 0 {
-			// Try to find by name+parent
-			nameKey := ic.NameEn
-			if nameKey == "" {
-				nameKey = ic.NameRu
+		newID, ok := oldIDToNewID[ic.ID]
+		if newID == 0 && ok && newID != ic.ID {
+			// Try to find by name
+			nameKey := ic.Slug
+			if nameKey != "" {
+				newID = slugToID[nameKey]
 			}
-			key := nameKey + "|"
-			if ic.ParentID != nil {
-				if newParentID, ok := oldIDToNewID[*ic.ParentID]; ok {
-					key += fmt.Sprintf("%d", newParentID)
-				}
-			}
-			newID = nameParentToID[key]
 		}
-		if newID == 0 {
+		if newID == 0 || newID == ic.ID {
 			continue
 		}
 

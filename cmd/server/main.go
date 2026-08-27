@@ -417,6 +417,7 @@ func main() {
 			h.HandleCompanyGetWithSettings(w, r)
 			return
 		}
+
 		// Everything else under /admin/companies/{id} requires admin role
 		jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(path, "/verify") {

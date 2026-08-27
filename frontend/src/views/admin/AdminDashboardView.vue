@@ -92,8 +92,8 @@ const changePassword = async () => {
 const rebuildEndpoints = {
   counts: '/admin/rebuild-product-counts',
   sort: '/admin/rebuild-sort-indexes',
-  scupage: '/admin/rebuild-scupage-indexes',
-  all: '/admin/scupages/catalogize-all',
+  eanpage: '/admin/rebuild-eanpage-indexes',
+  all: '/admin/eanpages/catalogize-all',
 };
 
 const rebuildKey = ref(null);
@@ -106,8 +106,8 @@ const rebuildLabel = (key) => {
   return {
     counts: t('admin.rebuild_product_counts'),
     sort: t('admin.rebuild_sort_indexes'),
-    scupage: t('admin.rebuild_scupage_indexes'),
-    all: t('admin.rebuild_all_scupage_indexes'),
+    eanpage: t('admin.rebuild_eanpage_indexes'),
+    all: t('admin.rebuild_all_eanpage_indexes'),
   }[key];
 };
 
@@ -211,18 +211,18 @@ onMounted(() => {
             {{ systemLoading === 'sort' ? '...' : t('admin.rebuild_sort_indexes') }}
           </button>
           <button
-            @click="askRebuild('scupage')"
+            @click="askRebuild('eanpage')"
             :disabled="systemLoading !== null"
             class="px-3 py-1.5 text-xs rounded-md border border-line bg-surface hover:bg-surface-2 disabled:opacity-50"
           >
-            {{ systemLoading === 'scupage' ? '...' : t('admin.rebuild_scupage_indexes') }}
+            {{ systemLoading === 'eanpage' ? '...' : t('admin.rebuild_eanpage_indexes') }}
           </button>
           <button
             @click="askRebuild('all')"
             :disabled="systemLoading !== null"
             class="px-3 py-1.5 text-xs rounded-md border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-50"
           >
-            {{ systemLoading === 'all' ? '...' : t('admin.rebuild_all_scupage_indexes') }}
+            {{ systemLoading === 'all' ? '...' : t('admin.rebuild_all_eanpage_indexes') }}
           </button>
         </div>
         <div class="text-[11px] text-ink-3 mt-1">
@@ -310,9 +310,9 @@ onMounted(() => {
           <div class="font-medium">{{ t('admin.promo') }}</div>
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.promo_desc') }}</div>
         </router-link>
-        <router-link to="/admin/scupages" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
-          <div class="font-medium">{{ t('admin.scupage_title') || 'SCU Pages' }}</div>
-          <div class="text-sm text-ink-3 mt-1">{{ t('admin.scupage_manage_desc') || 'Manage SEO product pages' }}</div>
+        <router-link to="/admin/eanpages" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">{{ t('admin.eanpage_title') || 'SCU Pages' }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('admin.eanpage_manage_desc') || 'Manage SEO product pages' }}</div>
         </router-link>
         <router-link to="/admin/catalogizer" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
           <div class="font-medium">{{ t('admin.catalogizer_title') || 'Auto-Catalogizer' }}</div>

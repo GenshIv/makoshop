@@ -103,7 +103,7 @@ const runCatalogizeAll = async () => {
   running.value = true;
 
   try {
-    const res = await api.post('/admin/scupages/catalogize-all', {
+    const res = await api.post('/admin/eanpages/catalogize-all', {
       apply: true,
     });
     addLog(`Catalogize all complete: processed=${res.data.processed}, catalogized=${res.data.catalogized}`);
@@ -320,7 +320,7 @@ onMounted(() => {
           :disabled="running"
           class="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
         >
-          {{ t('admin.catalogizer_catalogize_all_scupages') || 'Catalogize All SCU Pages' }}
+          {{ t('admin.catalogizer_catalogize_all_eanpages') || 'Catalogize All SCU Pages' }}
         </button>
         <button
           @click="trainCatalogizer"
@@ -643,7 +643,7 @@ onMounted(() => {
 
     <ConfirmDialog
       :open="catalogizeAllOpen"
-      :title="t('admin.catalogizer_catalogize_all_scupages')"
+      :title="t('admin.catalogizer_catalogize_all_eanpages')"
       :message="t('admin.catalogizer_catalogize_all_confirm')"
       :confirm-text="t('admin.save')"
       :cancel-text="t('admin.cancel')"

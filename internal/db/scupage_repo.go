@@ -117,7 +117,7 @@ func (r *EANPageRepo) CreateNoListIndex(s *model.EANPage) error {
 
 	// Turbo index: eanpage_slug:<slug>
 	slugKey := turboKeyEANPageSlug + s.Slug
-	if err := r.Store.TurboWrite(slugKey, []byte(strconv.FormatInt(id, 10))); err != nil {
+	if err := r.Store.TurboWrite(slugKey, []byte(KeyEANPage(id))); err != nil {
 		_ = r.Store.TurboWrite(eanKey, []byte{})
 		_ = r.Store.DocDelete(KeyEANPage(s.ID))
 		return fmt.Errorf("turbo index eanpage_slug: %w", err)
@@ -156,7 +156,7 @@ func (r *EANPageRepo) Create(s *model.EANPage) error {
 
 	// Turbo index: eanpage_ean:<scu>
 	eanKey := turboKeyEANPageEAN + s.EAN
-	if err := r.Store.TurboWrite(eanKey, []byte(KeyEANPage(id))); err != nil {
+	if err := r.Store.TurboWrite(eanKey, []byte(strconv.FormatInt(id, 10))); err != nil {
 		_, _ = r.Store.db.TurboDeleteIndexString(TurboKeyEANPageList, KeyEANPage(id))
 		_ = r.Store.DocDelete(KeyEANPage(s.ID))
 		return fmt.Errorf("turbo index eanpage_ean: %w", err)
@@ -211,8 +211,17 @@ func (r *EANPageRepo) GetBySlug(slug string) (*model.EANPage, error) {
 	if err != nil || len(data) == 0 {
 		return nil, fmt.Errorf("scu page with slug %q not found", slug)
 	}
+	// Data is stored as KeyEANPage(id), e.g. "eanpage:73"
+	// Extract the ID from the key
+	key := string(data)
+	parts := strings.SplitN(key, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid slug index format: %q", key)
+	}
 	var id int64
-	_, _ = fmt.Sscanf(string(data), "%d", &id)
+	if _, err := fmt.Sscanf(parts[1], "%d", &id); err != nil {
+		return nil, fmt.Errorf("invalid slug index ID: %q", parts[1])
+	}
 	return r.Get(id)
 }
 
@@ -505,6 +514,16 @@ func (r *EANPageRepo) autoCatalogize(p *model.Product) (int64, error) {
 
 	// Tokenize product name (same as catalogizer)
 	productTokens := tokenizer.Tokenize(p.Name)
+
+	// Also tokenize shop_category attribute if present
+	for _, attr := range p.Attributes {
+		if attr.Key == "shop_category" && attr.Value != "" {
+			catTokens := tokenizer.Tokenize(attr.Value)
+			productTokens = append(productTokens, catTokens...)
+			break
+		}
+	}
+
 	if len(productTokens) == 0 {
 		return 0, nil
 	}

@@ -101,6 +101,14 @@ type AttrFieldMap struct {
 	Code  string `json:"code"`  // attribute code in the catalog (e.g. "material")
 }
 
+// HTMLAttrRule defines how to extract an attribute from HTML description
+type HTMLAttrRule struct {
+	Code      string `json:"code"`      // attribute code in the catalog (e.g. "power")
+	Pattern   string `json:"pattern"`   // regex pattern to match (e.g. "Moc\\s*[-:]\\s*([0-9]+\\s*W)")
+	Group     int    `json:"group"`     // capture group to extract (default 1)
+	Transform string `json:"transform"` // optional: "trim", "lowercase", "uppercase", "clean_html"
+}
+
 // PriceSourceConfig describes how to parse a specific company's price file.
 // Different companies provide attributes differently, so this is configurable.
 type PriceSourceConfig struct {
@@ -114,6 +122,7 @@ type PriceSourceConfig struct {
 	ShopCategoryField  string            `json:"shop_category_field,omitempty"`  // property name (default "ShopProductCategory")
 	AvailabilityMap    map[string]string `json:"availability_map,omitempty"`     // raw value -> "in_stock"|"out_of_stock"
 	AttrFields         []AttrFieldMap    `json:"attr_fields,omitempty"`          // extra attributes to extract
+	HTMLAttrRules      []HTMLAttrRule    `json:"html_attr_rules,omitempty"`      // rules to extract attributes from HTML description
 }
 
 type Company struct {
