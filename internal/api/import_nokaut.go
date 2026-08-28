@@ -3,7 +3,9 @@ package api
 import (
 	"fmt"
 	"html"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -26,10 +28,72 @@ type NokautImportResult struct {
 	ProductsCreated int    `json:"products_created"`
 	ProductsUpdated int    `json:"products_updated"`
 	ProductsSkipped int    `json:"products_skipped"`
+	ProductsDeleted int    `json:"products_deleted"`
 }
 
 // pricesDir is the root directory for company price files.
 const pricesDir = "prices"
+
+// downloadPriceFile downloads the company's price file from company.ImportURL
+// and saves it to prices/<company>.<ext>. The local copy is kept for debugging
+// and can be re-imported manually. Returns the saved file path.
+func downloadPriceFile(company *model.Company) (string, error) {
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Get(company.ImportURL)
+	if err != nil {
+		return "", fmt.Errorf("get: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+
+	// Determine file extension from the URL path (ignore query params).
+	ext := ".xml"
+	if u, uerr := url.Parse(company.ImportURL); uerr == nil {
+		if e := filepath.Ext(u.Path); e != "" && len(e) <= 10 {
+			ext = e
+		}
+	}
+
+	name := sanitizeFileName(company.Name)
+	if name == "" {
+		name = fmt.Sprintf("company_%d", company.ID)
+	}
+	destPath := filepath.Join(pricesDir, name+ext)
+
+	if err := os.MkdirAll(pricesDir, 0o755); err != nil {
+		return "", fmt.Errorf("mkdir: %w", err)
+	}
+
+	f, err := os.Create(destPath)
+	if err != nil {
+		return "", fmt.Errorf("create: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		return "", fmt.Errorf("write: %w", err)
+	}
+
+	return destPath, nil
+}
+
+// sanitizeFileName converts a company name into a safe file name fragment
+// (lowercase latin letters, digits, underscores).
+func sanitizeFileName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	var b strings.Builder
+	for _, r := range name {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+		case r == ' ' || r == '-' || r == '_':
+			b.WriteRune('_')
+		}
+	}
+	return strings.Trim(b.String(), "_")
+}
 
 // HandleAdminImportNokaut imports offers from Nokaut XML price files.
 // It is idempotent: existing offers (EAN + name + company) are updated in place,
@@ -37,13 +101,20 @@ const pricesDir = "prices"
 //
 // POST /admin/import-nokaut
 // Query params:
-//   - company=ID_OR_NAME   import only this company (default: all companies with ImportFolder set)
+//   - company=ID_OR_NAME   import only this company (default: all companies with ImportURL or ImportFolder set)
 //   - limit=N              max offers to import per company (0 = unlimited)
 func (h *Handlers) HandleAdminImportNokaut(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
+
+	// Prevent concurrent imports
+	if !h.importMu.TryLock() {
+		httpres.WriteError(w, http.StatusConflict, "IMPORT_IN_PROGRESS", "Another import is already in progress")
+		return
+	}
+	defer h.importMu.Unlock()
 
 	companyParam := r.URL.Query().Get("company")
 	limit := 0
@@ -52,7 +123,7 @@ func (h *Handlers) HandleAdminImportNokaut(w http.ResponseWriter, r *http.Reques
 	}
 
 	startTime := time.Now()
-	fmt.Printf("[IMPORT-NOKAUT] Starting (company=%q limit=%d)\n", companyParam, limit)
+	fmt.Printf("[IMPORT-NOKAUT] Starting (company=%q limit=%d) from %s\n", companyParam, limit, r.RemoteAddr)
 
 	// Resolve target companies
 	var companies []model.Company
@@ -80,9 +151,9 @@ func (h *Handlers) HandleAdminImportNokaut(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	} else {
-		// All companies that have an ImportFolder configured
+		// All companies that have an ImportURL or ImportFolder configured
 		for _, c := range all {
-			if c.ImportFolder != "" {
+			if c.ImportURL != "" || c.ImportFolder != "" {
 				companies = append(companies, c)
 			}
 		}
@@ -96,9 +167,11 @@ func (h *Handlers) HandleAdminImportNokaut(w http.ResponseWriter, r *http.Reques
 	// Import each company
 	for i := range companies {
 		company := &companies[i]
-		fmt.Printf("[IMPORT-NOKAUT] Importing company: %s (ID=%d, folder=%q)\n", company.Name, company.ID, company.ImportFolder)
+		fmt.Printf("[IMPORT-NOKAUT] Importing company: %s (ID=%d, url=%q, folder=%q)\n", company.Name, company.ID, company.ImportURL, company.ImportFolder)
 
-		result := h.importNokautCompany(company, limit)
+		result := NokautImportResult{}
+		result = h.importNokautCompany(company, limit)
+
 		fmt.Printf("[IMPORT-NOKAUT] Company %s: parsed=%d created=%d updated=%d skipped=%d\n",
 			company.Name, result.OffersParsed, result.ProductsCreated, result.ProductsUpdated, result.ProductsSkipped)
 
@@ -122,33 +195,61 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 	cfg := company.PriceSource
 	applyPriceSourceDefaults(&cfg)
 
-	currency := cfg.Currency
-	if currency == "" {
-		currency = company.Settings.Currency
-	}
+	// Always use settings.currency as the primary currency source
+	currency := company.Settings.Currency
 	if currency == "" {
 		currency = "PLN"
 	}
 
-	// Find XML files
-	// Clean the ImportFolder path: remove leading/trailing slashes and "prices/" prefix
-	importFolder := company.ImportFolder
-	importFolder = strings.TrimPrefix(importFolder, "/")
-	importFolder = strings.TrimSuffix(importFolder, "/")
-	importFolder = strings.TrimPrefix(importFolder, "prices/")
+	var files []string
 
-	dir := filepath.Join(pricesDir, importFolder)
-	files, err := filepath.Glob(filepath.Join(dir, "*.xml"))
-	if err != nil {
-		fmt.Printf("[IMPORT-NOKAUT] WARN: glob %s: %v\n", dir, err)
-		return NokautImportResult{Status: "no_files"}
+	if company.ImportURL != "" {
+		// Download the price file from the URL and save it to prices/<company>.<ext>
+		// The local copy is kept for debugging and re-imports.
+		destPath, err := downloadPriceFile(company)
+		if err != nil {
+			fmt.Printf("[IMPORT-NOKAUT] WARN: download price from %s: %v\n", company.ImportURL, err)
+			return NokautImportResult{Status: "download_error"}
+		}
+		files = []string{destPath}
+		fmt.Printf("[IMPORT-NOKAUT] Downloaded price file to %s\n", destPath)
+	} else {
+		// Legacy: read XML files from the company's import folder
+		// Clean the ImportFolder path: remove leading/trailing slashes and "prices/" prefix
+		importFolder := company.ImportFolder
+		importFolder = strings.TrimPrefix(importFolder, "/")
+		importFolder = strings.TrimSuffix(importFolder, "/")
+		importFolder = strings.TrimPrefix(importFolder, "prices/")
+
+		dir := filepath.Join(pricesDir, importFolder)
+		var err error
+		files, err = filepath.Glob(filepath.Join(dir, "*.xml"))
+		if err != nil {
+			fmt.Printf("[IMPORT-NOKAUT] WARN: glob %s: %v\n", dir, err)
+			return NokautImportResult{Status: "no_files"}
+		}
+		sort.Strings(files)
+		if len(files) == 0 {
+			fmt.Printf("[IMPORT-NOKAUT] WARN: no XML files in %s\n", dir)
+			return NokautImportResult{Status: "no_files"}
+		}
+		fmt.Printf("[IMPORT-NOKAUT] Found %d XML files in %s\n", len(files), dir)
 	}
-	sort.Strings(files)
-	if len(files) == 0 {
-		fmt.Printf("[IMPORT-NOKAUT] WARN: no XML files in %s\n", dir)
-		return NokautImportResult{Status: "no_files"}
+
+	// Pre-load attribute definitions to avoid repeated DB hits
+	attrDefCache := make(map[string]*model.AttrDef)
+	newAttrKeys := make(map[string]struct{}) // unique keys not in cache
+	if h.attrDefRepo != nil {
+		if attrDefs, err := h.attrDefRepo.List(); err == nil {
+			for i := range attrDefs {
+				// Cache by each key in the Keys array
+				for _, key := range attrDefs[i].Keys {
+					attrDefCache[key] = &attrDefs[i]
+				}
+			}
+			fmt.Printf("[IMPORT-NOKAUT] Pre-loaded %d attribute definitions (%d keys)\n", len(attrDefs), len(attrDefCache))
+		}
 	}
-	fmt.Printf("[IMPORT-NOKAUT] Found %d XML files in %s\n", len(files), dir)
 
 	parser := pricesrc.NewNokautParser()
 
@@ -156,6 +257,8 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 	result.Files = len(files)
 
 	var allProducts []*model.Product
+	var allParsedProducts []*model.Product
+	var allParsedNames []string
 
 	for _, file := range files {
 		if limit > 0 && result.OffersParsed >= limit {
@@ -169,11 +272,14 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 		}
 
 		fileStart := time.Now()
-		fmt.Printf("[IMPORT-NOKAUT] Parsing %s...\n", filepath.Base(file))
+		fmt.Printf("[IMPORT-NOKAUT] Parsing %s (file %d/%d)...\n", filepath.Base(file), len(files), len(files))
 
-		var fileProducts []*model.Product
 		var fileParsed int
 		var fileSkipped int
+
+		// First pass: parse and collect all products
+		var parsedProducts []*model.Product
+		var parsedNames []string
 
 		_, err = parser.Parse(f, func(offer pricesrc.Offer) error {
 			if limit > 0 && result.OffersParsed >= limit {
@@ -182,43 +288,23 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 			result.OffersParsed++
 			fileParsed++
 
-			p := mapOfferToProduct(offer, cfg, company.ID, currency, h.attrDefRepo)
+			p := mapOfferToProduct(offer, cfg, company.ID, currency, h.attrDefRepo, attrDefCache, newAttrKeys)
 			if p == nil {
 				fileSkipped++
 				result.ProductsSkipped++
 				return nil
 			}
 
-			id, isNew, err := h.productRepo.GetOrCreateByEAN(p, pricesrc.NormalizeName(p.Name))
-			if err != nil {
-				fmt.Printf("[IMPORT-NOKAUT] WARN: GetOrCreateByEAN %s: %v\n", p.Name, err)
-				fileSkipped++
-				result.ProductsSkipped++
-				return nil
-			}
-
-			if isNew {
-				result.ProductsCreated++
-			} else {
-				result.ProductsUpdated++
-			}
-
-			// For EANPage upsert we need the final product state.
-			// New products already have all fields; existing ones may have
-			// merged attributes, so fetch them.
-			var final *model.Product
-			if isNew {
-				final = p
-			} else {
-				if prod, err := h.productRepo.Get(id); err == nil {
-					final = prod
-				} else {
-					final = p
-				}
-			}
-			fileProducts = append(fileProducts, final)
+			parsedProducts = append(parsedProducts, p)
+			parsedNames = append(parsedNames, pricesrc.NormalizeName(p.Name))
 			return nil
 		})
+
+		// Collect all parsed products for batch processing
+		if len(parsedProducts) > 0 {
+			allParsedProducts = append(allParsedProducts, parsedProducts...)
+			allParsedNames = append(allParsedNames, parsedNames...)
+		}
 
 		f.Close()
 
@@ -226,18 +312,44 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 			fmt.Printf("[IMPORT-NOKAUT] WARN: parse %s: %v (parsed %d before error)\n", filepath.Base(file), err, fileParsed)
 		}
 
-		allProducts = append(allProducts, fileProducts...)
 		fmt.Printf("[IMPORT-NOKAUT]   %s: parsed=%d skipped=%d in %v\n",
 			filepath.Base(file), fileParsed, fileSkipped, time.Since(fileStart))
 	}
 
 	// ============================================
-	// Phase 2: Batch upsert EAN pages + index (IN TRANSACTION)
+	// Phase 0: Batch create new attribute definitions (OUTSIDE TRANSACTION)
 	// ============================================
-	fmt.Printf("[IMPORT-NOKAUT] Phase 2: Upserting EAN pages for %d products (transactional)...\n", len(allProducts))
-	phase2Start := time.Now()
+	// Creates AttrDef for all new attribute keys in one batch to avoid vacuum.
+	if len(newAttrKeys) > 0 && h.attrDefRepo != nil {
+		fmt.Printf("[IMPORT-NOKAUT] Phase 0: Creating %d new attribute definitions (batch)...\n", len(newAttrKeys))
+		phase0Start := time.Now()
 
-	// Create application-level transaction
+		// Collect all new keys
+		keys := make([]string, 0, len(newAttrKeys))
+		for key := range newAttrKeys {
+			keys = append(keys, key)
+		}
+
+		// Batch create all AttrDef
+		created, err := h.attrDefRepo.BatchGetOrCreateByKeys(keys)
+		if err != nil {
+			fmt.Printf("[IMPORT-NOKAUT] WARN: batch create attribute definitions: %v\n", err)
+		} else {
+			// Update cache with newly created AttrDef
+			for key, ad := range created {
+				attrDefCache[key] = ad
+			}
+			fmt.Printf("[IMPORT-NOKAUT] Phase 0: created %d new attribute definitions in %v\n", len(created), time.Since(phase0Start))
+		}
+	}
+
+	// ============================================
+	// Phase 1: Batch create/update products (IN TRANSACTION)
+	// ============================================
+	fmt.Printf("[IMPORT-NOKAUT] Phase 1: Creating/updating %d products (transactional)...\n", len(allParsedProducts))
+	phase1Start := time.Now()
+
+	// Create application-level transaction BEFORE any writes
 	txn := db.NewTransaction(h.store)
 	if err := txn.Begin(); err != nil {
 		fmt.Printf("[IMPORT-NOKAUT] ERROR: failed to begin transaction: %v\n", err)
@@ -249,6 +361,94 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 			_ = txn.Abort()
 		}
 	}()
+
+	if len(allParsedProducts) > 0 {
+		// Process in batches of 1000 to avoid filling up the database
+		const batchSize = 100_000
+		for i := 0; i < len(allParsedProducts); i += batchSize {
+			end := i + batchSize
+			if end > len(allParsedProducts) {
+				end = len(allParsedProducts)
+			}
+
+			batchProducts := allParsedProducts[i:end]
+			batchNames := allParsedNames[i:end]
+
+			fmt.Printf("[IMPORT-NOKAUT] Phase 1: Processing batch %d-%d (%d products)...\n", i, end, len(batchProducts))
+
+			ids, isNewMap, err := h.productRepo.BatchGetOrCreateByEANTx(txn, batchProducts, batchNames)
+			if err != nil {
+				fmt.Printf("[IMPORT-NOKAUT] WARN: BatchGetOrCreateByEANTx: %v\n", err)
+				result.ProductsSkipped += len(batchProducts)
+				continue
+			}
+
+			for j, p := range batchProducts {
+				if isNewMap[j] {
+					result.ProductsCreated++
+				} else {
+					result.ProductsUpdated++
+				}
+
+				// For EANPage upsert we need the final product state.
+				// New products already have all fields; existing ones may have
+				// merged attributes, so fetch them.
+				var final *model.Product
+				if isNewMap[j] {
+					final = p
+				} else {
+					if prod, err := h.productRepo.Get(ids[j]); err == nil {
+						final = prod
+					} else {
+						final = p
+					}
+				}
+				allProducts = append(allProducts, final)
+			}
+		}
+	}
+	fmt.Printf("[IMPORT-NOKAUT] Phase 1: done in %v\n", time.Since(phase1Start))
+
+	// ============================================
+	// Phase 1.6: Delete stale products not in this import (IN TRANSACTION)
+	// ============================================
+	// Removes products for this company that are no longer in the price file.
+	// Runs before indexing so the vendor index still reflects pre-import state.
+	if len(allParsedProducts) > 0 && h.productRepo != nil {
+		fmt.Printf("[IMPORT-NOKAUT] Phase 1.6: Cleaning up stale products for company %d...\n", company.ID)
+		deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, pricesrc.NormalizeName)
+		result.ProductsDeleted = deleted
+		fmt.Printf("[IMPORT-NOKAUT] Phase 1.6: deleted %d stale products\n", deleted)
+	}
+
+	// ============================================
+	// Phase 1.5: Batch index all products (IN TRANSACTION)
+	// ============================================
+
+	if h.turboSearch != nil && len(allProducts) > 0 {
+		// Process in batches of 1000 to avoid filling up the database
+		const batchSize = 100_000
+		for i := 0; i < len(allProducts); i += batchSize {
+			end := i + batchSize
+			if end > len(allProducts) {
+				end = len(allProducts)
+			}
+
+			batchProducts := allProducts[i:end]
+			fmt.Printf("[IMPORT-NOKAUT] Phase 1.5: Indexing batch %d-%d (%d products)...\n", i, end, len(batchProducts))
+
+			if err := h.turboSearch.BatchIndexProductstx(txn, batchProducts); err != nil {
+				fmt.Printf("[IMPORT-NOKAUT] WARN: batch index products: %v\n", err)
+			}
+		}
+	}
+
+	// return NokautImportResult{}
+	// ============================================
+	// Phase 2: Batch upsert EAN pages + index (IN TRANSACTION)
+	// ============================================
+	fmt.Printf("[IMPORT-NOKAUT] Phase 2: Upserting EAN pages for %d products (transactional)...\n", len(allProducts))
+	phase2Start := time.Now()
 
 	if err := h.eanPageRepo.LoadCatalogizerCache(); err != nil {
 		fmt.Printf("[IMPORT-NOKAUT] WARN: load catalogizer cache: %v\n", err)
@@ -307,6 +507,7 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 	// ============================================
 	// Phase 5: Rebuild category trees (IN TRANSACTION)
 	// ============================================
+
 	fmt.Println("[IMPORT-NOKAUT] Phase 5: Rebuilding category trees (transactional)...")
 	if err := h.categoryRepo.RebuildTreesTx(txn); err != nil {
 		fmt.Printf("[IMPORT-NOKAUT] ERROR: rebuild category trees failed: %v\n", err)
@@ -323,6 +524,19 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 	}
 
 	fmt.Println("[IMPORT-NOKAUT] Transaction committed successfully")
+
+	// ============================================
+	// Phase 6: Build EAN page sort indexes
+	// ============================================
+	fmt.Println("[IMPORT-NOKAUT] Phase 6: Building EAN page sort indexes...")
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
+			fmt.Printf("[IMPORT-NOKAUT] ERROR: build EAN page sort indexes failed: %v\n", err)
+			result.Status = "error_eanpage_sort_indexes"
+			return result
+		}
+	}
+
 	result.Status = "completed"
 	return result
 }
@@ -351,7 +565,7 @@ func applyPriceSourceDefaults(cfg *model.PriceSourceConfig) {
 
 // mapOfferToProduct maps a parsed Nokaut offer to a model.Product using the
 // company's PriceSourceConfig. Returns nil if the offer has no usable data.
-func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, companyID int64, currency string, attrDefRepo interface{}) *model.Product {
+func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, companyID int64, currency string, attrDefRepo interface{}, attrDefCache map[string]*model.AttrDef, newAttrKeys map[string]struct{}) *model.Product {
 	name := strings.TrimSpace(offer.Name)
 	if name == "" {
 		return nil
@@ -406,26 +620,89 @@ func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, compan
 	if productURL != "" {
 		attrs = append(attrs, model.KeyValue{Key: "product_url", Value: productURL})
 	}
+	// Partner/affiliate purchase URL: from <url> field (e.g. webep1.com link).
+	// This is the link the "go to purchase" button should use.
+	purchaseURL := strings.TrimSpace(offer.URL)
+	if purchaseURL != "" {
+		attrs = append(attrs, model.KeyValue{Key: "purchase_url", Value: purchaseURL})
+	}
 	if shopCategory != "" {
 		attrs = append(attrs, model.KeyValue{Key: "shop_category", Value: html.UnescapeString(shopCategory)})
 	}
 
 	// Step 1: Clean HTML first — remove scripts, inline styles, unescape entities
-	description := pricesrc.CleanHTMLDescription(strings.TrimSpace(offer.Description))
+	rawDescription := strings.TrimSpace(offer.Description)
+	description := pricesrc.CleanHTMLDescription(rawDescription)
 
 	// Step 2: Parse attributes from cleaned HTML description
 	if description != "" && attrDefRepo != nil {
 		if repo, ok := attrDefRepo.(*db.AttrDefRepo); ok {
+			// Try HTML attribute parser first
 			keyParser := pricesrc.NewHTMLAttrKeyParser(repo)
 			htmlAttrs := keyParser.Parse(description)
-			for code, value := range htmlAttrs {
-				attrs = append(attrs, model.KeyValue{Key: code, Value: value})
+			for code, values := range htmlAttrs {
+				for _, value := range values {
+					attrs = append(attrs, model.KeyValue{Key: code, Value: value})
+				}
+			}
+
+			// If no attributes found, try specific parsers based on description format
+			if len(htmlAttrs) == 0 {
+				var parsedAttrs map[string][]string
+
+				// Try HDWR parser first (for "Specyfikacja urządzenia" format)
+				if strings.Contains(description, "Specyfikacja urządzenia") {
+					hdwrParser := pricesrc.NewHDWRAttrParser()
+					parsedAttrs = hdwrParser.Parse(description)
+				}
+
+				// Fallback to Zabudowa parser (plain text format)
+				if len(parsedAttrs) == 0 {
+					zabudowaParser := pricesrc.NewZabudowaAttrParser()
+					parsedAttrs = zabudowaParser.Parse(description)
+				}
+
+				// Limit to max 15 attributes to prevent bloat
+				count := 0
+				for key, values := range parsedAttrs {
+					// Check cache first to avoid DB hit
+					var ad *model.AttrDef
+					if cached, exists := attrDefCache[key]; exists {
+						ad = cached
+					} else {
+						// Collect new keys for batch creation later
+						newAttrKeys[key] = struct{}{}
+						continue
+					}
+
+					// Add all values for this key
+					for _, value := range values {
+						if count >= 15 {
+							break
+						}
+						attrs = append(attrs, model.KeyValue{Key: ad.Code, Value: value})
+						count++
+					}
+				}
 			}
 		}
 	}
 
-	// Step 3: Truncate description safely
-	description = pricesrc.TruncateHTML(description, 3000)
+	// Step 3: Remove attribute section from description if attributes were found (for plain text only)
+	if len(attrs) > 0 && !strings.Contains(description, "<") {
+		description = removeAttributeSection(description)
+	}
+
+	// Step 4: Wrap description in <pre> tags for Zabudowa AGD (plain text format)
+	if strings.Contains(description, "\n") && !strings.Contains(description, "<pre") {
+		description = "<pre>" + description + "</pre>"
+		// Use larger limit for pre-formatted content
+		description = pricesrc.TruncateHTML(description, 5000)
+
+	} else {
+		// Step 5: Truncate description safely
+		description = pricesrc.TruncateHTML(description, 3000)
+	}
 
 	return &model.Product{
 		EAN:           ean,
@@ -465,4 +742,29 @@ func mapAvailability(raw string, availMap map[string]string) (model.ProductStatu
 		return model.ProductStatusActive, 1
 	}
 	return model.ProductStatusHidden, 0
+}
+
+// removeAttributeSection removes the attribute section from plain text description.
+// Looks for common markers like "Specyfikacja urządzenia", "Specyfikacja", "Parametry", etc.
+func removeAttributeSection(description string) string {
+	// Common attribute section markers
+	markers := []string{
+		"Specyfikacja urządzenia",
+		"Specyfikacja techniczna",
+		"Specyfikacja",
+		"Parametry",
+		"Dane techniczne",
+		"Technical specifications",
+		"Specifications",
+	}
+
+	for _, marker := range markers {
+		idx := strings.Index(description, marker)
+		if idx != -1 {
+			// Keep only the text before the marker
+			return strings.TrimSpace(description[:idx])
+		}
+	}
+
+	return description
 }

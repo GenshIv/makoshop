@@ -34,7 +34,7 @@ cd ..
 echo "=== [2/2] Building backend (vendored) ==="
 # -mod=vendor uses the vendored dependencies, so this works on any machine
 # without the local makodb/silentjson checkouts.
-CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w" -o makoshop ./cmd/server/
+CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o makoshop ./cmd/server/
 
 echo ""
 echo "Build complete:"

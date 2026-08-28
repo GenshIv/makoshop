@@ -67,6 +67,7 @@ const startEdit = (sp) => {
     data: {
       title: sp.title || '',
       description: sp.description || '',
+      keywords: sp.keywords || '',
       slug: sp.slug || '',
       is_active: sp.is_active !== false,
       category_id: sp.category_id || 0,
@@ -174,6 +175,7 @@ onMounted(fetchEANPages);
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_id') || 'ID' }}</th>
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_scu') || 'EAN' }}</th>
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_title') || 'Title' }}</th>
+              <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_keywords') || 'Keywords' }}</th>
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_slug') || 'Slug' }}</th>
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_products') || 'Products' }}</th>
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_active') || 'Active' }}</th>
@@ -189,6 +191,7 @@ onMounted(fetchEANPages);
               <td class="px-4 py-2">{{ sp.id }}</td>
               <td class="px-4 py-2 max-w-xs truncate" :title="sp.ean">{{ sp.ean }}</td>
               <td class="px-4 py-2 max-w-xs truncate" :title="sp.title">{{ sp.title }}</td>
+              <td class="px-4 py-2 max-w-xs truncate text-xs text-ink-2" :title="sp.keywords">{{ sp.keywords || '-' }}</td>
               <td class="px-4 py-2 max-w-xs truncate" :title="sp.slug">{{ sp.slug }}</td>
               <td class="px-4 py-2">{{ sp.product_count || sp.product_ids?.length || 0 }}</td>
               <td class="px-4 py-2">
@@ -214,7 +217,7 @@ onMounted(fetchEANPages);
               </td>
             </tr>
             <tr v-if="eanpages.length === 0">
-              <td colspan="7" class="px-4 py-8 text-center text-ink-3">
+              <td colspan="8" class="px-4 py-8 text-center text-ink-3">
                 {{ t('admin.eanpage_no_results') || 'No EAN pages found' }}
               </td>
             </tr>
@@ -279,6 +282,17 @@ onMounted(fetchEANPages);
               rows="3"
               class="w-full px-3 py-2 border border-line rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
             ></textarea>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-ink-2 mb-1">
+              {{ t('admin.eanpage_keywords') || 'Keywords' }}
+            </label>
+            <input
+              v-model="editing.data.keywords"
+              type="text"
+              class="w-full px-3 py-2 border border-line rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
           </div>
 
           <div>

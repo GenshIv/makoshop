@@ -26,6 +26,12 @@ type Transaction struct {
 	// Buffered turbo sort index writes: token -> []docID (sorted)
 	turboSortIndex map[string][]string
 
+	// Buffered document deletions: key -> struct{}
+	docDeletes map[string]struct{}
+
+	// Buffered turbo index deletions: token -> set of docIDs
+	turboIndexDeletes map[string]map[string]struct{}
+
 	// Products created/updated in this transaction (for EAN page operations)
 	products []*model.Product
 
@@ -39,12 +45,14 @@ type Transaction struct {
 // NewTransaction creates a new transaction.
 func NewTransaction(store *Store) *Transaction {
 	return &Transaction{
-		store:           store,
-		docPuts:         make(map[string][]byte),
-		turboWrites:     make(map[string][]byte),
-		turboBatchIndex: make(map[string][]string),
-		turboSortIndex:  make(map[string][]string),
-		active:          true,
+		store:             store,
+		docPuts:           make(map[string][]byte),
+		turboWrites:       make(map[string][]byte),
+		turboBatchIndex:   make(map[string][]string),
+		turboSortIndex:    make(map[string][]string),
+		docDeletes:        make(map[string]struct{}),
+		turboIndexDeletes: make(map[string]map[string]struct{}),
+		active:            true,
 	}
 }
 
@@ -105,6 +113,27 @@ func (t *Transaction) Commit() error {
 		}
 	}
 
+	// Apply all document deletions (after puts, so deletes take precedence)
+	for key := range t.docDeletes {
+		if err := t.store.DocDelete(key); err != nil {
+			return fmt.Errorf("commit doc delete %s: %w", key, err)
+		}
+	}
+
+	// Apply all turbo index deletions (after puts, so deletes take precedence)
+	// Use batch deletion to minimize vacuum
+	for token, docIDSet := range t.turboIndexDeletes {
+		if len(docIDSet) > 0 {
+			docIDs := make([]string, 0, len(docIDSet))
+			for docID := range docIDSet {
+				docIDs = append(docIDs, docID)
+			}
+			if _, err := t.store.db.TurboDeleteBatchIndexString(token, docIDs); err != nil {
+				return fmt.Errorf("commit turbo batch delete index %s: %w", token, err)
+			}
+		}
+	}
+
 	t.active = false
 	t.finished = true
 
@@ -128,6 +157,8 @@ func (t *Transaction) Abort() error {
 	t.turboWrites = make(map[string][]byte)
 	t.turboBatchIndex = make(map[string][]string)
 	t.turboSortIndex = make(map[string][]string)
+	t.docDeletes = make(map[string]struct{})
+	t.turboIndexDeletes = make(map[string]map[string]struct{})
 	t.products = nil
 
 	t.active = false
@@ -202,6 +233,48 @@ func (t *Transaction) TurboPutSortIndexString(token string, docIDs []string) err
 	return nil
 }
 
+// TurboPutIndexString buffers a turbo index write (single docID).
+func (t *Transaction) TurboPutIndexString(token string, docID string) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if !t.active || t.finished {
+		return 0, fmt.Errorf("transaction not active")
+	}
+
+	t.turboBatchIndex[token] = append(t.turboBatchIndex[token], docID)
+	return 1, nil
+}
+
+// DocDelete buffers a document deletion.
+func (t *Transaction) DocDelete(key string) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if !t.active || t.finished {
+		return fmt.Errorf("transaction not active")
+	}
+
+	t.docDeletes[key] = struct{}{}
+	return nil
+}
+
+// TurboDeleteIndexString buffers a turbo index deletion (remove docID from token).
+func (t *Transaction) TurboDeleteIndexString(token string, docID string) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if !t.active || t.finished {
+		return fmt.Errorf("transaction not active")
+	}
+
+	if t.turboIndexDeletes[token] == nil {
+		t.turboIndexDeletes[token] = make(map[string]struct{})
+	}
+	t.turboIndexDeletes[token][docID] = struct{}{}
+	return nil
+}
+
 // AddProduct adds a product to the transaction.
 func (t *Transaction) AddProduct(p *model.Product) {
 	t.mu.Lock()
@@ -228,6 +301,9 @@ func (t *Transaction) Clear() {
 	t.docPuts = make(map[string][]byte)
 	t.turboWrites = make(map[string][]byte)
 	t.turboBatchIndex = make(map[string][]string)
+	t.turboSortIndex = make(map[string][]string)
+	t.docDeletes = make(map[string]struct{})
+	t.turboIndexDeletes = make(map[string]map[string]struct{})
 	t.products = nil
 }
 

@@ -3,7 +3,6 @@ import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
-import { useCartStore } from '../stores/cart';
 import { useToast } from '../composables/useToast';
 import { useSeo } from '../composables/useSeo';
 import { useSettings } from '../composables/useSettings';
@@ -23,7 +22,6 @@ const props = defineProps({
 
 const route = useRoute();
 const router = useRouter();
-const cart = useCartStore();
 
 // Sanitize HTML description for safe rendering with v-html
 function sanitizeHtml(html) {
@@ -55,6 +53,14 @@ function sanitizeHtml(html) {
       el.removeAttribute('src');
     });
     
+    // Replace <pre> tags with <div> to allow text wrapping
+    temp.querySelectorAll('pre').forEach(pre => {
+      const div = document.createElement('div');
+      div.className = 'whitespace-pre-wrap break-words';
+      div.textContent = pre.textContent;
+      pre.replaceWith(div);
+    });
+    
     return temp.innerHTML;
   } catch (e) {
     // Fallback: simple regex-based sanitization
@@ -66,6 +72,8 @@ function sanitizeHtml(html) {
     clean = clean.replace(/\s+on\w+=\w+/gi, '');
     clean = clean.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, '');
     clean = clean.replace(/src\s*=\s*["']javascript:[^"']*["']/gi, '');
+    clean = clean.replace(/<pre>/gi, '<div class="whitespace-pre-wrap break-words">');
+    clean = clean.replace(/<\/pre>/gi, '</div>');
     return clean;
   }
 }
@@ -177,7 +185,7 @@ const fetchEANPage = async () => {
     treePath.value = data.tree_path || [];
     treePathFull.value = data.tree_path_full || [];
 
-    initFromData();
+    await initFromData();
   } catch (e) {
     error.value = e.response?.data?.error?.message || t('eanpage.not_found');
     console.error(e);
@@ -186,7 +194,7 @@ const fetchEANPage = async () => {
   }
 };
 
-function initFromData() {
+async function initFromData() {
   // Page title / meta are handled reactively by useSeo()
 
   // Select cheapest product by default (first supplier of first modification).
@@ -210,16 +218,21 @@ function initFromData() {
   }
 
   // Load company settings for badges
-  // fetchCompanySettings(); // REMOVED: This causes a second request that overwrites data if not careful
+  await fetchCompanySettings();
 };
 
-const addToCart = async () => {
-  if (!selectedProduct.value) return;
-  try {
-    await cart.addItem(selectedProduct.value.id, 1);
-    toast.success(t('cart.added_to_cart'));
-  } catch (e) {
-    toast.error(e.response?.data?.message || t('cart.add_to_cart_error'));
+// Get the partner purchase URL from a product's attributes
+const getPurchaseUrl = (product) => {
+  if (!product?.attributes) return '';
+  const attr = product.attributes.find(a => a.key === 'purchase_url');
+  return attr?.value || '';
+};
+
+// Open the partner purchase link in a new tab
+const goToPurchase = () => {
+  const url = getPurchaseUrl(selectedProduct.value);
+  if (url) {
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 };
 
@@ -471,7 +484,7 @@ const hasAnyInStock = computed(() => {
 });
 
 // Convert []KeyValue to {key: value} map.
-const INTERNAL_ATTRS = ['product_url', 'shop_category'];
+const INTERNAL_ATTRS = ['product_url', 'purchase_url', 'shop_category'];
 
 const normalizeAttrs = (attrs) => {
   if (!attrs) return {};
@@ -742,10 +755,14 @@ watch(
                     >→</button>
                   </div>
                 </div>
-                <div class="text-sm text-ink-2 prose prose-sm max-w-none">
-                  <div v-if="modifications[activeTab].suppliers[descSupplierIndex]?.description"
+                <div class="text-sm text-ink-2 prose prose-sm max-w-none max-h-[600px] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-orange-400">
+                  <div v-if="modifications[activeTab].suppliers[descSupplierIndex]?.description && modifications[activeTab].suppliers[descSupplierIndex].description !== '<pre></pre>'"
                        v-html="sanitizeHtml(modifications[activeTab].suppliers[descSupplierIndex].description)"
                        class="prose-ul:list-disc prose-ul:pl-5 prose-ol:list-decimal prose-ol:pl-5 prose-p:my-1 prose-li:my-0.5 prose-strong:font-semibold prose-ul:my-2 prose-ol:my-2">
+                  </div>
+                  <div v-else-if="page.description"
+                       class="whitespace-pre-line text-sm">
+                    {{ page.description }}
                   </div>
                   <p v-else class="text-ink-3">{{ t('product.no_description') }}</p>
                 </div>
@@ -756,14 +773,14 @@ watch(
           <!-- Specifications -->
           <div v-if="displayAttributes && Object.keys(displayAttributes).length" class="bg-surface rounded-2xl shadow-sm border border-line p-4">
             <h3 class="font-semibold text-ink mb-3">{{ t('catalog.characteristics') }}</h3>
-            <dl class="space-y-2 text-sm">
+            <dl class="space-y-2 text-sm max-h-[300px] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-orange-400">
               <div
                 v-for="(value, key) in displayAttributes"
                 :key="key"
                 class="flex items-start gap-2 border-b border-line pb-2 last:border-0 last:pb-0"
               >
-                <dt class="text-ink-3 text-xs min-w-[100px] shrink-0">{{ attrLabel(key) }}</dt>
-                <dd class="text-ink">{{ value }}</dd>
+                <dt class="text-ink-3 text-xs w-[180px] shrink-0 truncate" :title="attrLabel(key)">{{ attrLabel(key) }}</dt>
+                <dd class="text-ink flex-1">{{ value }}</dd>
               </div>
             </dl>
           </div>
@@ -795,11 +812,11 @@ watch(
                 </div>
               </div>
               <button
-                @click="addToCart"
-                :disabled="!isInStock(selectedProduct)"
+                @click="goToPurchase"
+                :disabled="!getPurchaseUrl(selectedProduct)"
                 class="px-6 py-3 bg-orange-600 text-white rounded-xl font-semibold text-sm hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed transition shrink-0"
               >
-                {{ t('catalog.add_to_cart') }}
+                {{ t('catalog.go_to_purchase') }}
               </button>
             </div>
           </div>
@@ -857,16 +874,19 @@ watch(
                     {{ isInStock(product) ? t('catalog.in_stock') : t('catalog.out_of_stock') }}
                   </span>
                 </div>
-                <!-- Middle: attributes -->
-                <div class="flex-shrink-0 w-32 text-xs text-ink-3">
+                <!-- Middle: attributes in key-value columns -->
+                <div class="flex-shrink-0 w-48 text-xs text-ink-3">
                   <template v-if="product.attributes && product.attributes.length">
-                    <div v-for="attr in product.attributes.slice(0, 3)" :key="attr.key" class="truncate">
-                      {{ attr.value }}
+                    <div class="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                      <template v-for="attr in product.attributes.filter(a => !INTERNAL_ATTRS.includes(a.key)).slice(0, 6)" :key="attr.key">
+                        <div class="truncate font-medium text-ink-2">{{ attr.key }}:</div>
+                        <div class="truncate">{{ attr.value }}</div>
+                      </template>
                     </div>
                   </template>
                 </div>
                 <!-- Right: description (wide, multi-line) -->
-                <div v-if="product.description" class="flex-1 min-w-0 text-xs text-ink-3 leading-relaxed break-words overflow-hidden" style="max-height: 2.5em;">
+                <div v-if="product.description" class="flex-1 min-w-0 text-xs text-ink-3 leading-relaxed break-words overflow-y-auto max-h-[1.5em]" style="scrollbar-width: thin;">
                   <div v-html="sanitizeHtml(product.description)" class="[&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4 [&>p]:my-0 [&>li]:my-0 [&>div]:my-0 [&>span]:my-0 [&>strong]:font-semibold"></div>
                 </div>
                 <!-- Far right: price -->

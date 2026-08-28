@@ -90,8 +90,8 @@ To test the transactional import:
 ## Files Modified
 
 - `internal/db/transaction.go` - New transaction manager
-- `internal/db/scupage_repo.go` - Transactional EAN page methods
-- `internal/db/scupage_search.go` - Transactional EAN page search methods
+- `internal/db/eanpage_repo.go` - Transactional EAN page methods
+- `internal/db/eanpage_search.go` - Transactional EAN page search methods
 - `internal/db/turbo_search.go` - Transactional sort index methods
 - `internal/db/category_repo.go` - Transactional category tree methods
 - `internal/api/import_nokaut.go` - Updated import flow to use transactions

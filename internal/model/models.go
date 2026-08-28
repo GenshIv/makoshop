@@ -143,7 +143,8 @@ type Company struct {
 	InstallmentPlanIds []int64          `json:"installment_plan_ids,omitempty"`
 
 	// --- Price import (tasks 1, 3, 7) ---
-	ImportFolder string            `json:"import_folder,omitempty"` // folder name in prices/ dir
+	ImportURL    string            `json:"import_url,omitempty"`    // URL to download the price file from
+	ImportFolder string            `json:"import_folder,omitempty"` // folder name in prices/ dir (legacy fallback)
 	PriceSource  PriceSourceConfig `json:"price_source,omitempty"`  // parsing config
 
 	// --- Company landing page (task 4) ---
@@ -254,6 +255,7 @@ type Product struct {
 	CategoryID    int64         `json:"category_id"`
 	BrandID       int64         `json:"brand_id,omitempty"`
 	CompanyID     int64         `json:"company_id"`
+	CompanyName   string        `json:"company_name,omitempty"` // transient: filled on read, not persisted
 	Brand         string        `json:"brand,omitempty"`
 	Price         float64       `json:"price"`
 	PreviousPrice float64       `json:"previous_price,omitempty"` // old price; if > Price → discount
@@ -307,6 +309,7 @@ type EANPage struct {
 	CreatedAt    int64      `json:"created_at,omitempty"`
 	UpdatedAt    int64      `json:"updated_at,omitempty"`
 	SeoURL       string     `json:"seo_url,omitempty"`
+	Keywords     string     `json:"keywords,omitempty"` // keywords for catalogization (product name + shop category)
 }
 
 // NOTE: ProductIDs removed from EANPage to prevent DB bloat.

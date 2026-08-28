@@ -1567,12 +1567,13 @@ func main() {
 	}
 
 	// Production-hardened HTTP server with sane timeouts.
+	// Note: WriteTimeout is set high to allow long-running imports to complete.
 	srv := &http.Server{
 		Addr:              fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port),
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      60 * time.Second,
+		WriteTimeout:      300 * time.Second, // 5 minutes for long imports
 		IdleTimeout:       120 * time.Second,
 	}
 

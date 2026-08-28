@@ -431,8 +431,7 @@ const fetchProducts = async () => {
     }
 
     const response = await api.get(url, { params });
-    console.log('[CatalogView] fetchProducts: URL:', url, 'Status:', response.status, 'ContentType:', response.headers['content-type']);
-    console.log('[CatalogView] fetchProducts: data type:', typeof response.data, 'is string:', typeof response.data === 'string');
+
 
     // Read server-side timing from header: X-Response-Time-Ms
     // Axios normalizes header names to lowercase, but we'll search defensively

@@ -38,7 +38,7 @@ func (r *CompanyRepo) Create(c *model.Company) error {
 		c.Status = model.CompanyStatusPending
 	}
 	if c.Settings.Currency == "" {
-		c.Settings.Currency = "RUB"
+		c.Settings.Currency = "PLN"
 	}
 	if c.Slug == "" {
 		c.Slug = slug.SlugKeepCase(c.Name)

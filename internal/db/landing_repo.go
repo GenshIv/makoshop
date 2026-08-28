@@ -62,6 +62,54 @@ func (r *LandingRepo) Create(l *model.LandingPage) error {
 	return nil
 }
 
+// CreateNoIndex creates a new landing page without indexing it.
+// Use this for batch operations where you'll index pages separately.
+func (r *LandingRepo) CreateNoIndex(l *model.LandingPage) error {
+	if l.EAN == "" {
+		return fmt.Errorf("ean is required")
+	}
+
+	id, err := r.Store.NextID("landing")
+	if err != nil {
+		return fmt.Errorf("next_id landing: %w", err)
+	}
+	l.ID = id
+	l.CreatedAt = time.Now().Unix()
+	l.UpdatedAt = time.Now().Unix()
+	if l.Slug == "" {
+		l.Slug = toLandingSlug(l.EAN)
+	}
+
+	data := MarshalLandingPage(*l)
+	if err := r.Store.DocPut(KeyLandingPage(l.ID), data); err != nil {
+		return fmt.Errorf("save landing: %w", err)
+	}
+
+	// Only write EAN key, don't add to landing_list index
+	eanKey := turboKeyLandingSCU + l.EAN
+	if err := r.Store.TurboWrite(eanKey, []byte(KeyLandingPage(l.ID))); err != nil {
+		_ = r.Store.DocDelete(KeyLandingPage(l.ID))
+		return fmt.Errorf("turbo index landing_ean: %w", err)
+	}
+
+	return nil
+}
+
+// BatchAddToIndex adds multiple landing pages to the landing_list index in batch.
+func (r *LandingRepo) BatchAddToIndex(landingIDs []int64) error {
+	if len(landingIDs) == 0 {
+		return nil
+	}
+
+	keys := make([]string, len(landingIDs))
+	for i, id := range landingIDs {
+		keys[i] = KeyLandingPage(id)
+	}
+
+	_, err := r.Store.db.TurboPutBatchIndexString(turboKeyLandingList, keys)
+	return err
+}
+
 // Get returns a landing page by ID.
 func (r *LandingRepo) Get(id int64) (*model.LandingPage, error) {
 	data, err := r.Store.DocGet(KeyLandingPage(id))
@@ -190,6 +238,45 @@ func (r *LandingRepo) AddProduct(id int64, productID int64) error {
 	return r.Store.DocPut(KeyLandingPage(l.ID), data)
 }
 
+// BatchAddProducts adds multiple product IDs to landing pages in batch.
+// landingToProducts is a map of landing page ID to product IDs.
+func (r *LandingRepo) BatchAddProducts(landingToProducts map[int64][]int64) error {
+	if len(landingToProducts) == 0 {
+		return nil
+	}
+
+	for landingID, productIDs := range landingToProducts {
+		if len(productIDs) == 0 {
+			continue
+		}
+
+		l, err := r.Get(landingID)
+		if err != nil {
+			continue
+		}
+
+		// Add all product IDs at once
+		existingSet := make(map[int64]bool)
+		for _, pid := range l.ProductIDs {
+			existingSet[pid] = true
+		}
+
+		for _, pid := range productIDs {
+			if !existingSet[pid] {
+				l.ProductIDs = append(l.ProductIDs, pid)
+			}
+		}
+
+		l.UpdatedAt = time.Now().Unix()
+		data := MarshalLandingPage(*l)
+		if err := r.Store.DocPut(KeyLandingPage(l.ID), data); err != nil {
+			fmt.Printf("WARN: batch add products to landing %d: %v\n", landingID, err)
+		}
+	}
+
+	return nil
+}
+
 // RemoveProduct removes a product ID from the landing page's product list.
 func (r *LandingRepo) RemoveProduct(id int64, productID int64) error {
 	l, err := r.Get(id)
@@ -282,4 +369,63 @@ func toLandingSlug(ean string) string {
 // slugToSCU reverses the slug back to EAN (approximate).
 func slugToSCU(slug string) string {
 	return strings.ReplaceAll(slug, "-", "_")
+}
+
+// BatchUpsertByEANs creates or updates landing pages for multiple EANs in batch.
+// Returns a map of EAN to LandingPage ID.
+func (r *LandingRepo) BatchUpsertByEANs(eans []string, getInfo func(ean string) (title, description string)) map[string]int64 {
+	result := make(map[string]int64)
+
+	if len(eans) == 0 {
+		return result
+	}
+
+	// First pass: check which landing pages already exist
+	existingIDs := make(map[string]int64) // ean -> id
+	var toCreate []string
+
+	for _, ean := range eans {
+		if ean == "" {
+			continue
+		}
+
+		l, err := r.GetByEAN(ean)
+		if err == nil {
+			existingIDs[ean] = l.ID
+			result[ean] = l.ID
+		} else {
+			toCreate = append(toCreate, ean)
+		}
+	}
+
+	// Second pass: create new landing pages (without indexing)
+	var newLandingIDs []int64
+	for _, ean := range toCreate {
+		title, description := getInfo(ean)
+
+		l := &model.LandingPage{
+			EAN:         ean,
+			Slug:        toLandingSlug(ean),
+			Title:       title,
+			Description: description,
+			IsActive:    true,
+		}
+
+		if err := r.CreateNoIndex(l); err != nil {
+			fmt.Printf("WARN: batch create landing for EAN %s: %v\n", ean, err)
+			continue
+		}
+
+		result[ean] = l.ID
+		newLandingIDs = append(newLandingIDs, l.ID)
+	}
+
+	// Third pass: batch add all new landing pages to index
+	if len(newLandingIDs) > 0 {
+		if err := r.BatchAddToIndex(newLandingIDs); err != nil {
+			fmt.Printf("WARN: batch add to landing index: %v\n", err)
+		}
+	}
+
+	return result
 }

@@ -713,16 +713,56 @@ func (r *CategoryRepo) rebuildFullTreeJSONTx(txn *Transaction) {
 }
 
 // rebuildAllAncestorsAndDescendantsTx is the transactional version of rebuildAllAncestorsAndDescendants.
+// Optimized to collect all writes and apply them in batch to reduce space usage.
 func (r *CategoryRepo) rebuildAllAncestorsAndDescendantsTx(txn *Transaction) {
 	all, err := r.ListAll()
 	if err != nil {
 		fmt.Printf("WARN: rebuildAllAncestorsAndDescendantsTx: %v\n", err)
 		return
 	}
-	for _, cat := range all {
-		r.rebuildAncestorsCacheTx(txn, cat.ID)
-		r.rebuildDescendantsCacheTx(txn, cat.ID)
+
+	// First pass: collect all ancestor and descendant writes
+	type batchWrite struct {
+		key    string
+		values []string
 	}
+	var ancestorWrites []batchWrite
+	var descendantWrites []batchWrite
+
+	for _, cat := range all {
+		// Collect ancestors
+		ancestors := r.computeAncestors(cat.ID)
+		if len(ancestors) > 0 {
+			key := turboKeyCategoryAncestors + fmt.Sprintf("%d", cat.ID)
+			ancestorKeys := make([]string, len(ancestors))
+			for i, id := range ancestors {
+				ancestorKeys[i] = KeyCategory(id)
+			}
+			ancestorWrites = append(ancestorWrites, batchWrite{key: key, values: ancestorKeys})
+		}
+		r.treePathCache.Delete(cat.ID)
+
+		// Collect descendants
+		descendants := r.computeDescendants(cat.ID)
+		if len(descendants) > 0 {
+			key := turboKeyCategoryChildrenOf + fmt.Sprintf("%d", cat.ID)
+			descendantKeys := make([]string, len(descendants))
+			for i, id := range descendants {
+				descendantKeys[i] = KeyCategory(id)
+			}
+			descendantWrites = append(descendantWrites, batchWrite{key: key, values: descendantKeys})
+		}
+	}
+
+	// Second pass: apply all writes in batch
+	for _, w := range ancestorWrites {
+		_, _ = txn.TurboPutBatchIndexString(w.key, w.values)
+	}
+	for _, w := range descendantWrites {
+		_, _ = txn.TurboPutBatchIndexString(w.key, w.values)
+	}
+
+	fmt.Printf("[DEBUG] rebuildAllAncestorsAndDescendantsTx: applied %d ancestor writes, %d descendant writes\n", len(ancestorWrites), len(descendantWrites))
 }
 
 // rebuildParentTreeJSON rebuilds the subtree for a given parentID and stores it as JSON.

@@ -3,7 +3,6 @@ package catalogizer
 import (
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/GenshIv/intHache"
 	"github.com/GenshIv/makodb/v2"
@@ -311,20 +310,16 @@ func (c *Catalogizer) BuildEANTokens(scuPageID int64, name string) error {
 		return nil
 	}
 
-	hashes := make([]uint64, len(tokens))
+	// Use same format as BuildTokensForCategory: uint64 hash -> key128 directly
+	key128s := make([]intHache.Key128, len(tokens))
 	for i, t := range tokens {
-		hashes[i] = t.Hash
+		key128s[i] = intHache.Key128{t.Hash, 0}
 	}
 
 	key := turboKeySCUTokens + fmt.Sprintf("%d", scuPageID)
-	_ = c.store.DB().TurboClearIndex(key)
-	// Convert uint64 hashes to strings for TurboPutBatchIndexString
-	strHashes := make([]string, len(hashes))
-	for i, h := range hashes {
-		strHashes[i] = fmt.Sprintf("%d", h)
-	}
-	if _, err := c.store.DB().TurboPutBatchIndexString(key, strHashes); err != nil {
-		return fmt.Errorf("turbo index scu_tokens for ean %d: %w", scuPageID, err)
+	buf := makodb.TurboBinaryNew(key128s)
+	if err := c.store.TurboWrite(key, buf); err != nil {
+		return fmt.Errorf("turbo write scu_tokens for ean %d: %w", scuPageID, err)
 	}
 	return nil
 }
@@ -332,48 +327,56 @@ func (c *Catalogizer) BuildEANTokens(scuPageID int64, name string) error {
 // CatalogizeEANPageByIntersection uses TurboTopNByIntersection to find the best category
 // for an EAN page based on token overlap with category anchor_keywords.
 // Returns the best category ID or 0 if no match. Returns no error for missing keys.
-func (c *Catalogizer) CatalogizeEANPageByIntersection(scuPageID int64) (int64, error) {
-	eanKey := turboKeySCUTokens + fmt.Sprintf("%d", scuPageID)
-
-	// Collect all active category token keys
-	categories, err := c.categoryRepo.ListAll()
-	if err != nil {
-		return 0, fmt.Errorf("list categories: %w", err)
-	}
-
-	var candidateKeys []string
-	catIDByKey := make(map[string]int64)
-	for _, cat := range categories {
-		if !cat.IsActive {
-			continue
-		}
-		key := turboKeyCatTokens + fmt.Sprintf("%d", cat.ID)
-		candidateKeys = append(candidateKeys, key)
-		catIDByKey[key] = cat.ID
-	}
-
-	if len(candidateKeys) == 0 {
-		return 0, nil
-	}
-
-	// Use TurboTopNByIntersection to find categories with most overlapping tokens
-	results, err := c.store.DB().TurboTopNByIntersection(eanKey, candidateKeys, 10)
-	if err != nil {
-		// Missing key (no tokens for this EAN page) is not an error
-		if strings.Contains(err.Error(), "key not found") {
-			return 0, nil
-		}
-		return 0, fmt.Errorf("turbo topN intersection: %w", err)
-	}
-
-	if len(results) == 0 {
-		return 0, nil
-	}
-
-	// Return the category with the highest count (first result)
-	// Convert results[0].Key to string for map lookup
-	//if catID, ok := catIDByKey[results[0].Key]; ok {
-	//	return catID, nil
-	//}
-	return 0, nil
-}
+//func (c *Catalogizer) CatalogizeEANPageByIntersection(scuPageID int64) (int64, error) {
+//	eanKey := turboKeySCUTokens + fmt.Sprintf("%d", scuPageID)
+//
+//	// Collect all active category token keys and their IDs
+//	categories, err := c.categoryRepo.ListAll()
+//	if err != nil {
+//		return 0, fmt.Errorf("list categories: %w", err)
+//	}
+//
+//	var candidateKeys []string
+//	var catIDs []int64 // parallel array: catIDs[i] corresponds to candidateKeys[i]
+//	for _, cat := range categories {
+//		if !cat.IsActive {
+//			continue
+//		}
+//		key := turboKeyCatTokens + fmt.Sprintf("%d", cat.ID)
+//		candidateKeys = append(candidateKeys, key)
+//		catIDs = append(catIDs, cat.ID)
+//	}
+//
+//	if len(candidateKeys) == 0 {
+//		return 0, nil
+//	}
+//
+//	// Use TurboTopNByIntersection to find categories with most overlapping tokens
+//	results, err := c.store.DB().TurboTopNByIntersection(eanKey, candidateKeys, 10)
+//	if err != nil {
+//		// Missing key (no tokens for this EAN page) is not an error
+//		if strings.Contains(err.Error(), "key not found") {
+//			return 0, nil
+//		}
+//		return 0, fmt.Errorf("turbo topN intersection: %w", err)
+//	}
+//
+//	if len(results) == 0 {
+//		return 0, nil
+//	}
+//
+//	// Return the category with the highest count (first result)
+//	// results[0].Key is a key128 hash of the candidate key (with "turbo_idx:" prefix)
+//	// We need to find which candidate key matches this hash
+//	bestResult := results[0]
+//	for i, candidateKey := range candidateKeys {
+//		// Check if this candidate key matches the result key
+//		// by hashing it with the same prefix as makodb uses
+//		hashedKey := intHache.SumString128("turbo_idx:" + candidateKey)
+//		if hashedKey == bestResult.Key {
+//			return catIDs[i], nil
+//		}
+//	}
+//
+//	return 0, nil
+//}

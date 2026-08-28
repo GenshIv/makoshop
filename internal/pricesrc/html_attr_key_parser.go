@@ -25,7 +25,7 @@ func NewHTMLAttrKeyParser(attrDefRepo *db.AttrDefRepo) *HTMLAttrKeyParser {
 
 // Parse extracts attributes from HTML content.
 // Returns a map of attribute code -> value.
-func (p *HTMLAttrKeyParser) Parse(htmlContent string) map[string]string {
+func (p *HTMLAttrKeyParser) Parse(htmlContent string) map[string][]string {
 	if htmlContent == "" || p.attrDefRepo == nil {
 		return nil
 	}
@@ -35,7 +35,7 @@ func (p *HTMLAttrKeyParser) Parse(htmlContent string) map[string]string {
 		return nil
 	}
 
-	attrs := make(map[string]string)
+	attrs := make(map[string][]string)
 
 	for _, pair := range pairs {
 		ad, err := p.attrDefRepo.GetOrCreateByKey(pair.Key)
@@ -45,7 +45,18 @@ func (p *HTMLAttrKeyParser) Parse(htmlContent string) map[string]string {
 
 		value := strings.TrimSpace(pair.Value)
 		if value != "" {
-			attrs[ad.Code] = value
+			// Split by commas if present
+			if strings.Contains(value, ",") {
+				parts := strings.Split(value, ",")
+				for _, part := range parts {
+					part = strings.TrimSpace(part)
+					if part != "" {
+						attrs[ad.Code] = append(attrs[ad.Code], part)
+					}
+				}
+			} else {
+				attrs[ad.Code] = append(attrs[ad.Code], value)
+			}
 		}
 	}
 
@@ -281,8 +292,10 @@ func (p *HTMLAttrKeyParser) ParseToModelAttributes(htmlContent string) []model.K
 	}
 
 	result := make([]model.KeyValue, 0, len(attrs))
-	for code, value := range attrs {
-		result = append(result, model.KeyValue{Key: code, Value: value})
+	for code, values := range attrs {
+		for _, value := range values {
+			result = append(result, model.KeyValue{Key: code, Value: value})
+		}
 	}
 
 	return result

@@ -28,13 +28,13 @@ All three price import methods call `IndexSCUPageBatch`:
 
 ### IndexSCUPageBatch Function
 
-The `IndexSCUPageBatch` function (scupage_search.go:182) correctly writes all attribute indexes:
+The `IndexSCUPageBatch` function (eanpage_search.go:182) correctly writes all attribute indexes:
 
 #### 1. Filtering Index (line 221)
 ```go
-indexes[scupageKeyAttr(kv.Key, valStr)] = append(indexes[scupageKeyAttr(kv.Key, valStr)], docID)
+indexes[eanpageKeyAttr(kv.Key, valStr)] = append(indexes[eanpageKeyAttr(kv.Key, valStr)], docID)
 ```
-- **Key format:** `scupage_attr:{code}:{value}`
+- **Key format:** `eanpage_attr:{code}:{value}`
 - **Purpose:** Turbo index for filtering
 - **Values:** Raw attribute values
 
@@ -77,7 +77,7 @@ Price Import
 ├── Phase 1: Parse products
 ├── Phase 2: Upsert EAN pages from products
 ├── Phase 3: IndexSCUPageBatch
-│   ├── Writes scupage_attr:{code}:{value} (filtering)
+│   ├── Writes eanpage_attr:{code}:{value} (filtering)
 │   ├── Writes attr_values_cat:{code}:{catID} (UI options)
 │   ├── Writes attr_label:{code}:{value} (display)
 │   └── Updates attrdef_cat_codes:{catID} (category codes)

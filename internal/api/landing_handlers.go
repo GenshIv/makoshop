@@ -246,6 +246,7 @@ func (h *Handlers) HandleLandingPageBySlug(w http.ResponseWriter, r *http.Reques
 	if products == nil {
 		products = []model.Product{}
 	}
+	h.enrichProductsWithCompanyNames(products)
 
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"landing":  lp,
@@ -285,6 +286,7 @@ func (h *Handlers) HandleLandingPageByEAN(w http.ResponseWriter, r *http.Request
 	if products == nil {
 		products = []model.Product{}
 	}
+	h.enrichProductsWithCompanyNames(products)
 
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"landing":  lp,
@@ -330,6 +332,7 @@ func (h *Handlers) HandleLandingPageProducts(w http.ResponseWriter, r *http.Requ
 	if products == nil {
 		products = []model.Product{}
 	}
+	h.enrichProductsWithCompanyNames(products)
 
 	q := r.URL.Query().Get("q")
 	pageStr := r.URL.Query().Get("page")
@@ -436,7 +439,28 @@ func (h *Handlers) HandleEANPageByPath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 1: Try EAN page by last part as slug
+	// Step 1: Try EAN page by last part as EAN code first
+	// If it's a single part, it might be an EAN code (e.g. /shop/5901234123457)
+	if len(cleanParts) == 1 {
+		part := cleanParts[0]
+		if sp, err := h.eanPageRepo.GetByEAN(part); err == nil {
+			canonical := "/shop/" + sp.Slug
+			if sp.CategoryID != 0 {
+				treePath, tpErr := h.categoryRepo.GetTreePath(sp.CategoryID)
+				if tpErr == nil && len(treePath) > 0 {
+					canonical = "/shop/" + strings.Join(treePath, "/") + "/" + sp.Slug
+				}
+			}
+			if path != canonical {
+				http.Redirect(w, r, canonical, http.StatusMovedPermanently)
+				return
+			}
+			h.writeEANPageResponse(w, r, sp)
+			return
+		}
+	}
+
+	// Step 1b: Try EAN page by last part as slug
 	// If it's a single part, it might be an EAN page slug (e.g. /shop/samsung-galaxy-s7)
 	// or a category slug (e.g. /shop/elektronika).
 	// We check EAN page first if it's a single part to allow redirects.
@@ -468,9 +492,16 @@ func (h *Handlers) HandleEANPageByPath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 3: Try EAN page by last part as slug (for deep paths that didn't match category)
-	slug := cleanParts[len(cleanParts)-1]
-	sp, err := h.eanPageRepo.GetBySlug(slug)
+	// Step 3: Try EAN page by last part as EAN code or slug (for deep paths that didn't match category)
+	part := cleanParts[len(cleanParts)-1]
+	var sp *model.EANPage
+
+	// Try EAN first
+	sp, err = h.eanPageRepo.GetByEAN(part)
+	if err != nil {
+		// Fallback to slug
+		sp, err = h.eanPageRepo.GetBySlug(part)
+	}
 	if err == nil {
 		// Build canonical URL for this EANPage
 		canonical := "/shop/" + sp.Slug
@@ -639,6 +670,31 @@ func (h *Handlers) handleEANPageCatalog(w http.ResponseWriter, r *http.Request, 
 }
 
 // writeEANPageResponse writes the EAN page with its products.
+// enrichProductsWithCompanyNames fills Product.CompanyName from the company
+// table so the frontend can show the real company name instead of a fallback.
+func (h *Handlers) enrichProductsWithCompanyNames(products []model.Product) {
+	if len(products) == 0 || h.companyRepo == nil {
+		return
+	}
+	seen := make(map[int64]string, len(products))
+	for i := range products {
+		cid := products[i].CompanyID
+		if cid == 0 || products[i].CompanyName != "" {
+			continue
+		}
+		if name, ok := seen[cid]; ok {
+			products[i].CompanyName = name
+			continue
+		}
+		name := ""
+		if c, err := h.companyRepo.Get(cid); err == nil && c != nil {
+			name = c.Name
+		}
+		seen[cid] = name
+		products[i].CompanyName = name
+	}
+}
+
 func (h *Handlers) writeEANPageResponse(w http.ResponseWriter, r *http.Request, sp *model.EANPage) {
 	ctx := r.Context()
 
@@ -647,6 +703,7 @@ func (h *Handlers) writeEANPageResponse(w http.ResponseWriter, r *http.Request, 
 	if err != nil || products == nil {
 		products = []model.Product{}
 	}
+	h.enrichProductsWithCompanyNames(products)
 
 	// Check if client disconnected after product lookup
 	select {
@@ -1373,7 +1430,7 @@ func (h *Handlers) HandleAdminRebuildEANPages(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	fmt.Println("[REBUILD-SCUPAGES] Starting EAN page rebuild...")
+	fmt.Println("[REBUILD-EANPAGES] Starting EAN page rebuild...")
 	startTime := time.Now()
 
 	// Get all product IDs
@@ -1382,7 +1439,7 @@ func (h *Handlers) HandleAdminRebuildEANPages(w http.ResponseWriter, r *http.Req
 	if len(nextIDData) > 0 {
 		_, _ = fmt.Sscanf(string(nextIDData), "%d", &maxID)
 	}
-	fmt.Printf("[REBUILD-SCUPAGES] Max product ID: %d\n", maxID)
+	fmt.Printf("[REBUILD-EANPAGES] Max product ID: %d\n", maxID)
 
 	var allIDs []uint64
 	for id := int64(1); id < maxID; id++ {
@@ -1391,10 +1448,10 @@ func (h *Handlers) HandleAdminRebuildEANPages(w http.ResponseWriter, r *http.Req
 			allIDs = append(allIDs, uint64(id))
 		}
 		if len(allIDs)%50000 == 0 && len(allIDs) > 0 {
-			fmt.Printf("[REBUILD-SCUPAGES] Collected %d product IDs\n", len(allIDs))
+			fmt.Printf("[REBUILD-EANPAGES] Collected %d product IDs\n", len(allIDs))
 		}
 	}
-	fmt.Printf("[REBUILD-SCUPAGES] Total products: %d\n", len(allIDs))
+	fmt.Printf("[REBUILD-EANPAGES] Total products: %d\n", len(allIDs))
 
 	if len(allIDs) == 0 {
 		httpres.WriteJSON(w, http.StatusOK, map[string]string{"status": "no_products"})
@@ -1402,7 +1459,7 @@ func (h *Handlers) HandleAdminRebuildEANPages(w http.ResponseWriter, r *http.Req
 	}
 
 	// Read all products into memory (same as import)
-	fmt.Printf("[REBUILD-SCUPAGES] Reading %d products...\n", len(allIDs))
+	fmt.Printf("[REBUILD-EANPAGES] Reading %d products...\n", len(allIDs))
 	readStart := time.Now()
 	var allProducts []*model.Product
 	const readBatchSize = 10000
@@ -1419,10 +1476,10 @@ func (h *Handlers) HandleAdminRebuildEANPages(w http.ResponseWriter, r *http.Req
 			allProducts = append(allProducts, p)
 		}
 		if (i+end)/2%100000 == 0 {
-			fmt.Printf("[REBUILD-SCUPAGES] Read %d/%d products\n", (i+end)/2, len(allIDs))
+			fmt.Printf("[REBUILD-EANPAGES] Read %d/%d products\n", (i+end)/2, len(allIDs))
 		}
 	}
-	fmt.Printf("[REBUILD-SCUPAGES] Read %d products in %v\n", len(allProducts), time.Since(readStart))
+	fmt.Printf("[REBUILD-EANPAGES] Read %d products in %v\n", len(allProducts), time.Since(readStart))
 
 	if len(allProducts) == 0 {
 		httpres.WriteJSON(w, http.StatusOK, map[string]string{"status": "no_products_with_scu"})
@@ -1430,13 +1487,13 @@ func (h *Handlers) HandleAdminRebuildEANPages(w http.ResponseWriter, r *http.Req
 	}
 
 	// Phase 1: Batch upsert EAN pages (uses same logic as import, including seo_url)
-	fmt.Printf("[REBUILD-SCUPAGES] Phase 1: BatchUpsertFromProducts %d products...\n", len(allProducts))
+	fmt.Printf("[REBUILD-EANPAGES] Phase 1: BatchUpsertFromProducts %d products...\n", len(allProducts))
 	phase1Start := time.Now()
 	_ = h.eanPageRepo.BatchUpsertFromProducts(allProducts)
-	fmt.Printf("[REBUILD-SCUPAGES] Phase 1: EAN pages upserted in %v\n", time.Since(phase1Start))
+	fmt.Printf("[REBUILD-EANPAGES] Phase 1: EAN pages upserted in %v\n", time.Since(phase1Start))
 
 	// Phase 2: Index all products (creates ean:{ean} indexes for EAN→Products lookup)
-	fmt.Printf("[REBUILD-SCUPAGES] Phase 2: Indexing %d products...\n", len(allProducts))
+	fmt.Printf("[REBUILD-EANPAGES] Phase 2: Indexing %d products...\n", len(allProducts))
 	phase2Start := time.Now()
 	if h.productRepo.TurboSearch() != nil {
 		// Clear global product list first to avoid duplicates
@@ -1449,17 +1506,17 @@ func (h *Handlers) HandleAdminRebuildEANPages(w http.ResponseWriter, r *http.Req
 				end = len(allProducts)
 			}
 			if err := h.productRepo.TurboSearch().IndexProductBatch(allProducts[i:end]); err != nil {
-				fmt.Printf("[REBUILD-SCUPAGES] WARN: index product batch: %v\n", err)
+				fmt.Printf("[REBUILD-EANPAGES] WARN: index product batch: %v\n", err)
 			}
 			if (i+end)/2%100000 == 0 {
-				fmt.Printf("[REBUILD-SCUPAGES] Indexed %d/%d products\n", (i+end)/2, len(allProducts))
+				fmt.Printf("[REBUILD-EANPAGES] Indexed %d/%d products\n", (i+end)/2, len(allProducts))
 			}
 		}
 	}
-	fmt.Printf("[REBUILD-SCUPAGES] Phase 2: Products indexed in %v\n", time.Since(phase2Start))
+	fmt.Printf("[REBUILD-EANPAGES] Phase 2: Products indexed in %v\n", time.Since(phase2Start))
 
 	// Phase 3: Index all EAN pages
-	fmt.Println("[REBUILD-SCUPAGES] Phase 3: Indexing EAN pages...")
+	fmt.Println("[REBUILD-EANPAGES] Phase 3: Indexing EAN pages...")
 	phase3Start := time.Now()
 	if h.eanPageSearch != nil {
 		allSCUs, _ := h.eanPageRepo.ListAll()
@@ -1468,59 +1525,59 @@ func (h *Handlers) HandleAdminRebuildEANPages(w http.ResponseWriter, r *http.Req
 			eanPtrs[i] = &allSCUs[i]
 		}
 		if err := h.eanPageSearch.IndexEANPageBatch(eanPtrs); err != nil {
-			fmt.Printf("[REBUILD-SCUPAGES] WARN: index EAN pages: %v\n", err)
+			fmt.Printf("[REBUILD-EANPAGES] WARN: index EAN pages: %v\n", err)
 		}
 	}
-	fmt.Printf("[REBUILD-SCUPAGES] Phase 3: EAN pages indexed in %v\n", time.Since(phase3Start))
+	fmt.Printf("[REBUILD-EANPAGES] Phase 3: EAN pages indexed in %v\n", time.Since(phase3Start))
 
 	// Phase 4: Build sort indexes for EAN pages
-	fmt.Println("[REBUILD-SCUPAGES] Phase 4: Building EAN page sort indexes...")
+	fmt.Println("[REBUILD-EANPAGES] Phase 4: Building EAN page sort indexes...")
 	phase4Start := time.Now()
 	if h.eanPageSearch != nil {
 		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
-			fmt.Printf("[REBUILD-SCUPAGES] WARN: build sort indexes: %v\n", err)
+			fmt.Printf("[REBUILD-EANPAGES] WARN: build sort indexes: %v\n", err)
 		}
 	}
-	fmt.Printf("[REBUILD-SCUPAGES] Phase 4: Sort indexes built in %v\n", time.Since(phase4Start))
+	fmt.Printf("[REBUILD-EANPAGES] Phase 4: Sort indexes built in %v\n", time.Since(phase4Start))
 
 	// Phase 5: Rebuild product sort indexes
-	fmt.Println("[REBUILD-SCUPAGES] Phase 5: Rebuilding product sort indexes...")
+	fmt.Println("[REBUILD-EANPAGES] Phase 5: Rebuilding product sort indexes...")
 	phase5Start := time.Now()
 	if h.productRepo.TurboSearch() != nil {
 		if err := h.productRepo.TurboSearch().BuildSortIndexes(); err != nil {
-			fmt.Printf("[REBUILD-SCUPAGES] WARN: rebuild product sort indexes: %v\n", err)
+			fmt.Printf("[REBUILD-EANPAGES] WARN: rebuild product sort indexes: %v\n", err)
 		}
 	}
-	fmt.Printf("[REBUILD-SCUPAGES] Phase 5: Product sort indexes rebuilt in %v\n", time.Since(phase5Start))
+	fmt.Printf("[REBUILD-EANPAGES] Phase 5: Product sort indexes rebuilt in %v\n", time.Since(phase5Start))
 
 	// Phase 6: Recalculate EAN page product counts
-	fmt.Println("[REBUILD-SCUPAGES] Phase 6: Recalculating EAN page product counts...")
+	fmt.Println("[REBUILD-EANPAGES] Phase 6: Recalculating EAN page product counts...")
 	phase6Start := time.Now()
 	if err := h.eanPageRepo.RecalculateProductCounts(); err != nil {
-		fmt.Printf("[REBUILD-SCUPAGES] WARN: recalculate product counts: %v\n", err)
+		fmt.Printf("[REBUILD-EANPAGES] WARN: recalculate product counts: %v\n", err)
 	}
-	fmt.Printf("[REBUILD-SCUPAGES] Phase 6: Product counts recalculated in %v\n", time.Since(phase6Start))
+	fmt.Printf("[REBUILD-EANPAGES] Phase 6: Product counts recalculated in %v\n", time.Since(phase6Start))
 
 	// Phase 7: Recalculate EAN page min prices
-	fmt.Println("[REBUILD-SCUPAGES] Phase 7: Recalculating EAN page min prices...")
+	fmt.Println("[REBUILD-EANPAGES] Phase 7: Recalculating EAN page min prices...")
 	phase7Start := time.Now()
 	if err := h.eanPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
-		fmt.Printf("[REBUILD-SCUPAGES] WARN: recalculate min prices: %v\n", err)
+		fmt.Printf("[REBUILD-EANPAGES] WARN: recalculate min prices: %v\n", err)
 	}
-	fmt.Printf("[REBUILD-SCUPAGES] Phase 7: Min prices recalculated in %v\n", time.Since(phase7Start))
+	fmt.Printf("[REBUILD-EANPAGES] Phase 7: Min prices recalculated in %v\n", time.Since(phase7Start))
 
 	// Phase 8: Rebuild EAN page sort indexes (to reflect updated min prices)
-	fmt.Println("[REBUILD-SCUPAGES] Phase 8: Rebuilding EAN page sort indexes...")
+	fmt.Println("[REBUILD-EANPAGES] Phase 8: Rebuilding EAN page sort indexes...")
 	phase8Start := time.Now()
 	if h.eanPageSearch != nil {
 		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
-			fmt.Printf("[REBUILD-SCUPAGES] WARN: rebuild EAN page sort indexes: %v\n", err)
+			fmt.Printf("[REBUILD-EANPAGES] WARN: rebuild EAN page sort indexes: %v\n", err)
 		}
 	}
-	fmt.Printf("[REBUILD-SCUPAGES] Phase 8: EAN page sort indexes rebuilt in %v\n", time.Since(phase8Start))
+	fmt.Printf("[REBUILD-EANPAGES] Phase 8: EAN page sort indexes rebuilt in %v\n", time.Since(phase8Start))
 
 	elapsed := time.Since(startTime)
-	fmt.Printf("[REBUILD-SCUPAGES] Completed in %v\n", elapsed)
+	fmt.Printf("[REBUILD-EANPAGES] Completed in %v\n", elapsed)
 
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":   "completed",
@@ -1541,7 +1598,7 @@ func (h *Handlers) HandleAdminRebuildEANPageSortIndexes(w http.ResponseWriter, r
 		return
 	}
 
-	fmt.Println("[REBUILD-SCUPAGE-SORT-INDEXES] Starting...")
+	fmt.Println("[REBUILD-EANPAGE-SORT-INDEXES] Starting...")
 	startTime := time.Now()
 
 	if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
@@ -1550,7 +1607,7 @@ func (h *Handlers) HandleAdminRebuildEANPageSortIndexes(w http.ResponseWriter, r
 	}
 
 	elapsed := time.Since(startTime)
-	fmt.Printf("[REBUILD-SCUPAGE-SORT-INDEXES] Completed in %v\n", elapsed)
+	fmt.Printf("[REBUILD-EANPAGE-SORT-INDEXES] Completed in %v\n", elapsed)
 
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "completed",
@@ -1600,7 +1657,7 @@ func (h *Handlers) HandleAdminRebuildEANPageIndexes(w http.ResponseWriter, r *ht
 		return
 	}
 
-	fmt.Println("[REBUILD-SCUPAGE-INDEXES] Starting...")
+	fmt.Println("[REBUILD-EANPAGE-INDEXES] Starting...")
 	startTime := time.Now()
 
 	// Get all EAN pages
@@ -1624,11 +1681,11 @@ func (h *Handlers) HandleAdminRebuildEANPageIndexes(w http.ResponseWriter, r *ht
 
 	// Build sort indexes ONCE after all pages are indexed
 	if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
-		fmt.Printf("[REBUILD-SCUPAGE-INDEXES] WARN: build sort indexes: %v\n", err)
+		fmt.Printf("[REBUILD-EANPAGE-INDEXES] WARN: build sort indexes: %v\n", err)
 	}
 
 	elapsed := time.Since(startTime)
-	fmt.Printf("[REBUILD-SCUPAGE-INDEXES] Completed: %d indexed, %d errors in %v\n", indexed, errors, elapsed)
+	fmt.Printf("[REBUILD-EANPAGE-INDEXES] Completed: %d indexed, %d errors in %v\n", indexed, errors, elapsed)
 
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "completed",

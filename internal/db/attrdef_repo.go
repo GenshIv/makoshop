@@ -137,17 +137,103 @@ func (r *AttrDefRepo) GetOrCreateByKey(rawKey string) (*model.AttrDef, error) {
 	r.store.DB().TurboRawWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", ad.ID)))
 	r.store.DB().TurboRawWrite(keyIndex, []byte(code))
 
-	// Add to list
-	listData, _ := r.store.DB().TurboRawRead(turboKeyAttrDefList)
-	var codes []string
-	if len(listData) > 0 {
-		json.Unmarshal(listData, &codes)
-	}
-	codes = append(codes, code)
-	listBytes, _ := json.Marshal(codes)
-	r.store.DB().TurboRawWrite(turboKeyAttrDefList, listBytes)
+	// Add to list (deferred to batch update to avoid vacuum)
+	// The list will be updated in BatchUpdateAttrDefList
 
 	return ad, nil
+}
+
+// BatchGetOrCreateByKeys creates AttrDef for all keys that don't exist yet.
+// Returns a map of key -> created AttrDef (only newly created ones).
+// Updates attrdef_list once at the end to avoid vacuum.
+func (r *AttrDefRepo) BatchGetOrCreateByKeys(keys []string) (map[string]*model.AttrDef, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+
+	created := make(map[string]*model.AttrDef)
+	var newCodes []string
+
+	for _, rawKey := range keys {
+		if rawKey == "" {
+			continue
+		}
+
+		// Normalize key
+		key := strings.TrimSpace(rawKey)
+		keyLower := strings.ToLower(key)
+
+		// Check if key is already mapped to a code
+		keyIndex := turboKeyAttrDefKey + keyLower
+		codeData, err := r.store.DB().TurboRawRead(keyIndex)
+		if err == nil && len(codeData) > 0 {
+			code := string(codeData)
+			existing, err := r.GetByCode(code)
+			if err == nil {
+				created[key] = existing
+			}
+			continue
+		}
+
+		// Generate code from key
+		code := r.generateCodeFromKey(key)
+
+		// Check if code already exists
+		existing, err := r.GetByCode(code)
+		if err == nil {
+			// Code exists, add key to it
+			existing.Keys = append(existing.Keys, key)
+			buf, _ := json.Marshal(existing)
+			r.store.DocPut(fmt.Sprintf("attrdef:%d", existing.ID), buf)
+			// Update key index
+			r.store.DB().TurboRawWrite(keyIndex, []byte(code))
+			created[key] = existing
+			continue
+		}
+
+		// Create new AttrDef
+		ad := &model.AttrDef{
+			ID:           time.Now().UnixNano(), // temp unique ID
+			Code:         code,
+			NameRu:       key,
+			Categories:   []int64{},
+			Type:         "string",
+			IsActive:     true,
+			IsFilterable: true,
+			IsSortable:   false,
+			SortOrder:    0,
+			Keys:         []string{key},
+			CreatedAt:    time.Now().Unix(),
+		}
+
+		// Save
+		docKey := fmt.Sprintf("attrdef:%d", ad.ID)
+		buf, _ := json.Marshal(ad)
+		if err := r.store.DocPut(docKey, buf); err != nil {
+			continue
+		}
+
+		// Update indexes
+		r.store.DB().TurboRawWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", ad.ID)))
+		r.store.DB().TurboRawWrite(keyIndex, []byte(code))
+
+		created[key] = ad
+		newCodes = append(newCodes, code)
+	}
+
+	// Update list once at the end to avoid vacuum
+	if len(newCodes) > 0 {
+		listData, _ := r.store.DB().TurboRawRead(turboKeyAttrDefList)
+		var codes []string
+		if len(listData) > 0 {
+			json.Unmarshal(listData, &codes)
+		}
+		codes = append(codes, newCodes...)
+		listBytes, _ := json.Marshal(codes)
+		r.store.DB().TurboRawWrite(turboKeyAttrDefList, listBytes)
+	}
+
+	return created, nil
 }
 
 // generateCodeFromKey creates a normalized code from a raw key.

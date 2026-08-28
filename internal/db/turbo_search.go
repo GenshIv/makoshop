@@ -175,6 +175,247 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 	return nil
 }
 
+// BatchIndexProducts indexes multiple products in batch for better performance.
+// This reduces space bloat by batching index writes instead of doing them one by one.
+func (t *TurboProductSearch) BatchIndexProducts(products []*model.Product) error {
+	if !t.enabled || len(products) == 0 {
+		return nil
+	}
+
+	fmt.Printf("[TURBO] Batch indexing %d products...\n", len(products))
+	start := time.Now()
+
+	// Collect all EAN keys and their docIDs
+	eanIndex := make(map[string][]string) // eanKey -> []docID
+
+	for _, p := range products {
+		docID := KeyProduct(p.ID)
+
+		// Add to product_list index
+		if _, err := t.store.db.TurboPutIndexString(TurboKeyProductList, docID); err != nil {
+			fmt.Printf("WARN: turbo index product_list: %v\n", err)
+		}
+
+		// Collect EAN index entries
+		if p.EAN != "" {
+			eanKey := "ean:" + p.EAN
+			eanIndex[eanKey] = append(eanIndex[eanKey], docID)
+		}
+
+		// Index price ranges
+		t.indexPriceRanges(p.Price, docID)
+	}
+
+	// Build map from EAN to products for efficient lookup
+	eanToProducts := make(map[string][]*model.Product)
+	for _, p := range products {
+		if p.EAN != "" {
+			eanToProducts[p.EAN] = append(eanToProducts[p.EAN], p)
+		}
+	}
+
+	// Batch write all EAN indexes
+	for eanKey, docIDs := range eanIndex {
+		if _, err := t.store.db.TurboPutBatchIndexString(eanKey, docIDs); err != nil {
+			fmt.Printf("WARN: turbo batch ean index %s: %v\n", eanKey, err)
+		}
+	}
+
+	// Create landing pages in batch (only once per unique EAN)
+	if t.landingRepo != nil {
+		var eans []string
+		for ean := range eanToProducts {
+			eans = append(eans, ean)
+		}
+
+		t.landingRepo.BatchUpsertByEANs(eans, func(ean string) (string, string) {
+			if prods, ok := eanToProducts[ean]; ok && len(prods) > 0 {
+				return prods[0].Name, prods[0].Description
+			}
+			return ean, ""
+		})
+	}
+
+	// Link products to landing pages and EAN pages (batch)
+	if t.landingRepo != nil {
+		landingToProducts := make(map[int64][]int64)
+
+		for ean, prods := range eanToProducts {
+			if lp, err := t.landingRepo.GetByEAN(ean); err == nil {
+				for _, p := range prods {
+					landingToProducts[lp.ID] = append(landingToProducts[lp.ID], p.ID)
+				}
+			}
+		}
+
+		_ = t.landingRepo.BatchAddProducts(landingToProducts)
+	}
+
+	if t.eanPageRepo != nil {
+		_ = t.eanPageRepo.BatchLinkProductsByEAN(eanToProducts)
+	}
+
+	fmt.Printf("[TURBO] Batch indexed %d products in %v\n", len(products), time.Since(start))
+	return nil
+}
+
+// BatchIndexProductstx indexes multiple products in batch (transactional version).
+// All writes are buffered in the transaction and applied atomically on Commit.
+// Uses batch operations to minimize vacuum by writing each index only once.
+func (t *TurboProductSearch) BatchIndexProductstx(txn *Transaction, products []*model.Product) error {
+	if !t.enabled || len(products) == 0 {
+		return nil
+	}
+
+	fmt.Printf("[TURBO] Batch indexing %d products (transactional)...\n", len(products))
+	start := time.Now()
+
+	// Collect all index entries in memory to minimize writes
+	// This prevents vacuum by writing each index only once with all new docIDs
+	indexes := make(map[string][]string) // indexKey -> []docID
+
+	// Collect all EAN keys and their docIDs
+	eanIndex := make(map[string][]string) // eanKey -> []docID
+	// Collect vendor (company) index entries for cleanup support
+	vendorIndex := make(map[string][]string) // vendorKey -> []docID
+
+	for _, p := range products {
+		docID := KeyProduct(p.ID)
+
+		// Add to product_list index (in transaction)
+		if _, err := txn.TurboPutIndexString(TurboKeyProductList, docID); err != nil {
+			fmt.Printf("WARN: turbo index product_list: %v\n", err)
+		}
+
+		// Collect brand index entries
+		if p.BrandID != 0 {
+			brandKey := turboKeyBrand(p.BrandID)
+			indexes[brandKey] = append(indexes[brandKey], docID)
+		}
+
+		// Collect category index entries (with ancestors)
+		if p.CategoryID != 0 {
+			ancestors, err := t.GetCategoryAncestors(p.CategoryID)
+			if err != nil {
+				ancestors = []int64{p.CategoryID}
+			}
+			for _, cid := range ancestors {
+				catKey := turboKeyCategory(cid)
+				indexes[catKey] = append(indexes[catKey], docID)
+			}
+		}
+
+		// Collect attribute index entries
+		for _, kv := range p.Attributes {
+			valStr := kv.Value
+			if valStr != "" {
+				attrKey := turboKeyAttr(kv.Key, valStr)
+				indexes[attrKey] = append(indexes[attrKey], docID)
+			}
+		}
+
+		// Collect text index entries
+		for _, tok := range tokenizeProduct(p) {
+			textKey := turboKeyText(tok)
+			indexes[textKey] = append(indexes[textKey], docID)
+		}
+
+		// Collect EAN index entries
+		if p.EAN != "" {
+			eanKey := "ean:" + p.EAN
+			eanIndex[eanKey] = append(eanIndex[eanKey], docID)
+		}
+
+		// Collect vendor (company) index entries
+		if p.CompanyID != 0 {
+			vendorKey := turboKeyVendor(p.CompanyID)
+			vendorIndex[vendorKey] = append(vendorIndex[vendorKey], docID)
+		}
+
+		// Index price ranges (in transaction)
+		t.indexPriceRangesTx(txn, p.Price, docID)
+	}
+
+	// no vacuum ^
+	// Build map from EAN to products for efficient lookup
+	eanToProducts := make(map[string][]*model.Product)
+	for _, p := range products {
+		if p.EAN != "" {
+			eanToProducts[p.EAN] = append(eanToProducts[p.EAN], p)
+		}
+	}
+
+	// Batch write all indexes (in transaction) - this minimizes vacuum
+	for key, docIDs := range indexes {
+		if len(docIDs) > 0 {
+			if _, err := txn.TurboPutBatchIndexString(key, docIDs); err != nil {
+				fmt.Printf("WARN: turbo batch index %s: %v\n", key, err)
+			}
+		}
+	}
+
+	// Batch write all EAN indexes (in transaction)
+	for eanKey, docIDs := range eanIndex {
+		if _, err := txn.TurboPutBatchIndexString(eanKey, docIDs); err != nil {
+			fmt.Printf("WARN: turbo batch ean index %s: %v\n", eanKey, err)
+		}
+	}
+
+	// Batch write all vendor (company) indexes (in transaction)
+	for vendorKey, docIDs := range vendorIndex {
+		if _, err := txn.TurboPutBatchIndexString(vendorKey, docIDs); err != nil {
+			fmt.Printf("WARN: turbo batch vendor index %s: %v\n", vendorKey, err)
+		}
+	}
+
+	// Create landing pages in batch (only once per unique EAN)
+	if t.landingRepo != nil {
+		var eans []string
+		for ean := range eanToProducts {
+			eans = append(eans, ean)
+		}
+
+		t.landingRepo.BatchUpsertByEANs(eans, func(ean string) (string, string) {
+			if prods, ok := eanToProducts[ean]; ok && len(prods) > 0 {
+				return prods[0].Name, prods[0].Description
+			}
+			return ean, ""
+		})
+	}
+
+	// Link products to landing pages and EAN pages (batch)
+	if t.landingRepo != nil {
+		landingToProducts := make(map[int64][]int64)
+
+		for ean, prods := range eanToProducts {
+			if lp, err := t.landingRepo.GetByEAN(ean); err == nil {
+				for _, p := range prods {
+					landingToProducts[lp.ID] = append(landingToProducts[lp.ID], p.ID)
+				}
+			}
+		}
+
+		_ = t.landingRepo.BatchAddProducts(landingToProducts)
+	}
+
+	if t.eanPageRepo != nil {
+		_ = t.eanPageRepo.BatchLinkProductsByEAN(eanToProducts)
+	}
+
+	fmt.Printf("[TURBO] Batch indexed %d products (transactional) in %v\n", len(products), time.Since(start))
+	return nil
+}
+
+// indexPriceRangesTx добавляет docID в индексы диапазонов цен (transactional version).
+func (t *TurboProductSearch) indexPriceRangesTx(txn *Transaction, price float64, docID string) {
+	ranges := priceRanges()
+	for _, r := range ranges {
+		if price >= r.min && price < r.max {
+			txn.TurboPutIndexString(r.key, docID)
+		}
+	}
+}
+
 // indexPriceRanges добавляет docID в индексы диапазонов цен.
 // Фиксированные диапазоны: 0-5k, 5k-10k, 10k-20k, 20k-50k, 50k-100k, 100k+
 func (t *TurboProductSearch) indexPriceRanges(price float64, docID string) {
@@ -335,6 +576,51 @@ func (t *TurboProductSearch) UnindexProduct(p *model.Product) error {
 				_ = t.eanPageRepo.RemoveProduct(sp.ID, p.ID)
 			}
 		}
+	}
+
+	return nil
+}
+
+// UnindexProductTx — transactional version of UnindexProduct.
+// All index removals are buffered in the transaction and applied on Commit.
+func (t *TurboProductSearch) UnindexProductTx(txn *Transaction, p *model.Product) error {
+	if !t.enabled {
+		return nil
+	}
+	docID := KeyProduct(p.ID)
+
+	// Remove from product_list
+	txn.TurboDeleteIndexString(TurboKeyProductList, docID)
+
+	if p.BrandID != 0 {
+		txn.TurboDeleteIndexString(turboKeyBrand(p.BrandID), docID)
+	}
+	if p.CompanyID != 0 {
+		txn.TurboDeleteIndexString(turboKeyVendor(p.CompanyID), docID)
+	}
+	if p.CategoryID != 0 {
+		ancestors, err := t.GetCategoryAncestors(p.CategoryID)
+		if err != nil {
+			ancestors = []int64{p.CategoryID}
+		}
+		for _, cid := range ancestors {
+			txn.TurboDeleteIndexString(turboKeyCategory(cid), docID)
+		}
+	}
+	for _, kv := range p.Attributes {
+		valStr := kv.Value
+		if valStr != "" {
+			txn.TurboDeleteIndexString(turboKeyAttr(kv.Key, valStr), docID)
+		}
+	}
+	for _, tok := range tokenizeProduct(p) {
+		txn.TurboDeleteIndexString(turboKeyText(tok), docID)
+	}
+
+	// Remove EAN index
+	if p.EAN != "" {
+		eanKey := "ean:" + p.EAN
+		txn.TurboDeleteIndexString(eanKey, docID)
 	}
 
 	return nil

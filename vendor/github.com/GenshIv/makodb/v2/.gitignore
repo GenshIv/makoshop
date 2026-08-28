@@ -1,8 +1,0 @@
-/.idea/
-/test_db/
-go.work
-go.work.sum
-/demo_stats_db/
-/examples_price_db/
-/demo_price_db_diag/
-*.db

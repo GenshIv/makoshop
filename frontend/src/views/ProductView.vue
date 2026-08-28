@@ -3,7 +3,6 @@ import { ref, reactive, onMounted, watch, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
-import { useCartStore } from '../stores/cart';
 import { useToast } from '../composables/useToast';
 import { useFormat } from '../composables/useFormat';
 import { useSeo } from '../composables/useSeo';
@@ -15,7 +14,6 @@ const { formatPrice, formatDate } = useFormat();
 
 const route = useRoute();
 const router = useRouter();
-const cart = useCartStore();
 const { t, locale } = useI18n();
 
 const product = ref(null);
@@ -107,12 +105,25 @@ const fetchReviews = async () => {
   }
 };
 
-const addToCart = async () => {
-  try {
-    await cart.addItem(product.value.id, 1);
-    toast.success(t('cart.added_to_cart'));
-  } catch (e) {
-    toast.error(e.response?.data?.message || t('cart.add_to_cart_error'));
+// Get the partner purchase URL from the product's attributes
+const getPurchaseUrl = () => {
+  const p = product.value;
+  if (!p) return '';
+  // attributes is an array of {key, value}
+  if (Array.isArray(p.attributes)) {
+    const attr = p.attributes.find(a => a.key === 'purchase_url');
+    if (attr?.value) return attr.value;
+  }
+  // fallback: attrs object form
+  if (p.attrs && p.attrs.purchase_url) return p.attrs.purchase_url;
+  return '';
+};
+
+// Open the partner purchase link in a new tab
+const goToPurchase = () => {
+  const url = getPurchaseUrl();
+  if (url) {
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 };
 
@@ -258,13 +269,13 @@ onMounted(() => {
           <span class="text-sm text-ink-3">{{ t('catalog.reviews_count', { count: product.review_count || 0 }) }}</span>
         </div>
 
-        <!-- Add to cart -->
+        <!-- Go to purchase (partner link) -->
         <button
-          @click="addToCart"
-          :disabled="!isInStock()"
+          @click="goToPurchase"
+          :disabled="!getPurchaseUrl()"
           class="mt-6 btn btn-primary btn-lg w-full sm:w-auto"
         >
-          {{ t('catalog.add_to_cart') }}
+          {{ t('catalog.go_to_purchase') }}
         </button>
 
         <!-- Attributes -->

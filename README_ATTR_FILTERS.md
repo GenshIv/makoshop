@@ -12,7 +12,7 @@ Ensured consistent use of **raw values** across all attribute-related indexes:
 
 | Index | Format | Purpose |
 |-------|--------|---------|
-| `scupage_attr:{code}:{value}` | Turbo index, raw values | Filtering |
+| `eanpage_attr:{code}:{value}` | Turbo index, raw values | Filtering |
 | `attr_values_cat:{code}:{catID}` | JSON map `{value: true}` | UI options |
 | `attr_label:{code}:{value}` | Raw value | Display |
 | `attrdef_code:{code}` | Numeric ID | Attribute lookup |
@@ -104,7 +104,7 @@ POST /admin/rebuild-attrdef-indexes
 4. Check API response for `category_attrs`
 
 ### Filters not working?
-1. Check if `scupage_attr` indexes exist
+1. Check if `eanpage_attr` indexes exist
 2. Verify attribute codes match in query and index
 3. Check server logs for errors
 

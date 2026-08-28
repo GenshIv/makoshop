@@ -15,7 +15,6 @@ import (
 	"github.com/GenshIv/makoshop/internal/httpres"
 	"github.com/GenshIv/makoshop/internal/metrics"
 	"github.com/GenshIv/makoshop/internal/model"
-	"github.com/GenshIv/makoshop/internal/tokenizer"
 	"github.com/GenshIv/silentjson/v2"
 )
 
@@ -711,6 +710,13 @@ func (h *Handlers) HandleAdminEANPageCatalogizeAll(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Prevent concurrent catalogize operations
+	if !h.catalogizeMu.TryLock() {
+		httpres.WriteError(w, http.StatusConflict, "CATALOGIZE_IN_PROGRESS", "Another catalogize operation is already in progress")
+		return
+	}
+	defer h.catalogizeMu.Unlock()
+
 	type req struct {
 		Apply bool `json:"apply"`
 		Force bool `json:"force"`
@@ -720,7 +726,7 @@ func (h *Handlers) HandleAdminEANPageCatalogizeAll(w http.ResponseWriter, r *htt
 	_ = json.NewDecoder(r.Body).Decode(&body)
 
 	rebuildAllIndexes := body.Apply || body.Force
-	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Starting (apply=%v force=%v rebuildAllIndexes=%v)...\n", body.Apply, body.Force, rebuildAllIndexes)
+	fmt.Printf("[EANPAGE-CATALOGIZE-ALL] Starting (apply=%v force=%v rebuildAllIndexes=%v)...\n", body.Apply, body.Force, rebuildAllIndexes)
 
 	// Get all EAN pages
 	all, err := h.eanPageRepo.List()
@@ -729,7 +735,7 @@ func (h *Handlers) HandleAdminEANPageCatalogizeAll(w http.ResponseWriter, r *htt
 		return
 	}
 
-	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Total EAN pages to process: %d\n", len(all))
+	fmt.Printf("[EANPAGE-CATALOGIZE-ALL] Total EAN pages to process: %d\n", len(all))
 
 	// Get catalogizer interface
 	catz := h.catalogizer
@@ -741,24 +747,34 @@ func (h *Handlers) HandleAdminEANPageCatalogizeAll(w http.ResponseWriter, r *htt
 	for i := range all {
 		sp := &all[i]
 
-		// Build tokens for this EAN page using all available text
-		//todo need remove and add to insert|update only
-		fullText := tokenizer.BuildEANTokensFullText(sp.Title, sp.Description, sp.Content, sp.Attributes)
-		if err := catz.BuildEANTokens(sp.ID, fullText); err != nil {
+		// Build tokens for this EAN page using Keywords field (product name + shop category)
+		// Fall back to Title if Keywords is empty
+		textForCatalogization := sp.Keywords
+		if textForCatalogization == "" {
+			textForCatalogization = sp.Title
+		}
+		if err := catz.BuildEANTokens(sp.ID, textForCatalogization); err != nil {
 			fmt.Printf("WARN: build tokens for eanpage %d: %v\n", sp.ID, err)
 			continue
 		}
 
 		if i%20000 == 0 {
-			fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Processed %d EAN pages from total %d. Catalogized %d...\n", i, len(all), catalogized)
+			fmt.Printf("[EANPAGE-CATALOGIZE-ALL] Processed %d EAN pages from total %d. Catalogized %d...\n", i, len(all), catalogized)
+		}
+
+		// Get all matching categories
+		matches := h.catalogizer.MatchProductToCategories(sp.Keywords)
+		newCatID := sp.CategoryID
+		if len(matches) > 0 {
+			newCatID = matches[0].NewCategoryID
 		}
 
 		// Catalogize using TurboTopNByIntersection
-		newCatID, err := catz.CatalogizeEANPageByIntersection(sp.ID)
-		if err != nil {
-			fmt.Printf("WARN: catalogize eanpage %d: %v\n", sp.ID, err)
-			continue
-		}
+		//newCatID, err := catz.CatalogizeEANPageByIntersection(sp.ID)
+		//if err != nil {
+		//	fmt.Printf("WARN: catalogize eanpage %d: %v\n", sp.ID, err)
+		//	continue
+		//}
 
 		newUrl := h.eanPageRepo.ComputeSeoURL(sp.Slug, sp.CategoryID, catCache)
 
@@ -790,14 +806,14 @@ func (h *Handlers) HandleAdminEANPageCatalogizeAll(w http.ResponseWriter, r *htt
 	//   3) rebuilds sort/numSort indexes
 	// This avoids per-document deletes (vacuum) and ensures no stale indexes.
 	if rebuildAllIndexes {
-		fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Starting full index rebuild...\n")
+		fmt.Printf("[EANPAGE-CATALOGIZE-ALL] Starting full index rebuild...\n")
 		if err := h.eanPageSearch.RebuildAllIndexes(); err != nil {
 			fmt.Printf("WARN: rebuild all indexes: %v\n", err)
 		}
-		fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Full index rebuild done.\n")
+		fmt.Printf("[EANPAGE-CATALOGIZE-ALL] Full index rebuild done.\n")
 	}
 
-	fmt.Printf("[SCUPAGE-CATALOGIZE-ALL] Done. Catalogized %d EAN pages.\n", catalogized)
+	fmt.Printf("[EANPAGE-CATALOGIZE-ALL] Done. Catalogized %d EAN pages.\n", catalogized)
 
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"processed":   len(all),
@@ -824,7 +840,7 @@ func (h *Handlers) HandleAdminEANPageRebuildTokens(w http.ResponseWriter, r *htt
 	var body req
 	_ = json.NewDecoder(r.Body).Decode(&body)
 
-	fmt.Printf("[SCUPAGE-REBUILD-TOKENS] Starting (limit=%d)...\n", body.Limit)
+	fmt.Printf("[EANPAGE-REBUILD-TOKENS] Starting (limit=%d)...\n", body.Limit)
 
 	all, err := h.eanPageRepo.List()
 	if err != nil {
@@ -841,14 +857,18 @@ func (h *Handlers) HandleAdminEANPageRebuildTokens(w http.ResponseWriter, r *htt
 
 	for i := range all {
 		sp := &all[i]
-		fullText := tokenizer.BuildEANTokensFullText(sp.Title, sp.Description, sp.Content, sp.Attributes)
-		if err := catz.BuildEANTokens(sp.ID, fullText); err != nil {
+		// Use Keywords field (product name + shop category) for catalogization
+		textForCatalogization := sp.Keywords
+		if textForCatalogization == "" {
+			textForCatalogization = sp.Title
+		}
+		if err := catz.BuildEANTokens(sp.ID, textForCatalogization); err != nil {
 			continue
 		}
 		rebuilt++
 	}
 
-	fmt.Printf("[SCUPAGE-REBUILD-TOKENS] Done. Rebuilt %d EAN page tokens.\n", rebuilt)
+	fmt.Printf("[EANPAGE-REBUILD-TOKENS] Done. Rebuilt %d EAN page tokens.\n", rebuilt)
 
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"processed": len(all),
@@ -881,8 +901,12 @@ func (h *Handlers) HandleAdminEANPageRebuildToken(w http.ResponseWriter, r *http
 	}
 
 	catz := h.catalogizer
-	fullText := tokenizer.BuildEANTokensFullText(sp.Title, sp.Description, sp.Content, sp.Attributes)
-	if err := catz.BuildEANTokens(sp.ID, fullText); err != nil {
+	// Use Keywords field (product name + shop category) for catalogization
+	textForCatalogization := sp.Keywords
+	if textForCatalogization == "" {
+		textForCatalogization = sp.Title
+	}
+	if err := catz.BuildEANTokens(sp.ID, textForCatalogization); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
@@ -891,7 +915,7 @@ func (h *Handlers) HandleAdminEANPageRebuildToken(w http.ResponseWriter, r *http
 		"status":     "rebuilt",
 		"eanpage_id": sp.ID,
 		"ean":        sp.EAN,
-		"full_text":  fullText[:min(len(fullText), 200)],
+		"full_text":  textForCatalogization[:min(len(textForCatalogization), 200)],
 	})
 }
 

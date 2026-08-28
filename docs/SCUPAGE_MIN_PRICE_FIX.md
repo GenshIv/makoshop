@@ -27,7 +27,7 @@ Added a new method `RecalculateMinPrices()` that:
 
 ### Files Modified
 
-1. **`internal/db/scupage_repo.go`**:
+1. **`internal/db/eanpage_repo.go`**:
    - Added `RecalculateMinPrices(productRepo *ProductRepo) error` method
 
 2. **`internal/api/import_prices.go`**:
@@ -42,7 +42,7 @@ Added a new method `RecalculateMinPrices()` that:
    - Added `HandleAdminSCUPageRecalculateMinPrices` handler (recalculates min prices AND rebuilds sort indexes)
 
 5. **`cmd/server/main.go`**:
-   - Registered route: `POST /admin/scupages/recalculate-min-prices`
+   - Registered route: `POST /admin/eanpages/recalculate-min-prices`
 
 ## Usage
 
@@ -52,7 +52,7 @@ Min prices are automatically recalculated after every import operation, and sort
 ### Manual (admin)
 ```bash
 # Recalculate min prices for all EAN pages and rebuild sort indexes
-curl -X POST http://localhost:8080/admin/scupages/recalculate-min-prices \
+curl -X POST http://localhost:8080/admin/eanpages/recalculate-min-prices \
   -H "Authorization: Bearer <token>"
 ```
 

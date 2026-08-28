@@ -497,12 +497,14 @@ func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.R
 		Description        string                  `json:"description,omitempty"`
 		LegalInfo          *model.CompanyLegalInfo `json:"legal_info,omitempty"`
 		Settings           *model.CompanySettings  `json:"settings,omitempty"`
+		Currency           string                  `json:"currency,omitempty"` // top-level currency (mapped to settings)
 		Status             model.CompanyStatus     `json:"status,omitempty"`
 		PaymentMethodIds   []int64                 `json:"payment_method_ids,omitempty"`
 		DeliveryTimeIds    []int64                 `json:"delivery_time_ids,omitempty"`
 		InstallmentPlanIds []int64                 `json:"installment_plan_ids,omitempty"`
 
 		// Price import (tasks 1, 3, 7)
+		ImportURL    string                   `json:"import_url,omitempty"`
 		ImportFolder string                   `json:"import_folder,omitempty"`
 		PriceSource  *model.PriceSourceConfig `json:"price_source,omitempty"`
 
@@ -541,6 +543,10 @@ func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.R
 		if req.Settings != nil {
 			c.Settings = *req.Settings
 		}
+		// Handle top-level currency field (map to settings)
+		if req.Currency != "" {
+			c.Settings.Currency = req.Currency
+		}
 		if req.Status != "" {
 			c.Status = req.Status
 		}
@@ -555,11 +561,16 @@ func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.R
 			c.InstallmentPlanIds = req.InstallmentPlanIds
 		}
 		// Price import config
+		if req.ImportURL != "" {
+			c.ImportURL = req.ImportURL
+		}
 		if req.ImportFolder != "" {
 			c.ImportFolder = req.ImportFolder
 		}
 		if req.PriceSource != nil {
 			c.PriceSource = *req.PriceSource
+			// Clear currency from price_source (it's stored in settings.currency)
+			c.PriceSource.Currency = ""
 		}
 		// Landing page fields
 		if req.NameRu != "" {

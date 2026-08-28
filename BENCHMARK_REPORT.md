@@ -72,7 +72,7 @@ GetCodesForCategoryTree    128s  (20.63%)
 ### 5. getCategoryWithDescendants — скрытая проблема
 
 ```go
-// scupage_search.go — вызывается для КАЖДОГО запроса с категорией
+// eanpage_search.go — вызывается для КАЖДОГО запроса с категорией
 func (s *SCUPageSearch) getCategoryWithDescendants(catID int64) ([]int64, error) {
     tree, err := s.categoryRepo.GetTree()  // ← полное дерево на каждый запрос!
 ```
@@ -82,7 +82,7 @@ func (s *SCUPageSearch) getCategoryWithDescendants(catID int64) ([]int64, error)
 ### 6. getCategoryAncestors — N+1
 
 ```go
-// scupage_search.go — для каждого SCUPage ищет всех родителей
+// eanpage_search.go — для каждого SCUPage ищет всех родителей
 func (s *SCUPageSearch) getCategoryAncestors(catID int64) ([]int64, error) {
     for current != 0 {
         cat, err := s.categoryRepo.Get(current)  // ← DB.Get на каждый уровень
@@ -138,7 +138,7 @@ for _, c := range cats {
 
 ### Priority 2: Кэш дерева категорий (быстрый win)
 
-**Где:** `internal/db/scupage_search.go` — `getCategoryWithDescendants`
+**Где:** `internal/db/eanpage_search.go` — `getCategoryWithDescendants`
 
 **Что:** Кэшировать дерево категорий с TTL (1 мин).
 
@@ -146,7 +146,7 @@ for _, c := range cats {
 
 ### Priority 3: Batch load продуктов вместо N+1 (большой win)
 
-**Где:** `internal/db/scupage_search.go` — `loadProductInfos`
+**Где:** `internal/db/eanpage_search.go` — `loadProductInfos`
 
 **Что:** 
 1. Собрать все productIDs со всей страницы
@@ -173,7 +173,7 @@ for _, c := range cats {
 
 ### Priority 6: Кэш getCategoryAncestors
 
-**Где:** `internal/db/scupage_search.go`
+**Где:** `internal/db/eanpage_search.go`
 
 **Что:** Кэшировать путь от категории к корню.
 

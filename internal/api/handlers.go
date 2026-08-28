@@ -54,6 +54,12 @@ type Handlers struct {
 
 	// Stats collector
 	statsCollector *stats.StatsCollector
+
+	// Import lock to prevent concurrent imports
+	importMu sync.Mutex
+
+	// Catalogize lock to prevent concurrent catalogize operations
+	catalogizeMu sync.Mutex
 }
 
 // cachedCatAttrs holds precomputed attribute items for a category.

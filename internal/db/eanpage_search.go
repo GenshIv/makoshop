@@ -420,7 +420,7 @@ func (s *EANPageSearch) BuildSortIndexes() error {
 	}
 
 	start := time.Now().Unix()
-	fmt.Println("[SCUPAGE] Building sort indexes per category...")
+	fmt.Println("[EANPAGE] Building sort indexes per category...")
 
 	all, err := s.repo.List()
 	if err != nil {
@@ -444,6 +444,12 @@ func (s *EANPageSearch) BuildSortIndexes() error {
 	catPricePairs := make(map[int64][]makodb.TurboNumSortPair)
 
 	for _, sp := range all {
+		// Skip EAN pages with no offers: keep them in text/search indexes
+		// (findable via search) but exclude from catalog sort indexes.
+		if sp.ProductCount == 0 {
+			continue
+		}
+
 		docIDKey := KeyEANPage(sp.ID)
 		priceVal := uint64(sp.MinPrice * 100)
 
@@ -528,7 +534,7 @@ func (s *EANPageSearch) BuildSortIndexes() error {
 		}
 	}
 
-	fmt.Printf("[SCUPAGE] Sort indexes built: %d pages, %d categories, %v\n", len(all), len(catPricesAsc), time.Since(time.Unix(start, 0)))
+	fmt.Printf("[EANPAGE] Sort indexes built: %d pages, %d categories, %v\n", len(all), len(catPricesAsc), time.Since(time.Unix(start, 0)))
 	return nil
 }
 
@@ -840,7 +846,7 @@ func (s *EANPageSearch) getCategoryAncestors(catID int64) ([]int64, error) {
 }
 
 func tokenizeEANPage(sp *model.EANPage) []string {
-	return tokenizeQueryEANPage(sp.Title + " " + sp.Description)
+	return tokenizeQueryEANPage(sp.EAN + " " + sp.Title + " " + sp.Description)
 }
 
 func tokenizeQueryEANPage(text string) []string {
@@ -880,7 +886,7 @@ func (s *EANPageSearch) RebuildAllIndexes() error {
 	}
 
 	start := time.Now().Unix()
-	fmt.Println("[SCUPAGE] RebuildAllIndexes: starting...")
+	fmt.Println("[EANPAGE] RebuildAllIndexes: starting...")
 
 	// Step 1: Clear all indexable keys
 	if err := s.clearAllIndexes(); err != nil {
@@ -952,7 +958,7 @@ func (s *EANPageSearch) RebuildAllIndexes() error {
 
 		if (i+1)%batchSize == 0 {
 			flushBatch()
-			fmt.Printf("[SCUPAGE] RebuildAllIndexes: processed %d / %d\n", i+1, len(all))
+			fmt.Printf("[EANPAGE] RebuildAllIndexes: processed %d / %d\n", i+1, len(all))
 		}
 	}
 
@@ -964,14 +970,14 @@ func (s *EANPageSearch) RebuildAllIndexes() error {
 		fmt.Printf("WARN: rebuild sort indexes: %v\n", err)
 	}
 
-	fmt.Printf("[SCUPAGE] RebuildAllIndexes: done in %v\n", time.Since(time.Unix(start, 0)))
+	fmt.Printf("[EANPAGE] RebuildAllIndexes: done in %v\n", time.Since(time.Unix(start, 0)))
 	return nil
 }
 
 // clearAllIndexes removes all indexable keys for EANPageSearch.
 // This ensures no stale indexes remain after rebuild.
 func (s *EANPageSearch) clearAllIndexes() error {
-	fmt.Println("[SCUPAGE] clearAllIndexes: clearing sort/numSort indexes...")
+	fmt.Println("[EANPAGE] clearAllIndexes: clearing sort/numSort indexes...")
 
 	// Clear per-category sort and numSort indexes
 	categories, err := s.categoryRepo.ListAll()
@@ -1007,7 +1013,7 @@ func (s *EANPageSearch) clearAllIndexes() error {
 
 	// Brand/vendor/attr/text indexes: dynamic, overwritten during rebuild.
 
-	fmt.Println("[SCUPAGE] clearAllIndexes: done.")
+	fmt.Println("[EANPAGE] clearAllIndexes: done.")
 	return nil
 }
 

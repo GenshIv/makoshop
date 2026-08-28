@@ -268,6 +268,32 @@ func (r *ProductRepo) Create(p *model.Product) error {
 	return nil
 }
 
+// CreateNoIndex creates a product without indexing it to turbo search.
+// Use this for batch operations where you'll index products separately.
+func (r *ProductRepo) CreateNoIndex(p *model.Product) error {
+	id, err := r.store.NextID("product")
+	if err != nil {
+		return fmt.Errorf("next_id product: %w", err)
+	}
+	p.ID = id
+	p.CreatedAt = time.Now().Unix()
+	p.UpdatedAt = time.Now().Unix()
+	if p.Status == "" {
+		p.Status = model.ProductStatusDraft
+	}
+	if p.Currency == "" {
+		p.Currency = "RUB"
+	}
+
+	data := MarshalProduct(*p)
+	if err := r.store.DocPut(KeyProduct(p.ID), data); err != nil {
+		return fmt.Errorf("save product: %w", err)
+	}
+
+	// No turbo index - will be done in batch later
+	return nil
+}
+
 func (r *ProductRepo) Get(id int64) (*model.Product, error) {
 	data, err := r.store.DocGet(KeyProduct(id))
 	if err != nil {
@@ -490,7 +516,257 @@ func (r *ProductRepo) GetOrCreateByEAN(p *model.Product, normalizedName string) 
 	return p.ID, true, nil
 }
 
+// BatchGetOrCreateByEAN processes multiple products in batch for better performance.
+// Returns a map of product index to (ID, isNew).
+// NOTE: This method does NOT index products to turbo search. Use BatchIndexProducts separately.
+func (r *ProductRepo) BatchGetOrCreateByEAN(products []*model.Product, normalizedNames []string) (map[int]int64, map[int]bool, error) {
+	result := make(map[int]int64)
+	isNewMap := make(map[int]bool)
+
+	// First pass: read all existing products in batch
+	existingIDs := make(map[string]int64) // keyPath -> existingID
+	var keysToRead []string
+
+	for i, p := range products {
+		if p.CompanyID == 0 {
+			continue
+		}
+		keyPath := productEANKey(p.EAN, normalizedNames[i], p.CompanyID)
+		keysToRead = append(keysToRead, keyPath)
+	}
+
+	// Batch read all keys
+	if len(keysToRead) > 0 {
+		for _, keyPath := range keysToRead {
+			data, err := r.store.db.TurboRawRead(keyPath)
+			if err == nil && len(data) > 0 {
+				var existingID int64
+				_, _ = fmt.Sscanf(string(data), "%d", &existingID)
+				existingIDs[keyPath] = existingID
+			}
+		}
+	}
+
+	// Second pass: create new products and update existing ones
+	for i, p := range products {
+		if p.CompanyID == 0 {
+			// Create product without EAN key (no indexing - will be done in batch)
+			if err := r.CreateNoIndex(p); err != nil {
+				return nil, nil, fmt.Errorf("create product %d: %w", i, err)
+			}
+			result[i] = p.ID
+			isNewMap[i] = true
+			continue
+		}
+
+		keyPath := productEANKey(p.EAN, normalizedNames[i], p.CompanyID)
+
+		if existingID, ok := existingIDs[keyPath]; ok {
+			// Update existing product
+			existing, err := r.Get(existingID)
+			if err == nil {
+				changed := false
+				if existing.Price != p.Price {
+					existing.Price = p.Price
+					changed = true
+				}
+				if existing.PreviousPrice != p.PreviousPrice {
+					existing.PreviousPrice = p.PreviousPrice
+					changed = true
+				}
+				if p.StockQty != 0 {
+					existing.StockQty = p.StockQty
+					changed = true
+				}
+				if len(p.Images) > 0 {
+					existing.Images = p.Images
+					changed = true
+				}
+				if p.Status != "" {
+					existing.Status = p.Status
+					changed = true
+				}
+				if p.Description != "" {
+					existing.Description = p.Description
+					changed = true
+				}
+				if p.Brand != "" {
+					existing.Brand = p.Brand
+					changed = true
+				}
+				if p.EAN != "" && p.EAN != existing.EAN {
+					existing.EAN = p.EAN
+					changed = true
+				}
+				if p.Name != "" && p.Name != existing.Name {
+					existing.Name = p.Name
+					changed = true
+				}
+				if len(p.Attributes) > 0 {
+					existing.Attributes = mergeAttributesOverwrite(existing.Attributes, p.Attributes)
+					changed = true
+				}
+				if changed {
+					existing.UpdatedAt = time.Now().Unix()
+					_ = r.store.DocPut(KeyProduct(existingID), MarshalProduct(*existing))
+				}
+				result[i] = existingID
+				isNewMap[i] = false
+				continue
+			}
+		}
+
+		// Create new product (no indexing - will be done in batch)
+		if err := r.CreateNoIndex(p); err != nil {
+			return nil, nil, fmt.Errorf("create product %d: %w", i, err)
+		}
+
+		// Write EAN key
+		_ = r.store.TurboWrite(keyPath, []byte(fmt.Sprintf("%d", p.ID)))
+
+		result[i] = p.ID
+		isNewMap[i] = true
+	}
+
+	return result, isNewMap, nil
+}
+
+// BatchGetOrCreateByEANTx is the transactional version of BatchGetOrCreateByEAN.
+// All writes are buffered in the transaction and applied atomically on Commit.
+func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*model.Product, normalizedNames []string) (map[int]int64, map[int]bool, error) {
+	result := make(map[int]int64)
+	isNewMap := make(map[int]bool)
+
+	// First pass: read all existing products in batch
+	existingIDs := make(map[string]int64) // keyPath -> existingID
+	var keysToRead []string
+
+	for i, p := range products {
+		if p.CompanyID == 0 {
+			continue
+		}
+		keyPath := productEANKey(p.EAN, normalizedNames[i], p.CompanyID)
+		keysToRead = append(keysToRead, keyPath)
+	}
+
+	// Batch read all keys
+	if len(keysToRead) > 0 {
+		for _, keyPath := range keysToRead {
+			data, err := r.store.db.TurboRawRead(keyPath)
+			if err == nil && len(data) > 0 {
+				var existingID int64
+				_, _ = fmt.Sscanf(string(data), "%d", &existingID)
+				existingIDs[keyPath] = existingID
+			}
+		}
+	}
+
+	// Second pass: create new products and update existing ones (in transaction)
+	for i, p := range products {
+		if p.CompanyID == 0 {
+			// Create product without EAN key (in transaction)
+			if err := r.createNoIndexTx(txn, p); err != nil {
+				return nil, nil, fmt.Errorf("create product %d: %w", i, err)
+			}
+			result[i] = p.ID
+			isNewMap[i] = true
+			continue
+		}
+
+		keyPath := productEANKey(p.EAN, normalizedNames[i], p.CompanyID)
+
+		if existingID, ok := existingIDs[keyPath]; ok {
+			// Update existing product (in transaction)
+			existing, err := r.Get(existingID)
+			if err == nil {
+				changed := false
+				if existing.Price != p.Price {
+					existing.Price = p.Price
+					changed = true
+				}
+				if existing.PreviousPrice != p.PreviousPrice {
+					existing.PreviousPrice = p.PreviousPrice
+					changed = true
+				}
+				if p.StockQty != 0 {
+					existing.StockQty = p.StockQty
+					changed = true
+				}
+				if len(p.Images) > 0 {
+					existing.Images = p.Images
+					changed = true
+				}
+				if p.Status != "" {
+					existing.Status = p.Status
+					changed = true
+				}
+				if p.Description != "" {
+					existing.Description = p.Description
+					changed = true
+				}
+				if p.Brand != "" {
+					existing.Brand = p.Brand
+					changed = true
+				}
+				if p.EAN != "" && p.EAN != existing.EAN {
+					existing.EAN = p.EAN
+					changed = true
+				}
+				if p.Name != "" && p.Name != existing.Name {
+					existing.Name = p.Name
+					changed = true
+				}
+				if len(p.Attributes) > 0 {
+					existing.Attributes = mergeAttributesOverwrite(existing.Attributes, p.Attributes)
+					changed = true
+				}
+				if changed {
+					existing.UpdatedAt = time.Now().Unix()
+					_ = txn.DocPut(KeyProduct(existingID), MarshalProduct(*existing))
+				}
+				result[i] = existingID
+				isNewMap[i] = false
+				continue
+			}
+		}
+
+		// Create new product (in transaction)
+		if err := r.createNoIndexTx(txn, p); err != nil {
+			return nil, nil, fmt.Errorf("create product %d: %w", i, err)
+		}
+
+		// Write EAN key (in transaction)
+		_ = txn.TurboWrite(keyPath, []byte(fmt.Sprintf("%d", p.ID)))
+
+		result[i] = p.ID
+		isNewMap[i] = true
+	}
+
+	return result, isNewMap, nil
+}
+
+// createNoIndexTx creates a product without indexing it to turbo search (transactional version).
+func (r *ProductRepo) createNoIndexTx(txn *Transaction, p *model.Product) error {
+	id, err := r.store.NextID("product")
+	if err != nil {
+		return fmt.Errorf("next_id product: %w", err)
+	}
+	p.ID = id
+	p.CreatedAt = time.Now().Unix()
+	p.UpdatedAt = time.Now().Unix()
+	if p.Status == "" {
+		p.Status = model.ProductStatusDraft
+	}
+	if p.Currency == "" {
+		p.Currency = "RUB"
+	}
+
+	data := MarshalProduct(*p)
+	return txn.DocPut(KeyProduct(p.ID), data)
+}
+
 // mergeAttributesOverwrite объединяет существующие атрибуты с новыми (новые переопределяют).
+// Allows multiple values per Key (deduplicates by Key+Value pair).
 func mergeAttributesOverwrite(existing, incoming []model.KeyValue) []model.KeyValue {
 	if len(incoming) == 0 {
 		return existing
@@ -498,16 +774,23 @@ func mergeAttributesOverwrite(existing, incoming []model.KeyValue) []model.KeyVa
 	if len(existing) == 0 {
 		return incoming
 	}
-	idx := make(map[string]int, len(existing))
+	// Index by Key+Value pair
+	type kvKey struct {
+		Key   string
+		Value string
+	}
+	idx := make(map[kvKey]int, len(existing))
 	for i, kv := range existing {
-		idx[kv.Key] = i
+		idx[kvKey{kv.Key, kv.Value}] = i
 	}
 	for _, kv := range incoming {
-		if i, ok := idx[kv.Key]; ok {
+		k := kvKey{kv.Key, kv.Value}
+		if i, ok := idx[k]; ok {
+			// Overwrite value if same Key+Value pair exists
 			existing[i].Value = kv.Value
 		} else {
 			existing = append(existing, kv)
-			idx[kv.Key] = len(existing) - 1
+			idx[k] = len(existing) - 1
 		}
 	}
 	return existing
@@ -559,6 +842,120 @@ func (r *ProductRepo) DeleteProductByID(id int64) error {
 		return fmt.Errorf("delete product %d: %w", id, err)
 	}
 	return nil
+}
+
+// deleteProductTx removes a product from all indexes and deletes its document,
+// buffering everything in the given transaction.
+func (r *ProductRepo) deleteProductTx(txn *Transaction, p *model.Product) error {
+	if r.turboSearch != nil {
+		_ = r.turboSearch.UnindexProductTx(txn, p)
+	}
+	// Remove from product_list (belt-and-suspenders; UnindexProductTx also does it)
+	_ = txn.TurboDeleteIndexString(TurboKeyProductList, KeyProduct(p.ID))
+	// Delete document
+	return txn.DocDelete(KeyProduct(p.ID))
+}
+
+// CleanupStaleProductsTx deletes products for a company whose offer key is not
+// present in the import set. It enumerates the company's products via the vendor
+// (company) index, and for each product whose offer key (EAN + normalized name +
+// company) is not among the importProducts' keys, removes it from all indexes
+// and deletes the document — all buffered in the given transaction.
+// normalize is the name normalization function used to compute offer keys; it
+// must match the one used at import time.
+// Returns the number of deleted products.
+func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, importProducts []*model.Product, normalize func(string) string) int {
+	if r.store == nil || companyID == 0 || len(importProducts) == 0 || normalize == nil {
+		return 0
+	}
+
+	// Build the set of offer keys present in this import
+	importKeys := make(map[string]struct{}, len(importProducts))
+	for _, p := range importProducts {
+		if p.CompanyID != companyID {
+			continue
+		}
+		key := productEANKey(p.EAN, normalize(p.Name), p.CompanyID)
+		importKeys[key] = struct{}{}
+	}
+	if len(importKeys) == 0 {
+		return 0
+	}
+
+	deleted := 0
+
+	// Get all product docIDs for this company via vendor index.
+	// Fallback: if the vendor index is empty (e.g. data imported before the
+	// index was maintained), scan product_list and filter by company.
+	vendorKey := turboKeyVendor(companyID)
+	tokens, err := r.store.db.TurboGetIndexTokens(vendorKey)
+	if err != nil || len(tokens) == 0 {
+		fmt.Printf("[CLEANUP] Company %d: vendor index empty, falling back to product_list scan\n", companyID)
+		allTokens, err := r.store.db.TurboGetIndexTokens(TurboKeyProductList)
+		if err != nil || len(allTokens) == 0 {
+			return 0
+		}
+		allDocs, err := r.store.db.MultiGetByDocIDs(allTokens)
+		if err != nil || len(allDocs) == 0 {
+			return 0
+		}
+		for _, doc := range allDocs {
+			if len(doc) == 0 {
+				continue
+			}
+			p, err := UnmarshalProduct(doc)
+			if err != nil || p.CompanyID != companyID {
+				continue
+			}
+			key := productEANKey(p.EAN, normalize(p.Name), p.CompanyID)
+			if _, ok := importKeys[key]; ok {
+				continue
+			}
+			if err := r.deleteProductTx(txn, p); err != nil {
+				fmt.Printf("WARN: cleanup stale product %d: %v\n", p.ID, err)
+				continue
+			}
+			deleted++
+		}
+		if deleted > 0 {
+			fmt.Printf("[CLEANUP] Company %d: deleted %d stale products (scan fallback)\n", companyID, deleted)
+		}
+		return deleted
+	}
+
+	// Load all products for this company
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
+	if err != nil || len(docs) == 0 {
+		return 0
+	}
+
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		p, err := UnmarshalProduct(doc)
+		if err != nil {
+			continue
+		}
+		if p.CompanyID != companyID {
+			continue
+		}
+		key := productEANKey(p.EAN, normalize(p.Name), p.CompanyID)
+		if _, ok := importKeys[key]; ok {
+			continue // still in the import — keep it
+		}
+		// Stale product — delete in transaction
+		if err := r.deleteProductTx(txn, p); err != nil {
+			fmt.Printf("WARN: cleanup stale product %d: %v\n", p.ID, err)
+			continue
+		}
+		deleted++
+	}
+
+	if deleted > 0 {
+		fmt.Printf("[CLEANUP] Company %d: deleted %d stale products (not in import)\n", companyID, deleted)
+	}
+	return deleted
 }
 
 // DeleteAllProducts removes all products and related indexes.

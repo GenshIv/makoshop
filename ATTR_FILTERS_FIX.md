@@ -4,7 +4,7 @@
 
 Attribute filters in the catalog were not working due to inconsistencies in how attribute values were stored and retrieved:
 
-1. **`scupage_attr:{code}:{value}`** — uses raw values (correct for filtering)
+1. **`eanpage_attr:{code}:{value}`** — uses raw values (correct for filtering)
 2. **`attr_values_cat:{code}:{catID}`** — was written inconsistently:
    - `IndexSCUPageBatch` wrote it as JSON map `{value: true}` (raw values)
    - `BatchWriteAttrValues` wrote it as turbo index with hex hashes (wrong)
@@ -71,7 +71,7 @@ New method that rebuilds `attr_values_cat` and `attr_label` indexes from all EAN
 ### Indexing (when EAN pages are indexed)
 
 `IndexSCUPageBatch` writes:
-- `scupage_attr:{code}:{value}` — turbo index for filtering (raw values)
+- `eanpage_attr:{code}:{value}` — turbo index for filtering (raw values)
 - `attr_values_cat:{code}:{catID}` — JSON map `{value: true}` for UI (raw values)
 - `attr_label:{code}:{value}` — raw value for display (raw values)
 - `attrdef_cat_codes:{catID}` — JSON array of codes for this category
@@ -88,7 +88,7 @@ New method that rebuilds `attr_values_cat` and `attr_label` indexes from all EAN
 `handleSCUPageCatalog` (landing_handlers.go):
 1. Parses `attr.{code}=value1,value2` from query
 2. Passes to `SCUPageSearch.ListWithTurbo`
-3. `ListWithTurbo` builds candidates using `scupage_attr:{code}:{value}` indexes
+3. `ListWithTurbo` builds candidates using `eanpage_attr:{code}:{value}` indexes
 4. Intersects with sort index and returns results
 
 ## Rebuilding Indexes

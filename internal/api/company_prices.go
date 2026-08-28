@@ -46,6 +46,7 @@ func (h *AuthHandlers) HandleAdminCompanyExport(w http.ResponseWriter, r *http.R
 		"slug":          c.Slug,
 		"description":   c.Description,
 		"logo_url":      c.LogoURL,
+		"import_url":    c.ImportURL,
 		"import_folder": c.ImportFolder,
 		"price_source":  c.PriceSource,
 		"desc_ru":       c.DescRu,
@@ -72,6 +73,7 @@ type companyExportDTO struct {
 	Description  string                   `json:"description,omitempty"`
 	LogoURL      string                   `json:"logo_url,omitempty"`
 	WebsiteURL   string                   `json:"website_url,omitempty"`
+	ImportURL    string                   `json:"import_url,omitempty"`
 	ImportFolder string                   `json:"import_folder,omitempty"`
 	PriceSource  *model.PriceSourceConfig `json:"price_source,omitempty"`
 	DescRu       string                   `json:"desc_ru,omitempty"`
@@ -97,6 +99,7 @@ func companyToExportDTO(c *model.Company) companyExportDTO {
 		Description:  c.Description,
 		LogoURL:      c.LogoURL,
 		WebsiteURL:   c.WebsiteURL,
+		ImportURL:    c.ImportURL,
 		ImportFolder: c.ImportFolder,
 		PriceSource:  &ps,
 		DescRu:       c.DescRu,
@@ -218,6 +221,9 @@ func (h *AuthHandlers) HandleAdminCompaniesImportAll(w http.ResponseWriter, r *h
 			if dto.WebsiteURL != "" {
 				c.WebsiteURL = dto.WebsiteURL
 			}
+			if dto.ImportURL != "" {
+				c.ImportURL = dto.ImportURL
+			}
 			if dto.ImportFolder != "" {
 				c.ImportFolder = dto.ImportFolder
 			}
@@ -272,6 +278,7 @@ func (h *AuthHandlers) HandleAdminCompanyImport(w http.ResponseWriter, r *http.R
 		Description  string                   `json:"description,omitempty"`
 		LogoURL      string                   `json:"logo_url,omitempty"`
 		WebsiteURL   string                   `json:"website_url,omitempty"`
+		ImportURL    string                   `json:"import_url,omitempty"`
 		ImportFolder string                   `json:"import_folder,omitempty"`
 		PriceSource  *model.PriceSourceConfig `json:"price_source,omitempty"`
 		DescRu       string                   `json:"desc_ru,omitempty"`
@@ -332,6 +339,9 @@ func (h *AuthHandlers) HandleAdminCompanyImport(w http.ResponseWriter, r *http.R
 		if req.WebsiteURL != "" {
 			c.WebsiteURL = req.WebsiteURL
 		}
+		if req.ImportURL != "" {
+			c.ImportURL = req.ImportURL
+		}
 		if req.ImportFolder != "" {
 			c.ImportFolder = req.ImportFolder
 		}
@@ -385,6 +395,7 @@ func (h *AuthHandlers) HandleAdminPriceSourcesList(w http.ResponseWriter, r *htt
 	type priceSourceItem struct {
 		CompanyID    int64                   `json:"company_id"`
 		CompanyName  string                  `json:"company_name"`
+		ImportURL    string                  `json:"import_url"`
 		ImportFolder string                  `json:"import_folder"`
 		PriceSource  model.PriceSourceConfig `json:"price_source"`
 	}
@@ -394,6 +405,7 @@ func (h *AuthHandlers) HandleAdminPriceSourcesList(w http.ResponseWriter, r *htt
 		items = append(items, priceSourceItem{
 			CompanyID:    c.ID,
 			CompanyName:  c.Name,
+			ImportURL:    c.ImportURL,
 			ImportFolder: c.ImportFolder,
 			PriceSource:  c.PriceSource,
 		})

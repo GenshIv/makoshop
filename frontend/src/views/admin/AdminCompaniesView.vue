@@ -23,6 +23,9 @@ const paymentMethods = ref([]);
 const deliveryTimes = ref([]);
 const installmentPlans = ref([]);
 
+// Available currencies for company settings
+const currencies = ['PLN', 'EUR', 'USD', 'RUB', 'UAH', 'GBP', 'CHF'];
+
 const fetchCompanies = async () => {
   loading.value = true;
   error.value = null;
@@ -347,6 +350,7 @@ const importResult = ref(null);
 const priceForm = ref(null);
 
 const emptyPriceForm = () => ({
+  import_url: '',
   import_folder: '',
   currency: '',
   is_visible: false,
@@ -376,6 +380,7 @@ const openPriceModal = async (company) => {
   try {
     const res = await api.get(`/admin/companies/${company.id}`);
     const c = res.data;
+    priceForm.value.import_url = c.import_url || '';
     priceForm.value.import_folder = c.import_folder || '';
     priceForm.value.currency = c.settings?.currency || '';
     priceForm.value.is_visible = !!c.is_visible;
@@ -385,7 +390,9 @@ const openPriceModal = async (company) => {
     priceForm.value.desc_pl = c.desc_pl || '';
     priceForm.value.desc_en = c.desc_en || '';
     if (c.price_source) {
-      priceForm.value.price_source = { ...priceForm.value.price_source, ...c.price_source };
+      // Don't copy currency from price_source (it's in settings.currency)
+      const { currency, ...priceSourceWithoutCurrency } = c.price_source;
+      priceForm.value.price_source = { ...priceForm.value.price_source, ...priceSourceWithoutCurrency };
       if (!priceForm.value.price_source.attr_fields) priceForm.value.price_source.attr_fields = [];
       if (!priceForm.value.price_source.availability_map) priceForm.value.price_source.availability_map = {};
     }
@@ -419,7 +426,12 @@ const savePriceConfig = async () => {
   if (!selectedCompany.value || !priceForm.value) return;
   priceSaving.value = true;
   try {
+    // Remove currency from price_source (it's stored in settings.currency)
+    const priceSource = { ...priceForm.value.price_source };
+    delete priceSource.currency;
+    
     await api.patch(`/admin/companies/${selectedCompany.value.id}`, {
+      import_url: priceForm.value.import_url,
       import_folder: priceForm.value.import_folder,
       currency: priceForm.value.currency,
       is_visible: priceForm.value.is_visible,
@@ -428,7 +440,7 @@ const savePriceConfig = async () => {
       desc_ua: priceForm.value.desc_ua,
       desc_pl: priceForm.value.desc_pl,
       desc_en: priceForm.value.desc_en,
-      price_source: priceForm.value.price_source,
+      price_source: priceSource,
     });
     showPriceModal.value = false;
     toast.success(t('admin.settings_saved') || 'Saved');
@@ -481,6 +493,7 @@ const emptyUnifiedSettingsForm = () => ({
   delivery_time_ids: [],
   installment_plan_ids: [],
   price_source: {
+    import_url: '',
     import_folder: '',
     currency: '',
     html_attr_rules: [],
@@ -498,7 +511,8 @@ const openUnifiedSettings = async (company) => {
     unifiedSettingsForm.value.payment_method_ids = c.payment_method_ids || [];
     unifiedSettingsForm.value.delivery_time_ids = c.delivery_time_ids || [];
     unifiedSettingsForm.value.installment_plan_ids = c.installment_plan_ids || [];
-    // Load import_folder from company root level
+    // Load import_url and import_folder from company root level
+    unifiedSettingsForm.value.price_source.import_url = c.import_url || '';
     unifiedSettingsForm.value.price_source.import_folder = c.import_folder || '';
     // Load currency from settings
     unifiedSettingsForm.value.price_source.currency = c.settings?.currency || '';
@@ -548,13 +562,21 @@ const saveUnifiedSettings = async () => {
   if (!selectedCompany.value || !unifiedSettingsForm.value) return;
   unifiedSettingsSaving.value = true;
   try {
+    // Save currency before removing from price_source
+    const currency = unifiedSettingsForm.value.price_source.currency;
+    
+    // Remove currency from price_source (it's stored in settings.currency)
+    const priceSource = { ...unifiedSettingsForm.value.price_source };
+    delete priceSource.currency;
+    
     await api.patch(`/admin/companies/${selectedCompany.value.id}`, {
+      import_url: unifiedSettingsForm.value.price_source.import_url,
       import_folder: unifiedSettingsForm.value.price_source.import_folder,
-      currency: unifiedSettingsForm.value.price_source.currency,
+      currency: currency,
       payment_method_ids: unifiedSettingsForm.value.payment_method_ids,
       delivery_time_ids: unifiedSettingsForm.value.delivery_time_ids,
       installment_plan_ids: unifiedSettingsForm.value.installment_plan_ids,
-      price_source: unifiedSettingsForm.value.price_source,
+      price_source: priceSource,
     });
     showUnifiedSettingsModal.value = false;
     toast.success(t('admin.settings_saved') || 'Saved');
@@ -741,18 +763,20 @@ onMounted(fetchCompanies);
 
         <div v-if="priceLoading" class="text-sm text-ink-3">Loading...</div>
         <div v-else-if="priceForm" class="space-y-4">
-          <!-- Import folder -->
+          <!-- Import URL -->
           <div>
-            <label class="text-sm font-medium text-ink-2 block mb-1">{{ t('admin.import_folder') || 'Import Folder' }}</label>
-            <input v-model="priceForm.import_folder" type="text" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface" placeholder="e.g. RoboJet" />
-            <p class="text-xs text-ink-3 mt-1">{{ t('admin.import_folder_hint') || 'Folder name inside prices/ directory' }}</p>
+            <label class="text-sm font-medium text-ink-2 block mb-1">{{ t('admin.import_url') || 'Import URL' }}</label>
+            <input v-model="priceForm.import_url" type="text" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface" placeholder="https://example.com/prices/company.xml" />
+            <p class="text-xs text-ink-3 mt-1">{{ t('admin.import_url_hint') || 'URL to download the price file from. Saved to prices/<company>.xml on import.' }}</p>
           </div>
 
           <!-- Currency + visibility -->
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="text-sm font-medium text-ink-2 block mb-1">{{ t('admin.currency') || 'Currency' }}</label>
-              <input v-model="priceForm.currency" type="text" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface" placeholder="PLN" />
+              <select v-model="priceForm.currency" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface">
+                <option v-for="cur in currencies" :key="cur" :value="cur">{{ cur }}</option>
+              </select>
             </div>
             <div class="flex items-end">
               <label class="inline-flex items-center gap-2 text-sm cursor-pointer">
@@ -930,13 +954,15 @@ onMounted(fetchCompanies);
           <div class="border-b border-line pb-4">
             <h3 class="text-sm font-semibold text-ink-2 mb-2">{{ t('admin.price_import_title') || 'Price Import' }}</h3>
             <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="text-xs text-ink-3 block mb-1">{{ t('admin.import_folder') || 'Import Folder' }}</label>
-                <input v-model="unifiedSettingsForm.price_source.import_folder" type="text" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface" />
+              <div class="col-span-2">
+                <label class="text-xs text-ink-3 block mb-1">{{ t('admin.import_url') || 'Import URL' }}</label>
+                <input v-model="unifiedSettingsForm.price_source.import_url" type="text" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface" placeholder="https://example.com/prices/company.xml" />
               </div>
               <div>
                 <label class="text-xs text-ink-3 block mb-1">{{ t('admin.currency') || 'Currency' }}</label>
-                <input v-model="unifiedSettingsForm.price_source.currency" type="text" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface" />
+                <select v-model="unifiedSettingsForm.price_source.currency" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface">
+                  <option v-for="cur in currencies" :key="cur" :value="cur">{{ cur }}</option>
+                </select>
               </div>
             </div>
           </div>
