@@ -19,3 +19,6 @@
 /makoshop
 /loadtest/cmd/pprof_out/
 /frontend/.vscode/extensions.json
+/frontend/.vscode/
+/.gomodcache/
+/.go-env/

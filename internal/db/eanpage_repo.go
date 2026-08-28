@@ -1175,6 +1175,21 @@ func (r *EANPageRepo) MatchProductToCategories(name string) []CatalogizeResult {
 	return results
 }
 
+// CategoriesWithEANPages returns a set of category IDs that have at least one EAN page.
+func (r *EANPageRepo) CategoriesWithEANPages() map[int64]struct{} {
+	all, err := r.List()
+	if err != nil {
+		return nil
+	}
+	result := make(map[int64]struct{})
+	for _, s := range all {
+		if s.CategoryID != 0 {
+			result[s.CategoryID] = struct{}{}
+		}
+	}
+	return result
+}
+
 // RecalculateProductCounts recalculates ProductCount for all EAN pages
 // based on actual products linked via EAN.
 // This fixes inconsistencies after bulk imports.
