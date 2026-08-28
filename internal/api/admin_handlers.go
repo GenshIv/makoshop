@@ -689,16 +689,6 @@ func (h *Handlers) HandleAdminCatalogizerTest(w http.ResponseWriter, r *http.Req
 	// Get all matching categories
 	matches := h.catalogizer.MatchProductToCategories(body.Name)
 
-	// Filter out categories that have no EAN pages
-	catsWithPages := h.eanPageRepo.CategoriesWithEANPages()
-	var filtered []catalogizer.CatalogizeResult
-	for _, m := range matches {
-		if _, ok := catsWithPages[m.NewCategoryID]; ok {
-			filtered = append(filtered, m)
-		}
-	}
-	matches = filtered
-
 	// Get product tokens for display
 	tokens := catalogizer.TokenizeName(body.Name)
 	tokenWords := make([]string, len(tokens))

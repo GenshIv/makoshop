@@ -33,6 +33,7 @@ const (
 
 	// Precomputed category trees as JSON.
 	turboKeyCategoryTreeFull   = "cat_tree_full:"
+	turboKeyCategoryTreeAdmin  = "cat_tree_admin:" // all categories, no filtering
 	turboKeyCategoryTreeParent = "cat_tree_parent:"
 )
 
@@ -40,12 +41,20 @@ type CategoryRepo struct {
 	store         *Store
 	treePathCache sync.Map // catID int64 → []string
 
+	// EANPageRepo for filtering categories with EAN pages in public tree
+	eanPageRepo *EANPageRepo
+
 	// Active transaction (nil if not in transaction)
 	txn *makodb.Transaction
 }
 
 func NewCategoryRepo(store *Store) *CategoryRepo {
 	return &CategoryRepo{store: store}
+}
+
+// SetEANPageRepo attaches an EANPageRepo for filtering categories in public tree.
+func (r *CategoryRepo) SetEANPageRepo(repo *EANPageRepo) {
+	r.eanPageRepo = repo
 }
 
 // SetTransaction sets the active transaction for this repo.
@@ -636,16 +645,85 @@ func (r *CategoryRepo) rebuildFullTreeJSON() {
 
 	if len(cats) == 0 {
 		r.store.TurboWrite(turboKeyCategoryTreeFull, []byte("[]"))
+		r.store.TurboWrite(turboKeyCategoryTreeAdmin, []byte("[]"))
 		return
 	}
 
-	tree, _ := r.buildTree(cats, nil)
-	fmt.Printf("[DEBUG] rebuildFullTreeJSON: cats=%d, tree_nodes=%d\n", len(cats), len(tree))
-	jsonData := marshalCategoryTree(tree)
-	if len(jsonData) == 0 {
-		jsonData = []byte("[]")
+	// Build admin tree (all categories, no filtering)
+	adminTree, _ := r.buildTree(cats, nil)
+	adminJson := marshalCategoryTree(adminTree)
+	if len(adminJson) == 0 {
+		adminJson = []byte("[]")
 	}
-	r.store.TurboWrite(turboKeyCategoryTreeFull, jsonData)
+	r.store.TurboWrite(turboKeyCategoryTreeAdmin, adminJson)
+
+	// Filter categories: only include those with EAN pages (for public tree)
+	filteredCats := cats
+	if r.eanPageRepo != nil {
+		filteredCats = r.filterCategoriesWithEANPages(cats)
+	}
+
+	publicTree, _ := r.buildTree(filteredCats, nil)
+	fmt.Printf("[DEBUG] rebuildFullTreeJSON: total=%d, public=%d, admin=%d\n", len(cats), len(publicTree), len(adminTree))
+	publicJson := marshalCategoryTree(publicTree)
+	if len(publicJson) == 0 {
+		publicJson = []byte("[]")
+	}
+	r.store.TurboWrite(turboKeyCategoryTreeFull, publicJson)
+}
+
+// filterCategoriesWithEANPages filters categories to only include those that have EAN pages
+// (directly or through descendants). This is used for the public category tree.
+func (r *CategoryRepo) filterCategoriesWithEANPages(cats []model.Category) []model.Category {
+	if r.eanPageRepo == nil {
+		return cats
+	}
+
+	// Get categories with EAN pages
+	catsWithPages := r.eanPageRepo.CategoriesWithEANPages()
+	if len(catsWithPages) == 0 {
+		return cats
+	}
+
+	// Build parent map and children map
+	byID := make(map[int64]*model.Category, len(cats))
+	for i := range cats {
+		byID[cats[i].ID] = &cats[i]
+	}
+
+	// Mark categories that have EAN pages directly
+	hasEANPage := make(map[int64]bool)
+	for _, cat := range cats {
+		if _, ok := catsWithPages[cat.ID]; ok {
+			hasEANPage[cat.ID] = true
+		}
+	}
+
+	// Propagate up: if a child has EAN pages, mark parent too
+	changed := true
+	for changed {
+		changed = false
+		for _, cat := range cats {
+			if cat.ParentID != nil && !hasEANPage[cat.ID] && hasEANPage[*cat.ParentID] {
+				continue
+			}
+			if cat.ParentID != nil && hasEANPage[cat.ID] && !hasEANPage[*cat.ParentID] {
+				hasEANPage[*cat.ParentID] = true
+				changed = true
+			}
+		}
+	}
+
+	// Filter: only keep categories marked as having EAN pages
+	result := make([]model.Category, 0, len(cats))
+	for _, cat := range cats {
+		if hasEANPage[cat.ID] {
+			result = append(result, cat)
+		}
+	}
+
+	fmt.Printf("[DEBUG] filterCategoriesWithEANPages: total=%d, with_pages=%d\n", len(cats), len(result))
+	return result
 }
 
 // rebuildAllAncestorsAndDescendants rebuilds ancestors and descendants caches for all categories.
@@ -976,6 +1054,7 @@ func (r *CategoryRepo) GetTreeByParent(parentID int64) ([]CategoryTreeNode, erro
 
 // GetTreeJSON returns the full category tree as raw JSON bytes.
 // Zero allocations for parsing: reads precomputed JSON directly from turbo.
+// This is the PUBLIC tree, filtered to only show categories with EAN pages.
 func (r *CategoryRepo) GetTreeJSON() ([]byte, error) {
 	data, err := r.store.DB().TurboRawRead(turboKeyCategoryTreeFull)
 	if err != nil {
@@ -984,6 +1063,23 @@ func (r *CategoryRepo) GetTreeJSON() ([]byte, error) {
 	if len(data) == 0 {
 		r.rebuildFullTreeJSON()
 		data, err = r.store.DB().TurboRawRead(turboKeyCategoryTreeFull)
+		if err != nil || len(data) == 0 {
+			return []byte("[]"), nil
+		}
+	}
+	return data, nil
+}
+
+// GetAdminTreeJSON returns the full admin category tree as raw JSON bytes.
+// Shows ALL categories without filtering.
+func (r *CategoryRepo) GetAdminTreeJSON() ([]byte, error) {
+	data, err := r.store.DB().TurboRawRead(turboKeyCategoryTreeAdmin)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		r.rebuildFullTreeJSON()
+		data, err = r.store.DB().TurboRawRead(turboKeyCategoryTreeAdmin)
 		if err != nil || len(data) == 0 {
 			return []byte("[]"), nil
 		}

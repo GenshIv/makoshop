@@ -878,7 +878,7 @@ watch(
                 <div class="flex-shrink-0 w-48 text-xs text-ink-3">
                   <template v-if="product.attributes && product.attributes.length">
                     <div class="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                      <template v-for="attr in product.attributes.filter(a => !INTERNAL_ATTRS.includes(a.key)).slice(0, 6)" :key="attr.key">
+                      <template v-for="attr in product.attributes.filter(a => !INTERNAL_ATTRS.includes(a.key) && !a.key.toLowerCase().includes('url') && !a.value.toLowerCase().startsWith('http')).slice(0, 6)" :key="attr.key">
                         <div class="truncate font-medium text-ink-2">{{ attr.key }}:</div>
                         <div class="truncate">{{ attr.value }}</div>
                       </template>

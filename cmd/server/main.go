@@ -866,6 +866,11 @@ func main() {
 				h.HandleAdminCategoriesExport(w, r)
 				return
 			}
+			// GET /admin/categories/tree — full tree for admin (all categories)
+			if r.URL.Query().Get("tree") == "1" {
+				h.HandleAdminCategoriesTree(w, r)
+				return
+			}
 			h.HandleCategoriesList(w, r)
 		case http.MethodPost:
 			// POST /admin/categories/import

@@ -158,7 +158,7 @@ const fetchCategories = async () => {
 
 const fetchTree = async () => {
   try {
-    const response = await api.get('/categories/tree');
+    const response = await api.get('/admin/categories?tree=1');
     tree.value = Array.isArray(response.data) ? response.data : [];
   } catch (e) {
     console.error(e);

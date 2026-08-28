@@ -101,6 +101,53 @@ func (h *Handlers) HandleCategoriesTree(w http.ResponseWriter, r *http.Request) 
 	_, _ = w.Write(data)
 }
 
+// HandleAdminCategoriesTree returns the full category tree for admin use.
+// GET /admin/categories/tree
+// Shows ALL categories regardless of EAN pages (unlike public /categories/tree).
+func (h *Handlers) HandleAdminCategoriesTree(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	headOnly := r.Method == http.MethodHead
+
+	childOf := r.URL.Query().Get("child_of")
+	if childOf != "" {
+		parentID, err := strconv.ParseInt(childOf, 10, 64)
+		if err != nil || parentID <= 0 {
+			httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid child_of parameter")
+			return
+		}
+		data, err := h.categoryRepo.GetTreeByParentJSON(parentID)
+		if err != nil {
+			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if headOnly {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(data)
+		return
+	}
+
+	data, err := h.categoryRepo.GetAdminTreeJSON()
+	if err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if headOnly {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
 // HandleRebuildCategoryTrees rebuilds all precomputed category tree JSONs.
 // POST /admin/rebuild-category-trees
 
