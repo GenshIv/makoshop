@@ -75,9 +75,6 @@ func NewHandlers(store *db.Store) *Handlers {
 	productRepo := db.NewProductRepo(store, promoCampaignRepo, promoPlanRepo, promoLogRepo)
 	categoryRepo := db.NewCategoryRepo(store)
 
-	// Build precomputed category tree JSONs at startup.
-	categoryRepo.RebuildTrees()
-
 	attrDefRepo := db.NewAttrDefRepo(store)
 
 	// Turbo search: enabled by default. Can be disabled via env flag if needed.
@@ -95,6 +92,12 @@ func NewHandlers(store *db.Store) *Handlers {
 
 	// Attach EANPageRepo to CategoryRepo for filtering public tree
 	categoryRepo.SetEANPageRepo(eanPageRepo)
+
+	// Build precomputed category tree JSONs at startup. Must run AFTER
+	// SetEANPageRepo so the public tree is filtered to categories that have
+	// EAN pages (directly or via descendants). Rebuilding before this would
+	// produce an unfiltered tree because eanPageRepo is still nil.
+	categoryRepo.RebuildTrees()
 
 	// EANPage search (catalog works on EAN pages)
 	eanPageSearch := db.NewEANPageSearch(store.DB(), eanPageRepo, productRepo, categoryRepo, turboEnabled)
@@ -210,6 +213,14 @@ func (h *Handlers) GetCategoryAttrs(catID int64) []db.AttrItem {
 
 	items := make([]db.AttrItem, 0, len(codes))
 	for _, code := range codes {
+		// Skip attributes with less than 3 EAN pages
+		if h.eanPageRepo != nil {
+			eanCount := h.eanPageRepo.CountEANPagesWithAttrCode(code)
+			if eanCount < 3 {
+				continue
+			}
+		}
+
 		values, _ := h.attrDefRepo.GetAttrValuesForCategory(code, catID)
 		if len(values) == 0 {
 			continue

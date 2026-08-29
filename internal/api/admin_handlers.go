@@ -468,6 +468,28 @@ func (h *Handlers) HandleAdminCatalogizerTrain(w http.ResponseWriter, r *http.Re
 	})
 }
 
+// HandleAdminRebuildAttrCodeIndexes rebuilds eanpage_attr_code:{code} indexes.
+// POST /admin/eanpages/rebuild-attr-code-indexes
+
+func (h *Handlers) HandleAdminRebuildAttrCodeIndexes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	fmt.Println("[ADMIN] Rebuilding attr_code indexes...")
+
+	if err := h.eanPageSearch.BuildAttrCodeIndexes(); err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	httpres.WriteJSON(w, http.StatusOK, map[string]string{
+		"status":  "completed",
+		"message": "attr_code indexes rebuilt",
+	})
+}
+
 // HandleAdminCatalogizerCoverage returns coverage statistics.
 // GET /admin/catalogizer/coverage
 

@@ -146,12 +146,16 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 	// Диапазоны цен (по доке, вариант 1)
 	t.indexPriceRanges(p.Price, docID)
 
-	// EAN index: links product to landing page
-	if p.EAN != "" {
-		eanKey := "ean:" + p.EAN
-		if _, err := t.store.db.TurboPutIndexString(eanKey, docID); err != nil {
+	// EAN index: links product to landing page.
+	// For products without EAN, use the name-based key so they attach to "nm:" pages.
+	if eanKey := ProductEANIndexKey(p); eanKey != "" {
+		if _, err := t.store.db.TurboPutIndexString("ean:"+eanKey, docID); err != nil {
 			return fmt.Errorf("turbo ean index: %w", err)
 		}
+	}
+
+	// Landing page + EANPage linking only for real EANs.
+	if p.EAN != "" {
 		// Update landing page product list
 		if t.landingRepo != nil {
 			_, _ = t.landingRepo.UpsertByEAN(p.EAN, func(lp *model.LandingPage) {
@@ -196,10 +200,10 @@ func (t *TurboProductSearch) BatchIndexProducts(products []*model.Product) error
 			fmt.Printf("WARN: turbo index product_list: %v\n", err)
 		}
 
-		// Collect EAN index entries
-		if p.EAN != "" {
-			eanKey := "ean:" + p.EAN
-			eanIndex[eanKey] = append(eanIndex[eanKey], docID)
+		// Collect EAN index entries (name-based key for products without EAN)
+		if eanKey := ProductEANIndexKey(p); eanKey != "" {
+			indexKey := "ean:" + eanKey
+			eanIndex[indexKey] = append(eanIndex[indexKey], docID)
 		}
 
 		// Index price ranges
@@ -320,10 +324,10 @@ func (t *TurboProductSearch) BatchIndexProductstx(txn *Transaction, products []*
 			indexes[textKey] = append(indexes[textKey], docID)
 		}
 
-		// Collect EAN index entries
-		if p.EAN != "" {
-			eanKey := "ean:" + p.EAN
-			eanIndex[eanKey] = append(eanIndex[eanKey], docID)
+		// Collect EAN index entries (name-based key for products without EAN)
+		if eanKey := ProductEANIndexKey(p); eanKey != "" {
+			indexKey := "ean:" + eanKey
+			eanIndex[indexKey] = append(eanIndex[indexKey], docID)
 		}
 
 		// Collect vendor (company) index entries
@@ -560,10 +564,12 @@ func (t *TurboProductSearch) UnindexProduct(p *model.Product) error {
 		t.store.db.TurboDeleteIndexString(turboKeyText(tok), docID)
 	}
 
-	// Remove EAN index
+	// Remove EAN index (name-based key for products without EAN)
+	if eanKey := ProductEANIndexKey(p); eanKey != "" {
+		t.store.db.TurboDeleteIndexString("ean:"+eanKey, docID)
+	}
+
 	if p.EAN != "" {
-		eanKey := "ean:" + p.EAN
-		t.store.db.TurboDeleteIndexString(eanKey, docID)
 		// Remove product from landing page
 		if t.landingRepo != nil {
 			if lp, err := t.landingRepo.GetByEAN(p.EAN); err == nil {
@@ -617,10 +623,9 @@ func (t *TurboProductSearch) UnindexProductTx(txn *Transaction, p *model.Product
 		txn.TurboDeleteIndexString(turboKeyText(tok), docID)
 	}
 
-	// Remove EAN index
-	if p.EAN != "" {
-		eanKey := "ean:" + p.EAN
-		txn.TurboDeleteIndexString(eanKey, docID)
+	// Remove EAN index (name-based key for products without EAN)
+	if eanKey := ProductEANIndexKey(p); eanKey != "" {
+		txn.TurboDeleteIndexString("ean:"+eanKey, docID)
 	}
 
 	return nil
@@ -687,10 +692,10 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 			indexes[turboKeyText(tok)] = append(indexes[turboKeyText(tok)], docID)
 		}
 
-		// EAN index
-		if p.EAN != "" {
-			eanKey := "ean:" + p.EAN
-			indexes[eanKey] = append(indexes[eanKey], docID)
+		// EAN index (name-based key for products without EAN)
+		if eanKey := ProductEANIndexKey(p); eanKey != "" {
+			indexKey := "ean:" + eanKey
+			indexes[indexKey] = append(indexes[indexKey], docID)
 		}
 	}
 

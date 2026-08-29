@@ -1470,6 +1470,15 @@ func main() {
 		h.HandleAdminCatalogizerCoverage(w, r)
 	}), model.RoleAdmin))
 
+	// POST /admin/eanpages/rebuild-attr-code-indexes — rebuild attr_code indexes
+	mux.Handle("/admin/eanpages/rebuild-attr-code-indexes", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.HandleAdminRebuildAttrCodeIndexes(w, r)
+	}), model.RoleAdmin))
+
 	// POST /admin/catalogize — run auto-catalogization
 	mux.Handle("/admin/catalogize", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

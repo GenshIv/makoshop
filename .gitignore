@@ -22,3 +22,4 @@
 /frontend/.vscode/
 /.gomodcache/
 /.go-env/
+/.claude/

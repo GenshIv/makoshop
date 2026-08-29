@@ -262,11 +262,14 @@ type Product struct {
 	Currency      string        `json:"currency"`
 	StockQty      int64         `json:"stock_qty"`
 	Status        ProductStatus `json:"status"`
+	ProductURL    string        `json:"product_url,omitempty"`  // direct link to product on vendor site
+	PurchaseURL   string        `json:"purchase_url,omitempty"` // affiliate/partner purchase link
 	Attributes    []KeyValue    `json:"attributes,omitempty"`
 	Images        []string      `json:"images,omitempty"`
 	SEO           ProductSEO    `json:"seo,omitempty"`
 	CreatedAt     int64         `json:"created_at"`
 	UpdatedAt     int64         `json:"updated_at"`
+	ShopCategory  string        `json:"shop_category"`
 }
 
 // LandingPage — посадочная страница для группы товаров с одинаковым EAN.

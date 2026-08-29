@@ -140,6 +140,7 @@
     "load_error": "Ошибка загрузки товаров",
     "config_prefix": "Комплектация: ",
     "all_products": "Все товары",
+    "explore": "Исследуйте",
     "bundle_prefix": "В комплекте: ",
     "search_results": "Результаты поиска: \"{q}\"",
     "catalog_title": "Каталог товаров",

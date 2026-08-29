@@ -1369,24 +1369,36 @@ defineOptions({ name: 'CatalogView' });
 
           <!-- Current category header with full description and image -->
           <div class="mb-3">
-            <div class="flex flex-col lg:flex-row gap-4">
-              <!-- Category name and full description -->
-              <div class="flex-1 min-w-0">
-                <h2 class="text-xl font-semibold text-ink">
-                  {{ currentBrowseCategory ? catName(currentBrowseCategory) : t('catalog.all_products') }}
-                </h2>
-                <p
-                  v-if="currentBrowseCategory && catDescription(currentBrowseCategory)"
-                  class="mt-1 text-sm text-ink-2"
+            <div class="relative overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-accent/10 via-surface to-surface-2 px-5 py-4 sm:px-6 sm:py-5">
+              <div class="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+                <!-- Category name and full description -->
+                <div class="flex-1 min-w-0">
+                  <!-- Warm eyebrow: journey/destination cue -->
+                  <span
+                    v-if="currentBrowseCategory"
+                    class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-accent mb-2"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="9"/>
+                      <path d="M15.5 8.5l-2 5-5 2 2-5z" stroke-linejoin="round"/>
+                    </svg>
+                    {{ t('catalog.explore') }}
+                  </span>
+                  <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-ink leading-tight">
+                    {{ currentBrowseCategory ? catName(currentBrowseCategory) : t('catalog.all_products') }}
+                  </h2>
+                  <p
+                    v-if="currentBrowseCategory && catDescription(currentBrowseCategory)"
+                    class="mt-2 text-sm sm:text-base text-ink-2 leading-relaxed max-w-prose"
+                  >
+                    {{ catDescription(currentBrowseCategory) }}
+                  </p>
+                </div>
+                <!-- Category image on the right -->
+                <div
+                  v-if="currentBrowseCategory && (isValidImage(currentBrowseCategory.image_light_url) || isValidImage(currentBrowseCategory.image_dark_url))"
+                  class="flex-shrink-0 w-36 sm:w-48 aspect-square relative rounded-xl overflow-hidden shadow-md border border-line"
                 >
-                  {{ catDescription(currentBrowseCategory) }}
-                </p>
-              </div>
-              <!-- Category image on the right -->
-              <div
-                v-if="currentBrowseCategory && (isValidImage(currentBrowseCategory.image_light_url) || isValidImage(currentBrowseCategory.image_dark_url))"
-                class="flex-shrink-0 w-48 aspect-square relative rounded-xl overflow-hidden shadow-md border border-line"
-              >
                 <img
                   v-if="isValidImage(currentBrowseCategory.image_light_url)"
                   :src="currentBrowseCategory.image_light_url"
@@ -1403,6 +1415,7 @@ defineOptions({ name: 'CatalogView' });
                   decoding="async"
                   class="absolute inset-0 w-full h-full object-cover hidden dark:block"
                 />
+                </div>
               </div>
             </div>
           </div>

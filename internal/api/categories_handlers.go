@@ -119,7 +119,7 @@ func (h *Handlers) HandleAdminCategoriesTree(w http.ResponseWriter, r *http.Requ
 			httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid child_of parameter")
 			return
 		}
-		data, err := h.categoryRepo.GetTreeByParentJSON(parentID)
+		data, err := h.categoryRepo.GetAdminTreeByParentJSON(parentID)
 		if err != nil {
 			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 			return

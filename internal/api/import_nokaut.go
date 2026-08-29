@@ -525,6 +525,10 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 
 	fmt.Println("[IMPORT-NOKAUT] Transaction committed successfully")
 
+	// Rebuild category trees with fully committed data: pages created inside the
+	// transaction were not visible to the transactional rebuild (Phase 5).
+	h.categoryRepo.RebuildTrees()
+
 	// ============================================
 	// Phase 6: Build EAN page sort indexes
 	// ============================================
@@ -610,25 +614,17 @@ func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, compan
 	// Availability → status + stock
 	status, stockQty := mapAvailability(offer.Availability, cfg.AvailabilityMap)
 
-	// Attributes: extra fields from config + product_url + shop_category
+	// Attributes: extra fields from config only
 	var attrs []model.KeyValue
 	for _, af := range cfg.AttrFields {
 		if val := strings.TrimSpace(offer.Props[af.Field]); val != "" {
 			attrs = append(attrs, model.KeyValue{Key: af.Code, Value: html.UnescapeString(val)})
 		}
 	}
-	if productURL != "" {
-		attrs = append(attrs, model.KeyValue{Key: "product_url", Value: productURL})
-	}
+	// product_url, purchase_url, and shop_category are now separate fields on Product, not attributes
 	// Partner/affiliate purchase URL: from <url> field (e.g. webep1.com link).
 	// This is the link the "go to purchase" button should use.
 	purchaseURL := strings.TrimSpace(offer.URL)
-	if purchaseURL != "" {
-		attrs = append(attrs, model.KeyValue{Key: "purchase_url", Value: purchaseURL})
-	}
-	if shopCategory != "" {
-		attrs = append(attrs, model.KeyValue{Key: "shop_category", Value: html.UnescapeString(shopCategory)})
-	}
 
 	// Step 1: Clean HTML first — remove scripts, inline styles, unescape entities
 	rawDescription := strings.TrimSpace(offer.Description)
@@ -715,8 +711,11 @@ func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, compan
 		Currency:      currency,
 		StockQty:      stockQty,
 		Status:        status,
+		ProductURL:    productURL,
+		PurchaseURL:   purchaseURL,
 		Attributes:    attrs,
 		Images:        images,
+		ShopCategory:  shopCategory,
 	}
 }
 

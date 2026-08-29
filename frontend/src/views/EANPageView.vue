@@ -221,11 +221,18 @@ async function initFromData() {
   await fetchCompanySettings();
 };
 
-// Get the partner purchase URL from a product's attributes
+// Get the partner purchase URL from a product's purchase_url field
+// Falls back to attributes for legacy data
 const getPurchaseUrl = (product) => {
-  if (!product?.attributes) return '';
-  const attr = product.attributes.find(a => a.key === 'purchase_url');
-  return attr?.value || '';
+  if (!product) return '';
+  // New format: separate field
+  if (product.purchase_url) return product.purchase_url;
+  // Legacy format: in attributes
+  if (product.attributes && Array.isArray(product.attributes)) {
+    const attr = product.attributes.find(a => a.key === 'purchase_url');
+    if (attr?.value) return attr.value;
+  }
+  return '';
 };
 
 // Open the partner purchase link in a new tab
@@ -886,8 +893,8 @@ watch(
                   </template>
                 </div>
                 <!-- Right: description (wide, multi-line) -->
-                <div v-if="product.description" class="flex-1 min-w-0 text-xs text-ink-3 leading-relaxed break-words overflow-y-auto max-h-[1.5em]" style="scrollbar-width: thin;">
-                  <div v-html="sanitizeHtml(product.description)" class="[&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4 [&>p]:my-0 [&>li]:my-0 [&>div]:my-0 [&>span]:my-0 [&>strong]:font-semibold"></div>
+                <div v-if="product.description" class="flex-1 min-w-0 text-xs text-ink-3 leading-relaxed break-words">
+                  <div v-html="sanitizeHtml(product.description)" class="[&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4 [&>p]:my-0.5 [&>li]:my-0 [&>div]:my-0 [&>span]:my-0 [&>strong]:font-semibold"></div>
                 </div>
                 <!-- Far right: price -->
                 <div class="font-semibold text-orange-600 whitespace-nowrap text-sm flex-shrink-0 mt-1">

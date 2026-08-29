@@ -974,9 +974,9 @@ func (h *Handlers) importNormalizedFileBatched(
 						(*batchAccum).AddIndex("text:"+tok, docID)
 					}
 
-					// EAN index
-					if prod.EAN != "" {
-						(*batchAccum).AddIndex("ean:"+prod.EAN, docID)
+					// EAN index (name-based key for products without EAN)
+					if eanKey := db.ProductEANIndexKey(prod); eanKey != "" {
+						(*batchAccum).AddIndex("ean:"+eanKey, docID)
 					}
 				}
 				imported++

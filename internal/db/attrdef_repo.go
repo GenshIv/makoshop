@@ -338,7 +338,7 @@ func (r *AttrDefRepo) GetCodesForCategoryTree(catID int64, categoryRepo *Categor
 		return nil, err
 	}
 	if len(codes) > 0 {
-		return codes, nil
+		return filterURLAttributes(codes), nil
 	}
 
 	// 2. No direct codes — check direct children (O(1) via cached children)
@@ -369,7 +369,19 @@ func (r *AttrDefRepo) GetCodesForCategoryTree(catID int64, categoryRepo *Categor
 		}
 	}
 
-	return firstCodes, nil
+	return filterURLAttributes(firstCodes), nil
+}
+
+// filterURLAttributes filters out product_url, purchase_url, and shop_category from attribute codes.
+// These are now separate fields on Product, not attributes.
+func filterURLAttributes(codes []string) []string {
+	result := make([]string, 0, len(codes))
+	for _, code := range codes {
+		if code != "product_url" && code != "purchase_url" && code != "shop_category" {
+			result = append(result, code)
+		}
+	}
+	return result
 }
 
 // intersectSortedStrings returns the intersection of two sorted string slices.

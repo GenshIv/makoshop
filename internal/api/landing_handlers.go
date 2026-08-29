@@ -420,6 +420,18 @@ func (h *Handlers) HandleEANPageByPath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Canonicalize trailing slash: /shop/x/y/ -> /shop/x/y (301). Without this,
+	// both forms serve identical content as duplicate URLs. This handler only
+	// serves /shop and /shop/... paths, so any trailing slash is safe to strip.
+	if len(r.URL.Path) > 1 && strings.HasSuffix(r.URL.Path, "/") {
+		target := strings.TrimSuffix(r.URL.Path, "/")
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
+		return
+	}
+
 	// Extract path after /shop/
 	path := r.URL.Path
 	prefix := "/shop/"
@@ -633,6 +645,8 @@ func (h *Handlers) handleEANPageCatalog(w http.ResponseWriter, r *http.Request, 
 			respData.CatID = catID
 			if treePath, err := h.categoryRepo.GetTreePath(catID); err == nil && len(treePath) > 0 {
 				respData.TreePath = treePath
+				// Canonical URL for the category listing page.
+				respData.SEOURL = "/shop/" + strings.Join(treePath, "/")
 			}
 			// Include full category object (with descriptions and images)
 			if cat, err := h.categoryRepo.Get(catID); err == nil {
@@ -642,10 +656,13 @@ func (h *Handlers) handleEANPageCatalog(w http.ResponseWriter, r *http.Request, 
 					respData.Subcategories = silentjson.RawMessage(subsJSON)
 				}
 			}
+		} else {
+			// Root catalog: canonical is /shop
+			respData.SEOURL = "/shop"
 		}
 
 		if wantsHTML(r) {
-			writeHTMLResponseEANList(w, r, i18n.T("ui.catalog_title"), respData)
+			writeHTMLResponseEANList(w, r, i18n.T("ui.catalog_title"), h.siteBaseURL(), respData)
 			return
 		}
 		writeJSONEANList(w, r, http.StatusOK, respData)
@@ -744,7 +761,7 @@ func (h *Handlers) writeEANPageResponse(w http.ResponseWriter, r *http.Request, 
 
 	title := sp.Title + " — MakoShop"
 	if wantsHTML(r) {
-		writeHTMLResponseEANList(w, r, title, respData)
+		writeHTMLResponseEANList(w, r, title, h.siteBaseURL(), respData)
 		return
 	}
 	writeJSONEANList(w, r, http.StatusOK, respData)
@@ -788,7 +805,7 @@ func wantsHTML(r *http.Request) bool {
 
 // writeHTMLResponse writes an HTML page with embedded data for SSR
 // For bots: full SSR with inline content. For browsers: minimal HTML + JS.
-func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title string, data db.EANListRespData) {
+func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title string, baseURL string, data db.EANListRespData) {
 	ctx := r.Context()
 	headOnly := r.Method == http.MethodHead
 
@@ -804,11 +821,9 @@ func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title stri
 		}
 	}
 
-	// Base URL
-	baseURL := "https://makoshop.com"
-
-	// Extract SEO fields
-	seoURL := ""
+	// Extract SEO fields. seoURL drives the canonical link and og:url; it is
+	// populated by the callers for both category listings and EAN pages.
+	seoURL := data.SEOURL
 	desc := "MakoShop — маркетплейс товаров по лучшим ценам от проверенных поставщиков."
 	image := ""
 
@@ -861,10 +876,8 @@ func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title stri
 		w.Write(htmlBotOGTitleEnd)
 		writeEscapedString(w, desc)
 		w.Write(htmlBotOGDescEnd)
-		w.Write(htmlBotOGType)
 		w.Write(stringToBytes(ogURL))
 		w.Write(htmlBotOGURLEnd)
-		w.Write(htmlBotBodyStart)
 		if bodyContent != "" {
 			w.Write(stringToBytes(bodyContent))
 		}
@@ -924,16 +937,10 @@ var (
 	htmlBotOGDescEnd = []byte(`">
   <meta property="og:type" content="website">
   <meta property="og:url" content="`)
-	htmlBotOGType = []byte(`">
-</head>
-<body>
-  <div id="app">`)
 	htmlBotOGURLEnd = []byte(`">
 </head>
 <body>
   <div id="app">`)
-	htmlBotBodyStart = []byte(`</div>
-  <script>window.__INITIAL_DATA__=`)
 	htmlBotScriptStart = []byte(`</div>
   <script>window.__INITIAL_DATA__=`)
 	htmlBotScriptEnd = []byte(`</script>
@@ -1247,8 +1254,9 @@ func renderSSRContent(jsonData []byte) string {
 		}
 	}
 
-	// Check if this is a single EANPage (has "page")
-	if raw, ok := data["page"]; ok {
+	// Check if this is a single EANPage (has "ean_page"). Note: the top-level
+	// "page" field is the pagination number, not the object.
+	if raw, ok := data["ean_page"]; ok {
 		var page model.EANPage
 		if err := json.Unmarshal(raw, &page); err == nil {
 			var products []model.Product

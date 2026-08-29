@@ -133,18 +133,22 @@ const attrsString = computed(() => {
       @mouseenter="onImageMouseEnter"
       @mouseleave="onImageMouseLeave"
     >
-      <img
+      <div
         v-if="product.images?.length"
-        :src="product.images[0]"
-        :alt="title"
-        loading="lazy"
-        decoding="async"
-        class="w-full h-full object-contain transition-all duration-500 ease-out group-hover:scale-[1.03]"
+        class="w-full h-full bg-white flex items-center justify-center transition-all duration-500 ease-out group-hover:scale-[1.03]"
         :class="{
           'image-fade': enableImageFade,
           'image-fade-active': enableImageFade && isImageActive
         }"
-      />
+      >
+        <img
+          :src="product.images[0]"
+          :alt="title"
+          loading="lazy"
+          decoding="async"
+          class="w-full h-full object-contain"
+        />
+      </div>
       <span v-else class="text-ink-3 text-xs">{{ t('catalog.no_photo') }}</span>
 
       <!-- Price sparkline on hover -->
@@ -224,18 +228,22 @@ const attrsString = computed(() => {
         @mouseenter="onImageMouseEnter"
         @mouseleave="onImageMouseLeave"
       >
-        <img
+        <div
           v-if="product.images?.length"
-          :src="product.images[0]"
-          :alt="title"
-          loading="lazy"
-          decoding="async"
-          class="w-full h-full object-cover transition-all duration-500 ease-out"
+          class="w-full h-full bg-white flex items-center justify-center transition-all duration-500 ease-out"
           :class="{
             'image-fade': enableImageFade,
             'image-fade-active': enableImageFade && isImageActive
           }"
-        />
+        >
+          <img
+            :src="product.images[0]"
+            :alt="title"
+            loading="lazy"
+            decoding="async"
+            class="w-full h-full object-cover"
+          />
+        </div>
         <span v-else class="w-full h-full flex items-center justify-center text-ink-3 text-xs">
           {{ t('catalog.no_photo') }}
         </span>

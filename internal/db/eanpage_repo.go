@@ -57,18 +57,15 @@ func extractKeywordsFromProduct(p *model.Product) string {
 	// Start with product name
 	keywords := []string{p.Name}
 
-	// Add shop category from attributes if present
-	for _, attr := range p.Attributes {
-		if attr.Key == "shop_category" && attr.Value != "" {
-			// Split by common delimiters and add each part
-			parts := strings.Split(attr.Value, ">")
-			for _, part := range parts {
-				part = strings.TrimSpace(part)
-				if part != "" {
-					keywords = append(keywords, part)
-				}
+	// Add shop category from Product.ShopCategory field if present
+	if p.ShopCategory != "" {
+		// Split by common delimiters and add each part
+		parts := strings.Split(p.ShopCategory, ">")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				keywords = append(keywords, part)
 			}
-			break
 		}
 	}
 
@@ -638,18 +635,15 @@ func (r *EANPageRepo) autoCatalogize(p *model.Product) (int64, error) {
 	// Tokenize product name (same as catalogizer)
 	productTokens := tokenizer.Tokenize(p.Name)
 
-	// Also tokenize shop_category attribute if present (use only last element)
-	for _, attr := range p.Attributes {
-		if attr.Key == "shop_category" && attr.Value != "" {
-			// Split by backslash or forward slash and take last element
-			parts := strings.Split(attr.Value, "\\")
-			last := parts[len(parts)-1]
-			last = strings.TrimSpace(last)
-			if last != "" {
-				catTokens := tokenizer.Tokenize(last)
-				productTokens = append(productTokens, catTokens...)
-			}
-			break
+	// Also tokenize shop_category field if present (use only last element)
+	if p.ShopCategory != "" {
+		// Split by backslash or forward slash and take last element
+		parts := strings.Split(p.ShopCategory, "\\")
+		last := parts[len(parts)-1]
+		last = strings.TrimSpace(last)
+		if last != "" {
+			catTokens := tokenizer.Tokenize(last)
+			productTokens = append(productTokens, catTokens...)
 		}
 	}
 
@@ -715,6 +709,23 @@ func eanPageKeyForProduct(p *model.Product) string {
 	}
 	// Name-based fallback key.
 	return "nm:" + strings.ToLower(strings.Join(strings.Fields(p.Name), " "))
+}
+
+// ProductEANIndexKey returns the key under which a product must be indexed in
+// the "ean:" turbo index so GetProductsByEAN finds it on its EAN page.
+// For products with an EAN that's the EAN; for name-based pages it's the same
+// "nm:<name>" fallback as eanPageKeyForProduct (so pages and products always
+// match). Returns "" when neither is available.
+func ProductEANIndexKey(p *model.Product) string {
+	if p.EAN != "" {
+		return p.EAN
+	}
+	pk := eanPageKeyForProduct(p)
+	// Guard against empty names ("nm:" with nothing after it).
+	if pk == "" || pk == "nm:" {
+		return ""
+	}
+	return pk
 }
 
 // toEANPageSlug creates a URL-friendly slug from EAN and title.
@@ -1190,6 +1201,20 @@ func (r *EANPageRepo) CategoriesWithEANPages() map[int64]struct{} {
 	return result
 }
 
+// CountEANPagesWithAttrCode counts how many EAN pages have the given attribute code.
+// Uses eanpage_attr_code:{code} turbo index for O(1) lookup.
+func (r *EANPageRepo) CountEANPagesWithAttrCode(code string) int {
+	if r.Store == nil {
+		return 0
+	}
+	key := "eanpage_attr_code:" + code
+	tokens, err := r.Store.db.TurboGetIndexTokens(key)
+	if err != nil || len(tokens) == 0 {
+		return 0
+	}
+	return len(tokens)
+}
+
 // RecalculateProductCounts recalculates ProductCount for all EAN pages
 // based on actual products linked via EAN.
 // This fixes inconsistencies after bulk imports.
@@ -1480,7 +1505,23 @@ func (r *EANPageRepo) CreateNoListIndexTx(txn *Transaction, s *model.EANPage) er
 	}
 
 	data := MarshalEANPage(*s)
-	return txn.DocPut(KeyEANPage(s.ID), data)
+	if err := txn.DocPut(KeyEANPage(s.ID), data); err != nil {
+		return fmt.Errorf("save eanpage: %w", err)
+	}
+
+	// Turbo index: eanpage_ean:<ean> (buffered in transaction)
+	eanKey := turboKeyEANPageEAN + s.EAN
+	if err := txn.TurboWrite(eanKey, []byte(strconv.FormatInt(s.ID, 10))); err != nil {
+		return fmt.Errorf("turbo index eanpage_ean: %w", err)
+	}
+
+	// Turbo index: eanpage_slug:<slug> (buffered in transaction)
+	slugKey := turboKeyEANPageSlug + s.Slug
+	if err := txn.TurboWrite(slugKey, []byte(KeyEANPage(s.ID))); err != nil {
+		return fmt.Errorf("turbo index eanpage_slug: %w", err)
+	}
+
+	return nil
 }
 
 // RecalculateProductCountsTx is the transactional version of RecalculateProductCounts.

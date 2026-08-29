@@ -64,6 +64,9 @@ func eanpageKeyVendor(companyID int64) string {
 func eanpageKeyAttr(code string, value string) string {
 	return "eanpage_attr:" + code + ":" + value
 }
+func eanpageKeyAttrCode(code string) string {
+	return "eanpage_attr_code:" + code
+}
 func eanpageKeyText(token string) string { return "eanpage_text:" + token }
 
 // eanpageKeyCategoryUnion returns the key for a category union index.
@@ -125,11 +128,17 @@ func (s *EANPageSearch) IndexEANPage(sp *model.EANPage) error {
 		indexes[eanpageKeyBrand(sp.BrandID)] = append(indexes[eanpageKeyBrand(sp.BrandID)], docID)
 	}
 
-	// Attributes index
+	// Attributes index + attr_code index
+	attrCodesSeen := make(map[string]struct{})
 	for _, kv := range sp.Attributes {
 		valStr := kv.Value
 		if valStr != "" {
 			indexes[eanpageKeyAttr(kv.Key, valStr)] = append(indexes[eanpageKeyAttr(kv.Key, valStr)], docID)
+			// Track unique attribute codes for this EAN page
+			if _, ok := attrCodesSeen[kv.Key]; !ok {
+				attrCodesSeen[kv.Key] = struct{}{}
+				indexes[eanpageKeyAttrCode(kv.Key)] = append(indexes[eanpageKeyAttrCode(kv.Key)], docID)
+			}
 			// Attr values per category for filter UI: own category only (no ancestors)
 			if sp.CategoryID != 0 {
 				labelKey := "attr_label:" + kv.Key + ":" + valStr
@@ -218,10 +227,17 @@ func (s *EANPageSearch) IndexEANPageBatchTx(txn *Transaction, pages []*model.EAN
 			indexes[eanpageKeyBrand(sp.BrandID)] = append(indexes[eanpageKeyBrand(sp.BrandID)], docID)
 		}
 
+		// Track unique attribute codes per EAN page
+		attrCodesSeen := make(map[string]struct{})
 		for _, kv := range sp.Attributes {
 			valStr := kv.Value
 			if valStr != "" {
 				indexes[eanpageKeyAttr(kv.Key, valStr)] = append(indexes[eanpageKeyAttr(kv.Key, valStr)], docID)
+				// Track unique attribute codes for this EAN page
+				if _, ok := attrCodesSeen[kv.Key]; !ok {
+					attrCodesSeen[kv.Key] = struct{}{}
+					indexes[eanpageKeyAttrCode(kv.Key)] = append(indexes[eanpageKeyAttrCode(kv.Key)], docID)
+				}
 				if sp.CategoryID != 0 {
 					if attrCatRef[kv.Key] == nil {
 						attrCatRef[kv.Key] = make(map[int64]map[string]string)
@@ -289,11 +305,17 @@ func (s *EANPageSearch) IndexEANPageBatch(pages []*model.EANPage) error {
 			indexes[eanpageKeyBrand(sp.BrandID)] = append(indexes[eanpageKeyBrand(sp.BrandID)], docID)
 		}
 
-		// Attributes index
+		// Attributes index + attr_code index
+		attrCodesSeen := make(map[string]struct{})
 		for _, kv := range sp.Attributes {
 			valStr := kv.Value
 			if valStr != "" {
 				indexes[eanpageKeyAttr(kv.Key, valStr)] = append(indexes[eanpageKeyAttr(kv.Key, valStr)], docID)
+				// Track unique attribute codes for this EAN page
+				if _, ok := attrCodesSeen[kv.Key]; !ok {
+					attrCodesSeen[kv.Key] = struct{}{}
+					indexes[eanpageKeyAttrCode(kv.Key)] = append(indexes[eanpageKeyAttrCode(kv.Key)], docID)
+				}
 				// Attr values per category for filter UI: own category only (no ancestors)
 				if sp.CategoryID != 0 {
 					if attrCatRef[kv.Key] == nil {
@@ -397,10 +419,17 @@ func (s *EANPageSearch) UnindexEANPage(sp *model.EANPage) error {
 		s.db.TurboDeleteIndexString(eanpageKeyBrand(sp.BrandID), docID)
 	}
 
+	// Delete attr_code index (unique codes only)
+	attrCodesSeen := make(map[string]struct{})
 	for _, kv := range sp.Attributes {
 		valStr := kv.Value
 		if valStr != "" {
 			s.db.TurboDeleteIndexString(eanpageKeyAttr(kv.Key, valStr), docID)
+			// Delete from attr_code index (once per code)
+			if _, ok := attrCodesSeen[kv.Key]; !ok {
+				attrCodesSeen[kv.Key] = struct{}{}
+				s.db.TurboDeleteIndexString(eanpageKeyAttrCode(kv.Key), docID)
+			}
 		}
 	}
 
@@ -1027,4 +1056,51 @@ func parseIDFromKey(key, prefix string) (int64, bool) {
 		return 0, false
 	}
 	return id, true
+}
+
+// BuildAttrCodeIndexes rebuilds the eanpage_attr_code:{code} indexes from all EAN pages.
+// This is needed after adding the index to existing data.
+func (s *EANPageSearch) BuildAttrCodeIndexes() error {
+	if !s.enabled {
+		return nil
+	}
+
+	start := time.Now().Unix()
+	fmt.Println("[EANPAGE] Building attr_code indexes...")
+
+	all, err := s.repo.List()
+	if err != nil {
+		return fmt.Errorf("list eanpages: %w", err)
+	}
+
+	// Collect all indexes in memory
+	indexes := make(map[string][]string)
+
+	for _, sp := range all {
+		docID := KeyEANPage(sp.ID)
+		// Track unique attribute codes per EAN page
+		attrCodesSeen := make(map[string]struct{})
+		for _, kv := range sp.Attributes {
+			if kv.Value != "" {
+				if _, ok := attrCodesSeen[kv.Key]; !ok {
+					attrCodesSeen[kv.Key] = struct{}{}
+					indexes[eanpageKeyAttrCode(kv.Key)] = append(indexes[eanpageKeyAttrCode(kv.Key)], docID)
+				}
+			}
+		}
+	}
+
+	// Write all indexes in batch
+	for key, docIDs := range indexes {
+		if len(docIDs) == 0 {
+			continue
+		}
+		if _, err := s.db.TurboPutBatchIndexString(key, docIDs); err != nil {
+			fmt.Printf("WARN: attr_code index %s: %v\n", key, err)
+		}
+	}
+
+	elapsed := time.Since(time.Unix(start, 0))
+	fmt.Printf("[EANPAGE] attr_code indexes built in %v: %d indexes, %d EAN pages scanned\n", elapsed, len(indexes), len(all))
+	return nil
 }
