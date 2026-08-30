@@ -10,7 +10,7 @@ const DEFAULT_CONSENT = {
   acceptedAt: null,
 };
 
-function getConsent() {
+function getConsentFromStorage() {
   try {
     const stored = localStorage.getItem(CONSENT_KEY);
     if (stored) {
@@ -20,6 +20,27 @@ function getConsent() {
     console.warn('Failed to read consent from localStorage:', e);
   }
   return null;
+}
+
+function getConsentFromCookie() {
+  try {
+    const cookies = document.cookie.split(';');
+    for (const cookie of cookies) {
+      const idx = cookie.indexOf(`${COOKIE_NAME}=`);
+      if (idx !== -1 && cookie.slice(0, idx).trim() === '') {
+        return JSON.parse(decodeURIComponent(cookie.slice(idx + COOKIE_NAME.length + 1)));
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to read consent from cookie:', e);
+  }
+  return null;
+}
+
+// Read consent from localStorage first, falling back to the cookie so the
+// choice survives even if one storage mechanism is cleared or blocked.
+function getConsent() {
+  return getConsentFromStorage() || getConsentFromCookie();
 }
 
 function setCookie(name, value, days) {
@@ -44,6 +65,11 @@ export function useCookieConsent() {
   if (_instance) return _instance;
 
   const consent = ref(getConsent() || { ...DEFAULT_CONSENT });
+  // Re-persist an existing choice to both localStorage and the cookie so the
+  // two stay in sync and the consent isn't lost if one gets cleared.
+  if (consent.value.acceptedAt) {
+    saveConsent(consent.value);
+  }
   const showBanner = ref(!consent.value.acceptedAt);
 
   const hasAnalytics = computed(() => consent.value.analytics);

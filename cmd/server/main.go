@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -126,10 +127,295 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.Set("X-XSS-Protection", "0")
 		// CSP: allow self resources and inline styles/scripts used by the SPA.
+		// Google Analytics domains are permitted so gtag.js can load (script-src)
+		// and page-view data can be sent (connect-src). Kept to specific Google
+		// hosts rather than a broad https: to stay restrictive.
 		h.Set("Content-Security-Policy",
-			"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:")
+			"default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.google-analytics.com https://analytics.google.com https://*.googletagmanager.com https://*.doubleclick.net")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// compressiblePrefixes are Content-Type prefixes worth gzipping. Binary assets
+// (images, webp) are excluded since gzip would not shrink them meaningfully.
+var compressiblePrefixes = []string{
+	"text/",
+	"application/json",
+	"application/javascript",
+	"application/xml",
+	"image/svg+xml",
+}
+
+func isCompressible(contentType string) bool {
+	for _, p := range compressiblePrefixes {
+		if strings.HasPrefix(contentType, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// gzipResponseWriter decides whether to compress at WriteHeader time (when the
+// Content-Type is already known) and then streams gzip directly. This avoids
+// buffering large responses (e.g. multi-MB sitemaps) in memory.
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	gz      *gzip.Writer
+	started bool
+}
+
+func (g *gzipResponseWriter) WriteHeader(code int) {
+	if g.started {
+		return
+	}
+	g.started = true
+	if isCompressible(g.Header().Get("Content-Type")) {
+		h := g.Header()
+		h.Set("Content-Encoding", "gzip")
+		h.Add("Vary", "Accept-Encoding")
+		// Compressed length differs from the original; drop it.
+		h.Del("Content-Length")
+		g.gz = gzip.NewWriter(g.ResponseWriter)
+	}
+	g.ResponseWriter.WriteHeader(code)
+}
+
+func (g *gzipResponseWriter) Write(b []byte) (int, error) {
+	if !g.started {
+		// Some handlers write without an explicit WriteHeader call.
+		g.WriteHeader(http.StatusOK)
+	}
+	if g.gz != nil {
+		return g.gz.Write(b)
+	}
+	return g.ResponseWriter.Write(b)
+}
+
+func (g *gzipResponseWriter) Flush() {
+	if g.gz != nil {
+		g.gz.Flush()
+	}
+	if f, ok := g.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// gzipMiddleware compresses responses with gzip when the client supports it.
+func gzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		gw := &gzipResponseWriter{ResponseWriter: w}
+		next.ServeHTTP(gw, r)
+		if gw.gz != nil {
+			gw.gz.Close()
+		}
+	})
+}
+
+// cachedAssetServer serves dist assets with long-lived immutable caching.
+// Build artifacts are content-hashed in their filenames (e.g. index-AbC123.js),
+// so browsers can cache them aggressively without risk of stale content.
+func cachedAssetServer(dir http.Dir) http.Handler {
+	fs := http.FileServer(dir)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		fs.ServeHTTP(w, r)
+	})
+}
+
+// enhanceHomepageHTML injects SEO tags (canonical, OG, JSON-LD) plus Polish
+// lang/title/description into the SPA index.html for the "/" route. The built
+// index.html is a thin shell without these; crawlers only see this markup for
+// the homepage, so we enrich it at serve time rather than rebuilding the SPA.
+func enhanceHomepageHTML(content []byte, siteURL string) []byte {
+	s := string(content)
+
+	// Language: Polish storefront.
+	s = strings.Replace(s, `<html lang="en">`, `<html lang="pl">`, 1)
+
+	const title = "wszyst.pl — Katalog produktów online | Najlepsze ceny od sprawdzonych sprzedawców"
+	const desc = "wszyst.pl to online katalog z tysiącami produktów. Porównuj ceny, czytaj opinie i kupuj od zweryfikowanych sprzedawców."
+
+	// Replace <title>...</title>.
+	if i := strings.Index(s, "<title>"); i >= 0 {
+		if j := strings.Index(s[i:], "</title>"); j >= 0 {
+			s = s[:i] + "<title>" + title + "</title>" + s[i+j+len("</title>"):]
+		}
+	}
+
+	// Replace description meta content.
+	const descTag = `<meta name="description" content="`
+	if i := strings.Index(s, descTag); i >= 0 {
+		start := i + len(descTag)
+		if j := strings.Index(s[start:], `" />`); j >= 0 {
+			s = s[:start] + desc + s[start+j:]
+		}
+	}
+
+	jsonLD := `{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "` + siteURL + `#org",
+      "name": "wszyst.pl",
+      "url": "` + siteURL + `/"
+    },
+    {
+      "@type": "WebSite",
+      "@id": "` + siteURL + `#website",
+      "url": "` + siteURL + `/",
+      "name": "wszyst.pl",
+      "publisher": {"@id": "` + siteURL + `#org"},
+      "inLanguage": "pl"
+    }
+  ]
+}`
+
+	inject := `<link rel="canonical" href="` + siteURL + `/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="wszyst.pl" />
+    <meta property="og:title" content="` + title + `" />
+    <meta property="og:description" content="` + desc + `" />
+    <meta property="og:url" content="` + siteURL + `/" />
+    <script type="application/ld+json">` + jsonLD + `</script>`
+
+	s = strings.Replace(s, "</head>", inject+"\n  </head>", 1)
+
+	return []byte(s)
+}
+
+// staticRouteContent returns the server-rendered HTML body for a client-side
+// route that would otherwise be an empty shell to non-JS renderers (crawlers,
+// accessibility scanners). Vue replaces this markup on mount, so it only ever
+// shows when JavaScript is unavailable — but it keeps these pages from being
+// flagged as "blank". Content mirrors the corresponding Vue view (Polish).
+func staticRouteContent(path string) (title, desc, body string) {
+	switch path {
+	case "/login":
+		title = "Logowanie — wszyst.pl"
+		desc = "Zaloguj się na swoje konto w wszyst.pl."
+		body = `<div class="min-h-[60vh] flex items-center justify-center px-4">
+      <div class="w-full max-w-md bg-surface rounded-xl border border-line shadow-sm p-6 sm:p-8">
+        <h1 class="text-2xl font-bold mb-6 text-center text-ink">Logowanie</h1>
+        <form class="space-y-4" method="post" action="/auth/login">
+          <div>
+            <label class="block text-sm text-ink-2 mb-1" for="login-email">Email</label>
+            <input id="login-email" name="email" type="email" autocomplete="email" required class="w-full px-3 py-2 border border-line rounded-lg bg-surface-2/50" />
+          </div>
+          <div>
+            <label class="block text-sm text-ink-2 mb-1" for="login-password">Hasło</label>
+            <input id="login-password" name="password" type="password" autocomplete="current-password" required class="w-full px-3 py-2 border border-line rounded-lg bg-surface-2/50" />
+          </div>
+          <button type="submit" class="w-full btn btn-primary">Logowanie</button>
+        </form>
+        <p class="mt-4 text-center text-sm text-ink-2">Nie masz konta? <a href="/register" class="text-accent hover:underline">Zarejestruj się</a></p>
+      </div>
+    </div>`
+	case "/register":
+		title = "Rejestracja — wszyst.pl"
+		desc = "Utwórz nowe konto w wszyst.pl."
+		body = `<div class="min-h-[60vh] flex items-center justify-center px-4">
+      <div class="w-full max-w-md bg-surface rounded-xl border border-line shadow-sm p-6 sm:p-8">
+        <h1 class="text-2xl font-bold mb-6 text-center text-ink">Rejestracja</h1>
+        <form class="space-y-4" method="post" action="/auth/register">
+          <div>
+            <label class="block text-sm text-ink-2 mb-1" for="reg-name">Imię</label>
+            <input id="reg-name" name="name" type="text" autocomplete="given-name" required class="w-full px-3 py-2 border border-line rounded-lg bg-surface-2/50" />
+          </div>
+          <div>
+            <label class="block text-sm text-ink-2 mb-1" for="reg-email">Email</label>
+            <input id="reg-email" name="email" type="email" autocomplete="email" required class="w-full px-3 py-2 border border-line rounded-lg bg-surface-2/50" />
+          </div>
+          <div>
+            <label class="block text-sm text-ink-2 mb-1" for="reg-password">Hasło</label>
+            <input id="reg-password" name="password" type="password" autocomplete="new-password" minlength="6" required class="w-full px-3 py-2 border border-line rounded-lg bg-surface-2/50" />
+          </div>
+          <div>
+            <label class="block text-sm text-ink-2 mb-1" for="reg-role">Rola</label>
+            <select id="reg-role" name="role" class="w-full px-3 py-2 border border-line rounded-lg bg-surface-2/50">
+              <option value="buyer">Kupujący</option>
+              <option value="seller">Sprzedawca</option>
+            </select>
+          </div>
+          <button type="submit" class="w-full btn btn-primary">Zarejestruj się</button>
+        </form>
+        <p class="mt-4 text-center text-sm text-ink-2">Masz już konto? <a href="/login" class="text-accent hover:underline">Zaloguj się</a></p>
+      </div>
+    </div>`
+	case "/privacy-policy":
+		title = "Polityka prywatności — wszyst.pl"
+		desc = "Polityka prywatności wszyst.pl — jak przetwarzamy Twoje dane osobowe."
+		body = `<div class="max-w-app mx-auto px-4 py-8">
+      <h1 class="text-2xl font-bold mb-6">Polityka prywatności</h1>
+      <p class="text-ink-2 mb-6">Szanujemy Twoją prywatność i zobowiązujemy się do ochrony Twoich danych osobowych.</p>
+      <section class="mb-6">
+        <h2 class="text-lg font-semibold mb-2">Zbierane dane</h2>
+        <p class="text-ink-2">Możemy zbierać imię, email, telefon, adres dostawy oraz dane o zamówieniach.</p>
+      </section>
+      <section class="mb-6">
+        <h2 class="text-lg font-semibold mb-2">Cookies</h2>
+        <p class="text-ink-2">Używamy cookies do poprawy funkcjonalności strony i analityki.</p>
+      </section>
+      <section class="mb-6">
+        <h2 class="text-lg font-semibold mb-2">Używanie danych</h2>
+        <p class="text-ink-2">Twoje dane są używane do realizacji zamówień, komunikacji z Tobą i poprawy naszych usług.</p>
+      </section>
+      <section class="mb-6">
+        <h2 class="text-lg font-semibold mb-2">Twoje prawa</h2>
+        <p class="text-ink-2">Możesz żądać dostępu, korekty lub usunięcia swoich danych.</p>
+      </section>
+      <section class="mb-6">
+        <h2 class="text-lg font-semibold mb-2">Kontakt</h2>
+        <p class="text-ink-2">W sprawach prywatności skontaktuj się z nami: privacy@wszyst.pl</p>
+      </section>
+    </div>`
+	default:
+		return "", "", ""
+	}
+	return title, desc, body
+}
+
+// enhanceStaticRouteHTML enriches the SPA shell for a client-side route with a
+// real <title>, meta description, canonical link and server-rendered body
+// content so non-JS renderers see a non-blank page. Vue replaces #app on mount.
+func enhanceStaticRouteHTML(content []byte, siteURL string, path string) []byte {
+	title, desc, body := staticRouteContent(path)
+	if title == "" {
+		return content
+	}
+
+	s := string(content)
+
+	// Language: Polish storefront.
+	s = strings.Replace(s, `<html lang="en">`, `<html lang="pl">`, 1)
+
+	// Replace <title>...</title>.
+	if i := strings.Index(s, "<title>"); i >= 0 {
+		if j := strings.Index(s[i:], "</title>"); j >= 0 {
+			s = s[:i] + "<title>" + title + "</title>" + s[i+j+len("</title>"):]
+		}
+	}
+
+	// Replace description meta content.
+	const descTag = `<meta name="description" content="`
+	if i := strings.Index(s, descTag); i >= 0 {
+		start := i + len(descTag)
+		if j := strings.Index(s[start:], `" />`); j >= 0 {
+			s = s[:start] + desc + s[start+j:]
+		}
+	}
+
+	// Inject canonical link.
+	s = strings.Replace(s, "</head>", `<link rel="canonical" href="`+siteURL+path+`" />`+"\n  </head>", 1)
+
+	// Replace the empty #app shell with server-rendered content.
+	s = strings.Replace(s, `<div id="app"></div>`, `<div id="app">`+body+`</div>`, 1)
+
+	return []byte(s)
 }
 
 // bootstrapSuperAdmin creates a superadmin if no admins exist.
@@ -233,6 +519,12 @@ func spaAwareHandler(next http.Handler) http.Handler {
 	})
 }
 
+func redirectToHTTPS(w http.ResponseWriter, r *http.Request) {
+	// Формируем новый URL с протоколом https
+	target := "https://" + r.Host + r.RequestURI
+	http.Redirect(w, r, target, http.StatusMovedPermanently)
+}
+
 func main() {
 	// Automatically load .env (if present) so the server picks up its
 	// configuration without the operator exporting variables manually.
@@ -278,6 +570,7 @@ func main() {
 	cartRepo := db.NewCartRepo(store)
 	paymentMethodRepo := db.NewPaymentMethodRepo(store)
 	deliveryTimeRepo := db.NewDeliveryTimeRepo(store)
+	deliveryMethodRepo := db.NewDeliveryMethodRepo(store)
 	installmentPlanRepo := db.NewInstallmentPlanRepo(store)
 
 	h := api.NewHandlers(store)
@@ -287,7 +580,7 @@ func main() {
 	// built bundles (not the dev /src/main.js) on deep-link navigation.
 	api.LoadBrowserAssetTags()
 	// Attach company settings repos to handlers
-	h.SetCompanySettingsRepos(companyRepo, paymentMethodRepo, deliveryTimeRepo, installmentPlanRepo)
+	h.SetCompanySettingsRepos(companyRepo, paymentMethodRepo, deliveryTimeRepo, deliveryMethodRepo, installmentPlanRepo)
 	authHandlers := api.NewAuthHandlers(userRepo, companyRepo, cartRepo, jwtMiddleware, cfg.Auth.JWTSecret)
 	// Attach turboSearch to authHandlers for company products endpoint
 	authHandlers.SetTurboSearch(h.TurboSearch())
@@ -724,6 +1017,42 @@ func main() {
 		case http.MethodDelete:
 			jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				h.HandleDeliveryTimeDelete(w, r)
+			}), model.RoleAdmin).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	// --- Company settings: Delivery Methods ---
+
+	// GET /admin/delivery-methods (public)
+	mux.Handle("/admin/delivery-methods", spaAwareHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			h.HandleDeliveryMethodsList(w, r)
+			return
+		}
+		// POST only for admin
+		if r.Method == http.MethodPost {
+			jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h.HandleDeliveryMethodCreate(w, r)
+			}), model.RoleAdmin).ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})))
+
+	// GET /admin/delivery-methods/{id} (public), PATCH/DELETE (admin)
+	mux.Handle("/admin/delivery-methods/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleDeliveryMethodGet(w, r)
+		case http.MethodPatch:
+			jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h.HandleDeliveryMethodUpdate(w, r)
+			}), model.RoleAdmin).ServeHTTP(w, r)
+		case http.MethodDelete:
+			jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h.HandleDeliveryMethodDelete(w, r)
 			}), model.RoleAdmin).ServeHTTP(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -1519,7 +1848,8 @@ func main() {
 	// origin; these routes cover the hashed build artifacts referenced by
 	// dist/index.html, which would otherwise fall through to 404.
 	distDir := http.Dir("frontend/dist")
-	mux.Handle("/assets/", http.FileServer(distDir))
+	// Hashed build artifacts are immutable — cache them for a year.
+	mux.Handle("/assets/", cachedAssetServer(distDir))
 	mux.Handle("/favicon.svg", http.FileServer(distDir))
 	mux.Handle("/icons.svg", http.FileServer(distDir))
 	mux.Handle("/koshik.png", http.FileServer(distDir))
@@ -1532,8 +1862,13 @@ func main() {
 			return
 		}
 
+		// Catch-all for client-side SPA routes (/login, /register, /privacy-policy,
+		// /checkout, ...). All real API routes are registered as specific mux
+		// patterns and take precedence over this handler, so only unknown/SPA
+		// paths reach here. Serve the index.html shell for any extension-less
+		// GET/HEAD request regardless of Accept: bots and link-checkers send no or
+		// minimal Accept headers, and gating on "text/html" made these pages 404.
 		if (r.Method == http.MethodGet || r.Method == http.MethodHead) &&
-			strings.Contains(r.Header.Get("Accept"), "text/html") &&
 			!strings.Contains(r.URL.Path, ".") {
 			// Serve frontend index.html for SPA routes
 			index, err := os.ReadFile("frontend/dist/index.html")
@@ -1544,6 +1879,14 @@ func main() {
 					http.Error(w, "frontend not built", http.StatusServiceUnavailable)
 					return
 				}
+			}
+			// Homepage: inject SEO tags (canonical, OG, JSON-LD, Polish meta).
+			if r.URL.Path == "/" {
+				index = enhanceHomepageHTML(index, strings.TrimRight(cfg.Server.SiteURL, "/"))
+			} else if _, _, body := staticRouteContent(r.URL.Path); body != "" {
+				// Client-side routes that would otherwise be blank shells for
+				// non-JS renderers: serve server-rendered content.
+				index = enhanceStaticRouteHTML(index, strings.TrimRight(cfg.Server.SiteURL, "/"), r.URL.Path)
 			}
 			w.Header().Set("Content-Type", "text/html")
 			// HEAD requests: send headers only, no body
@@ -1579,6 +1922,9 @@ func main() {
 		defer metricsWriter.Close()
 		handler = metrics.Middleware(metricsWriter)(handler)
 	}
+
+	// Gzip compression (outermost: compresses final bytes sent to the client).
+	handler = gzipMiddleware(handler)
 
 	// Production-hardened HTTP server with sane timeouts.
 	// Note: WriteTimeout is set high to allow long-running imports to complete.

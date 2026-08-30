@@ -101,9 +101,7 @@ const attrsString = computed(() => {
   <!-- GRID card -->
   <div
     v-if="view === 'grid'"
-    role="button"
     tabindex="0"
-    :aria-label="title"
     class="group bg-surface rounded-xl border border-line overflow-hidden cursor-pointer relative
            transition-all duration-200 ease-out
            hover:shadow-lg hover:-translate-y-0.5 hover:border-orange-300 dark:hover:bg-surface-elevated
@@ -211,9 +209,7 @@ const attrsString = computed(() => {
   <!-- LIST card -->
   <div
     v-else
-    role="button"
     tabindex="0"
-    :aria-label="title"
     class="group bg-surface rounded-xl border border-line overflow-hidden cursor-pointer
            transition-all duration-200 ease-out
            hover:shadow-lg hover:border-orange-300 dark:hover:bg-surface-elevated

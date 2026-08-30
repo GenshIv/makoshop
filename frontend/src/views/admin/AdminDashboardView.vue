@@ -334,6 +334,10 @@ onMounted(() => {
           <div class="font-medium">{{ t('admin.delivery_times_title') || 'Delivery Times' }}</div>
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.delivery_times_desc') || 'Manage delivery time options' }}</div>
         </router-link>
+        <router-link to="/admin/delivery-methods" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">{{ t('admin.delivery_methods_title') || 'Delivery Methods' }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('admin.delivery_methods_desc') || 'Manage delivery method options' }}</div>
+        </router-link>
         <router-link to="/admin/installment-plans" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
           <div class="font-medium">{{ t('admin.installment_plans_title') || 'Installment Plans' }}</div>
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.installment_plans_desc') || 'Manage installment plans' }}</div>

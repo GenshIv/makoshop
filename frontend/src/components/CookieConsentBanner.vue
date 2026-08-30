@@ -29,8 +29,10 @@
                   <input
                     type="checkbox"
                     v-model="consent.analytics"
+                    :aria-label="t('cookie.analytics')"
                     @change="onOptionChange"
                   />
+                  <span class="sr-only">{{ t('cookie.analytics') }}</span>
                   <span class="cookie-toggle-slider"></span>
                 </label>
                 <div class="cookie-option-header">
@@ -46,8 +48,10 @@
                   <input
                     type="checkbox"
                     v-model="consent.marketing"
+                    :aria-label="t('cookie.marketing')"
                     @change="onOptionChange"
                   />
+                  <span class="sr-only">{{ t('cookie.marketing') }}</span>
                   <span class="cookie-toggle-slider"></span>
                 </label>
                 <div class="cookie-option-header">
@@ -73,7 +77,7 @@
           </div>
 
           <div class="cookie-banner-link">
-            <a href="/privacy-policy" target="_blank">
+            <a href="/privacy-policy">
               {{ t('common.privacy_policy') }}
             </a>
           </div>
@@ -163,7 +167,7 @@ const onOptionChange = () => {
 
 .cookie-banner-body > p {
   margin: 0 0 1rem;
-  font-size: 0.9rem;
+  font-size: 1rem;
   color: #555;
   line-height: 1.5;
 }
@@ -191,7 +195,7 @@ const onOptionChange = () => {
 
 .cookie-option-title {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
 }
 
 .cookie-option-badge {
@@ -208,7 +212,7 @@ const onOptionChange = () => {
 
 .cookie-option-desc {
   margin: 0.25rem 0 0;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
   line-height: 1.4;
 }
@@ -248,11 +252,11 @@ const onOptionChange = () => {
   transition: transform 0.2s;
 }
 
-.cookie-toggle input:checked + .cookie-toggle-slider {
-  background: #ea580c;
+.cookie-toggle input:checked ~ .cookie-toggle-slider {
+  background: var(--accent);
 }
 
-.cookie-toggle input:checked + .cookie-toggle-slider::before {
+.cookie-toggle input:checked ~ .cookie-toggle-slider::before {
   transform: translateX(20px);
 }
 
@@ -277,12 +281,12 @@ const onOptionChange = () => {
 }
 
 .cookie-banner-footer .btn-primary {
-  background: #ea580c;
+  background: var(--accent);
   color: white;
 }
 
 .cookie-banner-footer .btn-primary:hover {
-  background: #c2410c;
+  background: var(--accent-hover);
 }
 
 .cookie-banner-footer .btn-secondary {
@@ -296,8 +300,8 @@ const onOptionChange = () => {
 
 .cookie-banner-footer .btn-outline {
   background: transparent;
-  color: #ea580c;
-  border: 1px solid #ea580c;
+  color: var(--accent);
+  border: 1px solid var(--accent);
 }
 
 .cookie-banner-footer .btn-outline:hover {
@@ -312,7 +316,7 @@ const onOptionChange = () => {
 }
 
 .cookie-banner-link a {
-  color: #ea580c;
+  color: var(--accent);
   text-decoration: underline;
 }
 

@@ -1671,6 +1671,7 @@ defineOptions({ name: 'CatalogView' });
             <ViewToggle v-model="catalogView" @update:model-value="setCatalogView" />
             <select
               v-model="filters.sort"
+              :aria-label="t('catalog.sort_by')"
               class="px-3 py-1.5 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent bg-surface"
             >
               <option value="relevance">{{ t('catalog.sort_relevance') }}</option>

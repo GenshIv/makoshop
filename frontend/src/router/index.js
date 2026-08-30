@@ -43,6 +43,7 @@ const routes = [
   { path: '/admin/promo', name: 'admin-promo', component: () => import('../views/admin/AdminPromoView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/payment-methods', name: 'admin-payment-methods', component: () => import('../views/admin/AdminPaymentMethodsView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/delivery-times', name: 'admin-delivery-times', component: () => import('../views/admin/AdminDeliveryTimesView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
+  { path: '/admin/delivery-methods', name: 'admin-delivery-methods', component: () => import('../views/admin/AdminDeliveryMethodsView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/installment-plans', name: 'admin-installment-plans', component: () => import('../views/admin/AdminInstallmentPlansView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
 ];
 

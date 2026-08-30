@@ -759,7 +759,7 @@ func (h *Handlers) writeEANPageResponse(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 
-	title := sp.Title + " — MakoShop"
+	title := sp.Title + " — " + h.siteName()
 	if wantsHTML(r) {
 		writeHTMLResponseEANList(w, r, title, h.siteBaseURL(), respData)
 		return
@@ -824,8 +824,19 @@ func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title stri
 	// Extract SEO fields. seoURL drives the canonical link and og:url; it is
 	// populated by the callers for both category listings and EAN pages.
 	seoURL := data.SEOURL
-	desc := "MakoShop — маркетплейс товаров по лучшим ценам от проверенных поставщиков."
+	desc := siteNameFromBaseURL(baseURL) + " — маркетплейс товаров по лучшим ценам от проверенных поставщиков."
 	image := ""
+	jsonLD := ""
+
+	if ep := data.EANPage; ep != nil {
+		if ep.Description != "" {
+			desc = ep.Description
+		}
+		if len(ep.Images) > 0 {
+			image = ep.Images[0]
+		}
+		jsonLD = buildEANProductJSONLD(baseURL, ep)
+	}
 
 	canonicalTag := ""
 	if seoURL != "" {
@@ -836,6 +847,12 @@ func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title stri
 	ogTags := ""
 	if image != "" {
 		ogTags = `  <meta property="og:image" content="` + html.EscapeString(image) + `">
+`
+	}
+
+	jsonLDTag := ""
+	if jsonLD != "" {
+		jsonLDTag = `  <script type="application/ld+json">` + jsonLD + `</script>
 `
 	}
 
@@ -871,6 +888,9 @@ func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title stri
 		if ogTags != "" {
 			w.Write(stringToBytes(ogTags))
 		}
+		if jsonLDTag != "" {
+			w.Write(stringToBytes(jsonLDTag))
+		}
 		w.Write(htmlBotOGStart)
 		writeEscapedString(w, title)
 		w.Write(htmlBotOGTitleEnd)
@@ -900,9 +920,90 @@ func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title stri
 	if canonicalTag != "" {
 		w.Write(stringToBytes(canonicalTag))
 	}
+	if jsonLDTag != "" {
+		w.Write(stringToBytes(jsonLDTag))
+	}
 	w.Write(htmlBodyStart)
 	writeSafeJSONWithPool(w, &data, eanListRespRegistry)
 	w.Write(htmlScriptEnd)
+}
+
+// siteNameFromBaseURL derives the human-readable site name from a base URL
+// host (e.g. "https://wszyst.pl" -> "wszyst.pl"). Used by free functions that
+// don't have access to *Handlers. Falls back to "MakoShop" in dev.
+func siteNameFromBaseURL(baseURL string) string {
+	if i := strings.Index(baseURL, "//"); i >= 0 {
+		host := baseURL[i+2:]
+		if j := strings.IndexAny(host, "/?"); j >= 0 {
+			host = host[:j]
+		}
+		if host != "" && host != "localhost" && host != "localhost:5173" {
+			return host
+		}
+	}
+	return "MakoShop"
+}
+
+// buildEANProductJSONLD constructs schema.org Product/Offer JSON-LD for an EAN
+// page, enabling rich results (price, image, brand). Returns "" when there is
+// no usable price to advertise.
+func buildEANProductJSONLD(baseURL string, ep *model.EANPage) string {
+	if ep == nil || ep.MinPrice <= 0 {
+		return ""
+	}
+	url := baseURL + ep.SeoURL
+	if url == baseURL {
+		url = baseURL + "/shop"
+	}
+	currency := ep.Currency
+	if currency == "" {
+		currency = "RUB"
+	}
+
+	type brand struct {
+		Type string `json:"@type"`
+		Name string `json:"name"`
+	}
+	type offer struct {
+		Type          string  `json:"@type"`
+		PriceCurrency string  `json:"priceCurrency"`
+		Price         float64 `json:"price"`
+		Availability  string  `json:"availability"`
+	}
+	type product struct {
+		Context string `json:"@context"`
+		Type    string `json:"@type"`
+		Name    string `json:"name"`
+		Brand   *brand `json:"brand,omitempty"`
+		Image   string `json:"image,omitempty"`
+		URL     string `json:"url"`
+		Offers  offer  `json:"offers"`
+	}
+
+	p := product{
+		Context: "https://schema.org",
+		Type:    "Product",
+		Name:    ep.Title,
+		URL:     url,
+		Offers: offer{
+			Type:          "Offer",
+			PriceCurrency: currency,
+			Price:         ep.MinPrice,
+			Availability:  "https://schema.org/InStock",
+		},
+	}
+	if ep.Brand != "" {
+		p.Brand = &brand{Type: "Brand", Name: ep.Brand}
+	}
+	if len(ep.Images) > 0 {
+		p.Image = ep.Images[0]
+	}
+
+	out, err := json.Marshal(p)
+	if err != nil {
+		return ""
+	}
+	return string(out)
 }
 
 // writeSafeJSONWithPool marshals data and writes escaped JSON directly to w.

@@ -9,6 +9,7 @@ const { toast } = useToast();
 
 const settings = ref({
   default_currency: 'PLN',
+  ga_measurement_id: '',
 });
 const loading = ref(true);
 const saving = ref(false);
@@ -66,6 +67,18 @@ onMounted(loadSettings);
               </option>
             </select>
             <p class="text-xs text-ink-3 mt-1">{{ t('admin.default_currency_hint') || 'Currency used for all prices by default' }}</p>
+          </div>
+
+          <!-- Google Analytics Measurement ID -->
+          <div>
+            <label class="text-sm font-medium text-ink-2 block mb-1">{{ t('admin.ga_measurement_id') || 'Google Analytics Measurement ID' }}</label>
+            <input
+              v-model.trim="settings.ga_measurement_id"
+              type="text"
+              placeholder="G-XXXXXXXXXX"
+              class="w-full max-w-xs px-3 py-2 border border-line rounded-lg text-sm bg-surface font-mono"
+            />
+            <p class="text-xs text-ink-3 mt-1">{{ t('admin.ga_measurement_id_hint') || 'Leave empty to disable tracking. Format: G-XXXXXXXXXX' }}</p>
           </div>
         </div>
         <div class="mt-4">

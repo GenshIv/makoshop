@@ -40,7 +40,9 @@
         <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
     </div>
-    <h3 class="text-base font-semibold text-ink mb-1">{{ title }}</h3>
+    <!-- Only render the heading when there is text, to avoid an empty
+         <h3> (WCAG 5.4 "headings should not be empty"). -->
+    <h3 v-if="title" class="text-base font-semibold text-ink mb-1">{{ title }}</h3>
     <p v-if="message" class="text-sm text-ink-3 max-w-sm">{{ message }}</p>
     <div v-if="$slots.default" class="mt-5">
       <slot />

@@ -11,11 +11,15 @@
   --bg-tertiary: #f3f4f6;
   --text-primary: #111827;
   --text-secondary: #374151;
-  --text-muted: #6b7280;
+  /* Muted text = gray-600. Darker than the previous gray-500 (#6b7280, 4.83:1)
+     so secondary/tertiary text on white meets WCAG AAA (>=7:1), not just AA. */
+  --text-muted: #545454;
   --border-color: #e5e7eb;
-  /* Brand accent = orange-600 (warm, high-conversion "buy" color) */
-  --accent: #ea580c;
-  --accent-hover: #c2410c;
+  /* Brand accent = orange-700. Darker than orange-600 so white button text and
+     accent links on light backgrounds meet WCAG AA (>=4.5:1). orange-600 (#ea580c)
+     only reached 3.56:1 and failed contrast checks. */
+  --accent: #c2410c;
+  --accent-hover: #9a3412;
   --danger: #ef4444;
   --success: #10b981;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);

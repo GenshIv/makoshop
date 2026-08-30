@@ -29,6 +29,7 @@ const loading = ref(true);
 const error = ref(null);
 const currentImageIndex = ref(0);
 const categoryPath = ref([]); // [{id, name}, ...]
+const deliveryMethods = ref([]); // seller's delivery methods (info only)
 
 const reviewForm = reactive({ rating: 5, comment: '' });
 const submittingReview = ref(false);
@@ -65,6 +66,12 @@ const fetchProduct = async () => {
     } else {
       categoryPath.value = [];
     }
+    // Fetch seller's delivery methods if product has company_id
+    if (product.value.company_id) {
+      await fetchDeliveryMethods(product.value.company_id);
+    } else {
+      deliveryMethods.value = [];
+    }
   } catch (e) {
     error.value = t('product.not_found');
     console.error(e);
@@ -87,6 +94,21 @@ const fetchCategoryPath = async (categoryId) => {
   } catch (e) {
     console.error('Failed to fetch category path:', e);
     categoryPath.value = [];
+  }
+};
+
+// Fetch the seller's delivery methods from the public company settings endpoint.
+const fetchDeliveryMethods = async (companyId) => {
+  if (!companyId) {
+    deliveryMethods.value = [];
+    return;
+  }
+  try {
+    const response = await api.get(`/admin/companies/${companyId}/settings`);
+    deliveryMethods.value = response.data?.delivery_methods || [];
+  } catch (e) {
+    console.error('Failed to fetch delivery methods:', e);
+    deliveryMethods.value = [];
   }
 };
 
@@ -287,6 +309,17 @@ onMounted(() => {
               <dd class="sm:ml-2 text-sm">{{ value }}</dd>
             </div>
           </dl>
+        </div>
+
+        <!-- Delivery methods (seller level, informational only) -->
+        <div v-if="deliveryMethods.length" class="mt-6 bg-surface rounded-xl border border-line p-4">
+          <h3 class="font-medium text-ink-2">{{ t('catalog.delivery_methods') }}</h3>
+          <ul class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+            <li v-for="dm in deliveryMethods" :key="dm.id" class="flex items-center gap-2 px-2 py-1 bg-surface-2 rounded-md text-ink-2">
+              <img v-if="dm.image" :src="dm.image" :alt="dm.name" class="w-8 h-8 object-cover rounded shrink-0" loading="lazy" />
+              <span class="truncate">{{ dm.name }}</span>
+            </li>
+          </ul>
         </div>
       </div>
     </div>

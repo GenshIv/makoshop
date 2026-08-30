@@ -140,6 +140,7 @@ type Company struct {
 	OwnerUserID        int64            `json:"owner_user_id"`
 	PaymentMethodIds   []int64          `json:"payment_method_ids,omitempty"`
 	DeliveryTimeIds    []int64          `json:"delivery_time_ids,omitempty"`
+	DeliveryMethodIds  []int64          `json:"delivery_method_ids,omitempty"`
 	InstallmentPlanIds []int64          `json:"installment_plan_ids,omitempty"`
 
 	// --- Price import (tasks 1, 3, 7) ---
@@ -521,6 +522,17 @@ type DeliveryTime struct {
 	UpdatedAt int64  `json:"updated_at"`
 }
 
+type DeliveryMethod struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	Image     string `json:"image,omitempty"`
+	IsActive  bool   `json:"is_active"`
+	SortOrder int    `json:"sort_order"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
 type InstallmentPlan struct {
 	ID        int64  `json:"id"`
 	Name      string `json:"name"`
@@ -536,5 +548,6 @@ type InstallmentPlan struct {
 type CompanySettingsV2 struct {
 	PaymentMethodIds   []int64 `json:"payment_method_ids,omitempty"`
 	DeliveryTimeIds    []int64 `json:"delivery_time_ids,omitempty"`
+	DeliveryMethodIds  []int64 `json:"delivery_method_ids,omitempty"`
 	InstallmentPlanIds []int64 `json:"installment_plan_ids,omitempty"`
 }

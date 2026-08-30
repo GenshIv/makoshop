@@ -195,7 +195,7 @@ onBeforeUnmount(() => {
               <router-link v-if="isAuthenticated" to="/seller" class="text-xs text-accent hover:underline px-1">
                 {{ t('common.seller_cabinet') }}
               </router-link>
-              <router-link v-if="isAuthenticated" to="/admin" class="text-xs text-purple-600 hover:underline px-1">
+              <router-link v-if="isAuthenticated" to="/admin" class="text-xs text-purple-600 dark:text-purple-300 hover:underline px-1">
                 {{ t('common.admin_panel') }}
               </router-link>
               <button @click="handleLogout" class="text-xs text-ink-3 hover:text-red-600 px-1 transition-colors">{{ t('common.logout') }}</button>
@@ -215,8 +215,7 @@ onBeforeUnmount(() => {
               <button
                 @click="showLangMenu = !showLangMenu"
                 class="hidden sm:flex items-center gap-1 px-1.5 py-1 text-xs rounded-md bg-surface-2 text-ink-2 hover:bg-surface-3"
-                :title="t('common.menu')"
-                :aria-label="t('common.menu')"
+                :aria-label="langLabels[locale] || locale"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.588 9a18.023 18.023 0 01-6.588-9m5.012-5l3 3m0 0l-3 3m3-3H3" />
@@ -244,8 +243,7 @@ onBeforeUnmount(() => {
               <button
                 @click="setAnimationEnabled(!animationEnabled)"
                 class="hidden sm:flex items-center gap-1 px-1.5 py-1 text-xs rounded-md bg-surface-2 text-ink-2 hover:bg-surface-3"
-                :title="animationEnabled ? t('common.disable_animation') : t('common.enable_animation')"
-                :aria-label="animationEnabled ? t('common.disable_animation') : t('common.enable_animation')"
+                :aria-label="animationEnabled ? t('common.animation_on') : t('common.animation_off')"
               >
                 <svg v-if="animationEnabled" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -262,8 +260,7 @@ onBeforeUnmount(() => {
               <button
                 @click="theme = theme === THEMES.LIGHT ? THEMES.DARK : theme === THEMES.DARK ? THEMES.AUTO : THEMES.LIGHT"
                 class="hidden sm:flex items-center gap-1 px-1.5 py-1 text-xs rounded-md bg-surface-2 text-ink-2 hover:bg-surface-3"
-                :title="t('common.theme')"
-                :aria-label="t('common.theme')"
+                :aria-label="theme === THEMES.LIGHT ? 'Light' : theme === THEMES.DARK ? 'Dark' : 'Auto'"
               >
                 <svg v-if="theme === THEMES.LIGHT" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -333,7 +330,7 @@ onBeforeUnmount(() => {
             <router-link to="/profile" class="block px-3 py-2 rounded-lg text-sm hover:bg-surface-2 transition-colors" @click="mobileMenuOpen = false">{{ t('common.profile') }}</router-link>
             <router-link to="/orders" class="block px-3 py-2 rounded-lg text-sm hover:bg-surface-2 transition-colors" @click="mobileMenuOpen = false">{{ t('common.my_orders') }}</router-link>
             <router-link v-if="isAuthenticated" to="/seller" class="block px-3 py-2 rounded-lg text-sm text-accent hover:bg-surface-2 transition-colors" @click="mobileMenuOpen = false">{{ t('common.seller_cabinet') }}</router-link>
-            <router-link v-if="isAuthenticated" to="/admin" class="block px-3 py-2 rounded-lg text-sm text-purple-600 hover:bg-surface-2 transition-colors" @click="mobileMenuOpen = false">{{ t('common.admin_panel') }}</router-link>
+            <router-link v-if="isAuthenticated" to="/admin" class="block px-3 py-2 rounded-lg text-sm text-purple-600 dark:text-purple-300 hover:bg-surface-2 transition-colors" @click="mobileMenuOpen = false">{{ t('common.admin_panel') }}</router-link>
             <button @click="handleLogout; mobileMenuOpen = false" class="w-full text-left px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-surface-2 transition-colors">{{ t('common.logout') }}</button>
           </template>
         </nav>
@@ -371,6 +368,10 @@ onBeforeUnmount(() => {
 
     <!-- Main content -->
     <main class="flex-1">
+      <!-- Persistent site-level heading so every route/state has a level-1
+           heading (WCAG 1.3.1). Visually hidden; page-specific headings still
+           render below it. -->
+      <h1 class="sr-only">{{ t('common.app_name') }}</h1>
       <router-view />
     </main>
 

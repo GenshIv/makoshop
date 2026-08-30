@@ -140,10 +140,11 @@ func (r *CompanyRepo) Update(id int64, updater func(*model.Company)) error {
 		}
 	}
 
-	// Save company settings (payment methods, delivery times, installment plans) as a batch
+	// Save company settings (payment methods, delivery times, delivery methods, installment plans) as a batch
 	settings := &model.CompanySettingsV2{
 		PaymentMethodIds:   c.PaymentMethodIds,
 		DeliveryTimeIds:    c.DeliveryTimeIds,
+		DeliveryMethodIds:  c.DeliveryMethodIds,
 		InstallmentPlanIds: c.InstallmentPlanIds,
 	}
 	if err := r.SaveCompanySettings(id, settings); err != nil {
@@ -201,6 +202,7 @@ func (r *CompanyRepo) Delete(id int64) error {
 const (
 	keyCompanyPaymentMethods   = "company_pm:" // company_id -> JSON array of method_ids
 	keyCompanyDeliveryTimes    = "company_dt:" // company_id -> JSON array of time_ids
+	keyCompanyDeliveryMethods  = "company_dm:" // company_id -> JSON array of delivery_method_ids
 	keyCompanyInstallmentPlans = "company_ip:" // company_id -> JSON array of plan_ids
 )
 
@@ -221,6 +223,12 @@ func (r *CompanyRepo) SaveCompanySettings(companyID int64, settings *model.Compa
 	dtData, _ := json.Marshal(settings.DeliveryTimeIds)
 	if err := r.Store.DocPut(keyCompanyDeliveryTimes+strconv.FormatInt(companyID, 10), dtData); err != nil {
 		return fmt.Errorf("save company delivery times: %w", err)
+	}
+
+	// Save delivery method IDs
+	dmData, _ := json.Marshal(settings.DeliveryMethodIds)
+	if err := r.Store.DocPut(keyCompanyDeliveryMethods+strconv.FormatInt(companyID, 10), dmData); err != nil {
+		return fmt.Errorf("save company delivery methods: %w", err)
 	}
 
 	// Save installment plan IDs
@@ -248,6 +256,12 @@ func (r *CompanyRepo) GetCompanySettings(companyID int64) (*model.CompanySetting
 		_ = json.Unmarshal(dtData, &settings.DeliveryTimeIds)
 	}
 
+	// Load delivery method IDs
+	dmData, err := r.Store.DocGet(keyCompanyDeliveryMethods + strconv.FormatInt(companyID, 10))
+	if err == nil && len(dmData) > 0 {
+		_ = json.Unmarshal(dmData, &settings.DeliveryMethodIds)
+	}
+
 	// Load installment plan IDs
 	ipData, err := r.Store.DocGet(keyCompanyInstallmentPlans + strconv.FormatInt(companyID, 10))
 	if err == nil && len(ipData) > 0 {
@@ -262,6 +276,7 @@ func (r *CompanyRepo) DeleteCompanySettings(companyID int64) error {
 	idStr := strconv.FormatInt(companyID, 10)
 	_ = r.Store.DocDelete(keyCompanyPaymentMethods + idStr)
 	_ = r.Store.DocDelete(keyCompanyDeliveryTimes + idStr)
+	_ = r.Store.DocDelete(keyCompanyDeliveryMethods + idStr)
 	_ = r.Store.DocDelete(keyCompanyInstallmentPlans + idStr)
 	return nil
 }

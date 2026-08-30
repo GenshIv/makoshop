@@ -43,12 +43,32 @@ func IsBotUserAgent(userAgent string) bool {
 	return false
 }
 
+// isCountablePath reports whether the request path represents a real page view
+// that should be counted as a visit. Only the site root and /shop pages are
+// counted; API calls, data endpoints and static assets are excluded so they
+// don't inflate the visit numbers.
+func isCountablePath(path string) bool {
+	if path == "/" {
+		return true
+	}
+	if path == "/shop" || strings.HasPrefix(path, "/shop/") {
+		return true
+	}
+	return false
+}
+
 // StatsMiddleware creates a middleware that records visits
 func StatsMiddleware(collector *StatsCollector) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Check if stats is enabled
 			if !collector.IsEnabled() {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Only count real page views (root + /shop), not API/data/static.
+			if !isCountablePath(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}

@@ -40,6 +40,7 @@ type Handlers struct {
 	// Company settings repos
 	paymentMethodRepo   *db.PaymentMethodRepo
 	deliveryTimeRepo    *db.DeliveryTimeRepo
+	deliveryMethodRepo  *db.DeliveryMethodRepo
 	installmentPlanRepo *db.InstallmentPlanRepo
 
 	// Stats cache
@@ -161,6 +162,12 @@ func (h *Handlers) siteBaseURL() string {
 	return "http://localhost:5173"
 }
 
+// siteName returns the human-readable site name derived from the configured
+// base URL host (e.g. "wszyst.pl"). Falls back to "MakoShop" in dev.
+func (h *Handlers) siteName() string {
+	return siteNameFromBaseURL(h.siteBaseURL())
+}
+
 // TurboSearch returns the attached TurboProductSearch.
 func (h *Handlers) TurboSearch() *db.TurboProductSearch {
 	return h.turboSearch
@@ -176,11 +183,13 @@ func (h *Handlers) SetCompanySettingsRepos(
 	companyRepo *db.CompanyRepo,
 	paymentMethodRepo *db.PaymentMethodRepo,
 	deliveryTimeRepo *db.DeliveryTimeRepo,
+	deliveryMethodRepo *db.DeliveryMethodRepo,
 	installmentPlanRepo *db.InstallmentPlanRepo,
 ) {
 	h.companyRepo = companyRepo
 	h.paymentMethodRepo = paymentMethodRepo
 	h.deliveryTimeRepo = deliveryTimeRepo
+	h.deliveryMethodRepo = deliveryMethodRepo
 	h.installmentPlanRepo = installmentPlanRepo
 }
 

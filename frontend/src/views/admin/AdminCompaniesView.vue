@@ -21,6 +21,7 @@ const companySettings = ref(null);
 
 const paymentMethods = ref([]);
 const deliveryTimes = ref([]);
+const deliveryMethods = ref([]);
 const installmentPlans = ref([]);
 
 // Available currencies for company settings
@@ -278,25 +279,35 @@ const deleteCompany = async (id) => {
   }
 };
 
+// Load the full option lists (payment methods, delivery times, delivery methods, installment plans).
+// Uses allSettled so one failing endpoint (e.g. payments disabled → 503) never breaks
+// the rest of the settings modal.
+const fetchOptionLists = async () => {
+  const [pmRes, dtRes, dmRes, ipRes] = await Promise.allSettled([
+    api.get('/admin/payment-methods'),
+    api.get('/admin/delivery-times'),
+    api.get('/admin/delivery-methods'),
+    api.get('/admin/installment-plans'),
+  ]);
+  paymentMethods.value = pmRes.status === 'fulfilled' ? (pmRes.value.data || []) : [];
+  deliveryTimes.value = dtRes.status === 'fulfilled' ? (dtRes.value.data || []) : [];
+  deliveryMethods.value = dmRes.status === 'fulfilled' ? (dmRes.value.data || []) : [];
+  installmentPlans.value = ipRes.status === 'fulfilled' ? (ipRes.value.data || []) : [];
+};
+
 const openSettings = async (company) => {
   selectedCompany.value = company;
   settingsLoading.value = true;
   try {
     // Fetch full lists
-    const [pmRes, dtRes, ipRes] = await Promise.all([
-      api.get('/admin/payment-methods'),
-      api.get('/admin/delivery-times'),
-      api.get('/admin/installment-plans'),
-    ]);
-    paymentMethods.value = pmRes.data || [];
-    deliveryTimes.value = dtRes.data || [];
-    installmentPlans.value = ipRes.data || [];
+    await fetchOptionLists();
 
     // Fetch company settings
     const res = await api.get(`/admin/companies/${company.id}/settings`);
     companySettings.value = {
       payment_method_ids: (res.data.company?.payment_method_ids || []).map(Number),
       delivery_time_ids: (res.data.company?.delivery_time_ids || []).map(Number),
+      delivery_method_ids: (res.data.company?.delivery_method_ids || []).map(Number),
       installment_plan_ids: (res.data.company?.installment_plan_ids || []).map(Number),
     };
   } catch (e) {
@@ -304,6 +315,7 @@ const openSettings = async (company) => {
     companySettings.value = {
       payment_method_ids: [],
       delivery_time_ids: [],
+      delivery_method_ids: [],
       installment_plan_ids: [],
     };
   } finally {
@@ -318,6 +330,7 @@ const saveSettings = async () => {
     await api.patch(`/admin/companies/${selectedCompany.value.id}`, {
       payment_method_ids: companySettings.value.payment_method_ids,
       delivery_time_ids: companySettings.value.delivery_time_ids,
+      delivery_method_ids: companySettings.value.delivery_method_ids,
       installment_plan_ids: companySettings.value.installment_plan_ids,
     });
     showSettingsModal.value = false;
@@ -491,6 +504,7 @@ const unifiedSettingsForm = ref(null);
 const emptyUnifiedSettingsForm = () => ({
   payment_method_ids: [],
   delivery_time_ids: [],
+  delivery_method_ids: [],
   installment_plan_ids: [],
   price_source: {
     import_url: '',
@@ -506,10 +520,13 @@ const openUnifiedSettings = async (company) => {
   unifiedImportResult.value = null;
   unifiedSettingsForm.value = emptyUnifiedSettingsForm();
   try {
+    // Ensure option lists are loaded for the checkbox groups
+    await fetchOptionLists();
     const res = await api.get(`/admin/companies/${company.id}`);
     const c = res.data;
     unifiedSettingsForm.value.payment_method_ids = c.payment_method_ids || [];
     unifiedSettingsForm.value.delivery_time_ids = c.delivery_time_ids || [];
+    unifiedSettingsForm.value.delivery_method_ids = c.delivery_method_ids || [];
     unifiedSettingsForm.value.installment_plan_ids = c.installment_plan_ids || [];
     // Load import_url and import_folder from company root level
     unifiedSettingsForm.value.price_source.import_url = c.import_url || '';
@@ -575,6 +592,7 @@ const saveUnifiedSettings = async () => {
       currency: currency,
       payment_method_ids: unifiedSettingsForm.value.payment_method_ids,
       delivery_time_ids: unifiedSettingsForm.value.delivery_time_ids,
+      delivery_method_ids: unifiedSettingsForm.value.delivery_method_ids,
       installment_plan_ids: unifiedSettingsForm.value.installment_plan_ids,
       price_source: priceSource,
     });
@@ -724,6 +742,18 @@ onMounted(fetchCompanies);
                 {{ dt.name }}
               </label>
               <span v-if="deliveryTimes.length === 0" class="text-xs text-ink-3">No delivery times defined.</span>
+            </div>
+          </div>
+
+          <!-- Delivery methods -->
+          <div>
+            <div class="text-sm font-medium text-ink-2 mb-1">{{ t('admin.delivery_methods') || 'Delivery Methods' }}</div>
+            <div class="flex flex-wrap gap-2">
+              <label v-for="dm in deliveryMethods" :key="dm.id" class="inline-flex items-center gap-1 text-xs cursor-pointer">
+                <input type="checkbox" :checked="isSelected('delivery_method_ids', dm.id)" @change="toggleSelection('delivery_method_ids', dm.id)" />
+                {{ dm.name }}
+              </label>
+              <span v-if="deliveryMethods.length === 0" class="text-xs text-ink-3">No delivery methods defined.</span>
             </div>
           </div>
 
@@ -935,6 +965,18 @@ onMounted(fetchCompanies);
                 {{ dt.name }}
               </label>
               <span v-if="deliveryTimes.length === 0" class="text-xs text-ink-3">No delivery times defined.</span>
+            </div>
+          </div>
+
+          <!-- Section: Delivery Methods -->
+          <div class="border-b border-line pb-4">
+            <h3 class="text-sm font-semibold text-ink-2 mb-2">{{ t('admin.delivery_methods') || 'Delivery Methods' }}</h3>
+            <div class="flex flex-wrap gap-2">
+              <label v-for="dm in deliveryMethods" :key="dm.id" class="inline-flex items-center gap-1 text-xs cursor-pointer">
+                <input type="checkbox" :checked="isUnifiedSelected('delivery_method_ids', dm.id)" @change="toggleUnifiedSelection('delivery_method_ids', dm.id)" />
+                {{ dm.name }}
+              </label>
+              <span v-if="deliveryMethods.length === 0" class="text-xs text-ink-3">No delivery methods defined.</span>
             </div>
           </div>
 

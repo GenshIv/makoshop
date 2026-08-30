@@ -501,6 +501,7 @@ func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.R
 		Status             model.CompanyStatus     `json:"status,omitempty"`
 		PaymentMethodIds   []int64                 `json:"payment_method_ids,omitempty"`
 		DeliveryTimeIds    []int64                 `json:"delivery_time_ids,omitempty"`
+		DeliveryMethodIds  []int64                 `json:"delivery_method_ids,omitempty"`
 		InstallmentPlanIds []int64                 `json:"installment_plan_ids,omitempty"`
 
 		// Price import (tasks 1, 3, 7)
@@ -556,6 +557,9 @@ func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.R
 		}
 		if req.DeliveryTimeIds != nil {
 			c.DeliveryTimeIds = req.DeliveryTimeIds
+		}
+		if req.DeliveryMethodIds != nil {
+			c.DeliveryMethodIds = req.DeliveryMethodIds
 		}
 		if req.InstallmentPlanIds != nil {
 			c.InstallmentPlanIds = req.InstallmentPlanIds
