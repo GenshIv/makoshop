@@ -1042,6 +1042,10 @@ func (r *AttrDefRepo) RebuildAttrValuesFromEANPages(eanPageRepo *EANPageRepo) er
 			if valStr == "" {
 				continue
 			}
+			// Skip attribute values longer than 40 runes
+			if model.IsAttrValueTooLong(valStr) {
+				continue
+			}
 			code := kv.Key
 			if attrValues[code] == nil {
 				attrValues[code] = make(map[int64]map[string]bool)

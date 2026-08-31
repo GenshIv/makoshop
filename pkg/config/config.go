@@ -11,6 +11,14 @@ type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	Auth     AuthConfig
+	Import   ImportConfig
+}
+
+// ImportConfig holds configuration for price import operations.
+type ImportConfig struct {
+	// PricesDir is the directory where price files are stored.
+	// Can be set via MAKOSHOP_PRICES_DIR (default: "prices").
+	PricesDir string
 }
 
 type ServerConfig struct {
@@ -128,6 +136,9 @@ func DefaultConfig() Config {
 		},
 		Auth: AuthConfig{
 			JWTSecret: jwtSecret,
+		},
+		Import: ImportConfig{
+			PricesDir: env("MAKOSHOP_PRICES_DIR", "prices"),
 		},
 	}
 }

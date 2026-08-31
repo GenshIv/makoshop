@@ -43,7 +43,7 @@ func (h *Handlers) HandleProductReviewCreate(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Verify product exists
-	_, err = h.productRepo.Get(productID)
+	product, err := h.productRepo.Get(productID)
 	if err != nil {
 		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "product not found")
 		return
@@ -64,9 +64,11 @@ func (h *Handlers) HandleProductReviewCreate(w http.ResponseWriter, r *http.Requ
 
 	review := &model.Review{
 		ProductID: productID,
+		EAN:       product.EAN,
 		UserID:    ctxUser.ID,
 		Rating:    req.Rating,
 		Comment:   req.Comment,
+		Status:    model.ReviewStatusApproved, // default: auto-approve
 	}
 
 	if err := h.reviewRepo.Create(review); err != nil {
@@ -78,11 +80,14 @@ func (h *Handlers) HandleProductReviewCreate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Recalculate product rating after creating review
+	h.recalculateProductRating(productID)
+
 	httpres.WriteJSON(w, http.StatusCreated, review)
 }
 
 // HandleProductReviewsList returns reviews for a product.
-// GET /products/{id}/reviews?page=1&limit=50
+// GET /products/{id}/reviews?page=1&limit=50&status=approved
 // Public endpoint.
 
 func (h *Handlers) HandleProductReviewsList(w http.ResponseWriter, r *http.Request) {
@@ -105,8 +110,9 @@ func (h *Handlers) HandleProductReviewsList(w http.ResponseWriter, r *http.Reque
 
 	page, _ := parseQueryInt(r.URL.Query().Get("page"), 1)
 	limit, _ := parseQueryInt(r.URL.Query().Get("limit"), 50)
+	statusFilter := r.URL.Query().Get("status")
 
-	reviews, total, err := h.reviewRepo.ListByProduct(productID, page, limit)
+	reviews, total, err := h.reviewRepo.ListByProduct(productID, page, limit, statusFilter)
 	if err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return

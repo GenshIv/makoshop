@@ -27,6 +27,8 @@ func KeyCart(id string) string         { return fmt.Sprintf("cart:%s", id) }
 func KeyOrder(id int64) string         { return fmt.Sprintf("order:%d", id) }
 func KeyPayment(id int64) string       { return fmt.Sprintf("payment:%d", id) }
 func KeyReview(id int64) string        { return fmt.Sprintf("review:%d", id) }
+func KeyComment(id int64) string       { return fmt.Sprintf("comment:%d", id) }
+func KeyVote(id int64) string          { return fmt.Sprintf("vote:%d", id) }
 func KeyPromoPlan(id int64) string     { return fmt.Sprintf("promo_plan:%d", id) }
 func KeyPromoCampaign(id int64) string { return fmt.Sprintf("promo_campaign:%d", id) }
 func KeyPromoLog(id int64) string      { return fmt.Sprintf("promo_log:%d", id) }
@@ -332,4 +334,30 @@ func UnmarshalEANPage(data []byte) (*model.EANPage, error) {
 		return nil, err
 	}
 	return &s, nil
+}
+
+func MarshalComment(c model.Comment) []byte {
+	b, _ := json.Marshal(c)
+	return b
+}
+
+func UnmarshalComment(data []byte) (*model.Comment, error) {
+	var c model.Comment
+	if err := json.Unmarshal(data, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func MarshalVote(v model.Vote) []byte {
+	b, _ := json.Marshal(v)
+	return b
+}
+
+func UnmarshalVote(data []byte) (*model.Vote, error) {
+	var v model.Vote
+	if err := json.Unmarshal(data, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
 }

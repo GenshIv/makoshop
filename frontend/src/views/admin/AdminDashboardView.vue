@@ -347,6 +347,14 @@ onMounted(() => {
           <div class="font-medium">{{ t('admin.installment_plans_title') || 'Installment Plans' }}</div>
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.installment_plans_desc') || 'Manage installment plans' }}</div>
         </router-link>
+        <router-link to="/admin/reviews" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">⭐ {{ t('admin.reviews_manage') || 'Reviews' }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('admin.reviews_manage_desc') || 'Manage product reviews & ratings' }}</div>
+        </router-link>
+        <router-link to="/admin/comments" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">💬 {{ t('admin.comments_manage') || 'Comments' }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('admin.comments_manage_desc') || 'Manage user comments & likes' }}</div>
+        </router-link>
       </div>
     </div>
 

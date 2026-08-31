@@ -32,22 +32,21 @@ type NokautImportResult struct {
 }
 
 // pricesDir is the root directory for company price files.
-const pricesDir = "prices"
+// Set via SetPricesDir (called from main.go) or defaults to "prices".
+var pricesDir = "prices"
+
+// SetPricesDir sets the directory where price files are stored.
+func SetPricesDir(dir string) {
+	if dir != "" {
+		pricesDir = dir
+	}
+}
 
 // downloadPriceFile downloads the company's price file from company.ImportURL
 // and saves it to prices/<company>.<ext>. The local copy is kept for debugging
 // and can be re-imported manually. Returns the saved file path.
+// Always deletes the old file first to ensure a fresh download.
 func downloadPriceFile(company *model.Company) (string, error) {
-	client := &http.Client{Timeout: 120 * time.Second}
-	resp, err := client.Get(company.ImportURL)
-	if err != nil {
-		return "", fmt.Errorf("get: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status: %s", resp.Status)
-	}
-
 	// Determine file extension from the URL path (ignore query params).
 	ext := ".xml"
 	if u, uerr := url.Parse(company.ImportURL); uerr == nil {
@@ -64,6 +63,23 @@ func downloadPriceFile(company *model.Company) (string, error) {
 
 	if err := os.MkdirAll(pricesDir, 0o755); err != nil {
 		return "", fmt.Errorf("mkdir: %w", err)
+	}
+
+	// Delete old file first to ensure fresh download
+	if err := os.Remove(destPath); err != nil && !os.IsNotExist(err) {
+		fmt.Printf("[IMPORT-NOKAUT] WARN: remove old file %s: %v\n", destPath, err)
+	} else {
+		fmt.Printf("[IMPORT-NOKAUT] Removed old file %s\n", destPath)
+	}
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Get(company.ImportURL)
+	if err != nil {
+		return "", fmt.Errorf("get: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 
 	f, err := os.Create(destPath)
@@ -626,9 +642,21 @@ func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, compan
 
 	// Attributes: extra fields from config only
 	var attrs []model.KeyValue
+
+	// Brand is a first-class attribute: it must land in Attributes so the
+	// catalog can filter by it (attr.brand=<value>). The AttrDef for the
+	// "brand" code is created in Phase 0 via newAttrKeys.
+	if brand != "" {
+		attrs = append(attrs, model.KeyValue{Key: "brand", Value: brand})
+		newAttrKeys["brand"] = struct{}{}
+	}
+
 	for _, af := range cfg.AttrFields {
 		if val := strings.TrimSpace(offer.Props[af.Field]); val != "" {
-			attrs = append(attrs, model.KeyValue{Key: af.Code, Value: html.UnescapeString(val)})
+			// Skip attribute values longer than 40 runes
+			if len([]rune(val)) <= 40 {
+				attrs = append(attrs, model.KeyValue{Key: af.Code, Value: html.UnescapeString(val)})
+			}
 		}
 	}
 	// product_url, purchase_url, and shop_category are now separate fields on Product, not attributes
@@ -648,7 +676,10 @@ func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, compan
 			htmlAttrs := keyParser.Parse(description)
 			for code, values := range htmlAttrs {
 				for _, value := range values {
-					attrs = append(attrs, model.KeyValue{Key: code, Value: value})
+					// Skip attribute values longer than 40 runes
+					if len([]rune(value)) <= 40 {
+						attrs = append(attrs, model.KeyValue{Key: code, Value: value})
+					}
 				}
 			}
 
@@ -686,7 +717,10 @@ func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, compan
 						if count >= 15 {
 							break
 						}
-						attrs = append(attrs, model.KeyValue{Key: ad.Code, Value: value})
+						// Skip attribute values longer than 40 runes
+						if len([]rune(value)) <= 40 {
+							attrs = append(attrs, model.KeyValue{Key: ad.Code, Value: value})
+						}
 						count++
 					}
 				}

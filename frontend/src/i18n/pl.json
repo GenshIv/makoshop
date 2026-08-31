@@ -641,6 +641,13 @@
     "visits_disable": "Wyłącz śledzenie",
     "visits_no_data": "Brak danych",
     "visits_no_data_hint": "Włącz śledzenie i poczekaj na ruch.",
+    "visits_useragents": "Przeglądarki",
+    "visits_browsers": "przeglądarki",
+    "visits_excluded_ips": "Wykluczone IP",
+    "visits_ips": "IP",
+    "visits_ip_placeholder": "Wprowadź adres IP",
+    "visits_add": "Dodaj",
+    "visits_no_excluded": "Brak wykluczonych IP",
     "refresh": "Odśwież",
     "coverage": "Zasięg",
     "coverage_hint": "Kliknij «Odśwież», aby załadować statystyki zasięgu.",
@@ -671,6 +678,7 @@
     "import_failed": "Błąd importu",
     "export_all": "Eksportuj wszystkie",
     "import_all": "Importuj wszystkie",
+    "import_source": "Źródło importu",
     "companies_imported": "Zaimportowano",
     "edit_company": "Edytuj firmę",
     "name_translations": "Tłumaczenia nazwy",
@@ -678,7 +686,10 @@
     "logo_url": "URL logo",
     "hero_image": "URL obrazu hero",
     "description_translations": "Tłumaczenia opisu",
-    "website_url": "URL strony firmy"
+    "website_url": "URL strony firmy",
+    "json_import": "",
+    "run_json_import": "",
+    "json_no_download": "Użyj pliku lokalnego (bez pobierania)"
   },
   "privacy": {
     "title": "Polityka prywatności",

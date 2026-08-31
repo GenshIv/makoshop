@@ -304,6 +304,25 @@ func (r *EANPageRepo) Update(id int64, updater func(*model.EANPage)) error {
 	return nil
 }
 
+// UpdateLikeDislikeCount updates the like_count and dislike_count for an eanpage.
+func (r *EANPageRepo) UpdateLikeDislikeCount(id int64, likeCount, dislikeCount int) error {
+	s, err := r.Get(id)
+	if err != nil {
+		return err
+	}
+
+	s.LikeCount = likeCount
+	s.DislikeCount = dislikeCount
+	s.UpdatedAt = time.Now().Unix()
+
+	data := MarshalEANPage(*s)
+	if err := r.Store.DocPut(KeyEANPage(s.ID), data); err != nil {
+		return fmt.Errorf("update eanpage like/dislike count: %w", err)
+	}
+
+	return nil
+}
+
 // List returns all EAN pages via turbo index.
 func (r *EANPageRepo) List() ([]model.EANPage, error) {
 	tokens, err := r.Store.db.TurboGetIndexTokens(TurboKeyEANPageList)
@@ -825,21 +844,25 @@ func deduplicateStrings(slice []string) []string {
 // For duplicates: keeps first occurrence (no overwriting).
 // mergeAttributes merges two KeyValue slices. Keys from 'a' take precedence.
 // Allows multiple values per Key (deduplicates by Key+Value pair).
+// Values longer than 40 runes are excluded.
 func mergeAttributes(a, b []model.KeyValue) []model.KeyValue {
 	if len(a) == 0 && len(b) == 0 {
 		return nil
 	}
 	if len(a) == 0 {
-		return cloneKeyValueSlice(b)
+		return filterAttrValues(b)
 	}
 	if len(b) == 0 {
-		return cloneKeyValueSlice(a)
+		return filterAttrValues(a)
 	}
 
 	// Start with a copy of a
 	result := cloneKeyValueSlice(a)
 	// Add entries from b that don't exist in a (check both Key and Value)
 	for _, kv := range b {
+		if model.IsAttrValueTooLong(kv.Value) {
+			continue
+		}
 		found := false
 		for _, r := range result {
 			if r.Key == kv.Key && r.Value == kv.Value {
@@ -851,7 +874,8 @@ func mergeAttributes(a, b []model.KeyValue) []model.KeyValue {
 			result = append(result, kv)
 		}
 	}
-	return result
+	// Final pass: remove any remaining long values from result
+	return filterAttrValues(result)
 }
 
 // MergeAttributes is the exported version of mergeAttributes.

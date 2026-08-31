@@ -37,14 +37,17 @@ type ImportPricesResult struct {
 	Brands           int    `json:"brands"`
 }
 
-// HandleAdminImportPrices imports products from CSV files in _tmp/prices
-// or from normalized JSONL files in _tmp/normalized.
+// HandleAdminImportPrices imports products from CSV files in _tmp/prices,
+// normalized JSONL files in _tmp/normalized, JSON price files, or Nokaut XML
+// price files.
 // POST /admin/import-prices
 // Query params:
-//   - source=csv|normalized|multi   data source (default: csv)
+//   - source=csv|normalized|multi|json|nokaut   data source (default: csv)
 //     csv       - single company from _tmp/prices/*.csv
 //     normalized - from _tmp/normalized/ (single company)
 //     multi     - multi-company from _tmp/prices/{company_name}/*.csv
+//     json      - JSON price file (productHeader + products array)
+//     nokaut    - Nokaut XML price file from company ImportURL (alias: xml)
 //   - limit=N                 max products to import (per company in multi mode)
 //   - company=NAME            company name for csv/normalized mode (default: "Magazilla Import")
 //   - no_attrs=1              skip attribute parsing (csv mode only)
@@ -70,6 +73,23 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 
 	if source == "normalized" {
 		h.importNormalized(w, r)
+		return
+	}
+
+	if source == "json" {
+		noDownload := r.URL.Query().Get("no_download") == "1"
+		companyParam := r.URL.Query().Get("company")
+		limit := 0
+		if v := r.URL.Query().Get("limit"); v != "" {
+			limit, _ = strconv.Atoi(v)
+		}
+		h.HandleAdminImportJSON(w, r, companyParam, limit, noDownload)
+		return
+	}
+
+	if source == "nokaut" || source == "xml" {
+		// Nokaut XML price files (same handler as POST /admin/import-nokaut)
+		h.HandleAdminImportNokaut(w, r)
 		return
 	}
 
@@ -1598,7 +1618,10 @@ func streamImportCSVFile(
 					code := strings.TrimPrefix(col, "attr_")
 					val := get(row, col)
 					if val != "" {
-						attrKV = append(attrKV, model.KeyValue{Key: code, Value: fmt.Sprintf("%v", parseAttrValue(code, val))})
+						// Skip attribute values longer than 40 runes
+						if len([]rune(val)) <= 40 {
+							attrKV = append(attrKV, model.KeyValue{Key: code, Value: fmt.Sprintf("%v", parseAttrValue(code, val))})
+						}
 					}
 				}
 			}
@@ -1612,6 +1635,22 @@ func streamImportCSVFile(
 						attrKV = append(attrKV, model.KeyValue{Key: code, Value: values[0]})
 					}
 				}
+			}
+		}
+
+		// Brand is a first-class attribute: always add it so the catalog can
+		// filter by it (attr.brand=<value>), even when noAttrs is set.
+		// Skip if an attr_brand column already provided it.
+		if brand != "" {
+			hasBrand := false
+			for _, kv := range attrKV {
+				if kv.Key == "brand" {
+					hasBrand = true
+					break
+				}
+			}
+			if !hasBrand {
+				attrKV = append(attrKV, model.KeyValue{Key: "brand", Value: brand})
 			}
 		}
 

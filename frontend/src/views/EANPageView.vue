@@ -6,14 +6,21 @@ import api from '../api';
 import { useToast } from '../composables/useToast';
 import { useSeo } from '../composables/useSeo';
 import { useSettings } from '../composables/useSettings';
+import { useAuthStore } from '../stores/auth';
 
 const { defaultCurrency } = useSettings();
 import Breadcrumbs from '../components/Breadcrumbs.vue';
 import PriceSparkline from '../components/PriceSparkline.vue';
+import CommentSection from '../components/CommentSection.vue';
 
 const { toast } = useToast();
+const { user } = useAuthStore();
 
 const { t, locale } = useI18n();
+
+const pageUserVote = ref(null); // 'like' | 'dislike' | null
+const pageLikeCount = ref(0);
+const pageDislikeCount = ref(0);
 
 const props = defineProps({
   // If provided, use this data directly instead of fetching from API
@@ -104,10 +111,108 @@ const loading = ref(true);
 const error = ref(null);
 
 
+// Compute aggregate rating across all products on this EAN page
+const pageAvgRating = computed(() => {
+  const prods = products.value.filter(p => p.avg_rating != null && Number(p.avg_rating) > 0);
+  if (prods.length === 0) return null;
+  const sum = prods.reduce((acc, p) => acc + Number(p.avg_rating), 0);
+  return Math.round((sum / prods.length) * 10) / 10;
+});
+
+const pageTotalReviews = computed(() => {
+  return products.value.reduce((acc, p) => acc + (Number(p.review_count) || 0), 0);
+});
+
+const eanPageJsonLd = computed(() => {
+  if (!page.value?.title) return undefined;
+
+  const ld = {
+    '@type': 'Product',
+    '@context': 'https://schema.org',
+    name: mainProductName.value || page.value.title,
+    description: page.value.description || '',
+    image: page.value.images?.[0] || '',
+    // Aggregate rating across all supplier products
+    aggregateRating: pageAvgRating.value != null && pageTotalReviews.value > 0 ? {
+      '@type': 'AggregateRating',
+      ratingValue: String(pageAvgRating.value),
+      bestRating: '5',
+      worstRating: '1',
+      ratingCount: pageTotalReviews.value,
+    } : undefined,
+    // Offers from all suppliers (top-level offers array)
+    offers: modifications.value.flatMap(m =>
+      m.suppliers.map(s => ({
+        '@type': 'Offer',
+        name: s.name,
+        price: String(s.price),
+        priceCurrency: s.currency || 'PLN',
+        availability: s.status === 'active' && (s.stock_qty || 0) > 0
+          ? 'https://schema.org/InStock'
+          : 'https://schema.org/OutOfStock',
+        url: s.purchase_url || s.product_url || '',
+        seller: {
+          '@type': 'Organization',
+          name: getCompanyName(s),
+        },
+      }))
+    ) || undefined,
+  };
+
+  // Clean up undefined keys
+  for (const key of Object.keys(ld)) {
+    if (ld[key] === undefined) delete ld[key];
+  }
+  if (ld.aggregateRating) {
+    for (const key of Object.keys(ld.aggregateRating)) {
+      if (ld.aggregateRating[key] === undefined) delete ld.aggregateRating[key];
+    }
+  }
+  if (ld.offers) {
+    for (const o of ld.offers) {
+      for (const key of Object.keys(o)) {
+        if (o[key] === undefined) delete o[key];
+      }
+    }
+    if (ld.offers.length === 0) delete ld.offers;
+  }
+
+  return ld;
+});
+
+// Insert JSON-LD into <head> for Googlebot
+const eanPageJsonLdHead = ref(null);
+
+// Create script element in <head> immediately (Googlebot sees it in initial HTML)
+function insertJsonLdInHead(ld) {
+  if (!ld || typeof document === 'undefined') return;
+  let el = document.getElementById('dsh-jsonld-eanpage');
+  if (!el) {
+    el = document.createElement('script');
+    el.id = 'dsh-jsonld-eanpage';
+    el.type = 'application/ld+json';
+    document.head.appendChild(el);
+  }
+  el.textContent = JSON.stringify(ld);
+}
+
+// Initial placeholder — Googlebot sees this immediately
+insertJsonLdInHead({
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: 'Loading...',
+});
+
+watch(eanPageJsonLd, (ld) => {
+  if (!ld) return;
+  insertJsonLdInHead(ld);
+}, { immediate: true });
+
 useSeo({
   title: computed(() => (page.value?.title ? `${page.value.title} — wszyst.pl` : t('pages.default_title'))),
   description: computed(() => page.value?.description || t('pages.default_description')),
   image: computed(() => page.value?.images?.[0] || null),
+  jsonLd: eanPageJsonLd,
 });
 
 const selectedProduct = ref(null);
@@ -596,11 +701,60 @@ if (props.data) {
   initFromData();
 }
 
+// Vote on this eanpage
+const votePage = async (voteType) => {
+  if (!user.value) {
+    toast.error(t('eanpage.login_first', 'Login first'));
+    return;
+  }
+  if (!page.value?.id) return;
+  try {
+    const res = await api.post('/votes', {
+      target_type: 'eanpage',
+      target_id: page.value.id,
+      vote_type: voteType,
+    });
+    pageUserVote.value = res.data.vote_type;
+    if (page.value) {
+      pageLikeCount.value = page.value.like_count || 0;
+      pageDislikeCount.value = page.value.dislike_count || 0;
+    }
+  } catch (e) {
+    console.error('Page vote failed:', e);
+    toast.error(t('eanpage.vote_error', 'Failed to vote'));
+  }
+};
+
+// Load user's vote on this page
+const loadPageVote = async () => {
+  if (!user.value || !page.value?.id) return;
+  try {
+    const res = await api.get('/votes/check', {
+      params: { target_type: 'eanpage', target_id: page.value.id }
+    });
+    pageUserVote.value = res.data.vote_type || null;
+    if (page.value) {
+      pageLikeCount.value = page.value.like_count || 0;
+      pageDislikeCount.value = page.value.dislike_count || 0;
+    }
+  } catch {
+    // Ignore
+  }
+};
+
 onMounted(() => {
   // Otherwise fetch from API
   if (!props.data) {
     fetchEANPage();
+  } else {
+    // Initialize from provided data
+    page.value = props.data.ean_page;
+    if (page.value) {
+      pageLikeCount.value = page.value.like_count || 0;
+      pageDislikeCount.value = page.value.dislike_count || 0;
+    }
   }
+  loadPageVote();
 });
 
 // Watch for props.data changes (when rendered from CatalogView)
@@ -623,6 +777,9 @@ watch(
 </script>
 
 <template>
+  <!-- JSON-LD structured data — inserted into <head> for Googlebot -->
+  <div class="hidden"></div>
+
   <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <!-- Error -->
     <div v-if="error" class="p-4 bg-red-50 text-red-700 rounded-lg theme-dark:bg-red-900/30 theme-dark:text-red-300">
@@ -652,7 +809,7 @@ watch(
         <Breadcrumbs :categories="treePathFull" />
 
         <div class="mt-4 flex items-start justify-between gap-4">
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1">
             <h1 class="text-2xl font-bold text-ink break-words">{{ mainProductName }}</h1>
             <div class="mt-1 flex items-center gap-2 text-sm text-ink-3 flex-wrap">
               <span v-if="page.brand">{{ page.brand }}</span>
@@ -669,6 +826,25 @@ watch(
                 {{ t('eanpage.available') }}
               </span>
             </div>
+          </div>
+          <!-- Page voting -->
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button
+              @click="votePage('like')"
+              class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-line transition-colors"
+              :class="pageUserVote === 'like' ? 'bg-green-50 border-green-200 text-green-700' : 'hover:bg-surface-2 text-ink-3 hover:text-green-600'"
+            >
+              <span>👍</span>
+              <span class="text-sm font-medium">{{ pageLikeCount }}</span>
+            </button>
+            <button
+              @click="votePage('dislike')"
+              class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-line transition-colors"
+              :class="pageUserVote === 'dislike' ? 'bg-red-50 border-red-200 text-red-700' : 'hover:bg-surface-2 text-ink-3 hover:text-red-600'"
+            >
+              <span>👎</span>
+              <span class="text-sm font-medium">{{ pageDislikeCount }}</span>
+            </button>
           </div>
           <button
             @click="goBack"
@@ -948,6 +1124,15 @@ watch(
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- User Comments -->
+    <div v-if="page" class="mt-10">
+      <h2 class="text-xl font-bold text-ink mb-4">{{ t('eanpage.comments_title', 'User Comments') }}</h2>
+      <CommentSection
+        target-type="eanpage"
+        :target-id="page.id"
+      />
     </div>
   </div>
 </template>

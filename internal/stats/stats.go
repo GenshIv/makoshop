@@ -10,6 +10,8 @@ type VisitEvent struct {
 	Referrer   string
 	CategoryID int64
 	Timestamp  uint32
+	UserAgent  string
+	IP         string
 }
 
 // ReferrerStats tracks visits by referrer domain
@@ -28,6 +30,12 @@ type FullReferrerStats struct {
 type PathStats struct {
 	CategoryID int64
 	Visits     [24]uint32 // by hour
+}
+
+// UserAgentStats tracks visits by useragent category
+type UserAgentStats struct {
+	Browser string     // e.g., "Chrome", "Safari", "Firefox", "Bot", "Other"
+	Visits  [24]uint32 // by hour
 }
 
 // StatsData holds all statistics data
@@ -55,6 +63,12 @@ type StatsData struct {
 
 	// Path stats (by category ID)
 	PathStats map[int64]*PathStats
+
+	// User agent stats (by browser)
+	UserAgentStats map[string]*UserAgentStats
+
+	// Excluded IPs (persisted with stats)
+	ExcludedIPs []string `json:"excluded_ips"`
 }
 
 // NewStatsData creates a new StatsData instance
@@ -63,6 +77,7 @@ func NewStatsData() *StatsData {
 		ReferrerStats:     make(map[string]*ReferrerStats),
 		FullReferrerStats: make(map[string]*FullReferrerStats),
 		PathStats:         make(map[int64]*PathStats),
+		UserAgentStats:    make(map[string]*UserAgentStats),
 	}
 }
 
@@ -73,6 +88,7 @@ type StatsConfig struct {
 	MaxPaths          int
 	TrackFullReferrer bool
 	GoogleReferrers   []string // full referrer patterns to track
+	ExcludedIPs       []string // IP addresses to exclude from stats (e.g., admin IP)
 }
 
 // DefaultStatsConfig returns default configuration
@@ -83,6 +99,7 @@ func DefaultStatsConfig() StatsConfig {
 		MaxPaths:          100,
 		TrackFullReferrer: false,
 		GoogleReferrers:   []string{"google.com", "google.ru", "google.co.uk"},
+		ExcludedIPs:       []string{},
 	}
 }
 
@@ -135,8 +152,26 @@ func (s *StatsData) GetPaths() map[int64]*PathStats {
 	return s.PathStats
 }
 
+// GetUserAgents returns user agent statistics
+func (s *StatsData) GetUserAgents() map[string]*UserAgentStats {
+	return s.UserAgentStats
+}
+
 // GetCurrentTime returns current UTC time components
 func GetCurrentTime() (hour uint8, dayOfWeek uint8, dayOfMonth uint8) {
 	now := time.Now().UTC()
 	return uint8(now.Hour()), uint8(now.Weekday()), uint8(now.Day())
+}
+
+// IsIPExcluded checks if the given IP is in the excluded list
+func IsIPExcluded(ip string, excludedIPs []string) bool {
+	if ip == "" {
+		return false
+	}
+	for _, excluded := range excludedIPs {
+		if ip == excluded {
+			return true
+		}
+	}
+	return false
 }

@@ -31,6 +31,8 @@ type Handlers struct {
 	orderRepo         *db.OrderRepo
 	paymentRepo       *db.PaymentRepo
 	reviewRepo        *db.ReviewRepo
+	commentRepo       *db.CommentRepo
+	voteRepo          *db.VoteRepo
 	productImportRepo *db.ProductImportRepo
 	promoPlanRepo     *db.PromoPlanRepo
 	promoCampaignRepo *db.PromoCampaignRepo
@@ -127,6 +129,8 @@ func NewHandlers(store *db.Store) *Handlers {
 		orderRepo:         db.NewOrderRepo(store),
 		paymentRepo:       db.NewPaymentRepo(store),
 		reviewRepo:        db.NewReviewRepo(store),
+		commentRepo:       db.NewCommentRepo(store),
+		voteRepo:          db.NewVoteRepo(store),
 		productImportRepo: db.NewProductImportRepo(store, productRepo),
 		promoPlanRepo:     promoPlanRepo,
 		promoCampaignRepo: promoCampaignRepo,

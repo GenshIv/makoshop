@@ -18,10 +18,109 @@ const { t, locale } = useI18n();
 
 const product = ref(null);
 
+// Build JSON-LD structured data for Product schema
+const productJsonLd = computed(() => {
+  const p = product.value;
+  if (!p?.name) return undefined;
+
+  const ld = {
+    '@type': 'Product',
+    '@context': 'https://schema.org',
+    name: p.name,
+    description: p.description || '',
+    image: p.images?.[0] || '',
+    sku: p.sku || '',
+    // AggregateRating (required for star snippets)
+    aggregateRating: p.avg_rating != null && p.review_count > 0 ? {
+      '@type': 'AggregateRating',
+      ratingValue: String(p.avg_rating),
+      bestRating: '5',
+      worstRating: '1',
+      ratingCount: p.review_count,
+    } : undefined,
+    // Individual reviews (required by Google)
+    review: (reviews.value || [])
+      .slice(0, 10) // limit to 10 reviews
+      .map(r => ({
+        '@type': 'Review',
+        author: { '@type': 'Person', name: r.user_name || 'Anonymous' },
+        datePublished: r.created_at,
+        reviewBody: r.comment || '',
+        reviewRating: {
+          '@type': 'Rating',
+          ratingValue: String(r.rating),
+          bestRating: '5',
+          worstRating: '1',
+        },
+      }))
+      .filter(r => r.reviewBody || r.author) || undefined,
+    // Offer
+    offers: {
+      '@type': 'Offer',
+      price: String(p.price),
+      priceCurrency: p.currency || 'PLN',
+      availability: isInStock() ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      url: window?.location?.href || '',
+    },
+  };
+
+  // Clean up undefined keys
+  for (const key of Object.keys(ld)) {
+    if (ld[key] === undefined) delete ld[key];
+  }
+  if (ld.aggregateRating) {
+    for (const key of Object.keys(ld.aggregateRating)) {
+      if (ld.aggregateRating[key] === undefined) delete ld.aggregateRating[key];
+    }
+  }
+  if (ld.review) {
+    for (const r of ld.review) {
+      for (const key of Object.keys(r)) {
+        if (r[key] === undefined) delete r[key];
+      }
+    }
+    if (ld.review.length === 0) delete ld.review;
+  }
+
+  return ld;
+});
+
+// JSON-LD data (for useSeo in head)
+const jsonLdData = computed(() => productJsonLd.value);
+
+// Insert JSON-LD into <head> for Googlebot
+const jsonLdHead = ref(null);
+
+// Create script element in <head> immediately (Googlebot sees it in initial HTML)
+function insertProductJsonLdInHead(ld) {
+  if (!ld || typeof document === 'undefined') return;
+  let el = document.getElementById('dsh-jsonld-product');
+  if (!el) {
+    el = document.createElement('script');
+    el.id = 'dsh-jsonld-product';
+    el.type = 'application/ld+json';
+    document.head.appendChild(el);
+  }
+  el.textContent = JSON.stringify(ld);
+}
+
+// Initial placeholder — Googlebot sees this immediately
+insertProductJsonLdInHead({
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: 'Loading...',
+});
+
+watch(jsonLdData, (ld) => {
+  if (!ld) return;
+  insertProductJsonLdInHead(ld);
+}, { immediate: true });
+
 useSeo({
   title: computed(() => (product.value?.name ? `${product.value.name} — wszyst.pl` : t('pages.product_title'))),
   description: computed(() => product.value?.description || t('pages.default_description')),
   image: computed(() => product.value?.images?.[0] || null),
+  jsonLd: productJsonLd,
 });
 const reviews = ref([]);
 const reviewsPagination = reactive({ page: 1, per_page: 10, total: 0, total_pages: 0 });
@@ -195,6 +294,9 @@ onMounted(() => {
 </script>
 
 <template>
+  <!-- JSON-LD structured data — inserted into <head> for Googlebot -->
+  <div class="hidden"></div>
+
   <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <!-- Breadcrumbs -->
     <Breadcrumbs :categories="categoryPath" :product-name="product?.name" />

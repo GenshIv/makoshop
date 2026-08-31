@@ -129,6 +129,10 @@ func (t *TurboProductSearch) IndexProduct(p *model.Product) error {
 	for _, kv := range p.Attributes {
 		valStr := kv.Value
 		if valStr != "" {
+			// Skip attribute values longer than 40 runes
+			if model.IsAttrValueTooLong(valStr) {
+				continue
+			}
 			if _, err := t.store.db.TurboPutIndexString(turboKeyAttr(kv.Key, valStr), docID); err != nil {
 				return fmt.Errorf("turbo attr index: %w", err)
 			}
@@ -313,6 +317,10 @@ func (t *TurboProductSearch) BatchIndexProductstx(txn *Transaction, products []*
 		for _, kv := range p.Attributes {
 			valStr := kv.Value
 			if valStr != "" {
+				// Skip attribute values longer than 40 runes
+				if model.IsAttrValueTooLong(valStr) {
+					continue
+				}
 				attrKey := turboKeyAttr(kv.Key, valStr)
 				indexes[attrKey] = append(indexes[attrKey], docID)
 			}
@@ -557,6 +565,10 @@ func (t *TurboProductSearch) UnindexProduct(p *model.Product) error {
 	for _, kv := range p.Attributes {
 		valStr := kv.Value
 		if valStr != "" {
+			// Skip attribute values longer than 40 runes (consistent with indexing)
+			if model.IsAttrValueTooLong(valStr) {
+				continue
+			}
 			t.store.db.TurboDeleteIndexString(turboKeyAttr(kv.Key, valStr), docID)
 		}
 	}
@@ -616,6 +628,10 @@ func (t *TurboProductSearch) UnindexProductTx(txn *Transaction, p *model.Product
 	for _, kv := range p.Attributes {
 		valStr := kv.Value
 		if valStr != "" {
+			// Skip attribute values longer than 40 runes (consistent with indexing)
+			if model.IsAttrValueTooLong(valStr) {
+				continue
+			}
 			txn.TurboDeleteIndexString(turboKeyAttr(kv.Key, valStr), docID)
 		}
 	}
@@ -670,6 +686,10 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 		for _, kv := range p.Attributes {
 			valStr := kv.Value
 			if valStr != "" {
+				// Skip attribute values longer than 40 runes
+				if model.IsAttrValueTooLong(valStr) {
+					continue
+				}
 				indexes[turboKeyAttr(kv.Key, valStr)] = append(indexes[turboKeyAttr(kv.Key, valStr)], docID)
 				// Справочник значений атрибута (глобальный)
 				if attrRef[kv.Key] == nil {

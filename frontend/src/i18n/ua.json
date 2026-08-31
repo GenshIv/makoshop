@@ -639,6 +639,13 @@
     "visits_disable": "Вимкнути відстеження",
     "visits_no_data": "Ще немає даних",
     "visits_no_data_hint": "Увімкніть відстеження і дочекайтесь трафіку.",
+    "visits_useragents": "Браузери",
+    "visits_browsers": "браузерів",
+    "visits_excluded_ips": "Виключені IP",
+    "visits_ips": "IP",
+    "visits_ip_placeholder": "Введіть IP-адресу",
+    "visits_add": "Додати",
+    "visits_no_excluded": "Немає виключених IP",
     "refresh": "Оновити",
     "coverage": "Покриття",
     "coverage_hint": "Натисніть «Оновити», щоб завантажити статистику покриття.",
@@ -669,6 +676,7 @@
     "import_failed": "Помилка імпорту",
     "export_all": "Експорт усіх",
     "import_all": "Імпорт усіх",
+    "import_source": "Джерело імпорту",
     "companies_imported": "Імпортовано",
     "edit_company": "Редагувати компанію",
     "name_translations": "Переклади назви",
@@ -676,7 +684,10 @@
     "logo_url": "URL логотипу",
     "hero_image": "URL hero-зображення",
     "description_translations": "Переклади опису",
-    "website_url": "URL сайту компанії"
+    "website_url": "URL сайту компанії",
+    "json_import": "",
+    "run_json_import": "",
+    "json_no_download": "Використовувати локальний файл (без завантаження)"
   },
   "privacy": {
     "title": "Політика конфіденційності",

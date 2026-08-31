@@ -23,6 +23,9 @@ type StatsCollector struct {
 		TurboRawWrite(key string, value []byte) error
 		TurboRawRead(key string) ([]byte, error)
 	}
+
+	// Excluded IPs cache (loaded from config)
+	excludedIPs []string
 }
 
 // NewStatsCollector creates a new StatsCollector
@@ -85,6 +88,18 @@ func (s *StatsCollector) SetEnabled(enabled bool) {
 	s.enabled.Store(enabled)
 }
 
+// SetExcludedIPs updates the list of excluded IPs and marks dirty for save
+func (s *StatsCollector) SetExcludedIPs(ips []string) {
+	s.excludedIPs = ips
+	s.data.ExcludedIPs = ips
+	s.dirty.Store(true)
+}
+
+// GetExcludedIPs returns the list of excluded IPs
+func (s *StatsCollector) GetExcludedIPs() []string {
+	return s.excludedIPs
+}
+
 // IsEnabled returns whether stats collection is enabled
 func (s *StatsCollector) IsEnabled() bool {
 	return s.enabled.Load()
@@ -113,6 +128,11 @@ func (s *StatsCollector) processVisits() {
 
 // recordVisit records a single visit
 func (s *StatsCollector) recordVisit(event VisitEvent) {
+	// Check if IP is excluded
+	if IsIPExcluded(event.IP, s.excludedIPs) {
+		return
+	}
+
 	hour, dayOfWeek, dayOfMonth := s.currentPeriodIndices()
 
 	// Reset only the period that just started; all other periods are preserved.
@@ -142,6 +162,11 @@ func (s *StatsCollector) recordVisit(event VisitEvent) {
 		s.updatePathStats(event.CategoryID, hour)
 	}
 
+	// Update user agent stats
+	if event.UserAgent != "" {
+		s.updateUserAgentStats(event.UserAgent, hour, event.IsBot)
+	}
+
 	// Mark as dirty (needs saving)
 	s.dirty.Store(true)
 }
@@ -157,26 +182,44 @@ func (s *StatsCollector) currentPeriodIndices() (hour, dayOfWeek, dayOfMonth uin
 	return
 }
 
-// rotatePeriods zeroes only the period that has just started (when its index no
-// longer matches the stored "current" marker) and advances that marker. It never
-// touches any other period, so historical data is preserved across transitions.
+// rotatePeriods aligns the stored "current" marker to the real time.
+// On startup (or after a gap) the stored hour/day/month may lag behind
+// real time. We rotate the arrays forward until the marker catches up,
+// zeroing each newly-reached slot so fresh counting starts clean.
+// Once marker == real, subsequent calls are no-ops.
 func (s *StatsCollector) rotatePeriods(hour, dayOfWeek, dayOfMonth uint8) {
-	if hour != s.data.CurrentHour {
-		s.data.HumanVisitsByHour[hour] = 0
-		s.data.BotVisitsByHour[hour] = 0
-		s.data.CurrentHour = hour
+	// Hour carousel (24h sliding window)
+	for s.data.CurrentHour != hour {
+		// Shift all hours forward by one, drop the oldest
+		for i := 23; i > 0; i-- {
+			s.data.HumanVisitsByHour[i] = s.data.HumanVisitsByHour[i-1]
+			s.data.BotVisitsByHour[i] = s.data.BotVisitsByHour[i-1]
+		}
+		s.data.HumanVisitsByHour[0] = 0
+		s.data.BotVisitsByHour[0] = 0
+		s.data.CurrentHour = (s.data.CurrentHour + 1) % 24
 	}
 
-	if dayOfWeek != s.data.CurrentDayOfWeek {
-		s.data.HumanVisitsByDay[dayOfWeek] = 0
-		s.data.BotVisitsByDay[dayOfWeek] = 0
-		s.data.CurrentDayOfWeek = dayOfWeek
+	// Day-of-week carousel (7d sliding window)
+	for s.data.CurrentDayOfWeek != dayOfWeek {
+		for i := 6; i > 0; i-- {
+			s.data.HumanVisitsByDay[i] = s.data.HumanVisitsByDay[i-1]
+			s.data.BotVisitsByDay[i] = s.data.BotVisitsByDay[i-1]
+		}
+		s.data.HumanVisitsByDay[0] = 0
+		s.data.BotVisitsByDay[0] = 0
+		s.data.CurrentDayOfWeek = (s.data.CurrentDayOfWeek + 1) % 7
 	}
 
-	if dayOfMonth != s.data.CurrentDayOfMonth {
-		s.data.HumanVisitsByMonthDay[dayOfMonth] = 0
-		s.data.BotVisitsByMonthDay[dayOfMonth] = 0
-		s.data.CurrentDayOfMonth = dayOfMonth
+	// Day-of-month carousel (31d sliding window)
+	for s.data.CurrentDayOfMonth != dayOfMonth {
+		for i := 30; i > 0; i-- {
+			s.data.HumanVisitsByMonthDay[i] = s.data.HumanVisitsByMonthDay[i-1]
+			s.data.BotVisitsByMonthDay[i] = s.data.BotVisitsByMonthDay[i-1]
+		}
+		s.data.HumanVisitsByMonthDay[0] = 0
+		s.data.BotVisitsByMonthDay[0] = 0
+		s.data.CurrentDayOfMonth = (s.data.CurrentDayOfMonth + 1) % 31
 	}
 }
 
@@ -242,6 +285,59 @@ func (s *StatsCollector) cleanupPaths() {
 	}
 }
 
+// updateUserAgentStats updates user agent statistics
+func (s *StatsCollector) updateUserAgentStats(ua string, hour uint8, isBot bool) {
+	browser := classifyUserAgent(ua)
+	if browser == "" {
+		return
+	}
+
+	stats, exists := s.data.UserAgentStats[browser]
+	if !exists {
+		stats = &UserAgentStats{
+			Browser: browser,
+		}
+		s.data.UserAgentStats[browser] = stats
+	}
+	atomic.AddUint32(&stats.Visits[hour], 1)
+}
+
+// classifyUserAgent classifies user agent into browser category
+func classifyUserAgent(ua string) string {
+	if ua == "" {
+		return ""
+	}
+
+	uaLower := strings.ToLower(ua)
+
+	// Check for bots first
+	if strings.Contains(uaLower, "bot") || strings.Contains(uaLower, "spider") || strings.Contains(uaLower, "crawler") {
+		return "Bot"
+	}
+
+	// Check for specific browsers
+	if strings.Contains(uaLower, "firefox") {
+		return "Firefox"
+	}
+	if strings.Contains(uaLower, "chrome") && !strings.Contains(uaLower, "edg") {
+		return "Chrome"
+	}
+	if strings.Contains(uaLower, "edg") || strings.Contains(uaLower, "edge") {
+		return "Edge"
+	}
+	if strings.Contains(uaLower, "safari") && !strings.Contains(uaLower, "chrome") {
+		return "Safari"
+	}
+	if strings.Contains(uaLower, "opera") || strings.Contains(uaLower, "opr") {
+		return "Opera"
+	}
+	if strings.Contains(uaLower, "msie") || strings.Contains(uaLower, "trident") {
+		return "IE"
+	}
+
+	return "Other"
+}
+
 // saveLoop saves stats periodically
 func (s *StatsCollector) saveLoop() {
 	ticker := time.NewTicker(1 * time.Minute)
@@ -277,6 +373,11 @@ func (s *StatsCollector) GetReferrers() map[string]*ReferrerStats {
 // GetPaths returns path statistics
 func (s *StatsCollector) GetPaths() map[int64]*PathStats {
 	return s.data.GetPaths()
+}
+
+// GetUserAgents returns user agent statistics
+func (s *StatsCollector) GetUserAgents() map[string]*UserAgentStats {
+	return s.data.GetUserAgents()
 }
 
 // extractDomain extracts domain from referrer URL

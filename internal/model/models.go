@@ -6,6 +6,16 @@ type KeyValue struct {
 	Value string `json:"value"`
 }
 
+// attrValueMaxRunes is the maximum number of runes allowed in an attribute value.
+// Values exceeding this limit are ignored everywhere: parsing, indexing, filtering.
+const attrValueMaxRunes = 40
+
+// IsAttrValueTooLong returns true if the attribute value has more than attrValueMaxRunes runes.
+// Long values are considered noise and are excluded from all processing.
+func IsAttrValueTooLong(v string) bool {
+	return len([]rune(v)) > attrValueMaxRunes
+}
+
 // User
 
 type UserRole string
@@ -268,6 +278,9 @@ type Product struct {
 	Attributes    []KeyValue    `json:"attributes,omitempty"`
 	Images        []string      `json:"images,omitempty"`
 	SEO           ProductSEO    `json:"seo,omitempty"`
+	AvgRating     float64       `json:"avg_rating,omitempty"`   // average review rating (computed)
+	ReviewCount   int           `json:"review_count,omitempty"` // number of approved reviews
+	EANPageID     int64         `json:"ean_page_id,omitempty"`  // linked EAN page ID
 	CreatedAt     int64         `json:"created_at"`
 	UpdatedAt     int64         `json:"updated_at"`
 	ShopCategory  string        `json:"shop_category"`
@@ -310,6 +323,8 @@ type EANPage struct {
 	Currency     string     `json:"currency"`             // currency (default: RUB)
 	Attributes   []KeyValue `json:"attributes,omitempty"` // merged attributes (no duplicates)
 	ProductCount int        `json:"product_count"`        // number of products with this EAN
+	LikeCount    int        `json:"like_count"`           // likes for this page
+	DislikeCount int        `json:"dislike_count"`        // dislikes for this page
 	CreatedAt    int64      `json:"created_at,omitempty"`
 	UpdatedAt    int64      `json:"updated_at,omitempty"`
 	SeoURL       string     `json:"seo_url,omitempty"`
@@ -417,15 +432,30 @@ type Payment struct {
 	CreatedAt         int64         `json:"created_at"`
 }
 
-// Review
+// ReviewStatus represents the moderation status of a review.
+type ReviewStatus string
 
+const (
+	ReviewStatusPending  ReviewStatus = "pending"  // new, awaiting moderation
+	ReviewStatusApproved ReviewStatus = "approved" // approved and visible
+	ReviewStatusRejected ReviewStatus = "rejected" // rejected by moderator
+	ReviewStatusHidden   ReviewStatus = "hidden"   // hidden (spam/complaints)
+)
+
+// Review represents a product review with moderation support.
 type Review struct {
-	ID        int64  `json:"id"`
-	ProductID int64  `json:"product_id"`
-	UserID    int64  `json:"user_id"`
-	Rating    int    `json:"rating"`
-	Comment   string `json:"comment,omitempty"`
-	CreatedAt int64  `json:"created_at"`
+	ID         int64        `json:"id"`
+	ProductID  int64        `json:"product_id"`
+	EAN        string       `json:"ean,omitempty"`         // product's EAN (copied at creation)
+	EANPageID  int64        `json:"ean_page_id,omitempty"` // EAN page ID (computed)
+	UserID     int64        `json:"user_id"`
+	Rating     int          `json:"rating"`
+	Comment    string       `json:"comment,omitempty"`
+	Status     ReviewStatus `json:"status"`
+	IsFeatured bool         `json:"is_featured"`
+	Verified   bool         `json:"verified"`
+	CreatedAt  int64        `json:"created_at"`
+	UpdatedAt  int64        `json:"updated_at"`
 }
 
 // Promotion
@@ -550,4 +580,74 @@ type CompanySettingsV2 struct {
 	DeliveryTimeIds    []int64 `json:"delivery_time_ids,omitempty"`
 	DeliveryMethodIds  []int64 `json:"delivery_method_ids,omitempty"`
 	InstallmentPlanIds []int64 `json:"installment_plan_ids,omitempty"`
+}
+
+// CommentTargetType represents the type of content a comment is attached to.
+type CommentTargetType string
+
+const (
+	CommentTargetProduct  CommentTargetType = "product"
+	CommentTargetCategory CommentTargetType = "category"
+	CommentTargetEANPage  CommentTargetType = "eanpage"
+)
+
+// CommentStatus represents the moderation status of a comment.
+type CommentStatus string
+
+const (
+	CommentStatusPending  CommentStatus = "pending"
+	CommentStatusApproved CommentStatus = "approved"
+	CommentStatusRejected CommentStatus = "rejected"
+	CommentStatusHidden   CommentStatus = "hidden"
+)
+
+// Comment represents a user comment on any target (product, category, eanpage).
+type Comment struct {
+	ID           int64             `json:"id"`
+	TargetType   CommentTargetType `json:"target_type"`
+	TargetID     int64             `json:"target_id"`
+	UserID       int64             `json:"user_id"`
+	ParentID     int64             `json:"parent_id,omitempty"` // for nested replies
+	Content      string            `json:"content"`
+	Status       CommentStatus     `json:"status"`
+	LikeCount    int               `json:"like_count"`
+	DislikeCount int               `json:"dislike_count"`
+	IsFeatured   bool              `json:"is_featured"`
+	CreatedAt    int64             `json:"created_at"`
+	UpdatedAt    int64             `json:"updated_at"`
+}
+
+// VoteType represents the type of vote (like or dislike).
+type VoteType string
+
+const (
+	VoteLike    VoteType = "like"
+	VoteDislike VoteType = "dislike"
+)
+
+// VoteTargetType represents the type of content being voted on.
+type VoteTargetType string
+
+const (
+	VoteTargetComment VoteTargetType = "comment"
+	VoteTargetReview  VoteTargetType = "review"
+	VoteTargetEANPage VoteTargetType = "eanpage"
+)
+
+// Vote represents a like/dislike on a comment, review, or eanpage.
+type Vote struct {
+	ID         int64    `json:"id"`
+	TargetType string   `json:"target_type"` // "comment", "review", or "eanpage"
+	TargetID   int64    `json:"target_id"`
+	UserID     int64    `json:"user_id"`
+	VoteType   VoteType `json:"vote_type"`
+	CreatedAt  int64    `json:"created_at"`
+	UpdatedAt  int64    `json:"updated_at"`
+}
+
+// UserVote represents the current vote state for a user on a target.
+type UserVote struct {
+	TargetType string   `json:"target_type"`
+	TargetID   int64    `json:"target_id"`
+	VoteType   VoteType `json:"vote_type"` // "like", "dislike", or "" if not voted
 }

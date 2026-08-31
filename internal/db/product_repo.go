@@ -767,12 +767,24 @@ func (r *ProductRepo) createNoIndexTx(txn *Transaction, p *model.Product) error 
 
 // mergeAttributesOverwrite объединяет существующие атрибуты с новыми (новые переопределяют).
 // Allows multiple values per Key (deduplicates by Key+Value pair).
+// Values longer than 40 runes are excluded.
 func mergeAttributesOverwrite(existing, incoming []model.KeyValue) []model.KeyValue {
 	if len(incoming) == 0 {
-		return existing
+		// Filter existing in place for long values
+		var filtered []model.KeyValue
+		for _, kv := range existing {
+			if !model.IsAttrValueTooLong(kv.Value) {
+				filtered = append(filtered, kv)
+			}
+		}
+		if len(filtered) == 0 {
+			return nil
+		}
+		return filtered
 	}
 	if len(existing) == 0 {
-		return incoming
+		// Filter incoming for long values
+		return filterAttrValues(incoming)
 	}
 	// Index by Key+Value pair
 	type kvKey struct {
@@ -784,6 +796,9 @@ func mergeAttributesOverwrite(existing, incoming []model.KeyValue) []model.KeyVa
 		idx[kvKey{kv.Key, kv.Value}] = i
 	}
 	for _, kv := range incoming {
+		if model.IsAttrValueTooLong(kv.Value) {
+			continue
+		}
 		k := kvKey{kv.Key, kv.Value}
 		if i, ok := idx[k]; ok {
 			// Overwrite value if same Key+Value pair exists
@@ -793,7 +808,31 @@ func mergeAttributesOverwrite(existing, incoming []model.KeyValue) []model.KeyVa
 			idx[k] = len(existing) - 1
 		}
 	}
-	return existing
+	// Final pass: remove any remaining long values from existing
+	var filtered []model.KeyValue
+	for _, kv := range existing {
+		if !model.IsAttrValueTooLong(kv.Value) {
+			filtered = append(filtered, kv)
+		}
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return filtered
+}
+
+// filterAttrValues removes attribute values longer than 40 runes.
+func filterAttrValues(attrs []model.KeyValue) []model.KeyValue {
+	result := make([]model.KeyValue, 0, len(attrs))
+	for _, kv := range attrs {
+		if !model.IsAttrValueTooLong(kv.Value) {
+			result = append(result, kv)
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 func (r *ProductRepo) Delete(id int64) error {

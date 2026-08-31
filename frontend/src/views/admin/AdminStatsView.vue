@@ -23,6 +23,9 @@ const enabled = ref(false);
 const summary = ref(null);
 const referrers = ref({});
 const paths = ref({});
+const useragents = ref({});
+const excludedIPs = ref([]);
+const newExcludedIP = ref('');
 
 const charts = ref({});
 
@@ -38,8 +41,8 @@ const currentDom = () => new Date().getDate();
 const nf = new Intl.NumberFormat();
 const fmtNum = (n) => nf.format(n || 0);
 
-const totalHuman = computed(() => sum(summary.value?.HumanVisitsByHour));
-const totalBot = computed(() => sum(summary.value?.BotVisitsByHour));
+const totalHuman = computed(() => summary.value?.TotalHumanVisits || 0);
+const totalBot = computed(() => summary.value?.TotalBotVisits || 0);
 const totalAll = computed(() => totalHuman.value + totalBot.value);
 const humanShare = computed(() =>
   totalAll.value > 0 ? Math.round((totalHuman.value / totalAll.value) * 100) : 0
@@ -152,17 +155,21 @@ const fetchData = async () => {
   loading.value = true;
   error.value = '';
   try {
-    const [statusRes, summaryRes, refRes, pathsRes] = await Promise.allSettled([
+    const [statusRes, summaryRes, refRes, pathsRes, uaRes, ipsRes] = await Promise.allSettled([
       api.get('/admin/stats/visits/status'),
       api.get('/admin/stats/visits/summary'),
       api.get('/admin/stats/visits/referrers'),
       api.get('/admin/stats/visits/paths'),
+      api.get('/admin/stats/visits/useragents'),
+      api.get('/admin/stats/visits/excluded-ips'),
     ]);
 
     if (statusRes.status === 'fulfilled') enabled.value = !!statusRes.value.data?.enabled;
     if (summaryRes.status === 'fulfilled') summary.value = summaryRes.value.data;
     if (refRes.status === 'fulfilled') referrers.value = refRes.value.data?.referrers || {};
     if (pathsRes.status === 'fulfilled') paths.value = pathsRes.value.data?.paths || {};
+    if (uaRes.status === 'fulfilled') useragents.value = uaRes.value.data?.useragents || {};
+    if (ipsRes.status === 'fulfilled') excludedIPs.value = ipsRes.value.data?.excluded_ips || [];
 
     if (summaryRes.status === 'rejected' && refRes.status === 'rejected' && pathsRes.status === 'rejected') {
       error.value = summaryRes.reason?.response?.data?.message || summaryRes.reason?.message || 'Error';
@@ -183,6 +190,42 @@ const toggleEnabled = async () => {
     error.value = e.response?.data?.message || e.message;
   }
 };
+
+const addExcludedIP = async () => {
+  const ip = newExcludedIP.value.trim();
+  if (!ip || excludedIPs.value.includes(ip)) {
+    newExcludedIP.value = '';
+    return;
+  }
+  try {
+    const updated = [...excludedIPs.value, ip];
+    await api.post('/admin/stats/visits/excluded-ips', { excluded_ips: updated });
+    excludedIPs.value = updated;
+    newExcludedIP.value = '';
+  } catch (e) {
+    error.value = e.response?.data?.message || e.message;
+  }
+};
+
+const removeExcludedIP = async (ip) => {
+  try {
+    const updated = excludedIPs.value.filter((i) => i !== ip);
+    await api.post('/admin/stats/visits/excluded-ips', { excluded_ips: updated });
+    excludedIPs.value = updated;
+  } catch (e) {
+    error.value = e.response?.data?.message || e.message;
+  }
+};
+
+const useragentRows = computed(() => {
+  return Object.entries(useragents.value || {})
+    .map(([browser, ua]) => ({
+      browser,
+      total: sum(ua.visits),
+      current: ua.visits?.[currentHour()] || 0,
+    }))
+    .sort((a, b) => b.total - a.total);
+});
 
 // ─────────────────────────────────────────────────────────────
 // Charts
@@ -377,7 +420,7 @@ const renderCharts = async () => {
     theme: { mode: isDark() ? 'dark' : 'light' },
     series: [totalHuman.value, totalBot.value],
     labels: [t('admin.visits_human'), t('admin.visits_bot')],
-    colors: ['#f97316', '#f59e0b'],
+    colors: ['#10b981', '#f59e0b'], // green for human, amber for bot
     stroke: {
       colors: [isDark() ? '#0f172a' : '#ffffff', isDark() ? '#0f172a' : '#ffffff'],
       width: 2,
@@ -392,7 +435,14 @@ const renderCharts = async () => {
       style: { fontSize: '14px', fontWeight: 600 },
       background: { enabled: false },
       formatter: (val, opts) => {
-        const total = totalHuman.value + totalBot.value;
+        // Use the series total from ApexCharts globals
+        const series = opts.w.globals.series;
+        let total = 0;
+        for (let i = 0; i < series.length; i++) {
+          for (let j = 0; j < series[i].length; j++) {
+            total += Number(series[i][j]) || 0;
+          }
+        }
         if (!total) return '';
         const pct = Math.round((Number(val) / total) * 100);
         return `${pct}%`;
@@ -671,6 +721,86 @@ watch(locale, () => {
                 </tr>
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- User Agents -->
+      <div class="bg-surface rounded-xl shadow-sm p-5 border border-line">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold text-sm text-ink-2">{{ t('admin.visits_useragents') }}</h2>
+          <span class="text-xs text-ink-3">{{ useragentRows.length }} {{ t('admin.visits_browsers') }}</span>
+        </div>
+
+        <div v-if="useragentRows.length === 0" class="text-center py-8 text-sm text-ink-3">
+          {{ t('admin.visits_no_data') }}
+        </div>
+
+        <div v-else>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-3">
+            <div
+              v-for="ua in useragentRows"
+              :key="ua.browser"
+              class="group"
+            >
+              <div class="flex items-center justify-between text-sm mb-1">
+                <span class="font-medium text-ink-2">{{ ua.browser }}</span>
+                <span class="text-ink-3 text-xs tabular-nums">
+                  {{ fmtNum(ua.total) }}
+                  <span class="text-ink-3/60">({{ Math.round((ua.total / totalAll) * 100) }}%)</span>
+                </span>
+              </div>
+              <div class="h-2 bg-surface-2 rounded-full overflow-hidden">
+                <div
+                  class="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-500"
+                  :style="{ width: (ua.total / totalAll * 100) + '%' }"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Excluded IPs -->
+      <div class="bg-surface rounded-xl shadow-sm p-5 border border-line">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold text-sm text-ink-2">{{ t('admin.visits_excluded_ips') }}</h2>
+          <span class="text-xs text-ink-3">{{ excludedIPs.length }} {{ t('admin.visits_ips') }}</span>
+        </div>
+
+        <div class="flex gap-2 mb-3">
+          <input
+            v-model="newExcludedIP"
+            @keyup.enter="addExcludedIP"
+            type="text"
+            :placeholder="t('admin.visits_ip_placeholder')"
+            class="flex-1 px-3 py-2 border border-line rounded-lg text-sm bg-surface-2 focus:outline-none focus:ring-2 focus:ring-purple-400"
+          />
+          <button
+            @click="addExcludedIP"
+            class="btn btn-primary btn-sm"
+          >
+            {{ t('admin.visits_add') }}
+          </button>
+        </div>
+
+        <div v-if="excludedIPs.length === 0" class="text-center py-4 text-sm text-ink-3">
+          {{ t('admin.visits_no_excluded') }}
+        </div>
+
+        <div v-else class="flex flex-wrap gap-2">
+          <div
+            v-for="ip in excludedIPs"
+            :key="ip"
+            class="flex items-center gap-2 px-3 py-1.5 bg-surface-2 rounded-lg text-sm"
+          >
+            <span class="font-mono text-ink-2">{{ ip }}</span>
+            <button
+              @click="removeExcludedIP(ip)"
+              class="text-red-500 hover:text-red-700 text-xs"
+            >
+              ×
+            </button>
           </div>
         </div>
       </div>

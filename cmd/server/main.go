@@ -579,6 +579,9 @@ func main() {
 	deliveryMethodRepo := db.NewDeliveryMethodRepo(store)
 	installmentPlanRepo := db.NewInstallmentPlanRepo(store)
 
+	// Set the prices directory for import operations (XML/JSON).
+	api.SetPricesDir(cfg.Import.PricesDir)
+
 	h := api.NewHandlers(store)
 	// Set the canonical site base URL (for sitemaps, robots.txt, canonicals).
 	h.SetSiteURL(cfg.Server.SiteURL)
@@ -845,6 +848,16 @@ func main() {
 	mux.Handle("/admin/import-nokaut", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			h.HandleAdminImportNokaut(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}), model.RoleAdmin))
+
+	// POST /admin/import-unified — batch import: each company's price file is
+	// parsed using the method stored in its PriceSource.Format (saved in DB).
+	mux.Handle("/admin/import-unified", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			h.HandleAdminImportUnified(w, r)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -1158,6 +1171,118 @@ func main() {
 	// GET /reviews?user_id=... (auth required, own reviews only)
 	mux.Handle("/reviews", jwtMiddleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h.HandleUserReviewsList(w, r)
+	})))
+
+	// GET /seller/reviews (seller access)
+	mux.Handle("/seller/reviews", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleSellerReviews(w, r)
+	})))
+
+	// Admin review endpoints
+	mux.Handle("/admin/reviews", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleAdminReviewsList(w, r)
+		case http.MethodPost:
+			h.HandleAdminReviewsBulkActions(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/admin/reviews/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		parts := strings.Split(path, "/")
+		if len(parts) < 5 || parts[4] == "" {
+			http.Error(w, "id required", http.StatusBadRequest)
+			return
+		}
+		_ = parts[4]
+
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleAdminReviewGet(w, r)
+		case http.MethodPatch:
+			h.HandleAdminReviewUpdate(w, r)
+		case http.MethodDelete:
+			h.HandleAdminReviewDelete(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/admin/reviews/stats", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleAdminReviewStats(w, r)
+	})))
+
+	mux.Handle("/admin/reviews/recalculate", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleAdminReviewsRecalculate(w, r)
+	})))
+
+	// --- Comment endpoints ---
+
+	// /comments — POST (auth) для создания, GET (public) для списка
+	mux.Handle("/comments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			jwtMiddleware.RequireAuth(http.HandlerFunc(h.HandleCommentCreate)).ServeHTTP(w, r)
+		} else {
+			h.HandleCommentsList(w, r)
+		}
+	}))
+
+	// --- Vote endpoints ---
+
+	// /votes — POST (auth) для голосования
+	mux.Handle("/votes", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			jwtMiddleware.RequireAuth(http.HandlerFunc(h.HandleVoteCreate)).ServeHTTP(w, r)
+		} else {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	// GET /votes/check (auth required)
+	mux.Handle("/votes/check", jwtMiddleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleVoteCheck(w, r)
+	})))
+
+	// --- Admin comment endpoints ---
+
+	mux.Handle("/admin/comments", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleAdminCommentsList(w, r)
+		case http.MethodPost:
+			h.HandleAdminCommentsBulkActions(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/admin/comments/", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		parts := strings.Split(path, "/")
+		if len(parts) < 5 || parts[4] == "" {
+			http.Error(w, "id required", http.StatusBadRequest)
+			return
+		}
+
+		switch r.Method {
+		case http.MethodPatch:
+			h.HandleAdminCommentUpdate(w, r)
+		case http.MethodDelete:
+			h.HandleAdminCommentDelete(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/admin/comments/stats", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleAdminCommentStats(w, r)
+	})))
+
+	mux.Handle("/admin/votes/stats", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleAdminVoteStats(w, r)
 	})))
 
 	// --- Categories (public and admin share same CRUD for now) ---
@@ -1759,6 +1884,23 @@ func main() {
 	// GET /admin/stats/visits/status — visit stats status
 	mux.Handle("/admin/stats/visits/status", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h.HandleStatsStatus(w, r)
+	}), model.RoleAdmin))
+
+	// GET /admin/stats/visits/useragents — visit stats by user agent
+	mux.Handle("/admin/stats/visits/useragents", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.HandleStatsUserAgents(w, r)
+	}), model.RoleAdmin))
+
+	// GET/POST /admin/stats/visits/excluded-ips — get/update excluded IPs
+	mux.Handle("/admin/stats/visits/excluded-ips", jwtMiddleware.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleStatsGetExcludedIPs(w, r)
+		case http.MethodPost:
+			h.HandleStatsUpdateExcludedIPs(w, r)
+		default:
+			httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		}
 	}), model.RoleAdmin))
 
 	// GET /admin/debug/turbo-key?key=... — read raw turbo key (TEMP)

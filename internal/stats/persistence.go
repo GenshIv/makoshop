@@ -56,7 +56,7 @@ func (p *StatsPersistence) LoadStatsData(store interface {
 	}
 
 	// JSON may omit or null the maps; ensure they are non-nil so that
-	// subsequent writes (updateReferrerStats/updatePathStats) don't panic.
+	// subsequent writes (updateReferrerStats/updatePathStats/updateUserAgentStats) don't panic.
 	if stats.ReferrerStats == nil {
 		stats.ReferrerStats = make(map[string]*ReferrerStats)
 	}
@@ -66,6 +66,10 @@ func (p *StatsPersistence) LoadStatsData(store interface {
 	if stats.PathStats == nil {
 		stats.PathStats = make(map[int64]*PathStats)
 	}
+	if stats.UserAgentStats == nil {
+		stats.UserAgentStats = make(map[string]*UserAgentStats)
+	}
+	// Excluded IPs are loaded from JSON directly — no init needed
 
 	return &stats, nil
 }

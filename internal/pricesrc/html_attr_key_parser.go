@@ -418,6 +418,10 @@ func (p *HTMLAttrKeyParser) ParseToModelAttributes(htmlContent string) []model.K
 	result := make([]model.KeyValue, 0, len(attrs))
 	for code, values := range attrs {
 		for _, value := range values {
+			// Skip attribute values longer than 40 runes
+			if len([]rune(value)) > 40 {
+				continue
+			}
 			result = append(result, model.KeyValue{Key: code, Value: value})
 		}
 	}

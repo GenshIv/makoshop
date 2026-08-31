@@ -463,12 +463,61 @@ const savePriceConfig = async () => {
   }
 };
 
+// Import method options. 'saved' means: use the format stored in the
+// company's PriceSource.Format (saved in the DB).
+const importSources = [
+  { value: 'saved', label: 'Use saved format' },
+  { value: 'nokaut', label: 'XML (Nokaut)' },
+  { value: 'json', label: 'JSON' },
+  { value: 'csv', label: 'CSV' },
+  { value: 'normalized', label: 'Normalized (JSONL)' },
+  { value: 'multi', label: 'Multi-company' },
+];
+const importSource = ref('saved');
+
+const jsonImporting = ref(false);
+const jsonImportResult = ref(null);
+const jsonNoDownload = ref(false);
+
+const triggerJSONImport = async () => {
+  if (!selectedCompany.value) return;
+  jsonImporting.value = true;
+  jsonImportResult.value = null;
+  try {
+    const params = new URLSearchParams({
+      source: 'json',
+      company: String(selectedCompany.value.id),
+    });
+    if (jsonNoDownload.value) {
+      params.set('no_download', '1');
+    }
+    const res = await api.post(`/admin/import-prices?${params.toString()}`);
+    jsonImportResult.value = res.data;
+  } catch (e) {
+    jsonImportResult.value = { status: 'error', message: e.response?.data?.message || 'Import failed' };
+  } finally {
+    jsonImporting.value = false;
+  }
+};
+
+// The unified endpoint handles per-company formats (saved/json/nokaut) using
+// the company's saved PriceSource.Format. Folder-based formats (csv/normalized/
+// multi) are still served by the legacy /admin/import-prices endpoint.
+const UNIFIED_SOURCES = ['saved', 'json', 'nokaut'];
+
 const triggerImport = async () => {
   if (!selectedCompany.value) return;
   importing.value = true;
   importResult.value = null;
   try {
-    const res = await api.post(`/admin/import-nokaut?company=${selectedCompany.value.id}`);
+    const params = new URLSearchParams({ company: String(selectedCompany.value.id) });
+    if (importSource.value !== 'saved') {
+      params.set('source', importSource.value);
+    }
+    const endpoint = UNIFIED_SOURCES.includes(importSource.value)
+      ? '/admin/import-unified'
+      : '/admin/import-prices';
+    const res = await api.post(`${endpoint}?${params.toString()}`);
     importResult.value = res.data;
   } catch (e) {
     importResult.value = { status: 'error', message: e.response?.data?.message || 'Import failed' };
@@ -509,6 +558,7 @@ const emptyUnifiedSettingsForm = () => ({
     import_url: '',
     import_folder: '',
     currency: '',
+    format: 'nokaut',
     html_attr_rules: [],
   },
 });
@@ -532,9 +582,10 @@ const openUnifiedSettings = async (company) => {
     unifiedSettingsForm.value.price_source.import_folder = c.import_folder || '';
     // Load currency from settings
     unifiedSettingsForm.value.price_source.currency = c.settings?.currency || '';
-    // Load html_attr_rules from price_source
+    // Load html_attr_rules and format from price_source
     if (c.price_source) {
       unifiedSettingsForm.value.price_source.html_attr_rules = c.price_source.html_attr_rules || [];
+      unifiedSettingsForm.value.price_source.format = c.price_source.format || 'nokaut';
     }
   } catch (e) {
     console.error('load unified settings:', e);
@@ -604,12 +655,27 @@ const saveUnifiedSettings = async () => {
   }
 };
 
+const unifiedImportSource = ref('saved');
+const unifiedNoDownload = ref(false);
+
 const triggerUnifiedImport = async () => {
   if (!selectedCompany.value) return;
   unifiedImporting.value = true;
   unifiedImportResult.value = null;
   try {
-    const res = await api.post(`/admin/import-nokaut?company=${selectedCompany.value.id}`);
+    const params = new URLSearchParams({
+      company: String(selectedCompany.value.id),
+    });
+    if (unifiedImportSource.value !== 'saved') {
+      params.set('source', unifiedImportSource.value);
+    }
+    if (unifiedNoDownload.value) {
+      params.set('no_download', '1');
+    }
+    const endpoint = UNIFIED_SOURCES.includes(unifiedImportSource.value)
+      ? '/admin/import-unified'
+      : '/admin/import-prices';
+    const res = await api.post(`${endpoint}?${params.toString()}`);
     unifiedImportResult.value = res.data;
   } catch (e) {
     unifiedImportResult.value = { status: 'error', message: e.response?.data?.message || 'Import failed' };
@@ -788,6 +854,22 @@ onMounted(fetchCompanies);
             <p class="text-xs text-ink-3 mt-1">{{ t('admin.import_url_hint') || 'URL to download the price file from. Saved to prices/<company>.xml on import.' }}</p>
           </div>
 
+          <!-- Import source selector -->
+          <div>
+            <label class="text-sm font-medium text-ink-2 block mb-1">{{ t('admin.import_source') || 'Import Source' }}</label>
+            <select v-model="importSource" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface">
+              <option v-for="src in importSources" :key="src.value" :value="src.value">{{ src.label }}</option>
+            </select>
+            <p class="text-xs text-ink-3 mt-1">
+              <template v-if="importSource === 'saved'">Uses the Format saved in this company's Price Source Config</template>
+              <template v-else-if="importSource === 'csv'">CSV files from _tmp/prices/*.csv</template>
+              <template v-else-if="importSource === 'normalized'">JSONL files from _tmp/normalized/</template>
+              <template v-else-if="importSource === 'multi'">Multi-company CSV from _tmp/prices/{company}/*.csv</template>
+              <template v-else-if="importSource === 'json'">JSON price file (productHeader + products array)</template>
+              <template v-else-if="importSource === 'nokaut'">Nokaut XML price file from company ImportURL (prices/&lt;company&gt;.xml)</template>
+            </p>
+          </div>
+
           <!-- Currency + visibility -->
           <div class="grid grid-cols-2 gap-3">
             <div>
@@ -827,7 +909,10 @@ onMounted(fetchCompanies);
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
               <div>
                 <label class="text-xs text-ink-3 block">{{ t('admin.field_format') || 'Format' }}</label>
-                <input v-model="priceForm.price_source.format" type="text" class="w-full px-2 py-1 text-xs rounded-md border border-line bg-surface" />
+                <select v-model="priceForm.price_source.format" class="w-full px-2 py-1 text-xs rounded-md border border-line bg-surface">
+                  <option v-for="src in importSources.filter(s => s.value !== 'saved')" :key="src.value" :value="src.value">{{ src.label }}</option>
+                </select>
+                <p class="text-[10px] text-ink-3 mt-0.5">Method used to parse this company's price file on import</p>
               </div>
               <div>
                 <label class="text-xs text-ink-3 block">{{ t('admin.field_ean') || 'EAN Field' }}</label>
@@ -902,6 +987,19 @@ onMounted(fetchCompanies);
               {{ t('admin.import_created') || 'Created' }}: {{ importResult.products_created }} |
               {{ t('admin.import_updated') || 'Updated' }}: {{ importResult.products_updated }} |
               {{ t('admin.import_skipped') || 'Skipped' }}: {{ importResult.products_skipped }}
+            </div>
+          </div>
+
+          <!-- JSON Import -->
+          <div class="border-t border-line pt-3">
+            <div class="text-sm font-semibold text-ink-2 mb-2">{{ t('admin.json_import') || 'JSON Import' }}</div>
+            <p class="text-xs text-ink-3 mb-2">Import from JSON price file (productHeader + products array)</p>
+            <button @click="triggerJSONImport" :disabled="jsonImporting" class="px-3 py-1.5 text-xs rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
+              {{ jsonImporting ? (t('admin.importing') || 'Importing...') : (t('admin.run_json_import') || 'Run JSON Import') }}
+            </button>
+            <div v-if="jsonImportResult" class="mt-2 text-sm text-ink-3">
+              {{ jsonImportResult.status === 'error' ? jsonImportResult.message :
+                 `Parsed: ${jsonImportResult.offers_parsed} | Created: ${jsonImportResult.products_created} | Updated: ${jsonImportResult.products_updated}` }}
             </div>
           </div>
         </div>
@@ -1011,6 +1109,22 @@ onMounted(fetchCompanies);
                 No parser rules defined.
               </p>
             </div>
+          </div>
+
+          <!-- Import source selector -->
+          <div>
+            <label class="text-sm font-medium text-ink-2 block mb-1">{{ t('admin.import_source') || 'Import Source' }}</label>
+            <select v-model="unifiedImportSource" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface">
+              <option v-for="src in importSources" :key="src.value" :value="src.value">{{ src.label }}</option>
+            </select>
+          </div>
+
+          <!-- No download checkbox -->
+          <div>
+            <label class="inline-flex items-center gap-2 text-xs text-ink-3 cursor-pointer">
+              <input v-model="unifiedNoDownload" type="checkbox" />
+              {{ t('admin.json_no_download') || 'Use local file (no download)' }}
+            </label>
           </div>
 
           <!-- Import button -->

@@ -77,6 +77,7 @@ func StatsMiddleware(collector *StatsCollector) func(http.Handler) http.Handler 
 			isBot := IsBotUserAgent(r.UserAgent())
 			referrer := r.Referer()
 			categoryID := extractCategoryID(r.URL.Path)
+			ip := extractIP(r)
 
 			// Record visit asynchronously
 			collector.RecordVisit(VisitEvent{
@@ -84,12 +85,38 @@ func StatsMiddleware(collector *StatsCollector) func(http.Handler) http.Handler 
 				Referrer:   referrer,
 				CategoryID: categoryID,
 				Timestamp:  uint32(time.Now().Unix()),
+				UserAgent:  r.UserAgent(),
+				IP:         ip,
 			})
 
 			// Continue to next handler
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// extractIP extracts the client IP from the request
+func extractIP(r *http.Request) string {
+	// Check X-Forwarded-For header first (for proxies)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		return strings.Split(xff, ",")[0]
+	}
+
+	// Check X-Real-IP header (for proxies)
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+
+	// Fall back to RemoteAddr
+	if r.RemoteAddr != "" {
+		// Remove port if present
+		if idx := strings.LastIndex(r.RemoteAddr, ":"); idx > 0 {
+			return r.RemoteAddr[:idx]
+		}
+		return r.RemoteAddr
+	}
+
+	return ""
 }
 
 // extractCategoryID extracts category ID from URL path

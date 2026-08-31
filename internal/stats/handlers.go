@@ -90,3 +90,51 @@ func (h *StatsHandler) HandleGetStatus(w http.ResponseWriter, r *http.Request) {
 		"enabled": h.collector.IsEnabled(),
 	})
 }
+
+// HandleGetUserAgents handles GET /admin/stats/useragents
+func (h *StatsHandler) HandleGetUserAgents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpres.WriteErrorFlat(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	agents := h.collector.GetUserAgents()
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"useragents": agents,
+	})
+}
+
+// HandleUpdateExcludedIPs handles POST /admin/stats/excluded-ips
+func (h *StatsHandler) HandleUpdateExcludedIPs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpres.WriteErrorFlat(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	var req struct {
+		ExcludedIPs []string `json:"excluded_ips"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpres.WriteErrorFlat(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json")
+		return
+	}
+
+	h.collector.SetExcludedIPs(req.ExcludedIPs)
+
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"excluded_ips": req.ExcludedIPs,
+	})
+}
+
+// HandleGetExcludedIPs handles GET /admin/stats/excluded-ips
+func (h *StatsHandler) HandleGetExcludedIPs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpres.WriteErrorFlat(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"excluded_ips": h.collector.excludedIPs,
+	})
+}

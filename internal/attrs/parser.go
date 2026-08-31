@@ -158,6 +158,10 @@ func (a ParsedAttrs) add(code, value string) {
 	if value == "" {
 		return
 	}
+	// Skip attribute values longer than 40 runes — they are noise.
+	if len([]rune(value)) > 40 {
+		return
+	}
 	if _, ok := a[code]; !ok {
 		a[code] = []string{}
 	}

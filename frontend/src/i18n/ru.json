@@ -656,6 +656,13 @@
     "visits_disable": "Выключить отслеживание",
     "visits_no_data": "Пока нет данных",
     "visits_no_data_hint": "Включите отслеживание и дождитесь трафика.",
+    "visits_useragents": "Браузеры",
+    "visits_browsers": "браузеров",
+    "visits_excluded_ips": "Исключённые IP",
+    "visits_ips": "IP",
+    "visits_ip_placeholder": "Введите IP-адрес",
+    "visits_add": "Добавить",
+    "visits_no_excluded": "Нет исключённых IP",
     "refresh": "Обновить",
     "coverage": "Покрытие",
     "coverage_hint": "Нажмите «Обновить», чтобы загрузить статистику покрытия.",
@@ -679,6 +686,7 @@
     "import_failed": "Ошибка импорта",
     "export_all": "Экспорт всех",
     "import_all": "Импорт всех",
+    "import_source": "Источник импорта",
     "companies_imported": "Импортировано",
     "edit_company": "Редактировать компанию",
     "name_translations": "Переводы названия",
@@ -686,7 +694,10 @@
     "logo_url": "URL логотипа",
     "hero_image": "URL hero-изображения",
     "description_translations": "Переводы описания",
-    "website_url": "URL сайта компании"
+    "website_url": "URL сайта компании",
+    "json_import": "",
+    "run_json_import": "",
+    "json_no_download": "Использовать локальный файл (без скачивания)"
   },
   "privacy": {
     "title": "Политика конфиденциальности",

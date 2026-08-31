@@ -142,6 +142,10 @@ func (s *EANPageSearch) IndexEANPage(sp *model.EANPage) error {
 	for _, kv := range sp.Attributes {
 		valStr := kv.Value
 		if valStr != "" {
+			// Skip attribute values longer than 40 runes
+			if model.IsAttrValueTooLong(valStr) {
+				continue
+			}
 			indexes[eanpageKeyAttr(kv.Key, valStr)] = append(indexes[eanpageKeyAttr(kv.Key, valStr)], docID)
 			// Track unique attribute codes for this EAN page
 			if _, ok := attrCodesSeen[kv.Key]; !ok {
@@ -241,6 +245,10 @@ func (s *EANPageSearch) IndexEANPageBatchTx(txn *Transaction, pages []*model.EAN
 		for _, kv := range sp.Attributes {
 			valStr := kv.Value
 			if valStr != "" {
+				// Skip attribute values longer than 40 runes
+				if model.IsAttrValueTooLong(valStr) {
+					continue
+				}
 				indexes[eanpageKeyAttr(kv.Key, valStr)] = append(indexes[eanpageKeyAttr(kv.Key, valStr)], docID)
 				// Track unique attribute codes for this EAN page
 				if _, ok := attrCodesSeen[kv.Key]; !ok {
@@ -373,6 +381,10 @@ func (s *EANPageSearch) IndexEANPageBatch(pages []*model.EANPage) error {
 		for _, kv := range sp.Attributes {
 			valStr := kv.Value
 			if valStr != "" {
+				// Skip attribute values longer than 40 runes
+				if model.IsAttrValueTooLong(valStr) {
+					continue
+				}
 				indexes[eanpageKeyAttr(kv.Key, valStr)] = append(indexes[eanpageKeyAttr(kv.Key, valStr)], docID)
 				// Track unique attribute codes for this EAN page
 				if _, ok := attrCodesSeen[kv.Key]; !ok {
@@ -499,6 +511,10 @@ func (s *EANPageSearch) UnindexEANPage(sp *model.EANPage) error {
 	for _, kv := range sp.Attributes {
 		valStr := kv.Value
 		if valStr != "" {
+			// Skip attribute values longer than 40 runes (consistent with indexing)
+			if model.IsAttrValueTooLong(valStr) {
+				continue
+			}
 			s.db.TurboDeleteIndexString(eanpageKeyAttr(kv.Key, valStr), docID)
 			// Delete from attr_code index (once per code)
 			if _, ok := attrCodesSeen[kv.Key]; !ok {
@@ -1059,6 +1075,10 @@ func (s *EANPageSearch) RebuildAllIndexes() error {
 		for _, kv := range sp.Attributes {
 			valStr := kv.Value
 			if valStr != "" {
+				// Skip attribute values longer than 40 runes
+				if model.IsAttrValueTooLong(valStr) {
+					continue
+				}
 				indexes[eanpageKeyAttr(kv.Key, valStr)] = append(indexes[eanpageKeyAttr(kv.Key, valStr)], docIDKey)
 			}
 		}
@@ -1174,6 +1194,10 @@ func (s *EANPageSearch) BuildAttrCodeIndexes() error {
 		attrCodesSeen := make(map[string]struct{})
 		for _, kv := range sp.Attributes {
 			if kv.Value != "" {
+				// Skip attribute values longer than 40 runes
+				if model.IsAttrValueTooLong(kv.Value) {
+					continue
+				}
 				if _, ok := attrCodesSeen[kv.Key]; !ok {
 					attrCodesSeen[kv.Key] = struct{}{}
 					indexes[eanpageKeyAttrCode(kv.Key)] = append(indexes[eanpageKeyAttrCode(kv.Key)], docID)
