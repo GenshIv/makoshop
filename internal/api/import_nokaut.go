@@ -541,6 +541,16 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 		}
 	}
 
+	// ============================================
+	// Phase 7: Recalculate delivery_method attributes (from products' companies)
+	// ============================================
+	fmt.Println("[IMPORT-NOKAUT] Phase 7: Recalculating delivery method attributes...")
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.RecalculateDeliveryMethods(h.companyRepo, h.deliveryMethodRepo); err != nil {
+			fmt.Printf("[IMPORT-NOKAUT] WARN: recalculate delivery methods: %v\n", err)
+		}
+	}
+
 	result.Status = "completed"
 	return result
 }

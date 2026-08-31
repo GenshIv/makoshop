@@ -93,6 +93,7 @@ const rebuildEndpoints = {
   counts: '/admin/rebuild-product-counts',
   sort: '/admin/rebuild-sort-indexes',
   eanpage: '/admin/rebuild-eanpage-indexes',
+  attrdef: '/admin/rebuild-attrdef-indexes',
   all: '/admin/eanpages/catalogize-all',
 };
 
@@ -107,6 +108,7 @@ const rebuildLabel = (key) => {
     counts: t('admin.rebuild_product_counts'),
     sort: t('admin.rebuild_sort_indexes'),
     eanpage: t('admin.rebuild_eanpage_indexes'),
+    attrdef: t('admin.rebuild_attrdef_indexes'),
     all: t('admin.rebuild_all_eanpage_indexes'),
   }[key];
 };
@@ -218,6 +220,13 @@ onMounted(() => {
             {{ systemLoading === 'eanpage' ? '...' : t('admin.rebuild_eanpage_indexes') }}
           </button>
           <button
+            @click="askRebuild('attrdef')"
+            :disabled="systemLoading !== null"
+            class="px-3 py-1.5 text-xs rounded-md border border-line bg-surface hover:bg-surface-2 disabled:opacity-50"
+          >
+            {{ systemLoading === 'attrdef' ? '...' : t('admin.rebuild_attrdef_indexes') }}
+          </button>
+          <button
             @click="askRebuild('all')"
             :disabled="systemLoading !== null"
             class="px-3 py-1.5 text-xs rounded-md border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-50"
@@ -325,10 +334,6 @@ onMounted(() => {
         <router-link to="/admin/stats" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
           <div class="font-medium">{{ t('admin.visits_stats') }}</div>
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.visits_stats_desc') }}</div>
-        </router-link>
-        <router-link to="/admin/payment-methods" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
-          <div class="font-medium">{{ t('admin.payment_methods_title') || 'Payment Methods' }}</div>
-          <div class="text-sm text-ink-3 mt-1">{{ t('admin.payment_methods_desc') || 'Manage payment methods' }}</div>
         </router-link>
         <router-link to="/admin/delivery-times" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
           <div class="font-medium">{{ t('admin.delivery_times_title') || 'Delivery Times' }}</div>

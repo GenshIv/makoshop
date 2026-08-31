@@ -64,6 +64,12 @@ func maintenanceMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Allow auth endpoints (login, register, etc.) so users can still access the app
+		if strings.HasPrefix(r.URL.Path, "/auth") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		// For HTML clients: show maintenance page
 		if strings.Contains(r.Header.Get("Accept"), "text/html") {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")

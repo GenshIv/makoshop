@@ -264,6 +264,16 @@ func (h *Handlers) HandleAdminImportPrices(w http.ResponseWriter, r *http.Reques
 	}
 	fmt.Printf("[IMPORT-CSV] Phase 6: Min prices recalculated in %v\n", time.Since(phase6Start))
 
+	// Recalculate delivery_method attributes on EAN pages (from products' companies)
+	fmt.Println("[IMPORT-CSV] Recalculating delivery method attributes...")
+	dmStart := time.Now()
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.RecalculateDeliveryMethods(h.companyRepo, h.deliveryMethodRepo); err != nil {
+			fmt.Printf("[IMPORT-CSV] WARN: recalculate delivery methods: %v\n", err)
+		}
+	}
+	fmt.Printf("[IMPORT-CSV] Delivery method attributes recalculated in %v\n", time.Since(dmStart))
+
 	// Phase 7: Rebuild EAN page sort indexes (to reflect updated min prices)
 	fmt.Println("[IMPORT-CSV] Phase 7: Rebuilding EAN page sort indexes...")
 	phase7Start := time.Now()
@@ -480,6 +490,16 @@ func (h *Handlers) importNormalized(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[IMPORT-NORMALIZED] WARN: recalculate min prices: %v\n", err)
 	}
 	fmt.Printf("[IMPORT-NORMALIZED] Phase 5: Min prices recalculated in %v\n", time.Since(phase5Start))
+
+	// Recalculate delivery_method attributes on EAN pages (from products' companies)
+	fmt.Println("[IMPORT-NORMALIZED] Recalculating delivery method attributes...")
+	dmStart := time.Now()
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.RecalculateDeliveryMethods(h.companyRepo, h.deliveryMethodRepo); err != nil {
+			fmt.Printf("[IMPORT-NORMALIZED] WARN: recalculate delivery methods: %v\n", err)
+		}
+	}
+	fmt.Printf("[IMPORT-NORMALIZED] Delivery method attributes recalculated in %v\n", time.Since(dmStart))
 
 	// Phase 6: Rebuild EAN page sort indexes (to reflect updated min prices)
 	fmt.Println("[IMPORT-NORMALIZED] Phase 6: Rebuilding EAN page sort indexes...")
@@ -2092,6 +2112,16 @@ func (h *Handlers) importMultiCompany(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Printf("[IMPORT-MULTI] Phase 5: Min prices recalculated in %v\n", time.Since(phase5Start))
 
+	// Recalculate delivery_method attributes on EAN pages (from products' companies)
+	fmt.Println("[IMPORT-MULTI] Recalculating delivery method attributes...")
+	dmStart := time.Now()
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.RecalculateDeliveryMethods(h.companyRepo, h.deliveryMethodRepo); err != nil {
+			fmt.Printf("[IMPORT-MULTI] WARN: recalculate delivery methods: %v\n", err)
+		}
+	}
+	fmt.Printf("[IMPORT-MULTI] Delivery method attributes recalculated in %v\n", time.Since(dmStart))
+
 	// Phase 6: Rebuild EAN page sort indexes (to reflect updated min prices)
 	fmt.Println("[IMPORT-MULTI] Phase 6: Rebuilding EAN page sort indexes...")
 	phase6Start := time.Now()
@@ -2221,7 +2251,7 @@ func (h *Handlers) HandleAdminRebuildSortIndexes(w http.ResponseWriter, r *http.
 	var priceDesc []sortItem
 	var timeDesc []sortItem
 
-	// Read products in batches
+	// Read products in batches and collect for batch reindex
 	batchSize := 10000
 	for i := 0; i < len(allIDs); i += batchSize {
 		end := i + batchSize
@@ -2229,11 +2259,14 @@ func (h *Handlers) HandleAdminRebuildSortIndexes(w http.ResponseWriter, r *http.
 			end = len(allIDs)
 		}
 
+		var batchProducts []*model.Product
 		for _, docID := range allIDs[i:end] {
 			p, err := h.productRepo.Get(int64(docID))
 			if err != nil {
 				continue
 			}
+
+			batchProducts = append(batchProducts, p)
 
 			item := sortItem{
 				DocID: docID,
@@ -2244,6 +2277,13 @@ func (h *Handlers) HandleAdminRebuildSortIndexes(w http.ResponseWriter, r *http.
 			priceAsc = append(priceAsc, item)
 			priceDesc = append(priceDesc, item)
 			timeDesc = append(timeDesc, item)
+		}
+
+		// Batch reindex all products in this batch
+		if len(batchProducts) > 0 {
+			if err := h.productRepo.TurboSearch().IndexProductBatch(batchProducts); err != nil {
+				fmt.Printf("[REBUILD-SORT] WARN: batch reindex %d products: %v\n", len(batchProducts), err)
+			}
 		}
 
 		fmt.Printf("[REBUILD-SORT] Processed %d/%d products\n", i+batchSize, len(allIDs))

@@ -119,12 +119,10 @@ const companySettingsMap = ref({}); // company_id -> { payment_methods: [], deli
 const fetchCompanySettings = async () => {
   try {
     // Get all lists
-    const [pmRes, dtRes, ipRes] = await Promise.all([
-      api.get('/admin/payment-methods'),
+    const [dtRes, ipRes] = await Promise.all([
       api.get('/admin/delivery-times'),
       api.get('/admin/installment-plans'),
     ]);
-    const allPM = (pmRes.data || []).reduce((m, pm) => { m[pm.id] = pm; return m; }, {});
     const allDT = (dtRes.data || []).reduce((m, dt) => { m[dt.id] = dt; return m; }, {});
     const allIP = (ipRes.data || []).reduce((m, ip) => { m[ip.id] = ip; return m; }, {});
 

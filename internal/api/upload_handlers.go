@@ -56,17 +56,20 @@ func (h *Handlers) HandleUploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save file
-	dstPath := filepath.Join(uploadDir, filename)
-	dst, err := os.Create(dstPath)
+	// Read the uploaded bytes (request body is already capped at 10MB).
+	raw, err := io.ReadAll(file)
 	if err != nil {
-		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to save file")
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to read file")
 		return
 	}
-	defer dst.Close()
 
-	if _, err := io.Copy(dst, file); err != nil {
-		os.Remove(dstPath)
+	// Resize/compress to roughly the on-screen layout size. Falls back to the
+	// original bytes when processing isn't applicable or doesn't shrink the file.
+	raw = processCategoryImage(raw, categoryImageMaxDim)
+
+	// Save file
+	dstPath := filepath.Join(uploadDir, filename)
+	if err := os.WriteFile(dstPath, raw, 0644); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to save file")
 		return
 	}

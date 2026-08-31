@@ -23,7 +23,7 @@ function applyTheme(activeTheme) {
 
 function getSavedTheme() {
   try {
-    return localStorage.getItem(THEME_KEY) || THEMES.AUTO;
+    return sessionStorage.getItem(THEME_KEY) || THEMES.AUTO;
   } catch {
     return THEMES.AUTO;
   }
@@ -41,7 +41,7 @@ export function useTheme() {
   const setTheme = (value) => {
     theme.value = value;
     try {
-      localStorage.setItem(THEME_KEY, value);
+      sessionStorage.setItem(THEME_KEY, value);
     } catch {
       // ignore (private mode)
     }

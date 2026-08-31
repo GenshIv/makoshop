@@ -51,8 +51,24 @@ func NewStatsCollectorWithPersistence(config StatsConfig, visitChanSize int, sto
 	return collector
 }
 
-// Start starts the stats collector
+// Start starts the stats collector.
+// It first loads any previously persisted data so statistics survive restarts,
+// then eagerly rotates to the current period (zeroing only the just-started
+// bucket) so a fresh day/hour is handled even before the first visit arrives.
 func (s *StatsCollector) Start() {
+	// Load persisted stats if available; fall back to fresh data on any error.
+	if s.persistence != nil && s.store != nil {
+		if loaded, err := s.persistence.LoadStatsData(s.store); err == nil && loaded != nil {
+			s.data = loaded
+		} else if err != nil {
+			fmt.Printf("WARN: failed to load stats: %v\n", err)
+		}
+	}
+
+	// Reset only the period that just started (e.g. new hour/day), never all data.
+	hour, dayOfWeek, dayOfMonth := s.currentPeriodIndices()
+	s.rotatePeriods(hour, dayOfWeek, dayOfMonth)
+
 	s.enabled.Store(s.config.Enabled)
 	go s.processVisits()
 	go s.saveLoop()
@@ -97,34 +113,10 @@ func (s *StatsCollector) processVisits() {
 
 // recordVisit records a single visit
 func (s *StatsCollector) recordVisit(event VisitEvent) {
-	now := time.Now().UTC()
-	hour := uint8(now.Hour())
-	dayOfWeek := uint8(now.Weekday())
-	dayOfMonth := uint8(now.Day())
+	hour, dayOfWeek, dayOfMonth := s.currentPeriodIndices()
 
-	// Update hours
-	if hour != s.data.CurrentHour {
-		// Reset current hour
-		s.data.HumanVisitsByHour[hour] = 0
-		s.data.BotVisitsByHour[hour] = 0
-		s.data.CurrentHour = hour
-	}
-
-	// Update days of week
-	if dayOfWeek != s.data.CurrentDayOfWeek {
-		// Reset current day of week
-		s.data.HumanVisitsByDay[dayOfWeek] = 0
-		s.data.BotVisitsByDay[dayOfWeek] = 0
-		s.data.CurrentDayOfWeek = dayOfWeek
-	}
-
-	// Update days of month
-	if dayOfMonth != s.data.CurrentDayOfMonth {
-		// Reset current day of month
-		s.data.HumanVisitsByMonthDay[dayOfMonth] = 0
-		s.data.BotVisitsByMonthDay[dayOfMonth] = 0
-		s.data.CurrentDayOfMonth = dayOfMonth
-	}
+	// Reset only the period that just started; all other periods are preserved.
+	s.rotatePeriods(hour, dayOfWeek, dayOfMonth)
 
 	// Increment counters
 	if event.IsBot {
@@ -152,6 +144,40 @@ func (s *StatsCollector) recordVisit(event VisitEvent) {
 
 	// Mark as dirty (needs saving)
 	s.dirty.Store(true)
+}
+
+// currentPeriodIndices returns the current hour, weekday and 0-based day-of-month.
+// Day-of-month is stored 0-based (now.Day()-1) so it indexes [31] arrays safely:
+// using now.Day() directly would overflow to index 31 on the 31st and panic.
+func (s *StatsCollector) currentPeriodIndices() (hour, dayOfWeek, dayOfMonth uint8) {
+	now := time.Now().UTC()
+	hour = uint8(now.Hour())
+	dayOfWeek = uint8(now.Weekday())
+	dayOfMonth = uint8(now.Day() - 1)
+	return
+}
+
+// rotatePeriods zeroes only the period that has just started (when its index no
+// longer matches the stored "current" marker) and advances that marker. It never
+// touches any other period, so historical data is preserved across transitions.
+func (s *StatsCollector) rotatePeriods(hour, dayOfWeek, dayOfMonth uint8) {
+	if hour != s.data.CurrentHour {
+		s.data.HumanVisitsByHour[hour] = 0
+		s.data.BotVisitsByHour[hour] = 0
+		s.data.CurrentHour = hour
+	}
+
+	if dayOfWeek != s.data.CurrentDayOfWeek {
+		s.data.HumanVisitsByDay[dayOfWeek] = 0
+		s.data.BotVisitsByDay[dayOfWeek] = 0
+		s.data.CurrentDayOfWeek = dayOfWeek
+	}
+
+	if dayOfMonth != s.data.CurrentDayOfMonth {
+		s.data.HumanVisitsByMonthDay[dayOfMonth] = 0
+		s.data.BotVisitsByMonthDay[dayOfMonth] = 0
+		s.data.CurrentDayOfMonth = dayOfMonth
+	}
 }
 
 // updateReferrerStats updates referrer statistics

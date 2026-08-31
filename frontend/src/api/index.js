@@ -12,7 +12,7 @@ const api = axios.create({
 
 // Request interceptor: attach JWT if present
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('jwt');
+  const token = sessionStorage.getItem('jwt');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -50,10 +50,10 @@ api.interceptors.response.use(
       console.log('[API] 401 Unauthorized — clearing session, redirecting to /');
       
       // Check if we had a token before clearing (to detect if session was active)
-      const hadToken = !!localStorage.getItem('jwt');
+      const hadToken = !!sessionStorage.getItem('jwt');
       
-      localStorage.removeItem('jwt');
-      localStorage.removeItem('user');
+      sessionStorage.removeItem('jwt');
+      sessionStorage.removeItem('user');
       
       // Avoid infinite reload if already on root
       if (window.location.pathname !== '/') {

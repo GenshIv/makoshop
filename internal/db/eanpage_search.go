@@ -17,11 +17,13 @@ import (
 // EANPageSearch — turbo-поиск по посадочным страницам (EANPage).
 // Каталог и фильтрация работают по EANPage, не по товарам.
 type EANPageSearch struct {
-	db           *makodb.ShardedDB
-	repo         *EANPageRepo
-	productRepo  *ProductRepo
-	categoryRepo *CategoryRepo
-	enabled      bool
+	db                 *makodb.ShardedDB
+	repo               *EANPageRepo
+	productRepo        *ProductRepo
+	categoryRepo       *CategoryRepo
+	companyRepo        *CompanyRepo
+	deliveryMethodRepo *DeliveryMethodRepo
+	enabled            bool
 
 	// Cache for category descendants to avoid repeated expensive lookups.
 	// Key: catID, Value: []int64 of descendant IDs (not including catID itself).
@@ -43,6 +45,13 @@ func NewEANPageSearch(db *makodb.ShardedDB, repo *EANPageRepo, productRepo *Prod
 		descCache:    make(map[int64][]int64),
 		descCacheTTL: 5 * time.Minute,
 	}
+}
+
+// SetCompanyDeliveryRepos attaches company and delivery method repositories
+// required by RecalculateDeliveryMethods (used inside RebuildAllIndexes).
+func (s *EANPageSearch) SetCompanyDeliveryRepos(companyRepo *CompanyRepo, deliveryMethodRepo *DeliveryMethodRepo) {
+	s.companyRepo = companyRepo
+	s.deliveryMethodRepo = deliveryMethodRepo
 }
 
 // SetTransaction sets the active transaction for this search.
@@ -269,6 +278,60 @@ func (s *EANPageSearch) IndexEANPageBatchTx(txn *Transaction, pages []*model.EAN
 		}
 	}
 
+	// Write attr values per category indexes for filter UI (buffered in transaction).
+	// Merge with existing values (read from the committed state) so a partial batch
+	// does not erase values contributed by pages outside the batch.
+	for code, catMap := range attrCatRef {
+		for catID, values := range catMap {
+			key := "attr_values_cat:" + code + ":" + strconv.FormatInt(catID, 10)
+			valuesSet := make(map[string]struct{}, len(values))
+			if data, _ := s.db.TurboRawRead(key); len(data) > 0 {
+				var existing map[string]interface{}
+				if json.Unmarshal(data, &existing) == nil {
+					for v := range existing {
+						valuesSet[v] = struct{}{}
+					}
+				}
+			}
+			for val := range values {
+				valuesSet[val] = struct{}{}
+			}
+			if len(valuesSet) > 0 {
+				buf, _ := json.Marshal(valuesSet)
+				_ = txn.TurboWrite(key, buf)
+			}
+			// Write labels
+			for val := range values {
+				labelKey := "attr_label:" + code + ":" + val
+				_ = txn.TurboWrite(labelKey, []byte(val))
+			}
+		}
+	}
+
+	// Update attrdef_cat_codes:{catID} with codes used by EAN pages (buffered in transaction)
+	for catID, codes := range catCodes {
+		key := "attrdef_cat_codes:" + strconv.FormatInt(catID, 10)
+		// Read existing codes
+		data, _ := s.db.TurboRawRead(key)
+		var existing []string
+		if data != nil && len(data) > 0 {
+			json.Unmarshal(data, &existing)
+		}
+		existingSet := make(map[string]struct{}, len(existing))
+		for _, c := range existing {
+			existingSet[c] = struct{}{}
+		}
+		// Add new codes
+		for c := range codes {
+			if _, ok := existingSet[c]; !ok {
+				existing = append(existing, c)
+				existingSet[c] = struct{}{}
+			}
+		}
+		buf, _ := json.Marshal(existing)
+		_ = txn.TurboWrite(key, buf)
+	}
+
 	return nil
 }
 
@@ -350,12 +413,24 @@ func (s *EANPageSearch) IndexEANPageBatch(pages []*model.EANPage) error {
 		}
 	}
 
-	// Write attr values per category indexes for filter UI
+	// Write attr values per category indexes for filter UI.
+	// Merge with existing values (read-modify-write) so a partial batch does not
+	// erase values contributed by pages outside the batch — e.g. delivery_method
+	// values written by RecalculateDeliveryMethods, or standard attribute values
+	// from earlier imports.
 	for code, catMap := range attrCatRef {
 		for catID, values := range catMap {
 			key := "attr_values_cat:" + code + ":" + strconv.FormatInt(catID, 10)
-			// Store all values as a JSON set
-			valuesSet := make(map[string]struct{})
+			valuesSet := make(map[string]struct{}, len(values))
+			// Read existing values and merge (supplement, not overwrite).
+			if data, _ := s.db.TurboRawRead(key); len(data) > 0 {
+				var existing map[string]interface{}
+				if json.Unmarshal(data, &existing) == nil {
+					for v := range existing {
+						valuesSet[v] = struct{}{}
+					}
+				}
+			}
 			for val := range values {
 				valuesSet[val] = struct{}{}
 			}
@@ -917,6 +992,14 @@ func (s *EANPageSearch) RebuildAllIndexes() error {
 	start := time.Now().Unix()
 	fmt.Println("[EANPAGE] RebuildAllIndexes: starting...")
 
+	// Step 0: Rebuild category indexes first so ancestors/tree paths are populated
+	if s.categoryRepo != nil {
+		fmt.Println("[EANPAGE] RebuildAllIndexes: rebuilding category indexes...")
+		if err := s.categoryRepo.RebuildAllIndexes(); err != nil {
+			fmt.Printf("[EANPAGE] RebuildAllIndexes: WARN: rebuild category indexes: %v\n", err)
+		}
+	}
+
 	// Step 1: Clear all indexable keys
 	if err := s.clearAllIndexes(); err != nil {
 		return fmt.Errorf("clear indexes: %w", err)
@@ -997,6 +1080,15 @@ func (s *EANPageSearch) RebuildAllIndexes() error {
 	// Step 4: Rebuild sort/numSort indexes
 	if err := s.BuildSortIndexes(); err != nil {
 		fmt.Printf("WARN: rebuild sort indexes: %v\n", err)
+	}
+
+	// Step 5: Recalculate delivery_method attributes (from products' companies)
+	// This must happen after all EAN pages are indexed, so delivery_method
+	// indexes (eanpage_attr, attr_values_cat, attrdef_cat_codes) are correct.
+	if s.companyRepo != nil && s.deliveryMethodRepo != nil {
+		if err := s.RecalculateDeliveryMethods(s.companyRepo, s.deliveryMethodRepo); err != nil {
+			fmt.Printf("WARN: RecalculateDeliveryMethods in RebuildAllIndexes: %v\n", err)
+		}
 	}
 
 	fmt.Printf("[EANPAGE] RebuildAllIndexes: done in %v\n", time.Since(time.Unix(start, 0)))
@@ -1103,4 +1195,250 @@ func (s *EANPageSearch) BuildAttrCodeIndexes() error {
 	elapsed := time.Since(time.Unix(start, 0))
 	fmt.Printf("[EANPAGE] attr_code indexes built in %v: %d indexes, %d EAN pages scanned\n", elapsed, len(indexes), len(all))
 	return nil
+}
+
+// attrCodeDeliveryMethod is the EANPage attribute key that stores the deduplicated
+// set of delivery method slugs available for the products within each EAN page.
+const attrCodeDeliveryMethod = "delivery_method"
+
+// RecalculateDeliveryMethods computes the delivery_method attribute for all EAN
+// pages from their products' companies and rebuilds its turbo indexes.
+//
+// For each EAN page it resolves: products (by EAN) -> their companies ->
+// Company.DeliveryMethodIds -> deduplicated DeliveryMethod.Slug values, stores them
+// as a multi-value attribute on the page, then writes the full delivery_method
+// indexes in batch. The index content is built in memory as key -> docIDs and
+// written under the same keys (eanpage_attr:delivery_method:{slug} and
+// eanpage_attr_code:delivery_method), so makodb keeps it consistent.
+//
+// It also maintains the per-category filter indexes so the attribute shows up in
+// category filters: attr_values_cat:delivery_method:{catID} (value set) and
+// attrdef_cat_codes:{catID} (code registration for the category).
+func (s *EANPageSearch) RecalculateDeliveryMethods(companyRepo *CompanyRepo, dmRepo *DeliveryMethodRepo) error {
+	if !s.enabled || companyRepo == nil || dmRepo == nil {
+		return nil
+	}
+
+	start := time.Now().Unix()
+	fmt.Println("[EANPAGE] Recalculating delivery_method attributes...")
+
+	// companies: id -> delivery method ids
+	companies, err := companyRepo.List()
+	if err != nil {
+		return fmt.Errorf("list companies: %w", err)
+	}
+	companyDeliveryIDs := make(map[int64][]int64, len(companies))
+	for _, c := range companies {
+		if len(c.DeliveryMethodIds) > 0 {
+			companyDeliveryIDs[c.ID] = c.DeliveryMethodIds
+		}
+	}
+
+	// delivery methods: id -> slug
+	dms, err := dmRepo.List()
+	if err != nil {
+		return fmt.Errorf("list delivery methods: %w", err)
+	}
+	dmSlugByID := make(map[int64]string, len(dms))
+	for _, dm := range dms {
+		if dm.Slug != "" {
+			dmSlugByID[dm.ID] = dm.Slug
+		}
+	}
+
+	all, err := s.repo.List()
+	if err != nil {
+		return fmt.Errorf("list eanpages: %w", err)
+	}
+
+	// Full index content built in memory: key -> docIDs.
+	indexes := make(map[string][]string)
+	// Category filter indexes: catID -> set of delivery method slugs.
+	catSlugs := make(map[int64]map[string]struct{})
+
+	updated := 0
+	for i := range all {
+		sp := &all[i]
+		if sp.EAN == "" {
+			continue
+		}
+
+		// Products with this EAN via turbo index.
+		tokens, err := s.db.TurboGetIndexTokens("ean:" + sp.EAN)
+		if err != nil || len(tokens) == 0 {
+			continue
+		}
+		docs, err := s.db.MultiGetByDocIDs(tokens)
+		if err != nil || len(docs) == 0 {
+			continue
+		}
+
+		// Deduplicated delivery method slugs across all products' companies.
+		slugsSet := make(map[string]struct{})
+		for _, doc := range docs {
+			if len(doc) == 0 {
+				continue
+			}
+			p, err := UnmarshalProduct(doc)
+			if err != nil {
+				continue
+			}
+			for _, dmID := range companyDeliveryIDs[p.CompanyID] {
+				if slug, ok := dmSlugByID[dmID]; ok && slug != "" {
+					slugsSet[slug] = struct{}{}
+				}
+			}
+		}
+
+		docID := KeyEANPage(sp.ID)
+
+		// Rewrite the delivery_method attribute only when it changed.
+		if !sameStringSet(deliveryMethodSlugsOf(sp.Attributes), slugsSet) {
+			sp.Attributes = setDeliveryMethodAttr(sp.Attributes, slugsSet)
+			sp.UpdatedAt = time.Now().Unix()
+			data := MarshalEANPage(*sp)
+			if err := s.repo.Store.DocPut(docID, data); err != nil {
+				fmt.Printf("WARN: update delivery_method for eanpage %d: %v\n", sp.ID, err)
+				continue
+			}
+			updated++
+		}
+
+		// Accumulate index entries (full content per key).
+		if len(slugsSet) > 0 {
+			codeKey := eanpageKeyAttrCode(attrCodeDeliveryMethod)
+			indexes[codeKey] = append(indexes[codeKey], docID)
+			for slug := range slugsSet {
+				key := eanpageKeyAttr(attrCodeDeliveryMethod, slug)
+				indexes[key] = append(indexes[key], docID)
+			}
+
+			// Track values per own category for the filter UI.
+			if sp.CategoryID != 0 {
+				if catSlugs[sp.CategoryID] == nil {
+					catSlugs[sp.CategoryID] = make(map[string]struct{})
+				}
+				for slug := range slugsSet {
+					catSlugs[sp.CategoryID][slug] = struct{}{}
+				}
+			}
+		}
+
+		if (i+1)%10000 == 0 {
+			fmt.Printf("[EANPAGE] RecalculateDeliveryMethods: processed %d / %d (updated %d)\n", i+1, len(all), updated)
+		}
+	}
+
+	// Write all indexes in batch (one write per key with full content).
+	for key, docIDs := range indexes {
+		if len(docIDs) == 0 {
+			continue
+		}
+		if _, err := s.db.TurboPutBatchIndexString(key, docIDs); err != nil {
+			fmt.Printf("WARN: delivery_method index %s: %v\n", key, err)
+		}
+	}
+
+	// Update per-category filter indexes (same keys IndexEANPageBatch writes for
+	// other attributes), so delivery_method appears in category filters.
+	for catID, slugs := range catSlugs {
+		if len(slugs) == 0 {
+			continue
+		}
+
+		// Merge the value set into attr_values_cat:delivery_method:{catID}.
+		valuesKey := turboKeyAttrValuesCat + attrCodeDeliveryMethod + ":" + strconv.FormatInt(catID, 10)
+		existing, _ := s.db.TurboRawRead(valuesKey)
+		valuesSet := make(map[string]struct{}, len(slugs))
+		if len(existing) > 0 {
+			var m map[string]interface{}
+			if json.Unmarshal(existing, &m) == nil {
+				for v := range m {
+					valuesSet[v] = struct{}{}
+				}
+			}
+		}
+		for slug := range slugs {
+			valuesSet[slug] = struct{}{}
+		}
+		buf, err := json.Marshal(valuesSet)
+		if err != nil {
+			fmt.Printf("WARN: delivery_method attr_values_cat %d: %v\n", catID, err)
+			continue
+		}
+		if err := s.db.TurboRawWrite(valuesKey, buf); err != nil {
+			fmt.Printf("WARN: delivery_method attr_values_cat %d: %v\n", catID, err)
+			continue
+		}
+
+		// Register the code for this category (attrdef_cat_codes:{catID}).
+		codesKey := turboKeyAttrDefCatCodes + strconv.FormatInt(catID, 10)
+		data, _ := s.db.TurboRawRead(codesKey)
+		var codes []string
+		if len(data) > 0 {
+			json.Unmarshal(data, &codes)
+		}
+		found := false
+		for _, c := range codes {
+			if c == attrCodeDeliveryMethod {
+				found = true
+				break
+			}
+		}
+		if !found {
+			codes = append(codes, attrCodeDeliveryMethod)
+			buf, _ := json.Marshal(codes)
+			if err := s.db.TurboRawWrite(codesKey, buf); err != nil {
+				fmt.Printf("WARN: delivery_method attrdef_cat_codes %d: %v\n", catID, err)
+			}
+		}
+	}
+
+	elapsed := time.Since(time.Unix(start, 0))
+	fmt.Printf("[EANPAGE] RecalculateDeliveryMethods: done in %v. Updated %d pages, %d indexes.\n", elapsed, updated, len(indexes))
+	return nil
+}
+
+// deliveryMethodSlugsOf returns the set of delivery_method values stored on a page.
+func deliveryMethodSlugsOf(attrs []model.KeyValue) map[string]struct{} {
+	set := make(map[string]struct{})
+	for _, kv := range attrs {
+		if kv.Key == attrCodeDeliveryMethod && kv.Value != "" {
+			set[kv.Value] = struct{}{}
+		}
+	}
+	return set
+}
+
+// setDeliveryMethodAttr returns attrs with the delivery_method entries replaced by slugs.
+func setDeliveryMethodAttr(attrs []model.KeyValue, slugs map[string]struct{}) []model.KeyValue {
+	result := make([]model.KeyValue, 0, len(attrs)+len(slugs))
+	for _, kv := range attrs {
+		if kv.Key == attrCodeDeliveryMethod {
+			continue
+		}
+		result = append(result, kv)
+	}
+	sorted := make([]string, 0, len(slugs))
+	for slug := range slugs {
+		sorted = append(sorted, slug)
+	}
+	sort.Strings(sorted)
+	for _, slug := range sorted {
+		result = append(result, model.KeyValue{Key: attrCodeDeliveryMethod, Value: slug})
+	}
+	return result
+}
+
+// sameStringSet reports whether two string sets are equal.
+func sameStringSet(a, b map[string]struct{}) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k := range a {
+		if _, ok := b[k]; !ok {
+			return false
+		}
+	}
+	return true
 }

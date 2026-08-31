@@ -854,6 +854,13 @@ func mergeAttributes(a, b []model.KeyValue) []model.KeyValue {
 	return result
 }
 
+// MergeAttributes is the exported version of mergeAttributes.
+// Union by Key+Value: entries from 'a' take precedence, entries from 'b'
+// supplement 'a' without overwriting existing pairs.
+func MergeAttributes(a, b []model.KeyValue) []model.KeyValue {
+	return mergeAttributes(a, b)
+}
+
 // cloneKeyValueSlice creates a copy of a KeyValue slice.
 func cloneKeyValueSlice(src []model.KeyValue) []model.KeyValue {
 	if src == nil {
@@ -1238,7 +1245,17 @@ func (r *EANPageRepo) RecalculateProductCounts() error {
 		key := "ean:" + sp.EAN
 		tokens, err := r.Store.db.TurboGetIndexTokens(key)
 		if err != nil || len(tokens) == 0 {
-			// Index may not exist yet; skip
+			// No products for this EAN — set count to 0
+			if sp.ProductCount != 0 {
+				sp.ProductCount = 0
+				sp.UpdatedAt = time.Now().Unix()
+				data := MarshalEANPage(sp)
+				if err := r.Store.DocPut(KeyEANPage(sp.ID), data); err != nil {
+					fmt.Printf("WARN: update product_count=0 for eanpage %d: %v\n", sp.ID, err)
+					continue
+				}
+				updated++
+			}
 			continue
 		}
 

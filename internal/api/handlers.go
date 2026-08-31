@@ -191,6 +191,11 @@ func (h *Handlers) SetCompanySettingsRepos(
 	h.deliveryTimeRepo = deliveryTimeRepo
 	h.deliveryMethodRepo = deliveryMethodRepo
 	h.installmentPlanRepo = installmentPlanRepo
+
+	// Also attach to EANPageSearch so RebuildAllIndexes can compute delivery_method attrs.
+	if h.eanPageSearch != nil {
+		h.eanPageSearch.SetCompanyDeliveryRepos(companyRepo, deliveryMethodRepo)
+	}
 }
 
 // InvalidateCatAttrsCache clears cached attrs for a category (called on attr/category changes).
@@ -222,10 +227,10 @@ func (h *Handlers) GetCategoryAttrs(catID int64) []db.AttrItem {
 
 	items := make([]db.AttrItem, 0, len(codes))
 	for _, code := range codes {
-		// Skip attributes with less than 3 EAN pages
+		// Skip attributes with only 1 EAN page
 		if h.eanPageRepo != nil {
 			eanCount := h.eanPageRepo.CountEANPagesWithAttrCode(code)
-			if eanCount < 3 {
+			if eanCount < 2 {
 				continue
 			}
 		}

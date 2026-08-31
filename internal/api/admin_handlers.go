@@ -325,7 +325,9 @@ func (h *Handlers) HandleAdminEANPageUpdate(w http.ResponseWriter, r *http.Reque
 						kvs = append(kvs, model.KeyValue{Key: k, Value: val})
 					}
 				}
-				sp.Attributes = kvs
+				// Merge instead of full replace so incoming attributes supplement
+				// existing ones (e.g. delivery_method) without erasing them.
+				sp.Attributes = db.MergeAttributes(sp.Attributes, kvs)
 			}
 		}
 	}
@@ -955,6 +957,13 @@ func (h *Handlers) HandleAdminEANPageRecalculateCounts(w http.ResponseWriter, r 
 		return
 	}
 
+	// Recalculate delivery_method attributes (from products' companies)
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.RecalculateDeliveryMethods(h.companyRepo, h.deliveryMethodRepo); err != nil {
+			fmt.Printf("[EANPAGE-RECALC-COUNTS] WARN: recalculate delivery methods: %v\n", err)
+		}
+	}
+
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "ok",
 		"message": "Product counts recalculated",
@@ -981,6 +990,11 @@ func (h *Handlers) HandleAdminEANPageRecalculateMinPrices(w http.ResponseWriter,
 		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
 			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("min prices recalculated but failed to rebuild sort indexes: %v", err))
 			return
+		}
+
+		// Recalculate delivery_method attributes (from products' companies)
+		if err := h.eanPageSearch.RecalculateDeliveryMethods(h.companyRepo, h.deliveryMethodRepo); err != nil {
+			fmt.Printf("[EANPAGE-RECALC-MIN-PRICES] WARN: recalculate delivery methods: %v\n", err)
 		}
 	}
 

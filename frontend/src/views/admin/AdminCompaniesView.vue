@@ -283,13 +283,12 @@ const deleteCompany = async (id) => {
 // Uses allSettled so one failing endpoint (e.g. payments disabled → 503) never breaks
 // the rest of the settings modal.
 const fetchOptionLists = async () => {
-  const [pmRes, dtRes, dmRes, ipRes] = await Promise.allSettled([
-    api.get('/admin/payment-methods'),
+  const [dtRes, dmRes, ipRes] = await Promise.allSettled([
     api.get('/admin/delivery-times'),
     api.get('/admin/delivery-methods'),
     api.get('/admin/installment-plans'),
   ]);
-  paymentMethods.value = pmRes.status === 'fulfilled' ? (pmRes.value.data || []) : [];
+  paymentMethods.value = [];
   deliveryTimes.value = dtRes.status === 'fulfilled' ? (dtRes.value.data || []) : [];
   deliveryMethods.value = dmRes.status === 'fulfilled' ? (dmRes.value.data || []) : [];
   installmentPlans.value = ipRes.status === 'fulfilled' ? (ipRes.value.data || []) : [];
@@ -305,7 +304,7 @@ const openSettings = async (company) => {
     // Fetch company settings
     const res = await api.get(`/admin/companies/${company.id}/settings`);
     companySettings.value = {
-      payment_method_ids: (res.data.company?.payment_method_ids || []).map(Number),
+      payment_method_ids: ([]).map(Number),
       delivery_time_ids: (res.data.company?.delivery_time_ids || []).map(Number),
       delivery_method_ids: (res.data.company?.delivery_method_ids || []).map(Number),
       installment_plan_ids: (res.data.company?.installment_plan_ids || []).map(Number),
@@ -328,7 +327,7 @@ const saveSettings = async () => {
   if (!selectedCompany.value || !companySettings.value) return;
   try {
     await api.patch(`/admin/companies/${selectedCompany.value.id}`, {
-      payment_method_ids: companySettings.value.payment_method_ids,
+      payment_method_ids: [],
       delivery_time_ids: companySettings.value.delivery_time_ids,
       delivery_method_ids: companySettings.value.delivery_method_ids,
       installment_plan_ids: companySettings.value.installment_plan_ids,
@@ -524,7 +523,7 @@ const openUnifiedSettings = async (company) => {
     await fetchOptionLists();
     const res = await api.get(`/admin/companies/${company.id}`);
     const c = res.data;
-    unifiedSettingsForm.value.payment_method_ids = c.payment_method_ids || [];
+    unifiedSettingsForm.value.payment_method_ids = [];
     unifiedSettingsForm.value.delivery_time_ids = c.delivery_time_ids || [];
     unifiedSettingsForm.value.delivery_method_ids = c.delivery_method_ids || [];
     unifiedSettingsForm.value.installment_plan_ids = c.installment_plan_ids || [];
@@ -590,7 +589,7 @@ const saveUnifiedSettings = async () => {
       import_url: unifiedSettingsForm.value.price_source.import_url,
       import_folder: unifiedSettingsForm.value.price_source.import_folder,
       currency: currency,
-      payment_method_ids: unifiedSettingsForm.value.payment_method_ids,
+      payment_method_ids: [],
       delivery_time_ids: unifiedSettingsForm.value.delivery_time_ids,
       delivery_method_ids: unifiedSettingsForm.value.delivery_method_ids,
       installment_plan_ids: unifiedSettingsForm.value.installment_plan_ids,
@@ -721,17 +720,6 @@ onMounted(fetchCompanies);
 
         <div v-if="settingsLoading" class="text-sm text-ink-3">Loading...</div>
         <div v-else class="space-y-4">
-          <!-- Payment methods -->
-          <div>
-            <div class="text-sm font-medium text-ink-2 mb-1">{{ t('admin.payment_methods') || 'Payment Methods' }}</div>
-            <div class="flex flex-wrap gap-2">
-              <label v-for="pm in paymentMethods" :key="pm.id" class="inline-flex items-center gap-1 text-xs cursor-pointer">
-                <input type="checkbox" :checked="isSelected('payment_method_ids', pm.id)" @change="toggleSelection('payment_method_ids', pm.id)" />
-                {{ pm.name }}
-              </label>
-              <span v-if="paymentMethods.length === 0" class="text-xs text-ink-3">No payment methods defined.</span>
-            </div>
-          </div>
 
           <!-- Delivery times -->
           <div>
@@ -944,17 +932,6 @@ onMounted(fetchCompanies);
 
         <div v-if="unifiedSettingsLoading" class="text-sm text-ink-3">Loading...</div>
         <div v-else-if="unifiedSettingsForm" class="space-y-6">
-          <!-- Section: Payment Methods -->
-          <div class="border-b border-line pb-4">
-            <h3 class="text-sm font-semibold text-ink-2 mb-2">{{ t('admin.payment_methods') || 'Payment Methods' }}</h3>
-            <div class="flex flex-wrap gap-2">
-              <label v-for="pm in paymentMethods" :key="pm.id" class="inline-flex items-center gap-1 text-xs cursor-pointer">
-                <input type="checkbox" :checked="isUnifiedSelected('payment_method_ids', pm.id)" @change="toggleUnifiedSelection('payment_method_ids', pm.id)" />
-                {{ pm.name }}
-              </label>
-              <span v-if="paymentMethods.length === 0" class="text-xs text-ink-3">No payment methods defined.</span>
-            </div>
-          </div>
 
           <!-- Section: Delivery Times -->
           <div class="border-b border-line pb-4">

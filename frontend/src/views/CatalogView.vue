@@ -27,6 +27,9 @@ const route = useRoute();
 const router = useRouter();
 const { t, locale } = useI18n();
 
+// Track previous route path to distinguish navigation from filter changes
+const prevRoutePath = ref(route.path);
+
 const products = ref([]);
 const categoryAttrs = ref([]);
 const categoryPath = ref([]); // [{id, name}, ...]
@@ -177,7 +180,7 @@ const fetchCompanies = async () => {
   if (companiesCache.value.size > 0 || companiesLoading.value) return;
   companiesLoading.value = true;
   try {
-    const response = await api.get('/admin/companies');
+    const response = await api.get('/companies');
     const data = response.data || {};
     const companies = (Array.isArray(data) ? data : data.items || []);
     for (const c of companies) {
@@ -413,10 +416,12 @@ const fetchProducts = async () => {
   }
 
   try {
-    // If page is set in the URL, use it and sync pagination
-    if (route.query.page) {
+    // Only read page from URL on navigation (path changed), not on filter changes
+    const pathChanged = prevRoutePath.value !== route.path;
+    if (pathChanged && route.query.page) {
       pagination.page = parseInt(route.query.page, 10);
     }
+    prevRoutePath.value = route.path;
 
     const params = {
       ...buildQueryParams(),
@@ -461,13 +466,24 @@ const fetchProducts = async () => {
       }
 
       try {
-        return JSON.parse(value);
-      } catch {
+        // Strip invisible Unicode characters that break JSON parsing:
+        // \u00A0 (non-breaking space), \u200B (zero-width space),
+        // \uFEFF (BOM), \u2000-\u200A (various spaces), \u2028/\u2029 (line/paragraph sep)
+        const cleaned = value
+          .replace(/\u00A0/g, ' ')       // non-breaking space → regular space
+          .replace(/\u200B/g, '')        // zero-width space
+          .replace(/\uFEFF/g, '')        // BOM / zero-width no-break space
+          .replace(/[\u2000-\u200A]/g, '') // various Unicode spaces
+          .replace(/\u2028/g, '\n')      // line separator → newline
+          .replace(/\u2029/g, '\n');     // paragraph separator → newline
+        return JSON.parse(cleaned);
+      } catch (e) {
+        console.warn('[CatalogView] parseJSON failed even after cleanup:', e?.message?.slice(0, 200), 'raw preview:', String(value).slice(0, 200));
         return value;
       }
     }
 
-    const data = parseJSON(response.data);
+    let data = parseJSON(response.data);
     console.log('[CatalogView] Fetched data:', data);
     console.log('[CatalogView] data.ean_page:', data.ean_page);
 
@@ -652,18 +668,22 @@ const buildPathFromUrl = () => {
   categoryBrowsePath.value = path;
 };
 
-// Navigate into a category (updates products)
+// Navigate into a category — full reset like resetFilters
 const navigateToCategory = (cat) => {
-  const slugs = buildCategoryPath(cat.id, rootCategories.value);
-  const query = { ...route.query };
-  delete query.page;
+  filters.q = '';
+  filters.price_min = '';
+  filters.price_max = '';
+  filters.sort = 'relevance';
+  Object.keys(attrFilters).forEach(key => delete attrFilters[key]);
+  pagination.page = 1;
 
+  const slugs = buildCategoryPath(cat.id, rootCategories.value);
   let path = '/shop';
   if (slugs && slugs.length > 0) {
     path = '/shop/' + slugs.join('/');
   }
 
-  router.push({ path, query });
+  router.push({ path, query: {} });
 };
 
 // Get localized description for category
@@ -827,6 +847,7 @@ const applyFilters = () => {
   console.log('[CatalogView] applyFilters called, current path:', route.path);
   pagination.page = 1;
   const query = { ...route.query };
+  delete query.page;
   delete query.category_id;
   if (filters.q) query.q = filters.q; else delete query.q;
   if (filters.price_min) query.price_min = filters.price_min; else delete query.price_min;
@@ -921,19 +942,34 @@ const syncFiltersFromRoute = () => {
   filters.price_min = route.query.price_min || '';
   filters.price_max = route.query.price_max || '';
   filters.sort = route.query.sort || 'relevance';
-  if (route.query.page) pagination.page = parseInt(route.query.page, 10);
+
+  // Only read page from URL on navigation (path changed), not on filter changes
+  const pathChanged = prevRoutePath.value !== route.path;
+  if (pathChanged) {
+    if (route.query.page) {
+      pagination.page = parseInt(route.query.page, 10);
+    }
+    // Reset attrFilters on navigation
+    if (route.query.page || oldQ !== filters.q) {
+      Object.keys(attrFilters).forEach(key => delete attrFilters[key]);
+    }
+    prevRoutePath.value = route.path;
+  }
+
   if (oldQ !== filters.q) {
     console.log('[CatalogView] syncFiltersFromRoute: q changed from', oldQ, 'to', filters.q);
   }
 
-  // Load attribute filters from URL
-  Object.keys(route.query).forEach(key => {
-    if (key.startsWith('attr_')) {
-      const attrCode = key.slice(5); // remove 'attr_' prefix
-      const values = route.query[key].split(',');
-      attrFilters[attrCode] = values;
-    }
-  });
+  // Load attribute filters from URL (only when navigating)
+  if (pathChanged) {
+    Object.keys(route.query).forEach(key => {
+      if (key.startsWith('attr_')) {
+        const attrCode = key.slice(5);
+        const values = route.query[key].split(',');
+        attrFilters[attrCode] = values;
+      }
+    });
+  }
   // Reset flag after next tick to allow Vue to process the changes
   setTimeout(() => {
     isSyncingFiltersFromRoute.value = false;

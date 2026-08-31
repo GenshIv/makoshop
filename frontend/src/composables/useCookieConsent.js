@@ -1,6 +1,7 @@
 import { ref, computed, watch } from 'vue';
 
 const CONSENT_KEY = 'cookie_consent';
+const SESSION_KEY = 'cookie_consent_session';
 const COOKIE_NAME = 'cookie_consent';
 
 const DEFAULT_CONSENT = {
@@ -10,26 +11,37 @@ const DEFAULT_CONSENT = {
   acceptedAt: null,
 };
 
-function getConsentFromStorage() {
+function getConsentFromSessionStorage() {
   try {
-    const stored = localStorage.getItem(CONSENT_KEY);
+    const stored = sessionStorage.getItem(SESSION_KEY);
     if (stored) {
       return JSON.parse(stored);
     }
   } catch (e) {
-    console.warn('Failed to read consent from localStorage:', e);
+    console.warn('Failed to read consent from sessionStorage:', e);
   }
   return null;
 }
 
 function getConsentFromCookie() {
   try {
-    const cookies = document.cookie.split(';');
-    for (const cookie of cookies) {
-      const idx = cookie.indexOf(`${COOKIE_NAME}=`);
-      if (idx !== -1 && cookie.slice(0, idx).trim() === '') {
-        return JSON.parse(decodeURIComponent(cookie.slice(idx + COOKIE_NAME.length + 1)));
-      }
+    // Match cookie with proper URL decoding
+    const match = document.cookie.match(
+      new RegExp('(?:^|;\\s*)' + COOKIE_NAME + '=([^;]*)')
+    );
+    if (match) {
+      let raw = decodeURIComponent(match[1]);
+      // Strip invisible Unicode characters that break JSON parsing:
+      // \u00A0 (non-breaking space), \u200B (zero-width space),
+      // \uFEFF (BOM), \u2000-\u200A (various spaces), \u2028/\u2029
+      raw = raw
+        .replace(/\u00A0/g, ' ')
+        .replace(/\u200B/g, '')
+        .replace(/\uFEFF/g, '')
+        .replace(/[\u2000-\u200A]/g, '')
+        .replace(/\u2028/g, '\n')
+        .replace(/\u2029/g, '\n');
+      return JSON.parse(raw);
     }
   } catch (e) {
     console.warn('Failed to read consent from cookie:', e);
@@ -37,21 +49,43 @@ function getConsentFromCookie() {
   return null;
 }
 
-// Read consent from localStorage first, falling back to the cookie so the
-// choice survives even if one storage mechanism is cleared or blocked.
+// Read consent: cookie is the source of truth (survives ITP/EPSS sessionStorage clearing),
+// sessionStorage is a fallback (survives page reloads).
 function getConsent() {
-  return getConsentFromStorage() || getConsentFromCookie();
+  const fromCookie = getConsentFromCookie();
+  const fromSession = getConsentFromSessionStorage();
+
+  console.log('[CookieConsent] fromCookie:', fromCookie?.acceptedAt ? 'present' : 'null',
+              'fromSession:', fromSession?.acceptedAt ? 'present' : 'null',
+              'sessionStorage:', sessionStorage.getItem(SESSION_KEY) ? 'present' : 'null');
+
+  // Sync sessionStorage from cookie (cookie is the authoritative source)
+  if (fromCookie) {
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(fromCookie));
+      console.log('[CookieConsent] Re-synced sessionStorage from cookie');
+    } catch (e) {
+      console.warn('[CookieConsent] Failed to re-sync sessionStorage:', e);
+    }
+  }
+
+  // Cookie > sessionStorage > defaults
+  return fromSession || fromCookie;
 }
 
 function setCookie(name, value, days) {
   const expires = new Date();
   expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
-  document.cookie = `${name}=${encodeURIComponent(value)};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
+  // Secure + SameSite=None ensures the cookie is sent on all requests
+  // (HTTPS required for SameSite=None per modern browser specs)
+  // Only use Secure on HTTPS to avoid cookie not being sent on HTTP
+  const secure = location.protocol === 'https:' ? ';Secure' : '';
+  document.cookie = `${name}=${encodeURIComponent(value)};expires=${expires.toUTCString()};path=/;SameSite=None${secure}`;
 }
 
 function saveConsent(consent) {
   try {
-    localStorage.setItem(CONSENT_KEY, JSON.stringify(consent));
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(consent));
     setCookie(COOKIE_NAME, JSON.stringify(consent), 365);
   } catch (e) {
     console.warn('Failed to save consent:', e);
@@ -65,11 +99,6 @@ export function useCookieConsent() {
   if (_instance) return _instance;
 
   const consent = ref(getConsent() || { ...DEFAULT_CONSENT });
-  // Re-persist an existing choice to both localStorage and the cookie so the
-  // two stay in sync and the consent isn't lost if one gets cleared.
-  if (consent.value.acceptedAt) {
-    saveConsent(consent.value);
-  }
   const showBanner = ref(!consent.value.acceptedAt);
 
   const hasAnalytics = computed(() => consent.value.analytics);
@@ -110,11 +139,17 @@ export function useCookieConsent() {
     showBanner.value = true;
   };
 
+  const closeBanner = () => {
+    // Just close the banner without saving — preserves current consent values
+    showBanner.value = false;
+  };
+
   const clearConsent = () => {
     consent.value = { ...DEFAULT_CONSENT };
     try {
-      localStorage.removeItem(CONSENT_KEY);
-      document.cookie = `${COOKIE_NAME}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;`;
+      sessionStorage.removeItem(SESSION_KEY);
+      const secure = location.protocol === 'https:' ? ';Secure' : '';
+      document.cookie = `${COOKIE_NAME}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;SameSite=None${secure}`;
     } catch (e) {
       console.warn('Failed to clear consent:', e);
     }
@@ -135,6 +170,7 @@ export function useCookieConsent() {
     acceptEssential,
     saveCustom,
     showSettings,
+    closeBanner,
     clearConsent,
   };
 }

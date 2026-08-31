@@ -233,6 +233,10 @@ func (h *Handlers) HandleDeliveryMethodCreate(w http.ResponseWriter, r *http.Req
 	if !httpres.ReadJSON(w, r, &dm) {
 		return
 	}
+	if dm.Slug == "" {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "slug is required")
+		return
+	}
 	if err := h.deliveryMethodRepo.Create(&dm); err != nil {
 		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
 		return
@@ -274,6 +278,10 @@ func (h *Handlers) HandleDeliveryMethodUpdate(w http.ResponseWriter, r *http.Req
 		SortOrder int     `json:"sort_order"`
 	}
 	if !httpres.ReadJSON(w, r, &req) {
+		return
+	}
+	if req.Slug == "" {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "slug is required")
 		return
 	}
 	if err := h.deliveryMethodRepo.Update(id, func(d *model.DeliveryMethod) {

@@ -52,14 +52,12 @@ const hourLabels = computed(() => {
     '12', '13', '14', '15', '16', '17',
     '18', '19', '20', '21', '22', '23',
   ];
-  // Rotate so the current hour is in the middle
+  // Rotate so the current hour is LAST (oldest first, chronologically backward)
   const cur = currentHour();
+  const N = 24;
   const out = [];
-  for (let i = 11; i >= 0; i--) {
-    out.push(base[(cur - i + 24) % 24]);
-  }
-  for (let i = 0; i <= 12; i++) {
-    out.push(base[(cur + i) % 24]);
+  for (let i = 0; i < N; i++) {
+    out.push(base[(((cur - (N - 1) + i) % N) + N) % N]);
   }
   return out;
 });
@@ -67,12 +65,10 @@ const hourLabels = computed(() => {
 const rotateArr = (arr) => {
   if (!arr || arr.length !== 24) return (arr || []).slice(0, 24);
   const cur = currentHour();
+  const N = 24;
   const out = [];
-  for (let i = 11; i >= 0; i--) {
-    out.push(arr[(cur - i + 24) % 24]);
-  }
-  for (let i = 0; i <= 12; i++) {
-    out.push(arr[(cur + i) % 24]);
+  for (let i = 0; i < N; i++) {
+    out.push(arr[(((cur - (N - 1) + i) % N) + N) % N]);
   }
   return out;
 };
@@ -80,9 +76,10 @@ const rotateArr = (arr) => {
 const dowLabels = computed(() => {
   const cur = currentDow();
   const base = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const N = 7;
   const out = [];
-  for (let i = 0; i < 7; i++) {
-    out.push(base[(cur + i) % 7]);
+  for (let i = 0; i < N; i++) {
+    out.push(base[(((cur - (N - 1) + i) % N) + N) % N]);
   }
   return out;
 });
@@ -90,28 +87,32 @@ const dowLabels = computed(() => {
 const rotateDow = (arr) => {
   if (!arr || arr.length !== 7) return (arr || []).slice(0, 7);
   const cur = currentDow();
+  const N = 7;
   const out = [];
-  for (let i = 0; i < 7; i++) {
-    out.push(arr[(cur + i) % 7]);
+  for (let i = 0; i < N; i++) {
+    out.push(arr[(((cur - (N - 1) + i) % N) + N) % N]);
   }
   return out;
 };
 
 const domLabels = computed(() => {
-  const cur = currentDom();
+  const curIdx = (currentDom() - 1) % 31; // backend index of current day (0-based)
+  const N = 31;
   const out = [];
-  for (let i = 0; i < 31; i++) {
-    out.push(String((cur + i) % 31 || 31));
+  for (let i = 0; i < N; i++) {
+    const idx = (((curIdx - (N - 1) + i) % N) + N) % N;
+    out.push(String(idx + 1)); // calendar day number
   }
   return out;
 });
 
 const rotateDom = (arr) => {
   if (!arr || arr.length !== 31) return (arr || []).slice(0, 31);
-  const cur = currentDom();
+  const curIdx = (currentDom() - 1) % 31; // backend index of current day (0-based)
+  const N = 31;
   const out = [];
-  for (let i = 0; i < 31; i++) {
-    out.push(arr[(cur + i - 1) % 31]);
+  for (let i = 0; i < N; i++) {
+    out.push(arr[(((curIdx - (N - 1) + i) % N) + N) % N]);
   }
   return out;
 };
@@ -245,7 +246,7 @@ const renderCharts = async () => {
     return chart;
   };
 
-  // 1) Traffic by hour (area, rotated so current hour is centered)
+  // 1) Traffic by hour (area, rotated so the current hour is last)
   const hourData = rotateArr(s.HumanVisitsByHour).map((v, i) => ({
     x: hourLabels.value[i],
     y: v,
@@ -293,7 +294,7 @@ const renderCharts = async () => {
     annotations: {
       xaxis: [
         {
-          x: hourLabels.value[12],
+          x: hourLabels.value[23], // current hour is now the last point
           label: {
             text: 'now',
             style: { background: '#f97316', borderRadius: 4, fontSize: '10px', color: '#fff' },

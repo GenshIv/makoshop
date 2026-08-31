@@ -722,6 +722,9 @@ func (h *Handlers) writeEANPageResponse(w http.ResponseWriter, r *http.Request, 
 	}
 	h.enrichProductsWithCompanyNames(products)
 
+	// Show EAN page even if no products — frontend renders "not available"
+	// (catalog filtering is handled by BuildSortIndexes excluding product_count == 0)
+
 	// Check if client disconnected after product lookup
 	select {
 	case <-ctx.Done():
@@ -747,6 +750,9 @@ func (h *Handlers) writeEANPageResponse(w http.ResponseWriter, r *http.Request, 
 		TreePathFull: treePathFull,
 		SEOURL:       seoURL,
 		CatID:        sp.CategoryID,
+		Total:        int64(len(products)),
+		Page:         1,
+		Limit:        50,
 	}
 
 	if sp.CategoryID != 0 {
@@ -1595,6 +1601,16 @@ func (h *Handlers) HandleAdminRebuildEANPages(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Phase 0: Rebuild category indexes first so ancestors/tree paths are populated
+	fmt.Println("[REBUILD-EANPAGES] Phase 0: Rebuilding category indexes...")
+	phase0Start := time.Now()
+	if h.categoryRepo != nil {
+		if err := h.categoryRepo.RebuildAllIndexes(); err != nil {
+			fmt.Printf("[REBUILD-EANPAGES] WARN: rebuild category indexes: %v\n", err)
+		}
+	}
+	fmt.Printf("[REBUILD-EANPAGES] Phase 0: Category indexes rebuilt in %v\n", time.Since(phase0Start))
+
 	// Phase 1: Batch upsert EAN pages (uses same logic as import, including seo_url)
 	fmt.Printf("[REBUILD-EANPAGES] Phase 1: BatchUpsertFromProducts %d products...\n", len(allProducts))
 	phase1Start := time.Now()
@@ -1675,15 +1691,34 @@ func (h *Handlers) HandleAdminRebuildEANPages(w http.ResponseWriter, r *http.Req
 	}
 	fmt.Printf("[REBUILD-EANPAGES] Phase 7: Min prices recalculated in %v\n", time.Since(phase7Start))
 
-	// Phase 8: Rebuild EAN page sort indexes (to reflect updated min prices)
-	fmt.Println("[REBUILD-EANPAGES] Phase 8: Rebuilding EAN page sort indexes...")
+	// Phase 8: Recalculate delivery_method attributes (from products' companies)
+	fmt.Println("[REBUILD-EANPAGES] Phase 8: Recalculating delivery method attributes...")
 	phase8Start := time.Now()
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.RecalculateDeliveryMethods(h.companyRepo, h.deliveryMethodRepo); err != nil {
+			fmt.Printf("[REBUILD-EANPAGES] WARN: recalculate delivery methods: %v\n", err)
+		}
+	}
+	fmt.Printf("[REBUILD-EANPAGES] Phase 8: Delivery method attributes recalculated in %v\n", time.Since(phase8Start))
+
+	// Phase 9: Rebuild EAN page sort indexes (to reflect updated min prices)
+	fmt.Println("[REBUILD-EANPAGES] Phase 9: Rebuilding EAN page sort indexes...")
+	phase9Start := time.Now()
 	if h.eanPageSearch != nil {
 		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
 			fmt.Printf("[REBUILD-EANPAGES] WARN: rebuild EAN page sort indexes: %v\n", err)
 		}
 	}
-	fmt.Printf("[REBUILD-EANPAGES] Phase 8: EAN page sort indexes rebuilt in %v\n", time.Since(phase8Start))
+	fmt.Printf("[REBUILD-EANPAGES] Phase 9: EAN page sort indexes rebuilt in %v\n", time.Since(phase9Start))
+
+	// Invalidate category attrs cache so the new filter values are visible immediately
+	if h.catAttrs != nil {
+		h.catAttrsMu.Lock()
+		for k := range h.catAttrs {
+			delete(h.catAttrs, k)
+		}
+		h.catAttrsMu.Unlock()
+	}
 
 	elapsed := time.Since(startTime)
 	fmt.Printf("[REBUILD-EANPAGES] Completed in %v\n", elapsed)
@@ -1870,6 +1905,13 @@ func (h *Handlers) HandleAdminRebuildCategoryIndexes(w http.ResponseWriter, r *h
 	if err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
+	}
+
+	// Recalculate delivery_method attributes (from products' companies)
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.RecalculateDeliveryMethods(h.companyRepo, h.deliveryMethodRepo); err != nil {
+			fmt.Printf("[REBUILD-CAT-INDEXES] WARN: recalculate delivery methods: %v\n", err)
+		}
 	}
 
 	elapsed := time.Since(startTime)

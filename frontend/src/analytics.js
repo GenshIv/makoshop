@@ -8,14 +8,19 @@ import { useCookieConsent, isAnalyticsAllowed } from './composables/useCookieCon
 //
 // The Measurement ID is NOT hardcoded here — it's fetched at runtime from the
 // public settings endpoint so it can be configured in the admin UI without a
-// rebuild. Tracking only happens when BOTH conditions are true:
-//   1. A Measurement ID has been configured by an admin.
-//   2. The visitor has granted "analytics" cookie consent.
+// rebuild.
 //
-// Consent Mode is used so that data collection is gated on the visitor's choice
-// and can be revoked (not just granted). This is a single-page app, so page
-// views are sent manually on every route change. Only public storefront pages
-// are tracked; back-office and account areas (/admin, /seller, auth, ...) are
+// The tag ALWAYS loads whenever a Measurement ID is configured. What Google
+// actually receives is controlled by Consent Mode, driven by our unified
+// cookie_consent store (the same one behind the banner):
+//   - analytics consent granted -> full data incl. user identifiers
+//   - analytics consent denied  -> limited, non-identifiable "general" data
+// This keeps the analytics setting tied to our own persistent consent rather
+// than to any separate Google-side state.
+//
+// This is a single-page app, so page views are sent manually on every route
+// change (Consent Mode gates transmission). Only public storefront pages are
+// tracked; back-office and account areas (/admin, /seller, auth, ...) are
 // excluded so staff activity doesn't pollute visitor analytics.
 // ============================================================================
 
@@ -46,6 +51,8 @@ function isPublicPage(path) {
 }
 
 // Update GA's consent state (used after the tag has already loaded).
+// The source of truth for analytics consent is our unified cookie_consent store;
+// this only propagates that choice to Google's Consent Mode.
 function updateConsent(granted) {
   consentGranted = granted;
   if (!gtagReady) return;
@@ -58,8 +65,9 @@ function updateConsent(granted) {
   });
 }
 
-// Inject and configure the GA4 loader. Reads the current consentGranted state
-// (set by the caller) to establish the initial consent default.
+// Inject and configure the GA4 loader. The tag ALWAYS loads (when a Measurement
+// ID is configured) so that Consent Mode can manage data transmission. It reads
+// the current consentGranted state to establish the initial consent default.
 function loadGATag() {
   if (gtagReady || !gaMeasurementId) return;
   gtagReady = true;
@@ -87,9 +95,13 @@ function loadGATag() {
   window.gtag('config', gaMeasurementId, { send_page_view: false });
 }
 
-// Send a page_view for the given path, honoring all gating conditions.
+// Send a page_view for the given path. The event is ALWAYS fired (when the tag
+// is loaded) — Google's Consent Mode decides what actually leaves the browser:
+//   - analytics consent granted  -> full data incl. client ID / user identifiers
+//   - analytics consent denied   -> limited, non-identifiable "general" data only
+// So we do not gate on consentGranted here; gating happens at the tag level.
 function sendPageView(path) {
-  if (!gtagReady || !gaMeasurementId || !consentGranted) return;
+  if (!gtagReady || !gaMeasurementId) return;
   if (!isPublicPage(path)) {
     lastTrackedPath = null; // reset so re-entering a public page is tracked again
     return;
@@ -100,16 +112,18 @@ function sendPageView(path) {
 }
 
 // React to consent changes (e.g. visitor accepts or revokes via the banner).
+// The tag is always loaded once configured; consent changes only flip the
+// Consent Mode state so Google starts/stops receiving identifiable data.
 const { hasAnalytics } = useCookieConsent();
 watch(hasAnalytics, (allowed) => {
   if (!gaMeasurementId) return; // config not loaded yet; handled in init below
   if (!gtagReady) {
     consentGranted = allowed;
-    if (allowed) loadGATag(); // establishes the initial consent default
+    loadGATag(); // establishes the initial consent default
   } else {
     updateConsent(allowed);
   }
-  if (allowed) sendPageView(window.location.pathname);
+  sendPageView(window.location.pathname);
 });
 
 // React to SPA route changes so each navigation is recorded as a page view.
@@ -117,7 +131,10 @@ router.afterEach((to) => {
   sendPageView(to.fullPath);
 });
 
-// Initial setup: fetch the configured Measurement ID, then start if permitted.
+// Initial setup: fetch the configured Measurement ID, then ALWAYS start the tag.
+// The analytics consent (from our unified cookie_consent store) only controls
+// whether Google receives identifiable data via Consent Mode — never whether
+// the tag runs at all.
 (async () => {
   try {
     const res = await api.get(GA_SETTINGS_ENDPOINT);
@@ -127,16 +144,17 @@ router.afterEach((to) => {
     gaMeasurementId = '';
   }
 
-  if (gaMeasurementId && isAnalyticsAllowed()) {
-    consentGranted = true;
+  if (gaMeasurementId) {
+    consentGranted = isAnalyticsAllowed();
     loadGATag();
     sendPageView(window.location.pathname);
   }
 })();
 
 // Public helpers for future event tracking (kept for API stability).
+// Fired regardless of consent — Consent Mode controls what Google receives.
 export function trackEvent(name, params = {}) {
-  if (!window.gtag || !gtagReady || !consentGranted) return;
+  if (!window.gtag || !gtagReady) return;
   window.gtag('event', name, params);
 }
 

@@ -5,7 +5,7 @@
         <div class="cookie-banner">
           <div class="cookie-banner-header">
             <h3>🍪 {{ t('cookie.banner_title') }}</h3>
-            <button class="cookie-banner-close" @click="acceptEssential" :aria-label="t('cookie.close')">
+            <button class="cookie-banner-close" @click="closeBanner" :aria-label="t('cookie.close')">
               ✕
             </button>
           </div>
@@ -99,6 +99,7 @@ const {
   acceptAll,
   acceptEssential,
   saveCustom,
+  closeBanner,
 } = useCookieConsent();
 
 const onOptionChange = () => {

@@ -72,6 +72,8 @@ type KeyValuePair struct {
 // extractKeyValuePairs finds key-value pairs in HTML content.
 // Processes each <li> separately to extract text while preserving structure.
 // Format: "Key - value" or "Key: value" in list items.
+// Also handles Nokaut-style concatenated descriptions where attributes are
+// joined by "- " with the next key starting with an uppercase letter.
 func extractKeyValuePairs(htmlContent string) []KeyValuePair {
 	if htmlContent == "" {
 		return nil
@@ -86,6 +88,28 @@ func extractKeyValuePairs(htmlContent string) []KeyValuePair {
 		// Extract text from item (remove inline styles, keep content)
 		text := extractTextFromListItem(item)
 		if len(text) < 10 {
+			continue
+		}
+
+		// Try Nokaut-style split first: text like "Key1 - value1- Key2 - value2- Key3"
+		// where attributes are joined by "- " and the next key starts with uppercase
+		nokautPairs := splitNokautDescription(text)
+		if len(nokautPairs) > 0 {
+			for _, pair := range nokautPairs {
+				if pair.Key == "" || pair.Value == "" {
+					continue
+				}
+				if len(pair.Key) < 2 || len(pair.Key) > 50 {
+					continue
+				}
+				if len(pair.Value) < 3 || len(pair.Value) > 500 {
+					continue
+				}
+				if isNoiseKey(pair.Key) {
+					continue
+				}
+				pairs = append(pairs, pair)
+			}
 			continue
 		}
 
@@ -113,6 +137,106 @@ func extractKeyValuePairs(htmlContent string) []KeyValuePair {
 	}
 
 	return pairs
+}
+
+// splitNokautDescription splits a Nokaut-style concatenated description into key-value pairs.
+// Nokaut format: attributes alternate as "Key - Value" joined by "- ".
+// Keys start with an uppercase Polish letter.
+// Example: "Rozmiar - 15”- Pojemność: 21L- Liczba komór - 2"
+// becomes: [Rozmiar: 15”], [Pojemność: 21L], [Liczba komór: 2]
+func splitNokautDescription(text string) []KeyValuePair {
+	// Split by "- " (dash followed by space) — Nokaut's attribute separator
+	parts := strings.Split(text, "- ")
+
+	if len(parts) < 3 {
+		// Need at least key-value-key to confirm alternating pattern
+		return nil
+	}
+
+	var pairs []KeyValuePair
+	var pendingKey string
+
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+
+		// Check if this part contains ": " (key-value separator within a part)
+		if colonIdx := strings.Index(part, ": "); colonIdx > 0 {
+			// This part is "Key: value" — extract key and value
+			rawKey := strings.TrimSpace(part[:colonIdx])
+			rawValue := strings.TrimSpace(part[colonIdx+len(": "):])
+
+			if pendingKey != "" {
+				// We have a pending key from previous iteration
+				// This means the previous key's value is actually this "Key: value" pair
+				// Discard the pending key and use the new key-value pair
+				pendingKey = ""
+			}
+
+			if rawKey == "" || rawValue == "" {
+				continue
+			}
+			if len(rawKey) < 2 || len(rawKey) > 50 {
+				continue
+			}
+			if len(rawValue) < 1 || len(rawValue) > 500 {
+				continue
+			}
+			if !startsWithUppercasePolish(rawKey) {
+				continue
+			}
+			if isNoiseKey(rawKey) {
+				continue
+			}
+
+			pairs = append(pairs, KeyValuePair{Key: rawKey, Value: rawValue})
+			pendingKey = ""
+		} else {
+			// This part doesn't contain ": ", so it's either a key or a value
+			if pendingKey == "" {
+				// Expecting a key
+				if !startsWithUppercasePolish(part) {
+					continue
+				}
+				if len(part) < 2 || len(part) > 50 {
+					continue
+				}
+				if isNoiseKey(part) {
+					continue
+				}
+				pendingKey = part
+			} else {
+				// We have a pending key, this is the value
+				if len(part) < 1 || len(part) > 500 {
+					pendingKey = ""
+					continue
+				}
+				pairs = append(pairs, KeyValuePair{Key: pendingKey, Value: part})
+				pendingKey = ""
+			}
+		}
+	}
+
+	// Handle trailing pending key (no value for last attribute)
+	// Skip it
+
+	if len(pairs) >= 2 {
+		return pairs
+	}
+	return nil
+}
+
+// startsWithUppercasePolish checks if a string starts with an uppercase Polish letter.
+func startsWithUppercasePolish(s string) bool {
+	if s == "" {
+		return false
+	}
+	r := rune(s[0])
+	return (r >= 'A' && r <= 'Z') ||
+		(r == 'Ą' || r == 'Ć' || r == 'Ę' || r == 'Ł' || r == 'Ń' ||
+			r == 'Ó' || r == 'Ś' || r == 'Ź' || r == 'Ż')
 }
 
 // splitListItems splits HTML content into individual <li> items.

@@ -55,6 +55,18 @@ func (p *StatsPersistence) LoadStatsData(store interface {
 		return nil, fmt.Errorf("unmarshal stats: %w", err)
 	}
 
+	// JSON may omit or null the maps; ensure they are non-nil so that
+	// subsequent writes (updateReferrerStats/updatePathStats) don't panic.
+	if stats.ReferrerStats == nil {
+		stats.ReferrerStats = make(map[string]*ReferrerStats)
+	}
+	if stats.FullReferrerStats == nil {
+		stats.FullReferrerStats = make(map[string]*FullReferrerStats)
+	}
+	if stats.PathStats == nil {
+		stats.PathStats = make(map[int64]*PathStats)
+	}
+
 	return &stats, nil
 }
 

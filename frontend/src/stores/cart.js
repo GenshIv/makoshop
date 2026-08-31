@@ -17,7 +17,7 @@ export const useCartStore = defineStore('cart', {
     async fetchCart() {
       this.loading = true;
       try {
-        const token = localStorage.getItem('jwt');
+        const token = sessionStorage.getItem('jwt');
 
         if (token) {
           // Try auth cart first (skip auth redirect so we can fallback to guest cart)
@@ -27,7 +27,7 @@ export const useCartStore = defineStore('cart', {
           return;
         } else {
           // No token — try guest cart directly
-          const guestCartId = localStorage.getItem('guest_cart_id');
+          const guestCartId = sessionStorage.getItem('guest_cart_id');
           if (guestCartId) {
             try {
               const response = await api.get(`/cart/${guestCartId}`);
@@ -36,7 +36,7 @@ export const useCartStore = defineStore('cart', {
               return;
             } catch (guestErr) {
               // Guest cart expired or deleted
-              localStorage.removeItem('guest_cart_id');
+              sessionStorage.removeItem('guest_cart_id');
             }
           }
         }
@@ -55,9 +55,9 @@ export const useCartStore = defineStore('cart', {
         const response = await api.post('/cart', {});
         this.cartId = response.data.id;
         // If not authenticated, store as guest cart
-        const token = localStorage.getItem('jwt');
+        const token = sessionStorage.getItem('jwt');
         if (!token) {
-          localStorage.setItem('guest_cart_id', this.cartId);
+          sessionStorage.setItem('guest_cart_id', this.cartId);
         }
         return this.cartId;
       } catch (e) {

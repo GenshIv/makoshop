@@ -4,7 +4,7 @@ const ANIMATION_KEY = 'makoshop_animation_enabled';
 
 function getSavedAnimationEnabled() {
   try {
-    const val = localStorage.getItem(ANIMATION_KEY);
+    const val = sessionStorage.getItem(ANIMATION_KEY);
     return val !== null ? val === 'true' : true; // default: enabled
   } catch {
     return true;
@@ -27,7 +27,7 @@ export function useAnimation() {
   const setAnimationEnabled = (value) => {
     animationEnabled.value = value;
     try {
-      localStorage.setItem(ANIMATION_KEY, String(value));
+      sessionStorage.setItem(ANIMATION_KEY, String(value));
     } catch {
       // ignore (private mode)
     }
