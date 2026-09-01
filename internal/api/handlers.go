@@ -37,6 +37,7 @@ type Handlers struct {
 	promoPlanRepo     *db.PromoPlanRepo
 	promoCampaignRepo *db.PromoCampaignRepo
 	promoLogRepo      *db.PromoLogRepo
+	brandingRepo      *db.BrandingRepo
 	catalogizer       *catalogizer.Catalogizer
 
 	// Company settings repos
@@ -60,6 +61,10 @@ type Handlers struct {
 
 	// Import lock to prevent concurrent imports
 	importMu sync.Mutex
+
+	// Live progress tracker for batch price imports (read by
+	// /admin/import-progress). Created once, never reassigned.
+	importProgress *ImportProgress
 
 	// Catalogize lock to prevent concurrent catalogize operations
 	catalogizeMu sync.Mutex
@@ -135,6 +140,7 @@ func NewHandlers(store *db.Store) *Handlers {
 		promoPlanRepo:     promoPlanRepo,
 		promoCampaignRepo: promoCampaignRepo,
 		promoLogRepo:      promoLogRepo,
+		brandingRepo:      db.NewBrandingRepo(store),
 		productRepo:       productRepo,
 		turboSearch:       turboSearch,
 		eanPageSearch:     eanPageSearch,
@@ -143,6 +149,7 @@ func NewHandlers(store *db.Store) *Handlers {
 		catalogizer:       catz,
 		catAttrs:          make(map[int64]cachedCatAttrs),
 		statsCollector:    statsCollector,
+		importProgress:    NewImportProgress(),
 	}
 }
 

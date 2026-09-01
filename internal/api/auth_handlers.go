@@ -572,6 +572,9 @@ func (h *AuthHandlers) HandleAdminCompanyUpdate(w http.ResponseWriter, r *http.R
 			c.ImportFolder = req.ImportFolder
 		}
 		if req.PriceSource != nil {
+			// Canonicalize the format (lowercase, "xml"->"nokaut", empty->"nokaut")
+			// so the stored value is always a valid, comparable import format.
+			req.PriceSource.Normalize()
 			c.PriceSource = *req.PriceSource
 			// Clear currency from price_source (it's stored in settings.currency)
 			c.PriceSource.Currency = ""

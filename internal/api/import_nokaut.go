@@ -47,13 +47,8 @@ func SetPricesDir(dir string) {
 // and can be re-imported manually. Returns the saved file path.
 // Always deletes the old file first to ensure a fresh download.
 func downloadPriceFile(company *model.Company) (string, error) {
-	// Determine file extension from the URL path (ignore query params).
-	ext := ".xml"
-	if u, uerr := url.Parse(company.ImportURL); uerr == nil {
-		if e := filepath.Ext(u.Path); e != "" && len(e) <= 10 {
-			ext = e
-		}
-	}
+	// Determine file extension from the URL path (robust to query/matrix params).
+	ext := priceFileExt(company.ImportURL, ".xml")
 
 	name := sanitizeFileName(company.Name)
 	if name == "" {
@@ -72,7 +67,15 @@ func downloadPriceFile(company *model.Company) (string, error) {
 		fmt.Printf("[IMPORT-NOKAUT] Removed old file %s\n", destPath)
 	}
 
-	client := &http.Client{Timeout: 120 * time.Second}
+	// Large price files (e.g. 400MB+) can take many minutes to download on a
+	// slow link. Use a generous overall cap so a legitimate slow download
+	// completes instead of being aborted, while still bounding a truly stuck
+	// transfer. ResponseHeaderTimeout fails fast if the server never starts
+	// responding.
+	client := &http.Client{
+		Timeout:   15 * time.Minute,
+		Transport: &http.Transport{ResponseHeaderTimeout: 60 * time.Second},
+	}
 	resp, err := client.Get(company.ImportURL)
 	if err != nil {
 		return "", fmt.Errorf("get: %w", err)
@@ -109,6 +112,74 @@ func sanitizeFileName(name string) string {
 		}
 	}
 	return strings.Trim(b.String(), "_")
+}
+
+// priceFileExt derives a safe file extension from a price URL path. It strips
+// query strings and matrix parameters (? and ;) before taking the suffix after
+// the last dot, so "products.json;page=1;pageSize=1000" yields ".json" instead
+// of the too-long ".json;page=1;...". Falls back to defExt when the URL has no
+// usable extension.
+func priceFileExt(rawURL, defExt string) string {
+	if rawURL == "" {
+		return defExt
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return defExt
+	}
+	p := u.Path
+	if i := strings.IndexAny(p, "?;"); i != -1 {
+		p = p[:i]
+	}
+	if e := filepath.Ext(p); e != "" && len(e) <= 10 {
+		return e
+	}
+	return defExt
+}
+
+// detectPriceFormat peeks at the start of a downloaded price file and returns
+// "json" or "nokaut" (XML) based on the first meaningful byte, or "" when the
+// content is unrecognized. This is the ground truth for which parser to use and
+// lets us recover when a company's saved PriceSource.Format disagrees with the
+// actual file.
+func detectPriceFormat(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	buf := make([]byte, 256)
+	n, _ := f.Read(buf)
+	if n == 0 {
+		return ""
+	}
+
+	// Skip leading whitespace and a UTF-8 BOM to find the first real byte.
+	i := 0
+	for i < n {
+		c := buf[i]
+		if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
+			i++
+			continue
+		}
+		if i == 0 && c == 0xEF && n >= 3 && buf[1] == 0xBB && buf[2] == 0xBF {
+			i = 3
+			continue
+		}
+		break
+	}
+	if i >= n {
+		return ""
+	}
+
+	switch buf[i] {
+	case '{', '[':
+		return "json"
+	case '<':
+		return "nokaut"
+	}
+	return ""
 }
 
 // HandleAdminImportNokaut imports offers from Nokaut XML price files.
@@ -180,13 +251,25 @@ func (h *Handlers) HandleAdminImportNokaut(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Track live progress for this run.
+	h.importProgress.Begin(len(companies))
+	defer h.importProgress.Finish()
+
 	// Import each company
 	for i := range companies {
 		company := &companies[i]
 		fmt.Printf("[IMPORT-NOKAUT] Importing company: %s (ID=%d, url=%q, folder=%q)\n", company.Name, company.ID, company.ImportURL, company.ImportFolder)
 
+		h.importProgress.SetCompany(i+1, company.Name, "nokaut")
 		result := NokautImportResult{}
-		result = h.importNokautCompany(company, limit)
+		result = h.importNokautCompany(company, limit, "")
+
+		state := companyResultState(CompanyImportResult{Status: result.Status})
+		errMsg := ""
+		if state == CompanyStateFailed {
+			errMsg = result.Status
+		}
+		h.importProgress.CompanyDone(i+1, state, errMsg)
 
 		fmt.Printf("[IMPORT-NOKAUT] Company %s: parsed=%d created=%d updated=%d skipped=%d\n",
 			company.Name, result.OffersParsed, result.ProductsCreated, result.ProductsUpdated, result.ProductsSkipped)
@@ -198,6 +281,11 @@ func (h *Handlers) HandleAdminImportNokaut(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	// Global recalculation: run ONCE after all companies (not per company).
+	if err := h.runGlobalRecalculation(); err != nil {
+		fmt.Printf("[IMPORT-NOKAUT] WARN: global recalculation: %v\n", err)
+	}
+
 	fmt.Printf("[IMPORT-NOKAUT] Completed in %v\n", time.Since(startTime))
 }
 
@@ -207,7 +295,7 @@ func (h *Handlers) HandleAdminImportNokaut(w http.ResponseWriter, r *http.Reques
 // NOTE: Product creation/update (GetOrCreateByEAN) happens during parsing phase,
 // before the transaction starts. For full atomicity, this would need to be moved
 // into the transaction as well.
-func (h *Handlers) importNokautCompany(company *model.Company, limit int) NokautImportResult {
+func (h *Handlers) importNokautCompany(company *model.Company, limit int, explicitFile string) NokautImportResult {
 	cfg := company.PriceSource
 	applyPriceSourceDefaults(&cfg)
 
@@ -219,37 +307,44 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 
 	var files []string
 
-	if company.ImportURL != "" {
-		// Download the price file from the URL and save it to prices/<company>.<ext>
-		// The local copy is kept for debugging and re-imports.
-		destPath, err := downloadPriceFile(company)
-		if err != nil {
-			fmt.Printf("[IMPORT-NOKAUT] WARN: download price from %s: %v\n", company.ImportURL, err)
-			return NokautImportResult{Status: "download_error"}
-		}
-		files = []string{destPath}
-		fmt.Printf("[IMPORT-NOKAUT] Downloaded price file to %s\n", destPath)
+	if explicitFile != "" {
+		// The caller already downloaded the file (the unified importer downloads
+		// once and detects the format from the content before dispatching).
+		files = []string{explicitFile}
 	} else {
-		// Legacy: read XML files from the company's import folder
-		// Clean the ImportFolder path: remove leading/trailing slashes and "prices/" prefix
-		importFolder := company.ImportFolder
-		importFolder = strings.TrimPrefix(importFolder, "/")
-		importFolder = strings.TrimSuffix(importFolder, "/")
-		importFolder = strings.TrimPrefix(importFolder, "prices/")
+		h.importProgress.SetStep(StepDownload)
+		if company.ImportURL != "" {
+			// Download the price file from the URL and save it to prices/<company>.<ext>
+			// The local copy is kept for debugging and re-imports.
+			destPath, err := downloadPriceFile(company)
+			if err != nil {
+				fmt.Printf("[IMPORT-NOKAUT] WARN: download price from %s: %v\n", company.ImportURL, err)
+				return NokautImportResult{Status: "download_error"}
+			}
+			files = []string{destPath}
+			fmt.Printf("[IMPORT-NOKAUT] Downloaded price file to %s\n", destPath)
+		} else {
+			// Legacy: read XML files from the company's import folder
+			// Clean the ImportFolder path: remove leading/trailing slashes and "prices/" prefix
+			importFolder := company.ImportFolder
+			importFolder = strings.TrimPrefix(importFolder, "/")
+			importFolder = strings.TrimSuffix(importFolder, "/")
+			importFolder = strings.TrimPrefix(importFolder, "prices/")
 
-		dir := filepath.Join(pricesDir, importFolder)
-		var err error
-		files, err = filepath.Glob(filepath.Join(dir, "*.xml"))
-		if err != nil {
-			fmt.Printf("[IMPORT-NOKAUT] WARN: glob %s: %v\n", dir, err)
-			return NokautImportResult{Status: "no_files"}
+			dir := filepath.Join(pricesDir, importFolder)
+			var err error
+			files, err = filepath.Glob(filepath.Join(dir, "*.xml"))
+			if err != nil {
+				fmt.Printf("[IMPORT-NOKAUT] WARN: glob %s: %v\n", dir, err)
+				return NokautImportResult{Status: "no_files"}
+			}
+			sort.Strings(files)
+			if len(files) == 0 {
+				fmt.Printf("[IMPORT-NOKAUT] WARN: no XML files in %s\n", dir)
+				return NokautImportResult{Status: "no_files"}
+			}
+			fmt.Printf("[IMPORT-NOKAUT] Found %d XML files in %s\n", len(files), dir)
 		}
-		sort.Strings(files)
-		if len(files) == 0 {
-			fmt.Printf("[IMPORT-NOKAUT] WARN: no XML files in %s\n", dir)
-			return NokautImportResult{Status: "no_files"}
-		}
-		fmt.Printf("[IMPORT-NOKAUT] Found %d XML files in %s\n", len(files), dir)
 	}
 
 	// Pre-load attribute definitions to avoid repeated DB hits
@@ -276,6 +371,7 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 	var allParsedProducts []*model.Product
 	var allParsedNames []string
 
+	h.importProgress.SetStep(StepParse)
 	for _, file := range files {
 		if limit > 0 && result.OffersParsed >= limit {
 			break
@@ -303,6 +399,7 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 			}
 			result.OffersParsed++
 			fileParsed++
+			h.importProgress.AddParsed(1)
 
 			p := mapOfferToProduct(offer, cfg, company.ID, currency, h.attrDefRepo, attrDefCache, newAttrKeys)
 			if p == nil {
@@ -336,6 +433,7 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 	// Phase 0: Batch create new attribute definitions (OUTSIDE TRANSACTION)
 	// ============================================
 	// Creates AttrDef for all new attribute keys in one batch to avoid vacuum.
+	h.importProgress.SetStep(StepAttrDefs)
 	if len(newAttrKeys) > 0 && h.attrDefRepo != nil {
 		fmt.Printf("[IMPORT-NOKAUT] Phase 0: Creating %d new attribute definitions (batch)...\n", len(newAttrKeys))
 		phase0Start := time.Now()
@@ -363,6 +461,7 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 	// Phase 1: Batch create/update products (IN TRANSACTION)
 	// ============================================
 	fmt.Printf("[IMPORT-NOKAUT] Phase 1: Creating/updating %d products (transactional)...\n", len(allParsedProducts))
+	h.importProgress.SetStep(StepProducts)
 	phase1Start := time.Now()
 
 	// Create application-level transaction BEFORE any writes
@@ -402,8 +501,10 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 			for j, p := range batchProducts {
 				if isNewMap[j] {
 					result.ProductsCreated++
+					h.importProgress.AddCreated(1)
 				} else {
 					result.ProductsUpdated++
+					h.importProgress.AddUpdated(1)
 				}
 
 				// For EANPage upsert we need the final product state.
@@ -430,17 +531,19 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 	// ============================================
 	// Removes products for this company that are no longer in the price file.
 	// Runs before indexing so the vendor index still reflects pre-import state.
+	h.importProgress.SetStep(StepCleanup)
 	if len(allParsedProducts) > 0 && h.productRepo != nil {
 		fmt.Printf("[IMPORT-NOKAUT] Phase 1.6: Cleaning up stale products for company %d...\n", company.ID)
 		deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, pricesrc.NormalizeName)
 		result.ProductsDeleted = deleted
+		h.importProgress.SetDeleted(deleted)
 		fmt.Printf("[IMPORT-NOKAUT] Phase 1.6: deleted %d stale products\n", deleted)
 	}
 
 	// ============================================
 	// Phase 1.5: Batch index all products (IN TRANSACTION)
 	// ============================================
-
+	h.importProgress.SetStep(StepIndex)
 	if h.turboSearch != nil && len(allProducts) > 0 {
 		// Process in batches of 1000 to avoid filling up the database
 		const batchSize = 100_000
@@ -464,6 +567,7 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 	// Phase 2: Batch upsert EAN pages + index (IN TRANSACTION)
 	// ============================================
 	fmt.Printf("[IMPORT-NOKAUT] Phase 2: Upserting EAN pages for %d products (transactional)...\n", len(allProducts))
+	h.importProgress.SetStep(StepEANPages)
 	phase2Start := time.Now()
 
 	if err := h.eanPageRepo.LoadCatalogizerCache(); err != nil {
@@ -488,51 +592,15 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 	}
 	fmt.Printf("[IMPORT-NOKAUT] Phase 2: EAN pages done in %v\n", time.Since(phase2Start))
 
-	// ============================================
-	// Phase 3: Recalculate EAN page counts + min prices (IN TRANSACTION)
-	// ============================================
-	fmt.Println("[IMPORT-NOKAUT] Phase 3: Recalculating EAN page counts and min prices (transactional)...")
-	phase3Start := time.Now()
-	if err := h.eanPageRepo.RecalculateProductCountsTx(txn); err != nil {
-		fmt.Printf("[IMPORT-NOKAUT] ERROR: recalculate product counts failed: %v\n", err)
-		_ = txn.Abort()
-		result.Status = "error_counts"
-		return result
-	}
-	if err := h.eanPageRepo.RecalculateMinPricesTx(txn, h.productRepo); err != nil {
-		fmt.Printf("[IMPORT-NOKAUT] ERROR: recalculate min prices failed: %v\n", err)
-		_ = txn.Abort()
-		result.Status = "error_prices"
-		return result
-	}
-	fmt.Printf("[IMPORT-NOKAUT] Phase 3: done in %v\n", time.Since(phase3Start))
+	// NOTE: The global (company-independent) recalculations — EAN page product
+	// counts, min prices, product/EAN-page sort indexes, category trees, and
+	// delivery methods — are no longer run here per company. They run ONCE
+	// after all companies have imported (runGlobalRecalculation in
+	// import_unified.go), which saves time and avoids re-doing the same global
+	// work for every company.
 
-	// ============================================
-	// Phase 4: Build product sort indexes (IN TRANSACTION)
-	// ============================================
-	fmt.Println("[IMPORT-NOKAUT] Phase 4: Building product sort indexes (transactional)...")
-	if h.turboSearch != nil {
-		if err := h.turboSearch.BuildSortIndexesTx(txn); err != nil {
-			fmt.Printf("[IMPORT-NOKAUT] ERROR: build product sort indexes failed: %v\n", err)
-			_ = txn.Abort()
-			result.Status = "error_sort_indexes"
-			return result
-		}
-	}
-
-	// ============================================
-	// Phase 5: Rebuild category trees (IN TRANSACTION)
-	// ============================================
-
-	fmt.Println("[IMPORT-NOKAUT] Phase 5: Rebuilding category trees (transactional)...")
-	if err := h.categoryRepo.RebuildTreesTx(txn); err != nil {
-		fmt.Printf("[IMPORT-NOKAUT] ERROR: rebuild category trees failed: %v\n", err)
-		_ = txn.Abort()
-		result.Status = "error_trees"
-		return result
-	}
-
-	// Commit transaction
+	// Commit transaction (per-company data: products, indexes, EAN pages).
+	h.importProgress.SetStep(StepCommit)
 	if err := txn.Commit(); err != nil {
 		fmt.Printf("[IMPORT-NOKAUT] ERROR: commit transaction failed: %v\n", err)
 		result.Status = "error_commit"
@@ -540,32 +608,6 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int) Nokaut
 	}
 
 	fmt.Println("[IMPORT-NOKAUT] Transaction committed successfully")
-
-	// Rebuild category trees with fully committed data: pages created inside the
-	// transaction were not visible to the transactional rebuild (Phase 5).
-	h.categoryRepo.RebuildTrees()
-
-	// ============================================
-	// Phase 6: Build EAN page sort indexes
-	// ============================================
-	fmt.Println("[IMPORT-NOKAUT] Phase 6: Building EAN page sort indexes...")
-	if h.eanPageSearch != nil {
-		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
-			fmt.Printf("[IMPORT-NOKAUT] ERROR: build EAN page sort indexes failed: %v\n", err)
-			result.Status = "error_eanpage_sort_indexes"
-			return result
-		}
-	}
-
-	// ============================================
-	// Phase 7: Recalculate delivery_method attributes (from products' companies)
-	// ============================================
-	fmt.Println("[IMPORT-NOKAUT] Phase 7: Recalculating delivery method attributes...")
-	if h.eanPageSearch != nil {
-		if err := h.eanPageSearch.RecalculateDeliveryMethods(h.companyRepo, h.deliveryMethodRepo); err != nil {
-			fmt.Printf("[IMPORT-NOKAUT] WARN: recalculate delivery methods: %v\n", err)
-		}
-	}
 
 	result.Status = "completed"
 	return result

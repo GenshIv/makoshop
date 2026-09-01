@@ -7,8 +7,11 @@ import ProductCard from '../components/ProductCard.vue';
 import SkeletonCard from '../components/SkeletonCard.vue';
 import ViewToggle from '../components/ViewToggle.vue';
 import EmptyState from '../components/EmptyState.vue';
+import BrandingSlot from '../components/BrandingSlot.vue';
 import { useAnimation } from '../composables/useAnimation';
+import { useBranding } from '../composables/useBranding';
 import { useSettings } from '../composables/useSettings';
+import { useBrandingStore } from '../stores/branding';
 
 const { defaultCurrency } = useSettings();
 
@@ -48,6 +51,27 @@ watch(categoryPath, (newPath) => {
     categoryBrowsePath.value = newPath;
   }
 });
+
+// Branding: publish the current category chain (root -> current) so the
+// resolution can apply per-section image overrides. Cleared on the home page
+// and when leaving the catalog view (otherwise the stale chain would apply
+// category overrides on product/cart pages).
+const brandingStore = useBrandingStore();
+watch(
+  categoryBrowsePath,
+  (path) => {
+    brandingStore.setCategoryChain((path || []).map((c) => c.id));
+  },
+  { immediate: true }
+);
+onBeforeUnmount(() => {
+  brandingStore.setCategoryChain([]);
+});
+
+// Branding banner elements for this view (re-evaluated on route/store changes).
+const { useSlotElement } = useBranding();
+const homeBannerEl = useSlotElement('home_banner');
+const categoryBannerEl = useSlotElement('category_banner');
 
 // Current category object from API (with description)
 const currentCategory = ref(null);
@@ -1238,6 +1262,11 @@ defineOptions({ name: 'CatalogView' });
     >
       <div v-if="!eanPageData" class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6" key="catalog">
 
+    <!-- Branding: main page banner (home only) -->
+    <div v-if="showHero && homeBannerEl" class="mb-6">
+      <BrandingSlot slot-name="home_banner" />
+    </div>
+
     <!-- Hero intro (home only) -->
     <div
       v-if="showHero"
@@ -1401,6 +1430,11 @@ defineOptions({ name: 'CatalogView' });
                 </Transition>
               </span>
             </template>
+          </div>
+
+          <!-- Branding: category banner -->
+          <div v-if="categoryBannerEl" class="mb-3">
+            <BrandingSlot slot-name="category_banner" />
           </div>
 
           <!-- Current category header with full description and image -->

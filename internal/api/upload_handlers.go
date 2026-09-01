@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/GenshIv/makoshop/internal/httpres"
@@ -14,9 +15,19 @@ import (
 
 const uploadDir = "./data/uploads/categories"
 
+// uploadSubdirMaxDim bounds the max_dim parameter of the upload endpoint.
+const uploadSubdirMaxDim = 4096
+
 // HandleUploadImage handles POST /admin/upload-image
-// Accepts multipart/form-data with field "file"
-// Returns: { "url": "/uploads/categories/{filename}" }
+// Accepts multipart/form-data with field "file".
+//
+// Optional form fields:
+//   - subdir:  storage subdirectory under ./data/uploads (default "categories",
+//     e.g. "branding" for page decoration images). Must match [a-z0-9_-].
+//   - max_dim: longest side after resize in pixels (default 400, max 4096).
+//     Wide branding banners should use 1600–1920.
+//
+// Returns: { "url": "/uploads/{subdir}/{filename}" }
 func (h *Handlers) HandleUploadImage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
@@ -30,6 +41,27 @@ func (h *Handlers) HandleUploadImage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "file too large or invalid format")
 		return
+	}
+
+	// Optional subdir (default: categories, the historical upload target).
+	subdir := r.FormValue("subdir")
+	if subdir == "" {
+		subdir = "categories"
+	}
+	if !isValidUploadSubdir(subdir) {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid subdir")
+		return
+	}
+
+	// Optional max_dim (default: categoryImageMaxDim = 400).
+	maxDim := categoryImageMaxDim
+	if v := r.FormValue("max_dim"); v != "" {
+		n, perr := strconv.Atoi(v)
+		if perr != nil || n < 100 || n > uploadSubdirMaxDim {
+			httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid max_dim (100..4096)")
+			return
+		}
+		maxDim = n
 	}
 
 	file, header, err := r.FormFile("file")
@@ -51,7 +83,8 @@ func (h *Handlers) HandleUploadImage(w http.ResponseWriter, r *http.Request) {
 	filename := generateFilename() + ext
 
 	// Ensure upload directory exists
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+	dir := filepath.Join("./data/uploads", subdir)
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create upload directory")
 		return
 	}
@@ -65,20 +98,35 @@ func (h *Handlers) HandleUploadImage(w http.ResponseWriter, r *http.Request) {
 
 	// Resize/compress to roughly the on-screen layout size. Falls back to the
 	// original bytes when processing isn't applicable or doesn't shrink the file.
-	raw = processCategoryImage(raw, categoryImageMaxDim)
+	raw = processCategoryImage(raw, maxDim)
 
 	// Save file
-	dstPath := filepath.Join(uploadDir, filename)
+	dstPath := filepath.Join(dir, filename)
 	if err := os.WriteFile(dstPath, raw, 0644); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to save file")
 		return
 	}
 
-	url := "/uploads/categories/" + filename
+	url := "/uploads/" + subdir + "/" + filename
 	httpres.WriteJSON(w, http.StatusOK, map[string]string{"url": url, "filename": filename})
 }
 
+// isValidUploadSubdir allows only safe subdirectory names under ./data/uploads.
+func isValidUploadSubdir(s string) bool {
+	if s == "" || len(s) > 40 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
 // HandleDeleteImage handles DELETE /admin/upload-image/{filename}
+// Optional ?subdir= query param selects the storage subdirectory
+// (default "categories", e.g. "branding").
 func (h *Handlers) HandleDeleteImage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
@@ -93,7 +141,16 @@ func (h *Handlers) HandleDeleteImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filePath := filepath.Join(uploadDir, filename)
+	subdir := r.URL.Query().Get("subdir")
+	if subdir == "" {
+		subdir = "categories"
+	}
+	if !isValidUploadSubdir(subdir) {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid subdir")
+		return
+	}
+
+	filePath := filepath.Join("./data/uploads", subdir, filename)
 
 	// Check if file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {

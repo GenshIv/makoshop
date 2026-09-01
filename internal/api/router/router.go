@@ -151,6 +151,7 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.Handle("/admin/import-prices", d.JWT.RequireRole(http.HandlerFunc(d.adminImportPrices), model.RoleAdmin))
 	mux.Handle("/admin/import-nokaut", d.JWT.RequireRole(http.HandlerFunc(d.adminImportNokaut), model.RoleAdmin))
 	mux.Handle("/admin/import-unified", d.JWT.RequireRole(http.HandlerFunc(d.adminImportUnified), model.RoleAdmin))
+	mux.Handle("/admin/import-progress", d.JWT.RequireRole(http.HandlerFunc(d.adminImportProgress), model.RoleAdmin))
 	mux.Handle("/admin/products/import", d.JWT.RequireRole(http.HandlerFunc(d.adminProductsImport), model.RoleAdmin))
 
 	// --- Admin Rebuild endpoints ---
@@ -280,6 +281,12 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 
 	// Brands
 	mux.HandleFunc("/brands", d.brands)
+
+	// Branding: page decoration (public read, admin write)
+	mux.HandleFunc("/branding/active", d.brandingActive)
+	mux.Handle("/admin/branding/sets", d.JWT.RequireRole(http.HandlerFunc(d.adminBrandingSets), model.RoleAdmin))
+	mux.Handle("/admin/branding/sets/", d.JWT.RequireRole(http.HandlerFunc(d.adminBrandingSet), model.RoleAdmin))
+	mux.Handle("/admin/branding/category-overrides", d.JWT.RequireRole(http.HandlerFunc(d.adminBrandingCatThemes), model.RoleAdmin))
 
 	// Companies (public read, admin write)
 	mux.HandleFunc("/companies", d.companies)

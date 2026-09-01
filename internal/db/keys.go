@@ -34,6 +34,16 @@ func KeyPromoCampaign(id int64) string { return fmt.Sprintf("promo_campaign:%d",
 func KeyPromoLog(id int64) string      { return fmt.Sprintf("promo_log:%d", id) }
 func KeyLandingPage(id int64) string   { return fmt.Sprintf("landing:%d", id) }
 func KeyEANPage(id int64) string       { return fmt.Sprintf("eanpage:%d", id) }
+func KeyBrandSet(id int64) string      { return fmt.Sprintf("brand_set:%d", id) }
+
+// KeyBrandCatTheme is unique per (category, slot) pair — upsert semantics.
+func KeyBrandCatTheme(categoryID int64, slot model.BrandSlot) string {
+	return fmt.Sprintf("brand_cat_theme:%d:%s", categoryID, slot)
+}
+
+// KeyBrandingVersion is a turbo raw key holding the branding data version
+// (bumped on every admin write) so clients can detect stale caches.
+const KeyBrandingVersion = "branding:version"
 
 // Index keys — all turbo-based. Helpers for hashing used by turbo_search.go.
 
@@ -360,4 +370,30 @@ func UnmarshalVote(data []byte) (*model.Vote, error) {
 		return nil, err
 	}
 	return &v, nil
+}
+
+func MarshalBrandSet(s model.BrandSet) []byte {
+	b, _ := json.Marshal(s)
+	return b
+}
+
+func UnmarshalBrandSet(data []byte) (*model.BrandSet, error) {
+	var s model.BrandSet
+	if err := json.Unmarshal(data, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+func MarshalBrandCatTheme(t model.BrandCategoryTheme) []byte {
+	b, _ := json.Marshal(t)
+	return b
+}
+
+func UnmarshalBrandCatTheme(data []byte) (*model.BrandCategoryTheme, error) {
+	var t model.BrandCategoryTheme
+	if err := json.Unmarshal(data, &t); err != nil {
+		return nil, err
+	}
+	return &t, nil
 }

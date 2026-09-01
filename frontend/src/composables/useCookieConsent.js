@@ -55,15 +55,10 @@ function getConsent() {
   const fromCookie = getConsentFromCookie();
   const fromSession = getConsentFromSessionStorage();
 
-  console.log('[CookieConsent] fromCookie:', fromCookie?.acceptedAt ? 'present' : 'null',
-              'fromSession:', fromSession?.acceptedAt ? 'present' : 'null',
-              'sessionStorage:', sessionStorage.getItem(SESSION_KEY) ? 'present' : 'null');
-
   // Sync sessionStorage from cookie (cookie is the authoritative source)
   if (fromCookie) {
     try {
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(fromCookie));
-      console.log('[CookieConsent] Re-synced sessionStorage from cookie');
     } catch (e) {
       console.warn('[CookieConsent] Failed to re-sync sessionStorage:', e);
     }
@@ -181,7 +176,6 @@ _instance = useCookieConsent();
 // Callback for analytics/marketing scripts
 // Override this function in your app to initialize analytics when consent is given
 export let onConsentChange = (consent) => {
-  console.log('[CookieConsent] Consent changed:', consent);
 
   if (consent.analytics && !window.__analyticsInitialized) {
     window.__analyticsInitialized = true;
@@ -196,13 +190,11 @@ export let onConsentChange = (consent) => {
 
 // Override these functions in your app to integrate with analytics/marketing services
 export function initAnalytics() {
-  console.log('[CookieConsent] Analytics initialized');
   // Example: Google Analytics
   // window.gtag('consent', 'update', { analytics_storage: 'granted' });
 }
 
 export function initMarketing() {
-  console.log('[CookieConsent] Marketing initialized');
   // Example: Facebook Pixel, etc.
 }
 

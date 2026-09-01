@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -35,13 +34,8 @@ type JSONImportResult struct {
 // and saves it to prices/<company>.json. Returns the saved file path.
 // Always deletes the old file first to ensure a fresh download.
 func downloadJSONPriceFile(company *model.Company) (string, error) {
-	// Determine file extension from URL, default to .json
-	ext := ".json"
-	if u, uerr := url.Parse(company.ImportURL); uerr == nil {
-		if e := filepath.Ext(u.Path); e != "" && len(e) <= 10 {
-			ext = e
-		}
-	}
+	// Determine file extension from URL (robust to query/matrix params), default .json
+	ext := priceFileExt(company.ImportURL, ".json")
 
 	name := sanitizeFileName(company.Name)
 	if name == "" {
@@ -60,7 +54,14 @@ func downloadJSONPriceFile(company *model.Company) (string, error) {
 		fmt.Printf("[IMPORT-JSON] Removed old file %s\n", destPath)
 	}
 
-	client := &http.Client{Timeout: 120 * time.Second}
+	// Large price files can take many minutes to download on a slow link. Use a
+	// generous overall cap so a legitimate slow download completes instead of
+	// being aborted, while still bounding a truly stuck transfer.
+	// ResponseHeaderTimeout fails fast if the server never starts responding.
+	client := &http.Client{
+		Timeout:   15 * time.Minute,
+		Transport: &http.Transport{ResponseHeaderTimeout: 60 * time.Second},
+	}
 	resp, err := client.Get(company.ImportURL)
 	if err != nil {
 		return "", fmt.Errorf("get: %w", err)
@@ -146,13 +147,25 @@ func (h *Handlers) HandleAdminImportJSON(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
+	// Track live progress for this run.
+	h.importProgress.Begin(len(companies))
+	defer h.importProgress.Finish()
+
 	// Import each company
 	for i := range companies {
 		company := &companies[i]
 		fmt.Printf("[IMPORT-JSON] Importing company: %s (ID=%d, url=%q, folder=%q)\n", company.Name, company.ID, company.ImportURL, company.ImportFolder)
 
+		h.importProgress.SetCompany(i+1, company.Name, "json")
 		result := JSONImportResult{}
-		result = h.importJSONCompany(company, limit, noDownload)
+		result = h.importJSONCompany(company, limit, noDownload, "")
+
+		state := companyResultState(CompanyImportResult{Status: result.Status})
+		errMsg := ""
+		if state == CompanyStateFailed {
+			errMsg = result.Status
+		}
+		h.importProgress.CompanyDone(i+1, state, errMsg)
 
 		fmt.Printf("[IMPORT-JSON] Company %s: parsed=%d created=%d updated=%d skipped=%d\n",
 			company.Name, result.OffersParsed, result.ProductsCreated, result.ProductsUpdated, result.ProductsSkipped)
@@ -162,6 +175,11 @@ func (h *Handlers) HandleAdminImportJSON(w http.ResponseWriter, r *http.Request,
 			result.Company = company.Name
 			httpres.WriteJSON(w, http.StatusOK, result)
 		}
+	}
+
+	// Global recalculation: run ONCE after all companies (not per company).
+	if err := h.runGlobalRecalculation(); err != nil {
+		fmt.Printf("[IMPORT-JSON] WARN: global recalculation: %v\n", err)
 	}
 
 	fmt.Printf("[IMPORT-JSON] Completed in %v\n", time.Since(startTime))
@@ -230,7 +248,7 @@ type jsonImageFileItem struct {
 //   - Phase 5:   rebuild category trees (in transaction)
 //   - Commit, then post-commit: rebuild trees, EAN page sort indexes,
 //     delivery method attributes
-func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownload bool) JSONImportResult {
+func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownload bool, explicitFile string) JSONImportResult {
 	cfg := company.PriceSource
 	applyPriceSourceDefaults(&cfg)
 
@@ -242,55 +260,62 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 
 	var files []string
 
-	if noDownload {
-		// Use local file from ImportFolder without downloading
-		importFolder := company.ImportFolder
-		importFolder = strings.TrimPrefix(importFolder, "/")
-		importFolder = strings.TrimSuffix(importFolder, "/")
-		importFolder = strings.TrimPrefix(importFolder, "prices/")
-
-		dir := filepath.Join(pricesDir, importFolder)
-		var err error
-		files, err = filepath.Glob(filepath.Join(dir, "*.json"))
-		if err != nil {
-			fmt.Printf("[IMPORT-JSON] WARN: glob %s: %v\n", dir, err)
-			return JSONImportResult{Status: "no_files"}
-		}
-		sort.Strings(files)
-		if len(files) == 0 {
-			fmt.Printf("[IMPORT-JSON] WARN: no JSON files in %s\n", dir)
-			return JSONImportResult{Status: "no_files"}
-		}
-		fmt.Printf("[IMPORT-JSON] Using local JSON files from %s (%d files)\n", dir, len(files))
-	} else if company.ImportURL != "" {
-		// Download the JSON price file from the URL (default: always re-download)
-		destPath, err := downloadJSONPriceFile(company)
-		if err != nil {
-			fmt.Printf("[IMPORT-JSON] WARN: download JSON price from %s: %v\n", company.ImportURL, err)
-			return JSONImportResult{Status: "download_error"}
-		}
-		files = []string{destPath}
-		fmt.Printf("[IMPORT-JSON] Downloaded JSON price file to %s\n", destPath)
+	if explicitFile != "" {
+		// The caller already downloaded the file (the unified importer downloads
+		// once and detects the format from the content before dispatching).
+		files = []string{explicitFile}
 	} else {
-		// Fallback: read JSON files from the company's import folder
-		importFolder := company.ImportFolder
-		importFolder = strings.TrimPrefix(importFolder, "/")
-		importFolder = strings.TrimSuffix(importFolder, "/")
-		importFolder = strings.TrimPrefix(importFolder, "prices/")
+		h.importProgress.SetStep(StepDownload)
+		if noDownload {
+			// Use local file from ImportFolder without downloading
+			importFolder := company.ImportFolder
+			importFolder = strings.TrimPrefix(importFolder, "/")
+			importFolder = strings.TrimSuffix(importFolder, "/")
+			importFolder = strings.TrimPrefix(importFolder, "prices/")
 
-		dir := filepath.Join(pricesDir, importFolder)
-		var err error
-		files, err = filepath.Glob(filepath.Join(dir, "*.json"))
-		if err != nil {
-			fmt.Printf("[IMPORT-JSON] WARN: glob %s: %v\n", dir, err)
-			return JSONImportResult{Status: "no_files"}
+			dir := filepath.Join(pricesDir, importFolder)
+			var err error
+			files, err = filepath.Glob(filepath.Join(dir, "*.json"))
+			if err != nil {
+				fmt.Printf("[IMPORT-JSON] WARN: glob %s: %v\n", dir, err)
+				return JSONImportResult{Status: "no_files"}
+			}
+			sort.Strings(files)
+			if len(files) == 0 {
+				fmt.Printf("[IMPORT-JSON] WARN: no JSON files in %s\n", dir)
+				return JSONImportResult{Status: "no_files"}
+			}
+			fmt.Printf("[IMPORT-JSON] Using local JSON files from %s (%d files)\n", dir, len(files))
+		} else if company.ImportURL != "" {
+			// Download the JSON price file from the URL (default: always re-download)
+			destPath, err := downloadJSONPriceFile(company)
+			if err != nil {
+				fmt.Printf("[IMPORT-JSON] WARN: download JSON price from %s: %v\n", company.ImportURL, err)
+				return JSONImportResult{Status: "download_error"}
+			}
+			files = []string{destPath}
+			fmt.Printf("[IMPORT-JSON] Downloaded JSON price file to %s\n", destPath)
+		} else {
+			// Fallback: read JSON files from the company's import folder
+			importFolder := company.ImportFolder
+			importFolder = strings.TrimPrefix(importFolder, "/")
+			importFolder = strings.TrimSuffix(importFolder, "/")
+			importFolder = strings.TrimPrefix(importFolder, "prices/")
+
+			dir := filepath.Join(pricesDir, importFolder)
+			var err error
+			files, err = filepath.Glob(filepath.Join(dir, "*.json"))
+			if err != nil {
+				fmt.Printf("[IMPORT-JSON] WARN: glob %s: %v\n", dir, err)
+				return JSONImportResult{Status: "no_files"}
+			}
+			sort.Strings(files)
+			if len(files) == 0 {
+				fmt.Printf("[IMPORT-JSON] WARN: no JSON files in %s\n", dir)
+				return JSONImportResult{Status: "no_files"}
+			}
+			fmt.Printf("[IMPORT-JSON] Found %d JSON files in %s\n", len(files), dir)
 		}
-		sort.Strings(files)
-		if len(files) == 0 {
-			fmt.Printf("[IMPORT-JSON] WARN: no JSON files in %s\n", dir)
-			return JSONImportResult{Status: "no_files"}
-		}
-		fmt.Printf("[IMPORT-JSON] Found %d JSON files in %s\n", len(files), dir)
 	}
 
 	// Pre-load attribute definitions to avoid repeated DB hits
@@ -313,6 +338,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 	var allParsedProducts []*model.Product
 	var allParsedNames []string
 
+	h.importProgress.SetStep(StepParse)
 	for _, file := range files {
 		if limit > 0 && result.OffersParsed >= limit {
 			break
@@ -367,6 +393,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 				parsedNames = append(parsedNames, prod.Name)
 				result.OffersParsed++
 				fileParsed++
+				h.importProgress.AddParsed(1)
 			}
 		}
 
@@ -381,6 +408,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 	// Phase 0: Batch create new attribute definitions (OUTSIDE TRANSACTION)
 	// ============================================
 	// Creates AttrDef for all new attribute keys in one batch to avoid vacuum.
+	h.importProgress.SetStep(StepAttrDefs)
 	if len(newAttrKeys) > 0 && h.attrDefRepo != nil {
 		fmt.Printf("[IMPORT-JSON] Phase 0: Creating %d new attribute definitions (batch)...\n", len(newAttrKeys))
 		keys := make([]string, 0, len(newAttrKeys))
@@ -403,6 +431,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 
 	if len(allParsedProducts) > 0 {
 		fmt.Printf("[IMPORT-JSON] Phase 1: Creating/updating %d products (transactional)...\n", len(allParsedProducts))
+		h.importProgress.SetStep(StepProducts)
 		phase1Start := time.Now()
 
 		// Create application-level transaction BEFORE any writes
@@ -441,8 +470,10 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 			for j, p := range batchProducts {
 				if isNewMap[j] {
 					result.ProductsCreated++
+					h.importProgress.AddCreated(1)
 				} else {
 					result.ProductsUpdated++
+					h.importProgress.AddUpdated(1)
 				}
 
 				// For EAN page upsert we need the final product state.
@@ -465,14 +496,17 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		// Phase 1.6: Delete stale products not in this import (IN TRANSACTION)
 		// ============================================
 		// Removes products for this company that are no longer in the price file.
+		h.importProgress.SetStep(StepCleanup)
 		fmt.Printf("[IMPORT-JSON] Phase 1.6: Cleaning up stale products for company %d...\n", company.ID)
 		deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, identityNormalize)
 		result.ProductsDeleted = deleted
+		h.importProgress.SetDeleted(deleted)
 		fmt.Printf("[IMPORT-JSON] Phase 1.6: deleted %d stale products\n", deleted)
 
 		// ============================================
 		// Phase 1.5: Batch index all products (IN TRANSACTION)
 		// ============================================
+		h.importProgress.SetStep(StepIndex)
 		if h.turboSearch != nil && len(allProducts) > 0 {
 			for i := 0; i < len(allProducts); i += batchSize {
 				end := i + batchSize
@@ -493,6 +527,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		// Phase 2: Batch upsert EAN pages + index (IN TRANSACTION)
 		// ============================================
 		fmt.Printf("[IMPORT-JSON] Phase 2: Upserting EAN pages for %d products (transactional)...\n", len(allProducts))
+		h.importProgress.SetStep(StepEANPages)
 		phase2Start := time.Now()
 
 		if err := h.eanPageRepo.LoadCatalogizerCache(); err != nil {
@@ -517,73 +552,20 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		}
 		fmt.Printf("[IMPORT-JSON] Phase 2: EAN pages done in %v\n", time.Since(phase2Start))
 
-		// ============================================
-		// Phase 3: Recalculate EAN page counts + min prices (IN TRANSACTION)
-		// ============================================
-		phase3Start := time.Now()
-		if err := h.eanPageRepo.RecalculateProductCountsTx(txn); err != nil {
-			fmt.Printf("[IMPORT-JSON] ERROR: recalculate product counts failed: %v\n", err)
-			_ = txn.Abort()
-			result.Status = "error_counts"
-			return result
-		}
-		if err := h.eanPageRepo.RecalculateMinPricesTx(txn, h.productRepo); err != nil {
-			fmt.Printf("[IMPORT-JSON] ERROR: recalculate min prices failed: %v\n", err)
-			_ = txn.Abort()
-			result.Status = "error_prices"
-			return result
-		}
-		fmt.Printf("[IMPORT-JSON] Phase 3: done in %v\n", time.Since(phase3Start))
+		// NOTE: The global (company-independent) recalculations — EAN page
+		// product counts, min prices, product/EAN-page sort indexes, category
+		// trees, and delivery methods — are no longer run here per company.
+		// They run ONCE after all companies have imported
+		// (runGlobalRecalculation in import_unified.go).
 
-		// ============================================
-		// Phase 4: Build product sort indexes (IN TRANSACTION)
-		// ============================================
-		if h.turboSearch != nil {
-			if err := h.turboSearch.BuildSortIndexesTx(txn); err != nil {
-				fmt.Printf("[IMPORT-JSON] ERROR: build product sort indexes failed: %v\n", err)
-				_ = txn.Abort()
-				result.Status = "error_sort_indexes"
-				return result
-			}
-		}
-
-		// ============================================
-		// Phase 5: Rebuild category trees (IN TRANSACTION)
-		// ============================================
-		if err := h.categoryRepo.RebuildTreesTx(txn); err != nil {
-			fmt.Printf("[IMPORT-JSON] ERROR: rebuild category trees failed: %v\n", err)
-			_ = txn.Abort()
-			result.Status = "error_trees"
-			return result
-		}
-
-		// Commit transaction
+		// Commit transaction (per-company data: products, indexes, EAN pages).
+		h.importProgress.SetStep(StepCommit)
 		if err := txn.Commit(); err != nil {
 			fmt.Printf("[IMPORT-JSON] ERROR: commit transaction failed: %v\n", err)
 			result.Status = "error_commit"
 			return result
 		}
 		fmt.Println("[IMPORT-JSON] Transaction committed successfully")
-	}
-
-	// Rebuild category trees with fully committed data: pages created inside the
-	// transaction were not visible to the transactional rebuild (Phase 5).
-	h.categoryRepo.RebuildTrees()
-
-	// ============================================
-	// Post-commit: Build EAN page sort indexes
-	// ============================================
-	if h.eanPageSearch != nil {
-		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
-			fmt.Printf("[IMPORT-JSON] ERROR: build EAN page sort indexes failed: %v\n", err)
-			result.Status = "error_eanpage_sort_indexes"
-			return result
-		}
-
-		// Recalculate delivery_method attributes (from products' companies)
-		if err := h.eanPageSearch.RecalculateDeliveryMethods(h.companyRepo, h.deliveryMethodRepo); err != nil {
-			fmt.Printf("[IMPORT-JSON] WARN: recalculate delivery methods: %v\n", err)
-		}
 	}
 
 	result.Status = "completed"

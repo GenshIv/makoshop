@@ -976,9 +976,18 @@ func (r *EANPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 			// Update existing in memory
 			updatedPages[pk] = s
 		} else {
-			// Create new with category from product
+			// Create new. Category resolution matches the single-path
+			// UpsertFromProduct: prefer the product's category, and when the
+			// product has none (0), fall back to the catalogizer so new pages
+			// are not left uncategorized.
 			if _, ok := newPages[pk]; !ok {
 				slug := toEANPageSlug(pk, p.Name)
+				categoryID := p.CategoryID
+				if categoryID == 0 && r.CatalogizeNew && r.CategoryRepo != nil {
+					if catID, err := r.autoCatalogize(p); err == nil && catID > 0 {
+						categoryID = catID
+					}
+				}
 				newPages[pk] = &model.EANPage{
 					EAN:          pk,
 					Slug:         slug,
@@ -986,7 +995,7 @@ func (r *EANPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 					Description:  p.Description,
 					Content:      p.Description,
 					Images:       limitStrings(deduplicateStrings(p.Images), maxEANPageImages),
-					CategoryID:   p.CategoryID, // from product
+					CategoryID:   categoryID,
 					Brand:        p.Brand,
 					BrandID:      p.BrandID,
 					IsActive:     true,
@@ -994,7 +1003,7 @@ func (r *EANPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 					Currency:     p.Currency,
 					Attributes:   mergeAttributes(nil, p.Attributes),
 					ProductCount: 1,
-					SeoURL:       r.ComputeSeoURL(slug, p.CategoryID, treePathCache),
+					SeoURL:       r.ComputeSeoURL(slug, categoryID, treePathCache),
 					Keywords:     extractKeywordsFromProduct(p),
 					CreatedAt:    time.Now().Unix(),
 					UpdatedAt:    time.Now().Unix(),
@@ -1033,9 +1042,19 @@ func (r *EANPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 			// Update Keywords (always refresh with latest product info)
 			s.Keywords = extractKeywordsFromProduct(p)
 
-			// Ensure SeoURL is set (compute if missing or category changed)
-			if s.SeoURL == "" || s.CategoryID != p.CategoryID {
+			// Category handling (matches the single-path
+			// updateEANPageFromProduct "set if 0" semantics):
+			//   - If the page has no category and the product does, adopt the
+			//     product's category (this is how /admin/catalogize + rebuild
+			//     restores pages that were reset to 0).
+			//   - NEVER overwrite an existing (catalogizer-assigned) category
+			//     with the product's: the product's CategoryID is usually 0 for
+			//     price-file imports and would wipe the catalogizer's
+			//     assignment on every rebuild/import.
+			if s.CategoryID == 0 && p.CategoryID != 0 {
 				s.CategoryID = p.CategoryID
+				s.SeoURL = r.ComputeSeoURL(s.Slug, s.CategoryID, treePathCache)
+			} else if s.SeoURL == "" {
 				s.SeoURL = r.ComputeSeoURL(s.Slug, s.CategoryID, treePathCache)
 			}
 

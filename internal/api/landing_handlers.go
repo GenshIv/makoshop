@@ -1233,7 +1233,14 @@ func writeHTMLResponse(w http.ResponseWriter, r *http.Request, title string, dat
 }
 
 func stringToBytes(s string) []byte {
-	return *((*[]byte)(unsafe.Pointer(&s)))
+	if s == "" {
+		return nil
+	}
+	// Zero-copy string->[]byte. A string header is 16 bytes (ptr+len) but a
+	// slice header is 24 bytes (ptr+len+cap), so reinterpreting &s as *[]byte
+	// reads cap from adjacent garbage memory (latent out-of-bounds). Build the
+	// slice explicitly with cap == len via unsafe.Slice instead.
+	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
 // splitNonEmpty splits s by sep, returning only non-empty parts.

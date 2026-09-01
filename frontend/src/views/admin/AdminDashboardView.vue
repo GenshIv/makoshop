@@ -355,6 +355,10 @@ onMounted(() => {
           <div class="font-medium">💬 {{ t('admin.comments_manage') || 'Comments' }}</div>
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.comments_manage_desc') || 'Manage user comments & likes' }}</div>
         </router-link>
+        <router-link to="/admin/branding" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">🎨 {{ t('admin.branding.title') || 'Branding' }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('admin.branding.desc') || 'Page decoration sets & banners' }}</div>
+        </router-link>
       </div>
     </div>
 

@@ -39,16 +39,45 @@ type UnifiedImportResult struct {
 }
 
 // resolveImportCompanies resolves the target companies for an import.
-// If companyParam is non-empty it resolves a single company by ID or name;
-// otherwise it returns all companies that have an ImportURL or ImportFolder
-// configured. Shared by the Nokaut, JSON and unified import handlers.
-func (h *Handlers) resolveImportCompanies(companyParam string) ([]model.Company, error) {
+//   - If companiesParam (comma-separated IDs) is non-empty, resolve exactly
+//     those companies, in the given order (used by the UI checkbox selection).
+//   - Else if companyParam is non-empty, resolve a single company by ID or name.
+//   - Otherwise, return all companies that have an ImportURL or ImportFolder.
+func (h *Handlers) resolveImportCompanies(companyParam, companiesParam string) ([]model.Company, error) {
 	all, err := h.companyRepo.List()
 	if err != nil {
 		return nil, fmt.Errorf("list companies: %w", err)
 	}
+	byID := make(map[int64]model.Company, len(all))
+	for _, c := range all {
+		byID[c.ID] = c
+	}
 
 	var companies []model.Company
+
+	// Explicit list of company IDs (checkbox selection).
+	if companiesParam != "" {
+		for _, part := range strings.Split(companiesParam, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			cid, parseErr := strconv.ParseInt(part, 10, 64)
+			if parseErr != nil {
+				return nil, fmt.Errorf("invalid company id: %s", part)
+			}
+			c, ok := byID[cid]
+			if !ok {
+				return nil, fmt.Errorf("company not found: %s", part)
+			}
+			companies = append(companies, c)
+		}
+		if len(companies) == 0 {
+			return nil, fmt.Errorf("no companies selected")
+		}
+		return companies, nil
+	}
+
 	if companyParam != "" {
 		cid, parseErr := strconv.ParseInt(companyParam, 10, 64)
 		for _, c := range all {
@@ -93,13 +122,40 @@ func effectiveImportFormat(company *model.Company, override string) string {
 // importCompanyByFormat imports a single company's price file using the method
 // resolved from its saved PriceSource.Format (or an explicit override). It
 // dispatches to the per-company import implementation for the format.
+//
+// When the company has a price URL, the file is downloaded once and its real
+// format is detected from the content. If the detected format disagrees with
+// the saved one, the detected format wins (the file content is the ground
+// truth) and the saved format is corrected so future imports and the UI agree.
+// This is what makes the one-click auto-import resilient to a wrong saved
+// format (e.g. a JSON file that was saved with format "nokaut").
 func (h *Handlers) importCompanyByFormat(company *model.Company, override string, limit int, noDownload bool) CompanyImportResult {
 	format := effectiveImportFormat(company, override)
+	if format == "xml" {
+		format = "nokaut"
+	}
 	cr := CompanyImportResult{Company: company.Name, Format: format}
 
+	explicitFile := ""
+	if company.ImportURL != "" && !noDownload {
+		// Download once and let the content choose the parser.
+		if path, err := downloadPriceFile(company); err == nil {
+			explicitFile = path
+			if detected := detectPriceFormat(path); detected != "" && detected != format {
+				fmt.Printf("[IMPORT] %s: saved format %q but file is %q; using detected format\n", company.Name, format, detected)
+				format = detected
+				company.PriceSource.Format = detected
+				h.correctCompanyFormat(company, detected)
+			}
+		} else {
+			fmt.Printf("[IMPORT] %s: download failed: %v\n", company.Name, err)
+		}
+	}
+
+	cr.Format = format
 	switch format {
 	case "json":
-		r := h.importJSONCompany(company, limit, noDownload)
+		r := h.importJSONCompany(company, limit, noDownload, explicitFile)
 		cr.Status = r.Status
 		cr.Files = r.Files
 		cr.OffersParsed = r.OffersParsed
@@ -108,7 +164,7 @@ func (h *Handlers) importCompanyByFormat(company *model.Company, override string
 		cr.ProductsSkipped = r.ProductsSkipped
 		cr.ProductsDeleted = r.ProductsDeleted
 	case "nokaut", "xml":
-		r := h.importNokautCompany(company, limit)
+		r := h.importNokautCompany(company, limit, explicitFile)
 		cr.Status = r.Status
 		cr.Files = r.Files
 		cr.OffersParsed = r.OffersParsed
@@ -124,10 +180,75 @@ func (h *Handlers) importCompanyByFormat(company *model.Company, override string
 	return cr
 }
 
-// HandleAdminImportUnified imports price files for one or all companies in a
-// single call. Each company's file is parsed using the method stored in its
-// PriceSource.Format (saved in the DB), so a batch of price lists can be
-// imported with one command.
+// correctCompanyFormat persists a corrected PriceSource.Format for a company.
+// A failure here is non-fatal: the next import will simply detect again.
+func (h *Handlers) correctCompanyFormat(company *model.Company, format string) {
+	if h.companyRepo == nil {
+		return
+	}
+	if err := h.companyRepo.Update(company.ID, func(c *model.Company) {
+		c.PriceSource.Format = format
+	}); err != nil {
+		fmt.Printf("[IMPORT] %s: failed to persist corrected format %q: %v\n", company.Name, format, err)
+	}
+}
+
+// runGlobalRecalculation runs the company-independent (global) recalculations
+// exactly once, after all per-company imports have committed. These steps do
+// not depend on any single company, so running them per company (as the import
+// used to) was wasteful and re-did the same global work N times. Consolidating
+// them into one pass after the batch saves time and removes redundant work.
+//
+// Steps (all non-transactional, operating on the committed data):
+//   - EAN page product counts
+//   - EAN page min prices
+//   - product sort indexes
+//   - category trees
+//   - EAN page sort indexes
+//   - delivery_method attributes
+func (h *Handlers) runGlobalRecalculation() error {
+	if h.eanPageRepo != nil {
+		if err := h.eanPageRepo.RecalculateProductCounts(); err != nil {
+			return fmt.Errorf("recalculate product counts: %w", err)
+		}
+		if err := h.eanPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
+			return fmt.Errorf("recalculate min prices: %w", err)
+		}
+	}
+	if h.turboSearch != nil {
+		if err := h.turboSearch.BuildSortIndexes(); err != nil {
+			return fmt.Errorf("build product sort indexes: %w", err)
+		}
+	}
+	if h.categoryRepo != nil {
+		h.categoryRepo.RebuildTrees()
+	}
+	if h.eanPageSearch != nil {
+		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
+			return fmt.Errorf("build EAN page sort indexes: %w", err)
+		}
+		if err := h.eanPageSearch.RecalculateDeliveryMethods(h.companyRepo, h.deliveryMethodRepo); err != nil {
+			fmt.Printf("[IMPORT] WARN: recalculate delivery methods: %v\n", err)
+		}
+	}
+	return nil
+}
+
+// HandleAdminImportUnified imports price files for one or all companies. Each
+// company's file is parsed using the method stored in its PriceSource.Format
+// (saved in the DB), so a batch of price lists can be imported with one command.
+//
+// The import is asynchronous: the handler validates the request, starts the run
+// (and its live progress), then returns 202 immediately. The actual download /
+// parse / write happens in a background goroutine, and the client observes it
+// by polling GET /admin/import-progress until running=false.
+//
+// Why async: a batch import (especially with large files such as a 400MB price
+// list) can take minutes. Keeping the HTTP connection open for that whole time
+// meant a browser or proxy could time out and retry the request; once the first
+// run finished and released the import lock, the retry started a SECOND import
+// from the beginning (the "it went again" symptom). Returning immediately keeps
+// the request short and makes the run fully server-side.
 //
 // POST /admin/import-unified
 // Query params:
@@ -135,20 +256,26 @@ func (h *Handlers) importCompanyByFormat(company *model.Company, override string
 //   - source=...          explicit format override for all companies (default: use each company's saved Format)
 //   - limit=N             max offers to import per company (0 = unlimited)
 //   - no_download=1       skip download, use local file (json/nokaut)
+//
+// Response: 202 {status:"started"} while the run is in flight; 409 if another
+// import is already running; 404 if the company is unknown; 200 {status:
+// "no_companies"} if there is nothing to import.
 func (h *Handlers) HandleAdminImportUnified(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
 
-	// Prevent concurrent imports
+	// Prevent concurrent imports. The lock is held by the background goroutine
+	// for the whole run, so a second request gets 409 while the first is still
+	// in flight (it does not start a duplicate run).
 	if !h.importMu.TryLock() {
 		httpres.WriteError(w, http.StatusConflict, "IMPORT_IN_PROGRESS", "Another import is already in progress")
 		return
 	}
-	defer h.importMu.Unlock()
 
 	companyParam := r.URL.Query().Get("company")
+	companiesParam := r.URL.Query().Get("companies")
 	sourceOverride := r.URL.Query().Get("source")
 	limit := 0
 	if v := r.URL.Query().Get("limit"); v != "" {
@@ -156,45 +283,107 @@ func (h *Handlers) HandleAdminImportUnified(w http.ResponseWriter, r *http.Reque
 	}
 	noDownload := r.URL.Query().Get("no_download") == "1"
 
-	startTime := time.Now()
-	fmt.Printf("[IMPORT-UNIFIED] Starting (company=%q source=%q limit=%d no_download=%t) from %s\n",
-		companyParam, sourceOverride, limit, noDownload, r.RemoteAddr)
+	fmt.Printf("[IMPORT-UNIFIED] Starting (company=%q companies=%q source=%q limit=%d no_download=%t) from %s\n",
+		companyParam, companiesParam, sourceOverride, limit, noDownload, r.RemoteAddr)
 
-	companies, err := h.resolveImportCompanies(companyParam)
+	companies, err := h.resolveImportCompanies(companyParam, companiesParam)
 	if err != nil {
+		// No run started yet (Begin is called after resolution), so there is
+		// nothing to mark as failed in the progress tracker.
+		h.importMu.Unlock()
 		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 		return
 	}
 
 	if len(companies) == 0 {
+		h.importMu.Unlock()
 		httpres.WriteJSON(w, http.StatusOK, UnifiedImportResult{Status: "no_companies"})
 		return
 	}
 
-	result := UnifiedImportResult{Status: "completed"}
-	for i := range companies {
-		company := &companies[i]
-		fmt.Printf("[IMPORT-UNIFIED] Importing company: %s (ID=%d, format=%q, url=%q, folder=%q)\n",
-			company.Name, company.ID, effectiveImportFormat(company, sourceOverride), company.ImportURL, company.ImportFolder)
+	// Start tracking live progress for this batch run so the client can see it
+	// is running immediately after the 202 response. The total includes one
+	// extra slot for the final GLOBAL recalculation phase, which runs ONCE
+	// after all per-company imports (not per company).
+	h.importProgress.Begin(len(companies) + 1)
 
-		cr := h.importCompanyByFormat(company, sourceOverride, limit, noDownload)
-		result.Companies = append(result.Companies, cr)
-		result.OffersParsed += cr.OffersParsed
-		result.ProductsCreated += cr.ProductsCreated
-		result.ProductsUpdated += cr.ProductsUpdated
-		result.ProductsSkipped += cr.ProductsSkipped
-		result.ProductsDeleted += cr.ProductsDeleted
+	// Run the import in the background. The goroutine owns the import lock for
+	// the duration of the run and finalizes the progress tracker when done.
+	go func() {
+		defer h.importMu.Unlock()
+		defer h.importProgress.Finish()
 
-		fmt.Printf("[IMPORT-UNIFIED] Company %s (%s): status=%s parsed=%d created=%d updated=%d skipped=%d\n",
-			company.Name, cr.Format, cr.Status, cr.OffersParsed, cr.ProductsCreated, cr.ProductsUpdated, cr.ProductsSkipped)
+		startTime := time.Now()
+		result := UnifiedImportResult{Status: "completed"}
+		for i := range companies {
+			company := &companies[i]
+			format := effectiveImportFormat(company, sourceOverride)
+			fmt.Printf("[IMPORT-UNIFIED] Importing company: %s (ID=%d, format=%q, url=%q, folder=%q)\n",
+				company.Name, company.ID, format, company.ImportURL, company.ImportFolder)
+
+			// Mark this company as active before importing it.
+			h.importProgress.SetCompany(i+1, company.Name, format)
+
+			cr := h.importCompanyByFormat(company, sourceOverride, limit, noDownload)
+			result.Companies = append(result.Companies, cr)
+			result.OffersParsed += cr.OffersParsed
+			result.ProductsCreated += cr.ProductsCreated
+			result.ProductsUpdated += cr.ProductsUpdated
+			result.ProductsSkipped += cr.ProductsSkipped
+			result.ProductsDeleted += cr.ProductsDeleted
+
+			// Finalize this company's progress entry.
+			state := companyResultState(cr)
+			errMsg := ""
+			if state == CompanyStateFailed {
+				errMsg = cr.Status
+			}
+			h.importProgress.CompanyDone(i+1, state, errMsg)
+
+			fmt.Printf("[IMPORT-UNIFIED] Company %s (%s): status=%s parsed=%d created=%d updated=%d skipped=%d\n",
+				company.Name, cr.Format, cr.Status, cr.OffersParsed, cr.ProductsCreated, cr.ProductsUpdated, cr.ProductsSkipped)
+		}
+
+		// Global recalculation phase: runs ONCE after all companies have
+		// imported (not per company), so the same global work (EAN page counts,
+		// min prices, sort indexes, category trees, delivery methods) is not
+		// repeated for every company. Tracked as the final progress entry.
+		globalIdx := len(companies) + 1
+		h.importProgress.SetCompany(globalIdx, "Global recalculation", "")
+		h.importProgress.SetStep(StepRecalc)
+		if err := h.runGlobalRecalculation(); err != nil {
+			fmt.Printf("[IMPORT-UNIFIED] ERROR: global recalculation failed: %v\n", err)
+			h.importProgress.CompanyDone(globalIdx, CompanyStateFailed, err.Error())
+			h.importProgress.Fail(err.Error())
+			return
+		}
+		h.importProgress.CompanyDone(globalIdx, CompanyStateCompleted, "")
+
+		if result.Status == "completed" && result.OffersParsed == 0 && result.ProductsCreated == 0 && result.ProductsUpdated == 0 {
+			result.Status = "no_products"
+		}
+
+		fmt.Printf("[IMPORT-UNIFIED] Completed %d companies + global recalc in %v (parsed=%d created=%d updated=%d)\n",
+			len(companies), time.Since(startTime), result.OffersParsed, result.ProductsCreated, result.ProductsUpdated)
+	}()
+
+	// Return immediately: the import is now running in the background. The
+	// client polls /admin/import-progress for live status and the final result.
+	httpres.WriteJSON(w, http.StatusAccepted, map[string]any{
+		"status":  "started",
+		"message": "Import started in the background. Poll /admin/import-progress for status.",
+	})
+}
+
+// companyResultState maps a CompanyImportResult status to a progress state.
+func companyResultState(cr CompanyImportResult) string {
+	switch cr.Status {
+	case "completed", "":
+		return CompanyStateCompleted
+	case "use_dedicated_endpoint", "no_files", "no_products":
+		return CompanyStateSkipped
+	default:
+		// download_error, error_* and anything else is a failure.
+		return CompanyStateFailed
 	}
-
-	if result.Status == "completed" && result.OffersParsed == 0 && result.ProductsCreated == 0 && result.ProductsUpdated == 0 {
-		result.Status = "no_products"
-	}
-
-	fmt.Printf("[IMPORT-UNIFIED] Completed %d companies in %v (parsed=%d created=%d updated=%d)\n",
-		len(companies), time.Since(startTime), result.OffersParsed, result.ProductsCreated, result.ProductsUpdated)
-
-	httpres.WriteJSON(w, http.StatusOK, result)
 }

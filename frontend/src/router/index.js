@@ -46,6 +46,7 @@ const routes = [
   { path: '/admin/installment-plans', name: 'admin-installment-plans', component: () => import('../views/admin/AdminInstallmentPlansView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/reviews', name: 'admin-reviews', component: () => import('../views/admin/AdminReviewsView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/comments', name: 'admin-comments', component: () => import('../views/admin/AdminCommentsView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
+  { path: '/admin/branding', name: 'admin-branding', component: () => import('../views/admin/AdminBrandingView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
 ];
 
 const router = createRouter({

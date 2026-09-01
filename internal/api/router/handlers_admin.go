@@ -248,6 +248,15 @@ func (d *Deps) adminImportUnified(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 }
 
+// GET /admin/import-progress — live progress of the current batch price import
+func (d *Deps) adminImportProgress(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		d.Handlers.HandleAdminImportProgress(w, r)
+		return
+	}
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
+
 // POST /admin/products/import
 func (d *Deps) adminProductsImport(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {

@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from './stores/auth';
 import CategoryTree from './components/CategoryTree.vue';
+import BrandingSlot from './components/BrandingSlot.vue';
 import CookieConsentBanner from './components/CookieConsentBanner.vue';
 import ShardUsageBar from './components/ShardUsageBar.vue';
 import BackToTop from './components/BackToTop.vue';
@@ -284,6 +285,23 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
+    <!-- Branding: full-width strip right under the header -->
+    <BrandingSlot slot-name="header_fullwidth" />
+
+    <!-- Branding: side gutters (wide screens only, content is 1568px) -->
+    <div class="hidden min-[1600px]:block fixed left-2 top-[18vh] z-10">
+      <BrandingSlot slot-name="side_left_top" />
+    </div>
+    <div class="hidden min-[1600px]:block fixed left-2 bottom-[18vh] z-10">
+      <BrandingSlot slot-name="side_left_bottom" />
+    </div>
+    <div class="hidden min-[1600px]:block fixed right-2 top-[18vh] z-10">
+      <BrandingSlot slot-name="side_right_top" />
+    </div>
+    <div class="hidden min-[1600px]:block fixed right-2 bottom-[18vh] z-10">
+      <BrandingSlot slot-name="side_right_bottom" />
+    </div>
+
     <!-- Mobile menu overlay -->
     <div
       v-if="mobileMenuOpen"
@@ -374,6 +392,9 @@ onBeforeUnmount(() => {
       <h1 class="sr-only">{{ t('common.app_name') }}</h1>
       <router-view />
     </main>
+
+    <!-- Branding: full-width strip right above the footer -->
+    <BrandingSlot slot-name="footer_fullwidth" />
 
     <!-- Footer -->
     <footer class="bg-surface border-t border-line py-4">

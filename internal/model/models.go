@@ -1,5 +1,10 @@
 package model
 
+import (
+	"fmt"
+	"strings"
+)
+
 // KeyValue is a generic key-value pair for attributes, constraints, contexts, etc.
 type KeyValue struct {
 	Key   string `json:"key"`
@@ -134,6 +139,23 @@ type PriceSourceConfig struct {
 	AvailabilityMap    map[string]string `json:"availability_map,omitempty"`     // raw value -> "in_stock"|"out_of_stock"
 	AttrFields         []AttrFieldMap    `json:"attr_fields,omitempty"`          // extra attributes to extract
 	HTMLAttrRules      []HTMLAttrRule    `json:"html_attr_rules,omitempty"`      // rules to extract attributes from HTML description
+}
+
+// Normalize canonicalizes the Format field so import dispatch is deterministic:
+// it trims and lowercases the value, maps the "xml" alias to "nokaut", and
+// defaults an empty value to "nokaut". Call this before persisting a
+// PriceSourceConfig so the stored format is always a valid, comparable value.
+func (p *PriceSourceConfig) Normalize() {
+	if p == nil {
+		return
+	}
+	p.Format = strings.ToLower(strings.TrimSpace(p.Format))
+	if p.Format == "xml" {
+		p.Format = "nokaut"
+	}
+	if p.Format == "" {
+		p.Format = "nokaut"
+	}
 }
 
 type Company struct {
@@ -650,4 +672,179 @@ type UserVote struct {
 	TargetType string   `json:"target_type"`
 	TargetID   int64    `json:"target_id"`
 	VoteType   VoteType `json:"vote_type"` // "like", "dislike", or "" if not voted
+}
+
+// --- Branding: page decoration system (banners for different occasions) ---
+
+// BrandSlot is a placement location for a branding element on the page.
+type BrandSlot string
+
+const (
+	BrandSlotHeaderFullwidth BrandSlot = "header_fullwidth"  // full width, right under the header
+	BrandSlotHomeBanner      BrandSlot = "home_banner"       // main page banner (hero area)
+	BrandSlotCategoryBanner  BrandSlot = "category_banner"   // category page banner
+	BrandSlotFooterFullwidth BrandSlot = "footer_fullwidth"  // full width, right above the footer
+	BrandSlotSideLeftTop     BrandSlot = "side_left_top"     // left column, top
+	BrandSlotSideLeftBottom  BrandSlot = "side_left_bottom"  // left column, bottom
+	BrandSlotSideRightTop    BrandSlot = "side_right_top"    // right column, top
+	BrandSlotSideRightBottom BrandSlot = "side_right_bottom" // right column, bottom
+)
+
+// BrandSlots lists all valid slots.
+var BrandSlots = []BrandSlot{
+	BrandSlotHeaderFullwidth,
+	BrandSlotHomeBanner,
+	BrandSlotCategoryBanner,
+	BrandSlotFooterFullwidth,
+	BrandSlotSideLeftTop,
+	BrandSlotSideLeftBottom,
+	BrandSlotSideRightTop,
+	BrandSlotSideRightBottom,
+}
+
+// BrandSlotValid reports whether s is a known slot.
+func BrandSlotValid(s BrandSlot) bool {
+	for _, v := range BrandSlots {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// Branding limits (server-side sanity guards, see docs/BRANDING_SYSTEM_PLAN.md).
+const (
+	BrandingMaxSetName    = 100  // max runes in a set name
+	BrandingMaxSetDesc    = 500  // max runes in a set description
+	BrandingMaxPatterns   = 10   // max page regex patterns per element
+	BrandingMaxPatternLen = 200  // max runes per pattern
+	BrandingMaxAltLen     = 200  // max runes in alt text
+	BrandingMaxLinkLen    = 2048 // max runes in a link URL
+)
+
+// BrandElement is one branding element in a specific slot.
+//
+// PagePatterns are JS-regex patterns matched against the current page path
+// (e.g. "/shop/telefony/samsung"). An empty list means "show on every page".
+// Multiple patterns are OR-ed: the element shows if any of them matches.
+type BrandElement struct {
+	Slot         BrandSlot `json:"slot"`
+	ImageURL     string    `json:"image_url"`                // light theme image
+	ImageDarkURL string    `json:"image_dark_url,omitempty"` // dark theme image (optional)
+	LinkURL      string    `json:"link_url,omitempty"`       // optional click-through link
+	AltText      string    `json:"alt_text,omitempty"`
+	PagePatterns []string  `json:"page_patterns,omitempty"`
+}
+
+// BrandSet is a named branding set (e.g. "New Year 2025"). It is the basic
+// management unit: it can be enabled/disabled at any moment, and its elements
+// are shown per the resolution rules (see docs/BRANDING_SYSTEM_PLAN.md 2.3).
+type BrandSet struct {
+	ID          int64          `json:"id"`
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	Enabled     bool           `json:"enabled"`
+	Priority    int            `json:"priority"` // higher wins on conflict
+	Elements    []BrandElement `json:"elements"` // at most one element per slot
+	CreatedAt   int64          `json:"created_at"`
+	UpdatedAt   int64          `json:"updated_at"`
+}
+
+// BrandCategoryTheme is a per-category (section) image override for a slot:
+// "different sections can have their own images in any place".
+// It applies while the visitor browses the given category (or its subtree).
+type BrandCategoryTheme struct {
+	ID           int64     `json:"id"`
+	CategoryID   int64     `json:"category_id"`
+	Slot         BrandSlot `json:"slot"`
+	ImageURL     string    `json:"image_url"`
+	ImageDarkURL string    `json:"image_dark_url,omitempty"`
+	LinkURL      string    `json:"link_url,omitempty"`
+	CreatedAt    int64     `json:"created_at"`
+	UpdatedAt    int64     `json:"updated_at"`
+}
+
+// BrandingActivePayload is the public response of GET /branding/active:
+// only enabled sets plus all category overrides, with a version for caching.
+type BrandingActivePayload struct {
+	Version           int64                `json:"version"`
+	Sets              []BrandSet           `json:"sets"`
+	CategoryOverrides []BrandCategoryTheme `json:"category_overrides"`
+}
+
+// ValidateBrandElement checks a single element's fields.
+func ValidateBrandElement(e *BrandElement) error {
+	if !BrandSlotValid(e.Slot) {
+		return fmt.Errorf("invalid slot %q", e.Slot)
+	}
+	if strings.TrimSpace(e.ImageURL) == "" {
+		return fmt.Errorf("image_url is required for slot %s", e.Slot)
+	}
+	if len(e.ImageDarkURL) > BrandingMaxLinkLen {
+		return fmt.Errorf("image_dark_url is too long")
+	}
+	if len(e.LinkURL) > BrandingMaxLinkLen {
+		return fmt.Errorf("link_url is too long")
+	}
+	if len([]rune(e.AltText)) > BrandingMaxAltLen {
+		return fmt.Errorf("alt_text is too long")
+	}
+	if len(e.PagePatterns) > BrandingMaxPatterns {
+		return fmt.Errorf("too many page_patterns (max %d)", BrandingMaxPatterns)
+	}
+	for _, p := range e.PagePatterns {
+		if len([]rune(p)) > BrandingMaxPatternLen {
+			return fmt.Errorf("page pattern too long (max %d runes)", BrandingMaxPatternLen)
+		}
+		if strings.TrimSpace(p) == "" {
+			return fmt.Errorf("empty page pattern")
+		}
+	}
+	return nil
+}
+
+// ValidateBrandSet checks set-level invariants: name, and at most one
+// element per slot.
+func ValidateBrandSet(s *BrandSet) error {
+	if strings.TrimSpace(s.Name) == "" {
+		return fmt.Errorf("name is required")
+	}
+	if len([]rune(s.Name)) > BrandingMaxSetName {
+		return fmt.Errorf("name is too long (max %d runes)", BrandingMaxSetName)
+	}
+	if len([]rune(s.Description)) > BrandingMaxSetDesc {
+		return fmt.Errorf("description is too long (max %d runes)", BrandingMaxSetDesc)
+	}
+	seen := make(map[BrandSlot]bool, len(s.Elements))
+	for i := range s.Elements {
+		if err := ValidateBrandElement(&s.Elements[i]); err != nil {
+			return fmt.Errorf("element %d: %w", i, err)
+		}
+		slot := s.Elements[i].Slot
+		if seen[slot] {
+			return fmt.Errorf("duplicate element for slot %s", slot)
+		}
+		seen[slot] = true
+	}
+	return nil
+}
+
+// ValidateBrandCatTheme checks a category theme's fields.
+func ValidateBrandCatTheme(t *BrandCategoryTheme) error {
+	if t.CategoryID <= 0 {
+		return fmt.Errorf("category_id is required")
+	}
+	if !BrandSlotValid(t.Slot) {
+		return fmt.Errorf("invalid slot %q", t.Slot)
+	}
+	if strings.TrimSpace(t.ImageURL) == "" {
+		return fmt.Errorf("image_url is required")
+	}
+	if len(t.ImageDarkURL) > BrandingMaxLinkLen {
+		return fmt.Errorf("image_dark_url is too long")
+	}
+	if len(t.LinkURL) > BrandingMaxLinkLen {
+		return fmt.Errorf("link_url is too long")
+	}
+	return nil
 }

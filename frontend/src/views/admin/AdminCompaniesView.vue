@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import api from '../../api';
 import { useToast } from '../../composables/useToast';
@@ -407,6 +407,9 @@ const openPriceModal = async (company) => {
       priceForm.value.price_source = { ...priceForm.value.price_source, ...priceSourceWithoutCurrency };
       if (!priceForm.value.price_source.attr_fields) priceForm.value.price_source.attr_fields = [];
       if (!priceForm.value.price_source.availability_map) priceForm.value.price_source.availability_map = {};
+      // Normalize format: empty -> 'nokaut' so the select always shows a valid
+      // value (companies saved before the format field had an empty string).
+      if (!priceForm.value.price_source.format) priceForm.value.price_source.format = 'nokaut';
     }
   } catch (e) {
     console.error('load price config:', e);
@@ -463,17 +466,14 @@ const savePriceConfig = async () => {
   }
 };
 
-// Import method options. 'saved' means: use the format stored in the
-// company's PriceSource.Format (saved in the DB).
-const importSources = [
-  { value: 'saved', label: 'Use saved format' },
+// Per-company price file formats that the unified (one-click) importer can
+// parse from a company's ImportURL. This is the ONLY set of valid per-company
+// formats: the form shows and saves exactly one of these per company (loaded
+// from the DB, no global "saved" override, no folder-based sources).
+const priceFormats = [
   { value: 'nokaut', label: 'XML (Nokaut)' },
   { value: 'json', label: 'JSON' },
-  { value: 'csv', label: 'CSV' },
-  { value: 'normalized', label: 'Normalized (JSONL)' },
-  { value: 'multi', label: 'Multi-company' },
 ];
-const importSource = ref('saved');
 
 const jsonImporting = ref(false);
 const jsonImportResult = ref(null);
@@ -500,25 +500,60 @@ const triggerJSONImport = async () => {
   }
 };
 
-// The unified endpoint handles per-company formats (saved/json/nokaut) using
-// the company's saved PriceSource.Format. Folder-based formats (csv/normalized/
-// multi) are still served by the legacy /admin/import-prices endpoint.
-const UNIFIED_SOURCES = ['saved', 'json', 'nokaut'];
+// The unified import endpoint is async: it returns 202 immediately and the run
+// proceeds in the background. This helper polls /admin/import-progress until the
+// run finishes (running=false) or the timeout elapses, returning the final
+// snapshot. The single-company import buttons use it to wait for their run and
+// display the real result (the POST response no longer carries it).
+const pollImportUntilDone = async (timeoutMs = 30 * 60 * 1000) => {
+  const start = Date.now();
+  let last = null;
+  while (Date.now() - start < timeoutMs) {
+    const res = await api.get('/admin/import-progress');
+    last = res.data;
+    if (last && !last.running) {
+      return last;
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  return last;
+};
+
+// Extract a single company's result from a progress snapshot into the shape the
+// import result panels expect.
+const companyResultFromProgress = (snap, companyName) => {
+  const c = (snap?.companies || []).find((x) => x.name === companyName) || (snap?.companies || [])[0];
+  if (!c) return { status: 'completed' };
+  return {
+    status: c.status === 'failed' ? 'error' : 'completed',
+    company: c.name,
+    format: c.format,
+    offers_parsed: c.offers_parsed,
+    products_created: c.products_created,
+    products_updated: c.products_updated,
+    products_skipped: c.products_skipped,
+    products_deleted: c.products_deleted,
+    message: c.error || '',
+  };
+};
 
 const triggerImport = async () => {
-  if (!selectedCompany.value) return;
+  if (!selectedCompany.value || !priceForm.value) return;
   importing.value = true;
   importResult.value = null;
   try {
-    const params = new URLSearchParams({ company: String(selectedCompany.value.id) });
-    if (importSource.value !== 'saved') {
-      params.set('source', importSource.value);
-    }
-    const endpoint = UNIFIED_SOURCES.includes(importSource.value)
-      ? '/admin/import-unified'
-      : '/admin/import-prices';
-    const res = await api.post(`${endpoint}?${params.toString()}`);
-    importResult.value = res.data;
+    // Import using the format shown in the form (this company's per-company
+    // format). It is always a URL-based format (nokaut/json), so the unified
+    // endpoint handles it. No global "saved" override — the form shows exactly
+    // what is stored for this company. The endpoint is async (202), so we poll
+    // for completion and read the result from the progress snapshot.
+    const params = new URLSearchParams({
+      company: String(selectedCompany.value.id),
+      source: priceForm.value.price_source.format,
+    });
+    await api.post(`/admin/import-unified?${params.toString()}`);
+    const snap = await pollImportUntilDone();
+    importResult.value = companyResultFromProgress(snap, selectedCompany.value.name);
   } catch (e) {
     importResult.value = { status: 'error', message: e.response?.data?.message || 'Import failed' };
   } finally {
@@ -554,11 +589,23 @@ const emptyUnifiedSettingsForm = () => ({
   delivery_time_ids: [],
   delivery_method_ids: [],
   installment_plan_ids: [],
+  // Carry the FULL price_source so saving the unified settings does not wipe
+  // the fields this modal does not display (ean_field, attr_fields, ...). The
+  // backend replaces the whole PriceSource struct on PATCH, so any field not
+  // sent here would be reset to its zero value.
   price_source: {
     import_url: '',
     import_folder: '',
     currency: '',
     format: 'nokaut',
+    ean_field: 'EAN',
+    previous_price_field: 'PreviousPrice',
+    image_field: 'ImageOriginalUrl',
+    product_url_field: 'ProductUrl',
+    brand_field: 'Producent',
+    shop_category_field: 'ShopProductCategory',
+    availability_map: {},
+    attr_fields: [],
     html_attr_rules: [],
   },
 });
@@ -582,10 +629,17 @@ const openUnifiedSettings = async (company) => {
     unifiedSettingsForm.value.price_source.import_folder = c.import_folder || '';
     // Load currency from settings
     unifiedSettingsForm.value.price_source.currency = c.settings?.currency || '';
-    // Load html_attr_rules and format from price_source
+    // Load the FULL price_source (not just the displayed fields) so the other
+    // fields round-trip on save and are not wiped by the backend's full-struct
+    // replacement.
     if (c.price_source) {
-      unifiedSettingsForm.value.price_source.html_attr_rules = c.price_source.html_attr_rules || [];
-      unifiedSettingsForm.value.price_source.format = c.price_source.format || 'nokaut';
+      const { currency: _psCur, ...ps } = c.price_source;
+      unifiedSettingsForm.value.price_source = { ...unifiedSettingsForm.value.price_source, ...ps };
+      if (!unifiedSettingsForm.value.price_source.attr_fields) unifiedSettingsForm.value.price_source.attr_fields = [];
+      if (!unifiedSettingsForm.value.price_source.availability_map) unifiedSettingsForm.value.price_source.availability_map = {};
+      if (!unifiedSettingsForm.value.price_source.html_attr_rules) unifiedSettingsForm.value.price_source.html_attr_rules = [];
+      // Normalize format: empty -> 'nokaut' so the value is always valid.
+      if (!unifiedSettingsForm.value.price_source.format) unifiedSettingsForm.value.price_source.format = 'nokaut';
     }
   } catch (e) {
     console.error('load unified settings:', e);
@@ -655,32 +709,202 @@ const saveUnifiedSettings = async () => {
   }
 };
 
-const unifiedImportSource = ref('saved');
 const unifiedNoDownload = ref(false);
 
 const triggerUnifiedImport = async () => {
-  if (!selectedCompany.value) return;
+  if (!selectedCompany.value || !unifiedSettingsForm.value) return;
   unifiedImporting.value = true;
   unifiedImportResult.value = null;
   try {
+    // Import using the format shown in the form (this company's per-company
+    // format). It is always a URL-based format (nokaut/json), so the unified
+    // endpoint handles it. No global "saved" override — the form shows exactly
+    // what is stored for this company. The endpoint is async (202), so we poll
+    // for completion and read the result from the progress snapshot.
     const params = new URLSearchParams({
       company: String(selectedCompany.value.id),
+      source: unifiedSettingsForm.value.price_source.format,
     });
-    if (unifiedImportSource.value !== 'saved') {
-      params.set('source', unifiedImportSource.value);
-    }
     if (unifiedNoDownload.value) {
       params.set('no_download', '1');
     }
-    const endpoint = UNIFIED_SOURCES.includes(unifiedImportSource.value)
-      ? '/admin/import-unified'
-      : '/admin/import-prices';
-    const res = await api.post(`${endpoint}?${params.toString()}`);
-    unifiedImportResult.value = res.data;
+    await api.post(`/admin/import-unified?${params.toString()}`);
+    const snap = await pollImportUntilDone();
+    unifiedImportResult.value = companyResultFromProgress(snap, selectedCompany.value.name);
   } catch (e) {
     unifiedImportResult.value = { status: 'error', message: e.response?.data?.message || 'Import failed' };
   } finally {
     unifiedImporting.value = false;
+  }
+};
+
+// --- Update ALL prices (one button) with live progress ---
+const updateAllRunning = ref(false);
+const updateAllResult = ref(null);
+const importProgress = ref(null);
+let progressTimer = null;
+
+// --- Company selection for the batch price import (checkboxes) ---
+// Maps company id -> selected. Only companies with an import source are shown,
+// and any combination can be selected (replaces the old single-company imports).
+const selectedImportCompanies = ref({});
+
+// Companies that have an import source (URL or folder) and can be imported.
+const importableCompanies = computed(() =>
+  (companies.value || []).filter((c) => c.import_url || c.import_folder)
+);
+
+const toggleAllImportCompanies = (selectAll) => {
+  const next = {};
+  for (const c of importableCompanies.value) next[c.id] = selectAll;
+  selectedImportCompanies.value = next;
+};
+
+// IDs of the currently selected importable companies (for the API call).
+const selectedImportIds = () =>
+  importableCompanies.value
+    .filter((c) => selectedImportCompanies.value[c.id])
+    .map((c) => String(c.id));
+
+// Number of selected companies (shown on the import button).
+const selectedImportCount = computed(
+  () => importableCompanies.value.filter((c) => selectedImportCompanies.value[c.id]).length
+);
+
+// Default: all importable companies are selected the first time the list loads
+// (so "Import" behaves like the old "Update All"). After that the user's
+// selection is preserved.
+let importSelectionInitialized = false;
+watch(
+  importableCompanies,
+  (list) => {
+    if (importSelectionInitialized) return;
+    if (!list || list.length === 0) return;
+    const next = {};
+    for (const c of list) next[c.id] = true;
+    selectedImportCompanies.value = next;
+    importSelectionInitialized = true;
+  },
+  { immediate: true }
+);
+
+// Map a backend step id to a localized label.
+const stepLabel = (step) => {
+  const map = {
+    download: t('admin.step_download'),
+    parse: t('admin.step_parse'),
+    attr_defs: t('admin.step_attr_defs'),
+    products: t('admin.step_products'),
+    cleanup: t('admin.step_cleanup'),
+    index: t('admin.step_index'),
+    ean_pages: t('admin.step_ean_pages'),
+    recalc: t('admin.step_recalc'),
+    sort_indexes: t('admin.step_sort_indexes'),
+    category_trees: t('admin.step_category_trees'),
+    commit: t('admin.step_commit'),
+    post_commit: t('admin.step_post_commit'),
+  };
+  return map[step] || step || '';
+};
+
+const fetchImportProgress = async () => {
+  try {
+    const res = await api.get('/admin/import-progress');
+    importProgress.value = res.data;
+    // The background run finished (running=false). If we are awaiting THIS run
+    // (the "Update All" button is active), finalize it: report the result and
+    // stop polling. (A resumed run after a page reload has updateAllRunning
+    // true as well, so it finalizes the same way.)
+    if (res.data && !res.data.running && updateAllRunning.value) {
+      finalizeUpdateAll(res.data);
+    }
+  } catch (e) {
+    console.error('fetch import progress:', e);
+  }
+};
+
+// Finalize the "Update All" run once the background import has completed.
+// The per-company results and counters come from the progress snapshot (the
+// async endpoint no longer returns them in the POST response).
+const finalizeUpdateAll = (progress) => {
+  updateAllRunning.value = false;
+  stopProgressPolling();
+  const parsed = progress.offers_parsed || 0;
+  const updated = progress.products_updated || 0;
+  const created = progress.products_created || 0;
+  const failed = (progress.companies || []).filter((c) => c.status === 'failed').length;
+  if (progress.status === 'failed') {
+    toast.error(t('admin.import_failed') || 'Import failed');
+  } else if (failed > 0) {
+    toast.info(`${t('admin.import_completed') || 'Import completed'} — ${failed} ${t('admin.import_failed') || 'failed'}`);
+  } else if (parsed === 0 && updated === 0 && created === 0) {
+    toast.info(t('admin.no_products_imported') || 'No products imported');
+  } else {
+    toast.success(`${t('admin.import_all_completed') || 'All prices updated'} — ${updated} ${t('admin.products_updated') || 'updated'}`);
+  }
+};
+
+const startProgressPolling = () => {
+  if (progressTimer) return;
+  fetchImportProgress();
+  progressTimer = setInterval(fetchImportProgress, 1500);
+};
+
+const stopProgressPolling = () => {
+  if (progressTimer) {
+    clearInterval(progressTimer);
+    progressTimer = null;
+  }
+};
+
+const updateAllPrices = async () => {
+  const ids = selectedImportIds();
+  if (ids.length === 0) {
+    toast.info(t('admin.select_company_to_import') || 'Select at least one company to import');
+    return;
+  }
+  updateAllRunning.value = true;
+  updateAllResult.value = null;
+  importProgress.value = null;
+  startProgressPolling();
+  try {
+    // Send the selected companies (checkboxes) via the `companies` param. The
+    // backend imports exactly those companies, using each company's saved
+    // format, and runs the global recalculation once after all of them. The
+    // endpoint is async: it returns 202 immediately and the import runs in the
+    // background. We keep polling /admin/import-progress (started above);
+    // finalizeUpdateAll reports the result and stops polling once running=false.
+    // Keeping the POST short means a browser/proxy timeout can no longer cancel
+    // or restart it.
+    await api.post('/admin/import-unified', null, { params: { companies: ids.join(',') } });
+    // 202: the run is in flight. Do NOT finalize here — fetchImportProgress
+    // will detect completion and call finalizeUpdateAll.
+  } catch (e) {
+    if (e.response?.status === 409) {
+      // Another import is already in flight; keep polling to show its progress.
+      toast.info(t('admin.import_in_progress') || 'Import already in progress');
+    } else if (e.response?.status === 200 && e.response?.data?.status === 'no_companies') {
+      // Nothing to import — no background run was started.
+      toast.info(t('admin.no_companies_to_import') || 'No companies with import sources');
+      updateAllRunning.value = false;
+      stopProgressPolling();
+    } else {
+      const msg = e.response?.data?.message || t('admin.import_failed') || 'Import failed';
+      toast.error(msg);
+      updateAllResult.value = { status: 'error', message: msg };
+      updateAllRunning.value = false;
+      stopProgressPolling();
+    }
+  }
+};
+
+// Resume the live progress view if an import is already running (e.g. after a
+// page reload mid-import).
+const resumeProgressIfRunning = async () => {
+  await fetchImportProgress();
+  if (importProgress.value && importProgress.value.running) {
+    updateAllRunning.value = true;
+    startProgressPolling();
   }
 };
 
@@ -690,7 +914,12 @@ watch(showSettingsModal, (open) => {
   document.body.style.overflow = open ? 'hidden' : '';
 });
 
-onMounted(fetchCompanies);
+onMounted(() => {
+  fetchCompanies();
+  resumeProgressIfRunning();
+});
+
+onBeforeUnmount(stopProgressPolling);
 </script>
 
 <template>
@@ -707,7 +936,110 @@ onMounted(fetchCompanies);
         <button @click="triggerImportAllFile" class="px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-medium hover:bg-sky-700 transition">
           ⬆ {{ t('admin.import_all') || 'Import All' }}
         </button>
+        <button @click="updateAllPrices" :disabled="updateAllRunning" class="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 transition disabled:opacity-50">
+          {{ updateAllRunning ? (t('admin.importing') || 'Importing...') : ((t('admin.import_selected') || 'Import Selected') + ` (${selectedImportCount})`) }}
+        </button>
         <input ref="importAllFileInput" type="file" accept=".json,application/json" class="hidden" @change="onImportAllFile" />
+      </div>
+    </div>
+
+    <!-- Price import: select any combination of companies to import -->
+    <div v-if="importableCompanies.length > 0" class="mb-6 bg-surface rounded-lg shadow-sm p-4">
+      <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+        <div class="text-sm font-semibold text-purple-700">
+          {{ t('admin.select_companies_to_import') || 'Select companies to import' }}
+        </div>
+        <div class="flex items-center gap-2">
+          <button @click="toggleAllImportCompanies(true)" class="text-xs text-purple-600 hover:underline">
+            {{ t('admin.select_all') || 'Select all' }}
+          </button>
+          <span class="text-ink-3">·</span>
+          <button @click="toggleAllImportCompanies(false)" class="text-xs text-purple-600 hover:underline">
+            {{ t('admin.deselect_all') || 'Deselect all' }}
+          </button>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        <label
+          v-for="c in importableCompanies"
+          :key="c.id"
+          class="flex items-center gap-2 px-3 py-2 rounded-md border border-surface-3 hover:bg-surface-2 cursor-pointer"
+        >
+          <input
+            type="checkbox"
+            :checked="!!selectedImportCompanies[c.id]"
+            @change="selectedImportCompanies[c.id] = $event.target.checked"
+            class="h-4 w-4 accent-purple-600"
+          />
+          <span class="text-sm">{{ c.name }}</span>
+          <span v-if="c.price_source && c.price_source.format" class="text-[11px] text-ink-3">({{ c.price_source.format }})</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Update all prices: live progress panel -->
+    <div v-if="importProgress && importProgress.status !== 'idle'" class="mb-6 bg-surface rounded-lg shadow-sm p-4">
+      <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+        <div class="text-sm font-semibold text-purple-700">
+          {{ t('admin.update_all_prices_title') || 'Update all prices' }}
+        </div>
+        <div v-if="importProgress.running" class="flex items-center gap-2 text-xs text-ink-3">
+          <div class="animate-spin h-4 w-4 border-2 border-purple-600 border-t-transparent rounded-full"></div>
+          {{ t('admin.import_running') || 'Running...' }}
+        </div>
+        <div v-else class="text-xs font-medium" :class="importProgress.status === 'failed' ? 'text-red-600' : 'text-green-600'">
+          {{ importProgress.status === 'failed' ? (t('admin.import_failed') || 'Failed') : (t('admin.import_completed') || 'Completed') }}
+        </div>
+      </div>
+
+      <!-- Active company + step -->
+      <div v-if="importProgress.running && importProgress.current_index > 0" class="text-sm mb-3 flex items-center gap-2 flex-wrap">
+        <span class="text-ink-3">{{ t('admin.company') || 'Company' }}:</span>
+        <span class="font-medium">{{ importProgress.current_index }}/{{ importProgress.total_companies }}</span>
+        <span class="font-semibold text-purple-700">{{ importProgress.current_company }}</span>
+        <span v-if="importProgress.current_format" class="text-xs text-ink-3">({{ importProgress.current_format }})</span>
+        <span class="text-ink-3 ml-2">{{ t('admin.step') || 'Step' }}: <span class="text-ink-2">{{ stepLabel(importProgress.step) }}</span></span>
+      </div>
+
+      <!-- Aggregate counters -->
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
+        <div class="bg-surface-2 rounded-md p-2 text-center">
+          <div class="text-lg font-bold">{{ importProgress.offers_parsed }}</div>
+          <div class="text-[11px] text-ink-3">{{ t('admin.count_processed') || 'Processed' }}</div>
+        </div>
+        <div class="bg-surface-2 rounded-md p-2 text-center">
+          <div class="text-lg font-bold text-blue-600">{{ importProgress.products_updated }}</div>
+          <div class="text-[11px] text-ink-3">{{ t('admin.count_updated') || 'Updated' }}</div>
+        </div>
+        <div class="bg-surface-2 rounded-md p-2 text-center">
+          <div class="text-lg font-bold text-green-600">{{ importProgress.products_created }}</div>
+          <div class="text-[11px] text-ink-3">{{ t('admin.count_added') || 'Added' }}</div>
+        </div>
+        <div class="bg-surface-2 rounded-md p-2 text-center">
+          <div class="text-lg font-bold text-red-600">{{ importProgress.products_deleted }}</div>
+          <div class="text-[11px] text-ink-3">{{ t('admin.count_deleted') || 'Deleted' }}</div>
+        </div>
+        <div class="bg-surface-2 rounded-md p-2 text-center">
+          <div class="text-lg font-bold text-yellow-600">{{ importProgress.products_skipped }}</div>
+          <div class="text-[11px] text-ink-3">{{ t('admin.count_skipped') || 'Skipped' }}</div>
+        </div>
+      </div>
+
+      <!-- Per-company status list -->
+      <div class="space-y-1 border-t border-line pt-2">
+        <div v-for="c in importProgress.companies" :key="c.index"
+             class="flex items-center gap-2 text-xs"
+             :class="(c.index === importProgress.current_index && importProgress.running) ? 'text-purple-700 font-medium' : 'text-ink-3'">
+          <span class="w-10 text-right tabular-nums">{{ c.index }}/{{ importProgress.total_companies }}</span>
+          <span class="flex-1 truncate">{{ c.name || '—' }}</span>
+          <span v-if="c.status === 'running'" class="text-purple-600 text-right">{{ stepLabel(c.step) }}</span>
+          <span v-else-if="c.status === 'completed'" class="text-green-600 text-right tabular-nums">
+            ✓ {{ c.offers_parsed }} · +{{ c.products_created }} · ~{{ c.products_updated }} · −{{ c.products_deleted }}
+          </span>
+          <span v-else-if="c.status === 'failed'" class="text-red-600 text-right">✗ {{ c.error }}</span>
+          <span v-else-if="c.status === 'skipped'" class="text-yellow-600 text-right">↷</span>
+          <span v-else class="text-ink-3 text-right">…</span>
+        </div>
       </div>
     </div>
 
@@ -854,22 +1186,6 @@ onMounted(fetchCompanies);
             <p class="text-xs text-ink-3 mt-1">{{ t('admin.import_url_hint') || 'URL to download the price file from. Saved to prices/<company>.xml on import.' }}</p>
           </div>
 
-          <!-- Import source selector -->
-          <div>
-            <label class="text-sm font-medium text-ink-2 block mb-1">{{ t('admin.import_source') || 'Import Source' }}</label>
-            <select v-model="importSource" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface">
-              <option v-for="src in importSources" :key="src.value" :value="src.value">{{ src.label }}</option>
-            </select>
-            <p class="text-xs text-ink-3 mt-1">
-              <template v-if="importSource === 'saved'">Uses the Format saved in this company's Price Source Config</template>
-              <template v-else-if="importSource === 'csv'">CSV files from _tmp/prices/*.csv</template>
-              <template v-else-if="importSource === 'normalized'">JSONL files from _tmp/normalized/</template>
-              <template v-else-if="importSource === 'multi'">Multi-company CSV from _tmp/prices/{company}/*.csv</template>
-              <template v-else-if="importSource === 'json'">JSON price file (productHeader + products array)</template>
-              <template v-else-if="importSource === 'nokaut'">Nokaut XML price file from company ImportURL (prices/&lt;company&gt;.xml)</template>
-            </p>
-          </div>
-
           <!-- Currency + visibility -->
           <div class="grid grid-cols-2 gap-3">
             <div>
@@ -910,7 +1226,7 @@ onMounted(fetchCompanies);
               <div>
                 <label class="text-xs text-ink-3 block">{{ t('admin.field_format') || 'Format' }}</label>
                 <select v-model="priceForm.price_source.format" class="w-full px-2 py-1 text-xs rounded-md border border-line bg-surface">
-                  <option v-for="src in importSources.filter(s => s.value !== 'saved')" :key="src.value" :value="src.value">{{ src.label }}</option>
+                  <option v-for="src in priceFormats" :key="src.value" :value="src.value">{{ src.label }}</option>
                 </select>
                 <p class="text-[10px] text-ink-3 mt-0.5">Method used to parse this company's price file on import</p>
               </div>
@@ -1008,9 +1324,6 @@ onMounted(fetchCompanies);
           <button @click="showPriceModal = false" class="px-3 py-1.5 text-xs rounded-md border border-line bg-surface hover:bg-surface-2">
             {{ t('admin.cancel') }}
           </button>
-          <button @click="triggerImport" :disabled="importing" class="px-3 py-1.5 text-xs rounded-md bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50">
-            {{ importing ? (t('admin.importing') || 'Importing...') : (t('admin.run_import') || 'Run Import') }}
-          </button>
           <button @click="savePriceConfig" :disabled="priceSaving" class="px-3 py-1.5 text-xs rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50">
             {{ priceSaving ? (t('admin.saving') || 'Saving...') : (t('admin.save') || 'Save') }}
           </button>
@@ -1076,6 +1389,13 @@ onMounted(fetchCompanies);
                 <input v-model="unifiedSettingsForm.price_source.import_url" type="text" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface" placeholder="https://example.com/prices/company.xml" />
               </div>
               <div>
+                <label class="text-xs text-ink-3 block mb-1">{{ t('admin.field_format') || 'Format' }}</label>
+                <select v-model="unifiedSettingsForm.price_source.format" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface">
+                  <option v-for="fmt in priceFormats" :key="fmt.value" :value="fmt.value">{{ fmt.label }}</option>
+                </select>
+                <p class="text-[10px] text-ink-3 mt-0.5">{{ t('admin.format_hint') || 'How this company\'s price file is parsed. Loaded from and saved to this company.' }}</p>
+              </div>
+              <div>
                 <label class="text-xs text-ink-3 block mb-1">{{ t('admin.currency') || 'Currency' }}</label>
                 <select v-model="unifiedSettingsForm.price_source.currency" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface">
                   <option v-for="cur in currencies" :key="cur" :value="cur">{{ cur }}</option>
@@ -1111,14 +1431,6 @@ onMounted(fetchCompanies);
             </div>
           </div>
 
-          <!-- Import source selector -->
-          <div>
-            <label class="text-sm font-medium text-ink-2 block mb-1">{{ t('admin.import_source') || 'Import Source' }}</label>
-            <select v-model="unifiedImportSource" class="w-full px-2 py-1 text-sm rounded-md border border-line bg-surface">
-              <option v-for="src in importSources" :key="src.value" :value="src.value">{{ src.label }}</option>
-            </select>
-          </div>
-
           <!-- No download checkbox -->
           <div>
             <label class="inline-flex items-center gap-2 text-xs text-ink-3 cursor-pointer">
@@ -1127,16 +1439,6 @@ onMounted(fetchCompanies);
             </label>
           </div>
 
-          <!-- Import button -->
-          <div class="flex justify-between items-center">
-            <button @click="triggerUnifiedImport" :disabled="unifiedImporting" class="px-3 py-1.5 text-xs rounded-md bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50">
-              {{ unifiedImporting ? (t('admin.importing') || 'Importing...') : (t('admin.run_import') || 'Run Import') }}
-            </button>
-            <div v-if="unifiedImportResult" class="text-sm text-ink-3">
-              {{ unifiedImportResult.status === 'error' ? unifiedImportResult.message : 
-                 `Parsed: ${unifiedImportResult.offers_parsed} | Created: ${unifiedImportResult.products_created} | Updated: ${unifiedImportResult.products_updated}` }}
-            </div>
-          </div>
         </div>
 
         <div class="mt-4 flex justify-end gap-2">
