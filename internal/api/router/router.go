@@ -392,6 +392,9 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	// Hashed build artifacts are immutable — cache them for a year.
 	mux.Handle("/assets/", cachedAssetServer(distDir))
 	mux.Handle("/favicon.svg", http.FileServer(distDir))
+	// Classic .ico fallback: browsers request /favicon.ico by default even
+	// when the HTML declares an SVG icon; without this route it 404s.
+	mux.Handle("/favicon.ico", http.FileServer(distDir))
 	mux.Handle("/icons.svg", http.FileServer(distDir))
 	mux.Handle("/koshik.png", http.FileServer(distDir))
 

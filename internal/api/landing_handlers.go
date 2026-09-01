@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -25,34 +26,65 @@ import (
 // browserAssetTags holds the <script>/<link> tags extracted from the built
 // frontend index.html, so browser (non-bot) SSR pages reference the real
 // production bundles. Defaults to the dev entry point when dist/ is absent.
-var browserAssetTags = `<script type="module" src="/src/main.js"></script>`
+//
+// The tags are kept in sync with frontend rebuilds: refreshBrowserAssetTags
+// re-extracts them whenever dist/index.html is modified on disk (mtime check),
+// so SSR pages pick up a new frontend build without a server restart.
+var (
+	browserAssetTags = `<script type="module" src="/src/main.js"></script>`
+	browserTagsMu    sync.RWMutex
+	browserTagsMtime time.Time
+)
 
-// LoadBrowserAssetTags reads frontend/dist/index.html and extracts the
-// production asset tags (script/link tags with src or href). Call once at
-// startup. If the built index.html is missing, it keeps the dev fallback so
-// local development (Vite dev server) still works.
+var browserTagsRe = regexp.MustCompile(`<script[^>]*src=["'][^"']*["'][^>]*></script>|<link[^>]*href=["'][^"']*["'][^>]*>`)
+
+// LoadBrowserAssetTags performs the initial extraction of production asset
+// tags from frontend/dist/index.html. Called once at startup; afterwards
+// refreshBrowserAssetTags (invoked from browserScriptEnd) keeps the tags in
+// sync with frontend rebuilds. If the built index.html is missing, the dev
+// fallback is kept so local development (Vite dev server) still works.
 func LoadBrowserAssetTags() {
+	refreshBrowserAssetTags()
+}
+
+// refreshBrowserAssetTags re-extracts the asset tags when dist/index.html is
+// newer than the last extraction. Cheap in the common case (one os.Stat);
+// safe for concurrent use.
+func refreshBrowserAssetTags() {
+	fi, err := os.Stat("frontend/dist/index.html")
+	if err != nil {
+		return
+	}
+	browserTagsMu.RLock()
+	unchanged := !fi.ModTime().After(browserTagsMtime)
+	browserTagsMu.RUnlock()
+	if unchanged {
+		return
+	}
 	data, err := os.ReadFile("frontend/dist/index.html")
 	if err != nil {
 		return
 	}
-	re := regexp.MustCompile(`<script[^>]*src=["'][^"']*["'][^>]*></script>|<link[^>]*href=["'][^"']*["'][^>]*>`)
-	tags := re.FindAllString(string(data), -1)
-	if len(tags) > 0 {
-		browserAssetTags = strings.Join(tags, "\n  ")
-		// Update the shared script-end used by the EAN list browser path.
-		htmlScriptEnd = []byte(`</script>
-  ` + browserAssetTags + `
-</body>
-</html>`)
+	tags := browserTagsRe.FindAllString(string(data), -1)
+	if len(tags) == 0 {
+		return
 	}
+	browserTagsMu.Lock()
+	browserAssetTags = strings.Join(tags, "\n  ")
+	browserTagsMtime = fi.ModTime()
+	browserTagsMu.Unlock()
 }
 
 // browserScriptEnd returns the closing HTML for browser SSR pages, using the
-// production asset tags (or the dev fallback).
+// production asset tags (or the dev fallback). It refreshes the tags first so
+// a frontend rebuild is picked up without a server restart.
 func browserScriptEnd() []byte {
+	refreshBrowserAssetTags()
+	browserTagsMu.RLock()
+	tags := browserAssetTags
+	browserTagsMu.RUnlock()
 	return []byte(`</script>
-  ` + browserAssetTags + `
+  ` + tags + `
 </body>
 </html>`)
 }
@@ -976,7 +1008,7 @@ func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title stri
 	}
 	w.Write(htmlBodyStart)
 	writeSafeJSONWithPool(w, &data, eanListRespRegistry)
-	w.Write(htmlScriptEnd)
+	w.Write(browserScriptEnd())
 }
 
 // siteNameFromBaseURL derives the human-readable site name from a base URL
@@ -1050,10 +1082,6 @@ var (
 <body>
   <div id="app"></div>
   <script>window.__INITIAL_DATA__=`)
-	htmlScriptEnd = []byte(`</script>
-  <script type="module" src="/src/main.js"></script>
-</body>
-</html>`)
 )
 
 func writeEscapedString(w http.ResponseWriter, s string) {

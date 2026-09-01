@@ -2,6 +2,10 @@ import { ref, onMounted } from 'vue';
 import api from '../api';
 
 const defaultCurrency = ref('PLN');
+// Manual hero text overrides for the main page:
+// { ru: {headline, sub, tagline}, ua: {...}, en: {...}, pl: {...} }
+// Empty/missing fields mean "use the default i18n text".
+const homeHero = ref({});
 const loaded = ref(false);
 
 export function useSettings() {
@@ -10,6 +14,7 @@ export function useSettings() {
     try {
       const res = await api.get('/admin/settings');
       defaultCurrency.value = res.data.default_currency || 'PLN';
+      homeHero.value = res.data.home_hero || {};
     } catch (e) {
       console.error('Failed to load settings:', e);
     } finally {
@@ -23,6 +28,7 @@ export function useSettings() {
 
   return {
     defaultCurrency,
+    homeHero,
     loadSettings,
   };
 }

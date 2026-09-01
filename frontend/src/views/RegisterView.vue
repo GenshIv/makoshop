@@ -3,6 +3,7 @@ import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '../stores/auth';
+import LogoMark from '../components/LogoMark.vue';
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -39,6 +40,9 @@ const register = async () => {
 <template>
   <div class="min-h-[60vh] flex items-center justify-center px-4">
     <div class="w-full max-w-md bg-surface rounded-xl border border-line shadow-sm p-6 sm:p-8">
+      <router-link to="/" class="logo-link flex justify-center mb-5" :aria-label="t('common.app_name')">
+        <LogoMark class="h-9 w-auto text-ink" />
+      </router-link>
       <h1 class="text-2xl font-bold mb-6 text-center text-ink">{{ t('auth.register') }}</h1>
 
       <div v-if="error" class="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm theme-dark:bg-red-900/30 theme-dark:text-red-300">

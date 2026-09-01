@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -509,6 +510,41 @@ func (h *Handlers) HandleCompanyGetWithSettings(w http.ResponseWriter, r *http.R
 	})
 }
 
+// --- Home page hero text (manual management) ---
+
+// homeHeroLangs are the locales with a hero text override on the main page.
+var homeHeroLangs = []string{"ru", "ua", "en", "pl"}
+
+// homeHeroFields are the hero block fields that can be overridden per locale.
+var homeHeroFields = []string{"headline", "sub", "tagline"}
+
+// homeHeroFieldMaxLen caps a single hero text field (defense against garbage).
+const homeHeroFieldMaxLen = 300
+
+// normalizeHomeHero validates and normalizes the home hero text payload
+// (per-locale overrides for the main page hero block). Unknown locales and
+// fields are dropped; an empty string means "use the default i18n text".
+func normalizeHomeHero(raw map[string]interface{}) (map[string]map[string]string, error) {
+	result := map[string]map[string]string{}
+	for _, lang := range homeHeroLangs {
+		block, ok := raw[lang].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		texts := map[string]string{}
+		for _, field := range homeHeroFields {
+			v, _ := block[field].(string)
+			v = strings.TrimSpace(v)
+			if len(v) > homeHeroFieldMaxLen {
+				return nil, fmt.Errorf("home hero %s.%s: max %d characters", lang, field, homeHeroFieldMaxLen)
+			}
+			texts[field] = v
+		}
+		result[lang] = texts
+	}
+	return result, nil
+}
+
 // HandleGlobalSettingsGet returns global settings including default currency.
 // GET /admin/settings
 func (h *Handlers) HandleGlobalSettingsGet(w http.ResponseWriter, r *http.Request) {
@@ -519,6 +555,7 @@ func (h *Handlers) HandleGlobalSettingsGet(w http.ResponseWriter, r *http.Reques
 
 	defaultCurrency := "PLN" // default currency
 	gaMeasurementID := ""    // Google Analytics measurement ID (empty = GA disabled)
+	homeHero := map[string]map[string]string{}
 	if h.Store != nil {
 		store := h.Store()
 		if val, err := store.DocGet("global_settings"); err == nil && len(val) > 0 {
@@ -530,6 +567,11 @@ func (h *Handlers) HandleGlobalSettingsGet(w http.ResponseWriter, r *http.Reques
 				if ga, ok := settings["ga_measurement_id"].(string); ok {
 					gaMeasurementID = strings.TrimSpace(ga)
 				}
+				if raw, ok := settings["home_hero"].(map[string]interface{}); ok {
+					if hh, err := normalizeHomeHero(raw); err == nil {
+						homeHero = hh
+					}
+				}
 			}
 		}
 	}
@@ -537,6 +579,7 @@ func (h *Handlers) HandleGlobalSettingsGet(w http.ResponseWriter, r *http.Reques
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"default_currency":  defaultCurrency,
 		"ga_measurement_id": gaMeasurementID,
+		"home_hero":         homeHero,
 	})
 }
 
@@ -549,8 +592,9 @@ func (h *Handlers) HandleGlobalSettingsUpdate(w http.ResponseWriter, r *http.Req
 	}
 
 	var req struct {
-		DefaultCurrency string `json:"default_currency,omitempty"`
-		GaMeasurementID string `json:"ga_measurement_id"`
+		DefaultCurrency string                 `json:"default_currency,omitempty"`
+		GaMeasurementID string                 `json:"ga_measurement_id"`
+		HomeHero        map[string]interface{} `json:"home_hero"`
 	}
 	if !httpres.ReadJSON(w, r, &req) {
 		return
@@ -578,6 +622,17 @@ func (h *Handlers) HandleGlobalSettingsUpdate(w http.ResponseWriter, r *http.Req
 	// admins can both set and clear it from the settings UI.
 	settings["ga_measurement_id"] = strings.TrimSpace(req.GaMeasurementID)
 
+	// Home hero text (manual management of the main page hero block).
+	// When provided, the whole per-locale payload is replaced.
+	if req.HomeHero != nil {
+		hh, err := normalizeHomeHero(req.HomeHero)
+		if err != nil {
+			httpres.WriteError(w, http.StatusBadRequest, "INVALID_PARAM", err.Error())
+			return
+		}
+		settings["home_hero"] = hh
+	}
+
 	// Save
 	data, err := json.Marshal(settings)
 	if err != nil {
@@ -593,5 +648,6 @@ func (h *Handlers) HandleGlobalSettingsUpdate(w http.ResponseWriter, r *http.Req
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"default_currency":  settings["default_currency"],
 		"ga_measurement_id": settings["ga_measurement_id"],
+		"home_hero":         settings["home_hero"],
 	})
 }

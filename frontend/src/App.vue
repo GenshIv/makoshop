@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { useAuthStore } from './stores/auth';
 import CategoryTree from './components/CategoryTree.vue';
 import BrandingSlot from './components/BrandingSlot.vue';
+import LogoMark from './components/LogoMark.vue';
 import CookieConsentBanner from './components/CookieConsentBanner.vue';
 import ShardUsageBar from './components/ShardUsageBar.vue';
 import BackToTop from './components/BackToTop.vue';
@@ -154,8 +155,10 @@ onBeforeUnmount(() => {
               {{ t('common.categories') }}
             </button>
 
-            <!-- Logo -->
-            <router-link to="/" class="transition-opacity hover:opacity-80">
+            <!-- Logo: MK monogram mark + wordmark. The mark is hidden on
+                 very small screens to keep the mobile header layout intact. -->
+            <router-link to="/" class="logo-link flex items-center gap-2.5 transition-opacity hover:opacity-80">
+              <LogoMark class="hidden sm:block h-8 w-auto text-ink" />
               <span class="text-2xl font-extrabold tracking-tight whitespace-nowrap text-accent">
                 wszyst<span class="text-ink-2">.pl</span>
               </span>

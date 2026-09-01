@@ -290,17 +290,117 @@ router-link:not(.btn):not([class*="bg-surface"]) {
 }
 
 .link-btn:hover,
-a:not(.btn):not([class*="bg-surface"]):hover,
-router-link:not(.btn):not([class*="bg-surface"]):hover {
+/* .logo-link is excluded: the logo has its own hover effect (hand-drawn
+    redraw), and a background highlight behind it breaks the finish. */
+a:not(.btn):not([class*="bg-surface"]):not(.logo-link):hover,
+router-link:not(.btn):not([class*="bg-surface"]):not(.logo-link):hover {
   background-color: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent-hover);
   text-decoration: none !important;
 }
 
 .theme-dark .link-btn:hover,
-.theme-dark a:not(.btn):not([class*="bg-surface"]):hover,
-.theme-dark router-link:not(.btn):not([class*="bg-surface"]):hover {
+.theme-dark a:not(.btn):not([class*="bg-surface"]):not(.logo-link):hover,
+.theme-dark router-link:not(.btn):not([class*="bg-surface"]):not(.logo-link):hover {
   background-color: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+/* ====== Brand logo mark (MK monogram) ======
+   The mark is two interlocking sharp strokes:
+   - .mark-base   inherits currentColor (parent sets text-ink etc.)
+   - .mark-accent uses the brand accent, so both adapt to light/dark.
+   The parent sets the height (h-8, h-9, ...); the width follows the
+   intrinsic 632:352 ratio. */
+.logo-mark-svg {
+  aspect-ratio: 632 / 352;
+}
+.logo-mark-svg .mark-base {
+  fill: currentColor;
+}
+.logo-mark-svg .mark-accent {
+  fill: var(--accent);
+}
+/* pathLength="1" (on the paths) normalizes each outline to length 1, so the
+   dash values below are fractions of the full contour — no pixel measuring.
+   The stroke ("pen") is only set while a drawing animation runs. */
+.logo-mark-svg .mark-base,
+.logo-mark-svg .mark-accent {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  transition: fill-opacity 0.2s ease;
+}
+
+/* Shared "pen" for the drawing animations (entrance + hover).
+   stroke-width is in the paths' user space (the group scales by 0.1):
+   150 ≈ 15 viewBox units ≈ 1.4px at the header size (h-8). */
+.logo-draw .mark-base,
+.logo-link:hover .mark-base {
+  stroke: currentColor;
+  stroke-width: 150;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.logo-draw .mark-accent,
+.logo-link:hover .mark-accent {
+  stroke: var(--accent);
+  stroke-width: 150;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Entrance: the mark draws itself in on first render — the pen traces the
+   contour from empty, then the fill returns. .logo-draw is present from the
+   first render and dropped by LogoMark.vue after the animation completes. */
+@keyframes mark-draw-load {
+  0% {
+    stroke-dashoffset: 1;
+    fill-opacity: 0;
+  }
+  65% {
+    stroke-dashoffset: 0;
+    fill-opacity: 0;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    fill-opacity: 1;
+  }
+}
+
+.logo-draw .mark-base {
+  animation: mark-draw-load 1s ease-in-out both;
+}
+.logo-draw .mark-accent {
+  animation: mark-draw-load 1s ease-in-out 0.3s both;
+}
+
+/* Hand-drawn hover: the fill clears, then the "pen" traces the contour
+   from the path start (dashoffset 1 → 0), then the fill returns. The accent
+   stroke starts 0.3s later, so the two letters are drawn in sequence — like
+   a hand writing the mark. */
+@keyframes mark-draw {
+  0% {
+    stroke-dashoffset: 1;
+    fill-opacity: 1;
+  }
+  8% {
+    stroke-dashoffset: 1;
+    fill-opacity: 0;
+  }
+  70% {
+    stroke-dashoffset: 0;
+    fill-opacity: 0;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    fill-opacity: 1;
+  }
+}
+
+.logo-link:hover .mark-base {
+  animation: mark-draw 1s ease-in-out both;
+}
+.logo-link:hover .mark-accent {
+  animation: mark-draw 1s ease-in-out 0.3s both;
 }
 
 /* Themed scrollbars (WebKit) */
