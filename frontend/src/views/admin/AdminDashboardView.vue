@@ -359,6 +359,10 @@ onMounted(() => {
           <div class="font-medium">🎨 {{ t('admin.branding.title') || 'Branding' }}</div>
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.branding.desc') || 'Page decoration sets & banners' }}</div>
         </router-link>
+        <router-link to="/admin/seo" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">🔍 {{ t('admin.seo.title') || 'SEO' }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('admin.seo.desc') || 'Structured data (JSON-LD) for search engines' }}</div>
+        </router-link>
       </div>
     </div>
 

@@ -34,9 +34,12 @@ const charts = ref({});
 // ─────────────────────────────────────────────────────────────
 const sum = (arr) => (arr || []).reduce((a, b) => a + (b || 0), 0);
 
-const currentHour = () => new Date().getHours();
-const currentDow = () => new Date().getDay();
-const currentDom = () => new Date().getDate();
+// The backend buckets visits by UTC time (see stats.StatsCollector), so all
+// period alignment and "current" lookups must use UTC components — the
+// browser's local time would shift the carousel by the timezone offset.
+const currentHour = () => new Date().getUTCHours();
+const currentDow = () => new Date().getUTCDay();
+const currentDom = () => new Date().getUTCDate();
 
 const nf = new Intl.NumberFormat();
 const fmtNum = (n) => nf.format(n || 0);
@@ -47,6 +50,18 @@ const totalAll = computed(() => totalHuman.value + totalBot.value);
 const humanShare = computed(() =>
   totalAll.value > 0 ? Math.round((totalHuman.value / totalAll.value) * 100) : 0
 );
+
+// Visits of the current UTC hour (backend bucket index == UTC hour).
+const nowVisits = computed(() =>
+  (summary.value?.HumanVisitsByHour?.[currentHour()] || 0) +
+    (summary.value?.BotVisitsByHour?.[currentHour()] || 0)
+);
+
+const pad2 = (n) => String(n).padStart(2, '0');
+const nowHourRange = computed(() => {
+  const h = currentHour();
+  return `${pad2(h)}:00 – ${pad2((h + 1) % 24)}:00 UTC`;
+});
 
 const hourLabels = computed(() => {
   const base = [
@@ -124,8 +139,10 @@ const referrerRows = computed(() => {
   return Object.entries(referrers.value || {})
     .map(([domain, r]) => ({
       domain,
-      total: sum(r.visits),
-      current: r.visits?.[currentHour()] || 0,
+      // The API returns the Go struct field name "Visits" (capital V),
+      // matching HumanVisitsByHour/TotalHumanVisits used elsewhere here.
+      total: sum(r.Visits),
+      current: r.Visits?.[currentHour()] || 0,
     }))
     .sort((a, b) => b.total - a.total);
 });
@@ -134,8 +151,8 @@ const pathRows = computed(() => {
   return Object.entries(paths.value || {})
     .map(([id, p]) => ({
       id,
-      total: sum(p.visits),
-      current: p.visits?.[currentHour()] || 0,
+      total: sum(p.Visits),
+      current: p.Visits?.[currentHour()] || 0,
     }))
     .filter(p => p.total > 0)
     .sort((a, b) => b.total - a.total);
@@ -221,8 +238,8 @@ const useragentRows = computed(() => {
   return Object.entries(useragents.value || {})
     .map(([browser, ua]) => ({
       browser,
-      total: sum(ua.visits),
-      current: ua.visits?.[currentHour()] || 0,
+      total: sum(ua.Visits),
+      current: ua.Visits?.[currentHour()] || 0,
     }))
     .sort((a, b) => b.total - a.total);
 });
@@ -624,9 +641,9 @@ watch(locale, () => {
             </div>
           </div>
           <div class="mt-2 text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-            {{ fmtNum((summary.HumanVisitsByHour?.[new Date().getHours()] || 0) + (summary.BotVisitsByHour?.[new Date().getHours()] || 0)) }}
+            {{ fmtNum(nowVisits) }}
           </div>
-          <div class="mt-1 text-xs text-ink-3">{{ new Date().getHours() }}:00 - {{ (new Date().getHours() + 1) % 24 }}:00</div>
+          <div class="mt-1 text-xs text-ink-3">{{ nowHourRange }}</div>
         </div>
       </div>
 

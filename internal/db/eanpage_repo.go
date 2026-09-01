@@ -896,19 +896,24 @@ func cloneKeyValueSlice(src []model.KeyValue) []model.KeyValue {
 }
 
 // ComputeSeoURL builds seo_url for a EAN page: "/shop/{treePath}/{slug}"
-// Uses treePathCache to avoid repeated DB calls.
+// Uses treePathCache to avoid repeated DB calls. treePathCache may be nil
+// (single-item callers); in that case the path is computed without caching.
 func (r *EANPageRepo) ComputeSeoURL(slug string, categoryID int64, treePathCache map[int64][]string) string {
 	if categoryID == 0 || r.CategoryRepo == nil {
 		return "/shop/" + slug
 	}
 
-	treePath, cached := treePathCache[categoryID]
-	if !cached {
-		var err error
-		treePath, err = r.CategoryRepo.GetTreePath(categoryID)
-		if err != nil || len(treePath) == 0 {
-			return "/shop/" + slug
+	if treePathCache != nil {
+		if treePath, cached := treePathCache[categoryID]; cached {
+			return "/shop/" + strings.Join(treePath, "/") + "/" + slug
 		}
+	}
+
+	treePath, err := r.CategoryRepo.GetTreePath(categoryID)
+	if err != nil || len(treePath) == 0 {
+		return "/shop/" + slug
+	}
+	if treePathCache != nil {
 		treePathCache[categoryID] = treePath
 	}
 

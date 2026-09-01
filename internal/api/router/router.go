@@ -288,6 +288,9 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.Handle("/admin/branding/sets/", d.JWT.RequireRole(http.HandlerFunc(d.adminBrandingSet), model.RoleAdmin))
 	mux.Handle("/admin/branding/category-overrides", d.JWT.RequireRole(http.HandlerFunc(d.adminBrandingCatThemes), model.RoleAdmin))
 
+	// SEO structured data (JSON-LD) settings (admin)
+	mux.Handle("/admin/seo/settings", d.JWT.RequireRole(http.HandlerFunc(d.adminSeoSettings), model.RoleAdmin))
+
 	// Companies (public read, admin write)
 	mux.HandleFunc("/companies", d.companies)
 

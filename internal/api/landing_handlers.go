@@ -662,7 +662,7 @@ func (h *Handlers) handleEANPageCatalog(w http.ResponseWriter, r *http.Request, 
 		}
 
 		if wantsHTML(r) {
-			writeHTMLResponseEANList(w, r, i18n.T("ui.catalog_title"), h.siteBaseURL(), respData)
+			writeHTMLResponseEANList(w, r, i18n.T("ui.catalog_title"), h.siteBaseURL(), respData, h.seoSettings(), nil)
 			return
 		}
 		writeJSONEANList(w, r, http.StatusOK, respData)
@@ -767,10 +767,45 @@ func (h *Handlers) writeEANPageResponse(w http.ResponseWriter, r *http.Request, 
 
 	title := sp.Title + " — " + h.siteName()
 	if wantsHTML(r) {
-		writeHTMLResponseEANList(w, r, title, h.siteBaseURL(), respData)
+		// Fetch approved reviews for the products sharing this EAN (for the
+		// Product JSON-LD `review`/`aggregateRating` fields). Capped to avoid
+		// excessive DB calls on pages with many products.
+		reviews := h.fetchReviewsForProducts(products, 20)
+		writeHTMLResponseEANList(w, r, title, h.siteBaseURL(), respData, h.seoSettings(), reviews)
 		return
 	}
 	writeJSONEANList(w, r, http.StatusOK, respData)
+}
+
+// fetchReviewsForProducts collects approved reviews for the given products
+// (capped at maxTotal) for structured data. Errors are ignored (reviews are
+// best-effort; the page still renders without them).
+func (h *Handlers) fetchReviewsForProducts(products []model.Product, maxTotal int) []model.Review {
+	if h.reviewRepo == nil || len(products) == 0 || maxTotal <= 0 {
+		return nil
+	}
+	var reviews []model.Review
+	seen := make(map[int64]struct{})
+	for _, p := range products {
+		if len(reviews) >= maxTotal {
+			break
+		}
+		if p.ID == 0 {
+			continue
+		}
+		if _, ok := seen[p.ID]; ok {
+			continue
+		}
+		seen[p.ID] = struct{}{}
+		perProduct := maxTotal - len(reviews)
+		if perProduct > 10 {
+			perProduct = 10
+		}
+		if rvs, _, err := h.reviewRepo.ListByProduct(p.ID, 1, perProduct, string(model.ReviewStatusApproved)); err == nil {
+			reviews = append(reviews, rvs...)
+		}
+	}
+	return reviews
 }
 
 // isBot checks if the request is from a search engine bot
@@ -811,7 +846,7 @@ func wantsHTML(r *http.Request) bool {
 
 // writeHTMLResponse writes an HTML page with embedded data for SSR
 // For bots: full SSR with inline content. For browsers: minimal HTML + JS.
-func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title string, baseURL string, data db.EANListRespData) {
+func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title string, baseURL string, data db.EANListRespData, seo *model.SEOSettings, reviews []model.Review) {
 	ctx := r.Context()
 	headOnly := r.Method == http.MethodHead
 
@@ -832,7 +867,18 @@ func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title stri
 	seoURL := data.SEOURL
 	desc := siteNameFromBaseURL(baseURL) + " — маркетплейс товаров по лучшим ценам от проверенных поставщиков."
 	image := ""
-	jsonLD := ""
+
+	// JSON-LD structured data (SEO): site-level blocks (Organization, WebSite,
+	// OnlineStore) on every page; product-level blocks (Product, BreadcrumbList,
+	// OnlineStore) on EAN pages.
+	fallbackName := siteNameFromBaseURL(baseURL)
+	var ldBlocks []string
+	if seo != nil && seo.Enabled {
+		ldBlocks = append(ldBlocks, buildSiteJSONLDBlocks(seo, baseURL, fallbackName)...)
+		if ep := data.EANPage; ep != nil {
+			ldBlocks = append(ldBlocks, buildProductJSONLDBlocks(seo, baseURL, ep, data.Products, reviews, data.TreePath, data.TreePathFull)...)
+		}
+	}
 
 	if ep := data.EANPage; ep != nil {
 		if ep.Description != "" {
@@ -841,7 +887,6 @@ func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title stri
 		if len(ep.Images) > 0 {
 			image = ep.Images[0]
 		}
-		jsonLD = buildEANProductJSONLD(baseURL, ep)
 	}
 
 	canonicalTag := ""
@@ -857,8 +902,8 @@ func writeHTMLResponseEANList(w http.ResponseWriter, r *http.Request, title stri
 	}
 
 	jsonLDTag := ""
-	if jsonLD != "" {
-		jsonLDTag = `  <script type="application/ld+json">` + jsonLD + `</script>
+	for _, b := range ldBlocks {
+		jsonLDTag += `  <script type="application/ld+json">` + b + `</script>
 `
 	}
 
@@ -948,68 +993,6 @@ func siteNameFromBaseURL(baseURL string) string {
 		}
 	}
 	return "MakoShop"
-}
-
-// buildEANProductJSONLD constructs schema.org Product/Offer JSON-LD for an EAN
-// page, enabling rich results (price, image, brand). Returns "" when there is
-// no usable price to advertise.
-func buildEANProductJSONLD(baseURL string, ep *model.EANPage) string {
-	if ep == nil || ep.MinPrice <= 0 {
-		return ""
-	}
-	url := baseURL + ep.SeoURL
-	if url == baseURL {
-		url = baseURL + "/shop"
-	}
-	currency := ep.Currency
-	if currency == "" {
-		currency = "RUB"
-	}
-
-	type brand struct {
-		Type string `json:"@type"`
-		Name string `json:"name"`
-	}
-	type offer struct {
-		Type          string  `json:"@type"`
-		PriceCurrency string  `json:"priceCurrency"`
-		Price         float64 `json:"price"`
-		Availability  string  `json:"availability"`
-	}
-	type product struct {
-		Context string `json:"@context"`
-		Type    string `json:"@type"`
-		Name    string `json:"name"`
-		Brand   *brand `json:"brand,omitempty"`
-		Image   string `json:"image,omitempty"`
-		URL     string `json:"url"`
-		Offers  offer  `json:"offers"`
-	}
-
-	p := product{
-		Context: "https://schema.org",
-		Type:    "Product",
-		Name:    ep.Title,
-		URL:     url,
-		Offers: offer{
-			Type:          "Offer",
-			PriceCurrency: currency,
-			Price:         ep.MinPrice,
-			Availability:  "https://schema.org/InStock",
-		},
-	}
-	if ep.Brand != "" {
-		p.Brand = &brand{Type: "Brand", Name: ep.Brand}
-	}
-	if len(ep.Images) > 0 {
-		p.Image = ep.Images[0]
-	}
-
-	out, err := json.Marshal(p)
-	if err != nil {
-		return ""
-	}
-	return string(out)
 }
 
 // writeSafeJSONWithPool marshals data and writes escaped JSON directly to w.

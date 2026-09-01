@@ -258,6 +258,14 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		currency = "PLN"
 	}
 
+	// Tradedoubler feeds are served from a paginated JSON API (not a single
+	// static file). Detect it up front so we can walk every page instead of
+	// downloading one file.
+	isTradedoubler := isTradedoublerURL(company.ImportURL)
+	if isTradedoubler {
+		fmt.Printf("[IMPORT-JSON] %s: detected Tradedoubler paginated API, will walk pages\n", company.Name)
+	}
+
 	var files []string
 
 	if explicitFile != "" {
@@ -287,14 +295,19 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 			}
 			fmt.Printf("[IMPORT-JSON] Using local JSON files from %s (%d files)\n", dir, len(files))
 		} else if company.ImportURL != "" {
-			// Download the JSON price file from the URL (default: always re-download)
-			destPath, err := downloadJSONPriceFile(company)
-			if err != nil {
-				fmt.Printf("[IMPORT-JSON] WARN: download JSON price from %s: %v\n", company.ImportURL, err)
-				return JSONImportResult{Status: "download_error"}
+			if isTradedoubler {
+				// Paginated API: pages are fetched below (not a single file).
+				fmt.Printf("[IMPORT-JSON] %s: skipping single-file download (paginated API)\n", company.Name)
+			} else {
+				// Download the JSON price file from the URL (default: always re-download)
+				destPath, err := downloadJSONPriceFile(company)
+				if err != nil {
+					fmt.Printf("[IMPORT-JSON] WARN: download JSON price from %s: %v\n", company.ImportURL, err)
+					return JSONImportResult{Status: "download_error"}
+				}
+				files = []string{destPath}
+				fmt.Printf("[IMPORT-JSON] Downloaded JSON price file to %s\n", destPath)
 			}
-			files = []string{destPath}
-			fmt.Printf("[IMPORT-JSON] Downloaded JSON price file to %s\n", destPath)
 		} else {
 			// Fallback: read JSON files from the company's import folder
 			importFolder := company.ImportFolder
@@ -339,69 +352,91 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 	var allParsedNames []string
 
 	h.importProgress.SetStep(StepParse)
-	for _, file := range files {
-		if limit > 0 && result.OffersParsed >= limit {
-			break
+
+	if isTradedoubler {
+		// --- Paginated API path: walk every page and parse the products. ---
+		client := tradedoublerClient()
+		tps, derr := downloadTradedoubler(client, company.ImportURL, limit)
+		if derr != nil {
+			fmt.Printf("[IMPORT-JSON] %s: Tradedoubler download failed: %v\n", company.Name, derr)
+			result.Status = "download_error"
+			return result
 		}
-
-		f, err := os.Open(file)
-		if err != nil {
-			fmt.Printf("[IMPORT-JSON] WARN: open %s: %v\n", file, err)
-			continue
+		result.Files = 1 // the feed is one logical source
+		parsed, names, skipped := parseTradedoublerProducts(tps, company.ID, company.Name, currency, attrDefCache, newAttrKeys, limit)
+		allParsedProducts = parsed
+		allParsedNames = names
+		result.ProductsSkipped = skipped
+		result.OffersParsed = len(parsed)
+		for range parsed {
+			h.importProgress.AddParsed(1)
 		}
-
-		fileStart := time.Now()
-		fmt.Printf("[IMPORT-JSON] Parsing %s (file %d/%d)...\n", filepath.Base(file), len(files), len(files))
-
-		var fileParsed int
-		var fileSkipped int
-
-		// First pass: parse JSON and collect all products
-		var parsedProducts []*model.Product
-		var parsedNames []string
-
-		var jsonData jsonPriceFile
-		if err := json.NewDecoder(f).Decode(&jsonData); err != nil {
-			fmt.Printf("[IMPORT-JSON] WARN: decode %s: %v\n", file, err)
-			f.Close()
-			continue
-		}
-		f.Close()
-
-		fmt.Printf("[IMPORT-JSON] Loaded %d products from %s\n", len(jsonData.Products), filepath.Base(file))
-
-		for _, jp := range jsonData.Products {
+		fmt.Printf("[IMPORT-JSON] %s: Tradedoubler imported %d products (skipped=%d)\n", company.Name, len(parsed), skipped)
+	} else {
+		for _, file := range files {
 			if limit > 0 && result.OffersParsed >= limit {
 				break
 			}
 
-			// Parse the JSON product into a model.Product
-			prod, skip, err := parseJSONProductForImport(jp, company.ID, company.Name, currency, attrDefCache, newAttrKeys, h.attrDefRepo)
+			f, err := os.Open(file)
 			if err != nil {
-				fmt.Printf("[IMPORT-JSON] WARN: parse product %s: %v\n", jp.Name, err)
-				fileSkipped++
-				result.ProductsSkipped++
+				fmt.Printf("[IMPORT-JSON] WARN: open %s: %v\n", file, err)
 				continue
 			}
-			if skip {
-				fileSkipped++
-				result.ProductsSkipped++
+
+			fileStart := time.Now()
+			fmt.Printf("[IMPORT-JSON] Parsing %s (file %d/%d)...\n", filepath.Base(file), len(files), len(files))
+
+			var fileParsed int
+			var fileSkipped int
+
+			// First pass: parse JSON and collect all products
+			var parsedProducts []*model.Product
+			var parsedNames []string
+
+			var jsonData jsonPriceFile
+			if err := json.NewDecoder(f).Decode(&jsonData); err != nil {
+				fmt.Printf("[IMPORT-JSON] WARN: decode %s: %v\n", file, err)
+				f.Close()
 				continue
 			}
-			if prod != nil {
-				parsedProducts = append(parsedProducts, prod)
-				parsedNames = append(parsedNames, prod.Name)
-				result.OffersParsed++
-				fileParsed++
-				h.importProgress.AddParsed(1)
+			f.Close()
+
+			fmt.Printf("[IMPORT-JSON] Loaded %d products from %s\n", len(jsonData.Products), filepath.Base(file))
+
+			for _, jp := range jsonData.Products {
+				if limit > 0 && result.OffersParsed >= limit {
+					break
+				}
+
+				// Parse the JSON product into a model.Product
+				prod, skip, err := parseJSONProductForImport(jp, company.ID, company.Name, currency, attrDefCache, newAttrKeys, h.attrDefRepo)
+				if err != nil {
+					fmt.Printf("[IMPORT-JSON] WARN: parse product %s: %v\n", jp.Name, err)
+					fileSkipped++
+					result.ProductsSkipped++
+					continue
+				}
+				if skip {
+					fileSkipped++
+					result.ProductsSkipped++
+					continue
+				}
+				if prod != nil {
+					parsedProducts = append(parsedProducts, prod)
+					parsedNames = append(parsedNames, prod.Name)
+					result.OffersParsed++
+					fileParsed++
+					h.importProgress.AddParsed(1)
+				}
 			}
+
+			fmt.Printf("[IMPORT-JSON] Parsed %d products from %s in %v (skipped=%d)\n",
+				fileParsed, filepath.Base(file), time.Since(fileStart), fileSkipped)
+
+			allParsedProducts = append(allParsedProducts, parsedProducts...)
+			allParsedNames = append(allParsedNames, parsedNames...)
 		}
-
-		fmt.Printf("[IMPORT-JSON] Parsed %d products from %s in %v (skipped=%d)\n",
-			fileParsed, filepath.Base(file), time.Since(fileStart), fileSkipped)
-
-		allParsedProducts = append(allParsedProducts, parsedProducts...)
-		allParsedNames = append(allParsedNames, parsedNames...)
 	}
 
 	// ============================================

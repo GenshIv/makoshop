@@ -848,3 +848,113 @@ func ValidateBrandCatTheme(t *BrandCategoryTheme) error {
 	}
 	return nil
 }
+
+// ---------- SEO structured data (JSON-LD) ----------
+
+// SEOSettings holds the configurable site-wide and product-page structured
+// data (schema.org JSON-LD) used for SEO. A single settings document is stored
+// in the DB (see db.KeySEOSettings); the server renders the JSON-LD into every
+// landing page's <head>.
+type SEOSettings struct {
+	// Enabled toggles all JSON-LD injection. When false, no structured data
+	// is emitted (except nothing — the site relies on plain HTML).
+	Enabled bool `json:"enabled"`
+
+	// Organization (schema.org Organization) — emitted on every page.
+	OrgName       string   `json:"org_name"`
+	OrgLegalName  string   `json:"org_legal_name,omitempty"`
+	OrgLogo       string   `json:"org_logo,omitempty"`
+	OrgPhone      string   `json:"org_phone,omitempty"`
+	OrgEmail      string   `json:"org_email,omitempty"`
+	OrgStreet     string   `json:"org_street,omitempty"`
+	OrgCity       string   `json:"org_city,omitempty"`
+	OrgPostalCode string   `json:"org_postal_code,omitempty"`
+	OrgCountry    string   `json:"org_country,omitempty"`
+	OrgSameAs     []string `json:"org_same_as,omitempty"` // social/profile URLs
+
+	// WebSite (schema.org WebSite + SearchAction) — emitted on every page.
+	// SiteName falls back to the site name derived from the base URL.
+	// SearchURLTemplate is a path (relative to the base URL) that must contain
+	// the {search_term_string} placeholder, e.g. "/shop?q={search_term_string}".
+	SiteName          string `json:"site_name,omitempty"`
+	SearchURLTemplate string `json:"search_url_template,omitempty"`
+
+	// OnlineStore (schema.org OnlineStore) — emitted on every page and on
+	// product pages. StoreName/StoreLogo fall back to the organization values.
+	StoreName   string   `json:"store_name,omitempty"`
+	StoreLogo   string   `json:"store_logo,omitempty"`
+	StoreSameAs []string `json:"store_same_as,omitempty"`
+
+	// Product offer defaults (schema.org Product/Offer on product pages).
+	DefaultCurrency string `json:"default_currency,omitempty"` // fallback when EAN page has none
+	PriceValidDays  int    `json:"price_valid_days,omitempty"` // priceValidUntil = now + N days (default 30)
+
+	// Merchant return policy (schema.org Product.hasMerchantReturnPolicy).
+	// Emitted on product pages when ReturnPolicyEnabled is true.
+	ReturnPolicyEnabled bool   `json:"return_policy_enabled"`
+	ReturnPolicyText    string `json:"return_policy_text,omitempty"`
+	ReturnPolicyDays    int    `json:"return_policy_days,omitempty"`
+	ReturnPolicyCountry string `json:"return_policy_country,omitempty"` // fallback: org country
+
+	// Shipping details (schema.org Offer.shippingDetails). Emitted on product
+	// page offers when ShippingEnabled is true.
+	ShippingEnabled     bool    `json:"shipping_enabled"`
+	ShippingCost        float64 `json:"shipping_cost,omitempty"`
+	ShippingMinDays     int     `json:"shipping_min_days,omitempty"`
+	ShippingMaxDays     int     `json:"shipping_max_days,omitempty"`
+	ShippingDestination string  `json:"shipping_destination,omitempty"` // fallback: org country
+
+	UpdatedAt int64 `json:"updated_at,omitempty"`
+}
+
+const (
+	SEOMaxFieldLen   = 500 // max length for a single text field
+	SEOMaxSameAs     = 20  // max number of sameAs URLs
+	SEODefaultValid  = 30  // default priceValidUntil horizon in days
+	SEODefaultSearch = "/shop?q={search_term_string}"
+)
+
+// ValidateSEOSettings checks field lengths and the search template invariant.
+func ValidateSEOSettings(s *SEOSettings) error {
+	check := func(name, v string) error {
+		if len(v) > SEOMaxFieldLen {
+			return fmt.Errorf("%s is too long (max %d)", name, SEOMaxFieldLen)
+		}
+		return nil
+	}
+	for name, v := range map[string]string{
+		"org_name": s.OrgName, "org_legal_name": s.OrgLegalName, "org_logo": s.OrgLogo,
+		"org_phone": s.OrgPhone, "org_email": s.OrgEmail, "org_street": s.OrgStreet,
+		"org_city": s.OrgCity, "org_postal_code": s.OrgPostalCode, "org_country": s.OrgCountry,
+		"site_name": s.SiteName, "search_url_template": s.SearchURLTemplate,
+		"store_name": s.StoreName, "store_logo": s.StoreLogo, "default_currency": s.DefaultCurrency,
+		"return_policy_text": s.ReturnPolicyText, "return_policy_country": s.ReturnPolicyCountry,
+		"shipping_destination": s.ShippingDestination,
+	} {
+		if err := check(name, v); err != nil {
+			return err
+		}
+	}
+	if len(s.OrgSameAs) > SEOMaxSameAs || len(s.StoreSameAs) > SEOMaxSameAs {
+		return fmt.Errorf("too many sameAs URLs (max %d)", SEOMaxSameAs)
+	}
+	for _, u := range append(append([]string{}, s.OrgSameAs...), s.StoreSameAs...) {
+		if len(u) > SEOMaxFieldLen {
+			return fmt.Errorf("sameAs URL too long")
+		}
+	}
+	if s.SearchURLTemplate != "" && !strings.Contains(s.SearchURLTemplate, "{search_term_string}") {
+		return fmt.Errorf("search_url_template must contain {search_term_string}")
+	}
+	if s.PriceValidDays < 0 || s.PriceValidDays > 365 {
+		return fmt.Errorf("price_valid_days must be 0..365")
+	}
+	if s.ReturnPolicyDays < 0 || s.ReturnPolicyDays > 365 {
+		return fmt.Errorf("return_policy_days must be 0..365")
+	}
+	if s.ShippingMinDays < 0 || s.ShippingMaxDays < 0 || s.ShippingMaxDays > 365 ||
+		(s.ShippingMinDays > 0 && s.ShippingMaxDays > 0 && s.ShippingMinDays > s.ShippingMaxDays) {
+		return fmt.Errorf("shipping days must be 0..365 and min <= max")
+	}
+	return nil
+}

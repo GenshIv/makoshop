@@ -63,6 +63,10 @@ func (s *StatsCollector) Start() {
 	if s.persistence != nil && s.store != nil {
 		if loaded, err := s.persistence.LoadStatsData(s.store); err == nil && loaded != nil {
 			s.data = loaded
+			// Restore the in-memory excluded-IP list from the persisted data.
+			// IsIPExcluded/GetExcludedIPs read s.excludedIPs (not s.data.ExcludedIPs),
+			// so without this the exclusion list would be silently dropped on restart.
+			s.excludedIPs = s.data.ExcludedIPs
 		} else if err != nil {
 			fmt.Printf("WARN: failed to load stats: %v\n", err)
 		}
@@ -182,44 +186,66 @@ func (s *StatsCollector) currentPeriodIndices() (hour, dayOfWeek, dayOfMonth uin
 	return
 }
 
-// rotatePeriods aligns the stored "current" marker to the real time.
-// On startup (or after a gap) the stored hour/day/month may lag behind
-// real time. We rotate the arrays forward until the marker catches up,
-// zeroing each newly-reached slot so fresh counting starts clean.
-// Once marker == real, subsequent calls are no-ops.
+// rotatePeriods aligns the stored "current" markers to the real UTC time.
+//
+// The bucket arrays are indexed by clock value: slot h of the hour carousel
+// holds the visits of the most recent UTC hour h (likewise slot d of the
+// day carousel holds the most recent weekday d, and slot m of the month-day
+// carousel holds the most recent calendar day m+1). recordVisit always
+// increments the slot of the current clock value, and the UI reads the
+// arrays back with the same indexing, so rotation must NOT shift the
+// arrays — shifting would move every bucket into the wrong slot and merge
+// the previous period's count into the current one.
+//
+// On startup (or after a gap) a marker may lag behind real time. We advance
+// each marker one step at a time, zeroing the slot that just started again:
+// it still holds data from one full period ago (24h / 7d / 31d) and must be
+// replaced with a fresh counter. Once marker == real, calls are no-ops.
 func (s *StatsCollector) rotatePeriods(hour, dayOfWeek, dayOfMonth uint8) {
 	// Hour carousel (24h sliding window)
 	for s.data.CurrentHour != hour {
-		// Shift all hours forward by one, drop the oldest
-		for i := 23; i > 0; i-- {
-			s.data.HumanVisitsByHour[i] = s.data.HumanVisitsByHour[i-1]
-			s.data.BotVisitsByHour[i] = s.data.BotVisitsByHour[i-1]
-		}
-		s.data.HumanVisitsByHour[0] = 0
-		s.data.BotVisitsByHour[0] = 0
-		s.data.CurrentHour = (s.data.CurrentHour + 1) % 24
+		next := (s.data.CurrentHour + 1) % 24
+		s.data.HumanVisitsByHour[next] = 0
+		s.data.BotVisitsByHour[next] = 0
+		// Per-entity carousels (referrers, paths, user agents) share the same
+		// clock-hour indexing, so their just-started hour slot must be reset
+		// too, otherwise the new hour accumulates on top of 24h-old data.
+		s.zeroEntityHourSlot(next)
+		s.data.CurrentHour = next
 	}
 
 	// Day-of-week carousel (7d sliding window)
 	for s.data.CurrentDayOfWeek != dayOfWeek {
-		for i := 6; i > 0; i-- {
-			s.data.HumanVisitsByDay[i] = s.data.HumanVisitsByDay[i-1]
-			s.data.BotVisitsByDay[i] = s.data.BotVisitsByDay[i-1]
-		}
-		s.data.HumanVisitsByDay[0] = 0
-		s.data.BotVisitsByDay[0] = 0
-		s.data.CurrentDayOfWeek = (s.data.CurrentDayOfWeek + 1) % 7
+		next := (s.data.CurrentDayOfWeek + 1) % 7
+		s.data.HumanVisitsByDay[next] = 0
+		s.data.BotVisitsByDay[next] = 0
+		s.data.CurrentDayOfWeek = next
 	}
 
 	// Day-of-month carousel (31d sliding window)
 	for s.data.CurrentDayOfMonth != dayOfMonth {
-		for i := 30; i > 0; i-- {
-			s.data.HumanVisitsByMonthDay[i] = s.data.HumanVisitsByMonthDay[i-1]
-			s.data.BotVisitsByMonthDay[i] = s.data.BotVisitsByMonthDay[i-1]
-		}
-		s.data.HumanVisitsByMonthDay[0] = 0
-		s.data.BotVisitsByMonthDay[0] = 0
-		s.data.CurrentDayOfMonth = (s.data.CurrentDayOfMonth + 1) % 31
+		next := (s.data.CurrentDayOfMonth + 1) % 31
+		s.data.HumanVisitsByMonthDay[next] = 0
+		s.data.BotVisitsByMonthDay[next] = 0
+		s.data.CurrentDayOfMonth = next
+	}
+}
+
+// zeroEntityHourSlot resets the hour slot that just started for every
+// per-entity carousel (referrers, full referrers, paths, user agents).
+// Called from rotatePeriods as the hour marker advances.
+func (s *StatsCollector) zeroEntityHourSlot(hour uint8) {
+	for _, r := range s.data.ReferrerStats {
+		r.Visits[hour] = 0
+	}
+	for _, f := range s.data.FullReferrerStats {
+		f.Visits[hour] = 0
+	}
+	for _, p := range s.data.PathStats {
+		p.Visits[hour] = 0
+	}
+	for _, u := range s.data.UserAgentStats {
+		u.Visits[hour] = 0
 	}
 }
 

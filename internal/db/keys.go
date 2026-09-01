@@ -45,6 +45,10 @@ func KeyBrandCatTheme(categoryID int64, slot model.BrandSlot) string {
 // (bumped on every admin write) so clients can detect stale caches.
 const KeyBrandingVersion = "branding:version"
 
+// KeySEOSettings is the single document holding the configurable site-wide
+// SEO / structured-data (JSON-LD) settings.
+const KeySEOSettings = "seo:settings"
+
 // Index keys — all turbo-based. Helpers for hashing used by turbo_search.go.
 
 // attrValueHash returns a stable hash for an attribute value string.

@@ -137,7 +137,10 @@ func (h *Handlers) importCompanyByFormat(company *model.Company, override string
 	cr := CompanyImportResult{Company: company.Name, Format: format}
 
 	explicitFile := ""
-	if company.ImportURL != "" && !noDownload {
+	// Paginated APIs (Tradedoubler) are walked page by page inside the JSON
+	// importer, so there is no single file to pre-download for format
+	// detection. Skip it to avoid a wasteful (and possibly failing) request.
+	if company.ImportURL != "" && !noDownload && !isTradedoublerURL(company.ImportURL) {
 		// Download once and let the content choose the parser.
 		if path, err := downloadPriceFile(company); err == nil {
 			explicitFile = path

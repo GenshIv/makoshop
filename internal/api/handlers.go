@@ -11,6 +11,7 @@ import (
 	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/httpres"
 	"github.com/GenshIv/makoshop/internal/metrics"
+	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/makoshop/internal/stats"
 	"github.com/GenshIv/silentjson/v2"
 )
@@ -38,6 +39,7 @@ type Handlers struct {
 	promoCampaignRepo *db.PromoCampaignRepo
 	promoLogRepo      *db.PromoLogRepo
 	brandingRepo      *db.BrandingRepo
+	seoRepo           *db.SEORepo
 	catalogizer       *catalogizer.Catalogizer
 
 	// Company settings repos
@@ -141,6 +143,7 @@ func NewHandlers(store *db.Store) *Handlers {
 		promoCampaignRepo: promoCampaignRepo,
 		promoLogRepo:      promoLogRepo,
 		brandingRepo:      db.NewBrandingRepo(store),
+		seoRepo:           db.NewSEORepo(store),
 		productRepo:       productRepo,
 		turboSearch:       turboSearch,
 		eanPageSearch:     eanPageSearch,
@@ -177,6 +180,20 @@ func (h *Handlers) siteBaseURL() string {
 // base URL host (e.g. "wszyst.pl"). Falls back to "MakoShop" in dev.
 func (h *Handlers) siteName() string {
 	return siteNameFromBaseURL(h.siteBaseURL())
+}
+
+// seoSettings returns the current SEO / structured-data settings. It reads the
+// settings document on each call (a small local doc read); on any error it
+// returns the defaults so page rendering never fails because of SEO config.
+func (h *Handlers) seoSettings() *model.SEOSettings {
+	if h.seoRepo == nil {
+		return db.DefaultSettings()
+	}
+	s, err := h.seoRepo.GetSettings()
+	if err != nil {
+		return db.DefaultSettings()
+	}
+	return s
 }
 
 // TurboSearch returns the attached TurboProductSearch.
