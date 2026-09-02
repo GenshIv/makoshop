@@ -39,6 +39,7 @@ func NewJWTMiddleware(secret string) *JWTMiddleware {
 // RequireAuth validates JWT and puts user into context.
 func (m *JWTMiddleware) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
 		tokenString := extractToken(r)
 		if tokenString == "" {
 			http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"missing authorization token"}}`, http.StatusUnauthorized)

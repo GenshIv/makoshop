@@ -599,7 +599,6 @@ func (h *Handlers) parseProductsFile(file string, companyID int64, companyName s
 	var skipped int
 
 	type productRow struct {
-		SKU         string           `json:"sku"`
 		EAN         string           `json:"ean"`
 		Name        string           `json:"name"`
 		Description string           `json:"description"`
@@ -628,7 +627,7 @@ func (h *Handlers) parseProductsFile(file string, companyID int64, companyName s
 			continue
 		}
 
-		if row.SKU == "" || row.Name == "" {
+		if row.EAN == "" || row.Name == "" {
 			skipped++
 			continue
 		}
@@ -639,21 +638,21 @@ func (h *Handlers) parseProductsFile(file string, companyID int64, companyName s
 			continue
 		}
 
-		// EAN: use explicit EAN or derive from SKU
+		// EAN: use explicit EAN or derive from EAN
 		ean := row.EAN
 		if ean == "" {
-			parts := strings.SplitN(row.SKU, "-", 2)
+			parts := strings.SplitN(row.EAN, "-", 2)
 			ean = parts[0]
 			if ean == "" {
-				parts = strings.SplitN(row.SKU, "_", 2)
+				parts = strings.SplitN(row.EAN, "_", 2)
 				ean = parts[0]
 			}
 		}
 
-		// Option: append to name if SKU differs from EAN
+		// Option: append to name if EAN differs from EAN
 		name := row.Name
-		if ean != "" && row.SKU != ean {
-			option := strings.TrimPrefix(row.SKU, ean)
+		if ean != "" && row.EAN != ean {
+			option := strings.TrimPrefix(row.EAN, ean)
 			option = strings.TrimPrefix(option, "-")
 			option = strings.TrimPrefix(option, "_")
 			if option != "" {
@@ -667,7 +666,6 @@ func (h *Handlers) parseProductsFile(file string, companyID int64, companyName s
 		}
 
 		p := &model.Product{
-			SKU:         row.SKU,
 			EAN:         ean,
 			Name:        name,
 			Description: row.Description,
@@ -945,7 +943,6 @@ func (h *Handlers) importNormalizedFileBatched(
 	var allCreated []*model.Product // collect all new products for batch EAN page upsert
 
 	type productRow struct {
-		SKU         string           `json:"sku"`
 		EAN         string           `json:"ean"`
 		Name        string           `json:"name"`
 		Description string           `json:"description"`
@@ -965,7 +962,7 @@ func (h *Handlers) importNormalizedFileBatched(
 
 		var created []*model.Product
 
-		// Use GetOrCreateByKey to avoid duplicate products (SKU+company+attrs)
+		// Use GetOrCreateByKey to avoid duplicate products (EAN+company+attrs)
 		for _, p := range batch {
 			id, isNew, err := h.productRepo.GetOrCreateByKey(p)
 			if err != nil {
@@ -1050,7 +1047,7 @@ func (h *Handlers) importNormalizedFileBatched(
 			continue
 		}
 
-		if row.SKU == "" || row.Name == "" {
+		if row.EAN == "" || row.Name == "" {
 			skipped++
 			continue
 		}
@@ -1065,22 +1062,22 @@ func (h *Handlers) importNormalizedFileBatched(
 		// Category handled by catalogizer only
 		catID := int64(0)
 
-		// EAN: use explicit EAN from JSONL, or derive from SKU (base without option)
+		// EAN: use explicit EAN from JSONL, or derive from EAN (base without option)
 		ean := row.EAN
 		if ean == "" {
-			// Try to extract base SKU (before first dash/underscore)
-			parts := strings.SplitN(row.SKU, "-", 2)
+			// Try to extract base EAN (before first dash/underscore)
+			parts := strings.SplitN(row.EAN, "-", 2)
 			ean = parts[0]
 			if ean == "" {
-				parts = strings.SplitN(row.SKU, "_", 2)
+				parts = strings.SplitN(row.EAN, "_", 2)
 				ean = parts[0]
 			}
 		}
 
-		// Option: append to name if SKU differs from EAN
+		// Option: append to name if EAN differs from EAN
 		name := row.Name
-		if ean != "" && row.SKU != ean {
-			option := strings.TrimPrefix(row.SKU, ean)
+		if ean != "" && row.EAN != ean {
+			option := strings.TrimPrefix(row.EAN, ean)
 			option = strings.TrimPrefix(option, "-")
 			option = strings.TrimPrefix(option, "_")
 			if option != "" {
@@ -1094,7 +1091,6 @@ func (h *Handlers) importNormalizedFileBatched(
 		}
 
 		p := &model.Product{
-			SKU:         row.SKU,
 			EAN:         ean,
 			Name:        name,
 			Description: row.Description,
@@ -1227,7 +1223,6 @@ func (h *Handlers) importNormalizedFile(file string, limit, globalImported, batc
 	var batchCount int
 
 	type productRow struct {
-		SKU         string           `json:"sku"`
 		EAN         string           `json:"ean"`
 		Name        string           `json:"name"`
 		Description string           `json:"description"`
@@ -1256,7 +1251,7 @@ func (h *Handlers) importNormalizedFile(file string, limit, globalImported, batc
 			continue
 		}
 
-		if row.SKU == "" || row.Name == "" {
+		if row.EAN == "" || row.Name == "" {
 			skipped++
 			continue
 		}
@@ -1286,7 +1281,7 @@ func (h *Handlers) importNormalizedFile(file string, limit, globalImported, batc
 		images := filterImages(row.Images)
 
 		p := &model.Product{
-			SKU:         row.SKU,
+			EAN:         row.EAN,
 			Name:        row.Name,
 			Description: row.Description,
 			CategoryID:  catID,
@@ -1303,7 +1298,7 @@ func (h *Handlers) importNormalizedFile(file string, limit, globalImported, batc
 		}
 
 		if err := h.productRepo.Create(p); err != nil {
-			fmt.Printf("[IMPORT-NORMALIZED] WARN: failed to create product %s: %v\n", row.SKU, err)
+			fmt.Printf("[IMPORT-NORMALIZED] WARN: failed to create product %s: %v\n", row.EAN, err)
 			skipped++
 			continue
 		}
@@ -1498,7 +1493,7 @@ func streamImportCSVFile(
 			}
 		}
 
-		// SKU: new format "sku" or old "Артикул"
+		// EAN: new format "sku" or old "Артикул"
 		sku := get(row, "sku")
 		if sku == "" {
 			sku = get(row, "Артикул")
@@ -1515,7 +1510,7 @@ func streamImportCSVFile(
 		// EAN = базовый артикул (без опций)
 		ean := sku
 
-		// SKU = уникальный артикул модификации (с опцией)
+		// EAN = уникальный артикул модификации (с опцией)
 		uniqueSku := modSku
 		if uniqueSku == "" {
 			uniqueSku = sku
@@ -1656,7 +1651,6 @@ func streamImportCSVFile(
 
 		// Add to batch
 		product := &model.Product{
-			SKU:         uniqueSku,
 			EAN:         ean,
 			Name:        name,
 			Description: description,

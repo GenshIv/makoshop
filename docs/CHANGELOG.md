@@ -159,7 +159,7 @@
 
 - **POST /admin/products/import** — массовый импорт товаров из JSON (admin).
   - Content-Type: multipart/form-data, поле `file`.
-  - JSON: массив объектов Product (sku, name, price, category_id, attributes, ...).
+  - JSON: массив объектов Product (ean, name, price, category_id, attributes, ...).
   - Query param: `company_id` (обязателен).
   - Возвращает: `{"import_id": 1, "status": "processing"}`.
 

@@ -2,11 +2,14 @@ package db
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/GenshIv/makoshop/internal/attrs"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -28,10 +31,114 @@ const (
 
 type AttrDefRepo struct {
 	store *Store
+
+	// keyCache maps a normalized raw key (lowercase) to its AttrDef.
+	// It is the first line of defense against duplicate AttrDef documents:
+	// within a process, a key is resolved at most once against the DB.
+	mu       sync.Mutex
+	keyCache map[string]*model.AttrDef
+
+	// pendingListCodes accumulates codes of AttrDefs created since the last
+	// FlushList. makodb is append-only: rewriting the whole attrdef_list on
+	// every single creation (O(n) each) bloats the DB by ~1GB per import.
+	// Instead we buffer the codes in memory and write the list ONCE per batch
+	// via FlushList (a deduplicated set-union).
+	pendingListCodes map[string]bool
 }
 
 func NewAttrDefRepo(store *Store) *AttrDefRepo {
-	return &AttrDefRepo{store: store}
+	return &AttrDefRepo{
+		store:            store,
+		keyCache:         make(map[string]*model.AttrDef),
+		pendingListCodes: make(map[string]bool),
+	}
+}
+
+// addPendingListCode buffers a newly created code for a later batched list
+// write. Cheap (in-memory), no DB access.
+func (r *AttrDefRepo) addPendingListCode(code string) {
+	if code == "" {
+		return
+	}
+	r.mu.Lock()
+	r.pendingListCodes[code] = true
+	r.mu.Unlock()
+}
+
+// FlushList writes all buffered codes to the registry list in ONE deduplicated
+// set-union write, then clears the buffer. Call once per import batch (before
+// commit) so the list is updated a constant number of times, not once per
+// created AttrDef.
+func (r *AttrDefRepo) FlushList() error {
+	r.mu.Lock()
+	pending := r.pendingListCodes
+	r.pendingListCodes = make(map[string]bool)
+	r.mu.Unlock()
+
+	if len(pending) == 0 {
+		return nil
+	}
+	return r.unionAttrDefList(pending)
+}
+
+// HealList ensures every AttrDef document is present in the registry list.
+// It probes all documents (id 1..nextID) and adds any missing codes to the
+// list in ONE batched write. This repairs "doc not in list" orphans (e.g.
+// docs created by GetByCode's on-the-fly fallback before the buffering fix).
+func (r *AttrDefRepo) HealList() (int, error) {
+	maxID := r.currentNextID("attrdef")
+	if maxID <= 0 {
+		return 0, nil
+	}
+
+	codes := make(map[string]bool)
+	for id := int64(1); id <= maxID; id++ {
+		data, err := r.store.DocGet(fmt.Sprintf("attrdef:%d", id))
+		if err != nil || len(data) == 0 {
+			continue
+		}
+		var d struct {
+			Code string `json:"code"`
+		}
+		if json.Unmarshal(data, &d) != nil || d.Code == "" {
+			continue
+		}
+		codes[d.Code] = true
+	}
+
+	if len(codes) == 0 {
+		return 0, nil
+	}
+	if err := r.unionAttrDefList(codes); err != nil {
+		return 0, err
+	}
+	return len(codes), nil
+}
+
+// currentNextID reads the current ID counter for an entity without incrementing.
+func (r *AttrDefRepo) currentNextID(entityType string) int64 {
+	data, _ := r.store.DB().TurboRawRead(fmt.Sprintf("state:next_id:%s", entityType))
+	if len(data) == 0 {
+		return 0
+	}
+	var id int64
+	_, _ = fmt.Sscanf(string(data), "%d", &id)
+	return id
+}
+
+// cacheGet returns the cached AttrDef for a raw key, if present.
+func (r *AttrDefRepo) cacheGet(rawKey string) (*model.AttrDef, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	ad, ok := r.keyCache[rawKey]
+	return ad, ok
+}
+
+// cacheSet stores an AttrDef for a raw key.
+func (r *AttrDefRepo) cacheSet(rawKey string, ad *model.AttrDef) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.keyCache[rawKey] = ad
 }
 
 // ---------- CRUD ----------
@@ -74,71 +181,161 @@ func (r *AttrDefRepo) GetByCode(code string) (*model.AttrDef, error) {
 	buf, _ := json.Marshal(ad)
 	_ = r.store.DocPut(fmt.Sprintf("attrdef:%d", ad.ID), buf)
 
+	// Register the code for a batched list write so the doc is not left out of
+	// the registry list (which would make it a "doc not in list" orphan).
+	r.addPendingListCode(code)
+
 	return ad, nil
 }
 
 // GetOrCreateByKey finds an AttrDef by raw key (e.g. "Moc", "Power") or creates one.
 // Used by HTMLAttrKeyParser to map raw keys from HTML to attribute codes.
+//
+// Resolution order (single entry point for all import paths):
+//  1. in-process cache (raw key, lowercase)
+//  2. alias index attrdef_key:{rawkey_lower} -> code -> doc
+//  3. validated code from attrs.CodeFromKey:
+//     a. alias index attrdef_key:{code} -> code -> doc (normalized alias)
+//     b. exact code match attrdef_code:{code} -> doc
+//     c. create new AttrDef (NextID) + indexes atomically
+//
+// Invariant: exactly one AttrDef document per code. A document is created
+// only after both the cache and the attrdef_code index confirmed absence.
 func (r *AttrDefRepo) GetOrCreateByKey(rawKey string) (*model.AttrDef, error) {
 	if rawKey == "" {
 		return nil, ErrKeyNotFound
 	}
 
-	// Normalize key
 	key := strings.TrimSpace(rawKey)
 	keyLower := strings.ToLower(key)
 
-	// Check if key is already mapped to a code
-	keyIndex := turboKeyAttrDefKey + keyLower
-	codeData, err := r.store.DB().TurboRawRead(keyIndex)
-	if err == nil && len(codeData) > 0 {
-		code := string(codeData)
-		return r.GetByCode(code)
+	// 1. In-process cache.
+	if ad, ok := r.cacheGet(keyLower); ok {
+		return ad, nil
 	}
 
-	// Generate code from key
-	code := r.generateCodeFromKey(key)
-
-	// Check if code already exists
-	existing, err := r.GetByCode(code)
-	if err == nil {
-		// Code exists, add key to it
-		existing.Keys = append(existing.Keys, key)
-		buf, _ := json.Marshal(existing)
-		r.store.DocPut(fmt.Sprintf("attrdef:%d", existing.ID), buf)
-		// Update key index
-		r.store.DB().TurboRawWrite(keyIndex, []byte(code))
-		return existing, nil
+	// 2. Alias index: raw key -> code.
+	if code, ok := r.lookupKeyAlias(keyLower); ok {
+		if ad, err := r.GetByCode(code); err == nil {
+			r.cacheSet(keyLower, ad)
+			return ad, nil
+		}
 	}
 
-	// Create new AttrDef with temp ID (will be assigned by DocPut)
+	// 3. Validate and derive the canonical code.
+	code, ok := attrs.CodeFromKey(key)
+	if !ok {
+		return nil, ErrInvalidAttrKey
+	}
+
+	// 3a. Normalized alias: the canonical code may already be aliased to
+	// an existing (older) code.
+	if mapped, ok := r.lookupKeyAlias(code); ok {
+		if ad, err := r.GetByCode(mapped); err == nil {
+			r.cacheSet(keyLower, ad)
+			return ad, nil
+		}
+	}
+
+	// 3b. Exact code match.
+	if ad, err := r.GetByCode(code); err == nil {
+		// Register the raw key as an alias (deduplicated) and cache.
+		_ = r.store.DB().TurboRawWrite(turboKeyAttrDefKey+keyLower, []byte(ad.Code))
+		r.addKeyToDef(ad, key)
+		r.cacheSet(keyLower, ad)
+		return ad, nil
+	}
+
+	// 3c. Create new AttrDef.
+	ad, err := r.createAttrDef(code, key)
+	if err != nil {
+		return nil, err
+	}
+	r.cacheSet(keyLower, ad)
+	return ad, nil
+}
+
+// lookupKeyAlias reads the alias index attrdef_key:{key} -> code.
+func (r *AttrDefRepo) lookupKeyAlias(key string) (string, bool) {
+	data, err := r.store.DB().TurboRawRead(turboKeyAttrDefKey + key)
+	if err != nil || len(data) == 0 {
+		return "", false
+	}
+	code := strings.TrimSpace(string(data))
+	if code == "" {
+		return "", false
+	}
+	return code, true
+}
+
+// addKeyToDef appends a raw key to an existing AttrDef's Keys (deduplicated)
+// and persists the document.
+func (r *AttrDefRepo) addKeyToDef(ad *model.AttrDef, key string) {
+	for _, k := range ad.Keys {
+		if strings.EqualFold(k, key) {
+			return // already present (dedup)
+		}
+	}
+	ad.Keys = append(ad.Keys, key)
+	buf, _ := json.Marshal(ad)
+	_ = r.store.DocPut(fmt.Sprintf("attrdef:%d", ad.ID), buf)
+}
+
+// createAttrDef creates a new AttrDef document for a validated code and
+// writes all its indexes. The doc + attrdef_code + alias indexes are written
+// as one logical operation; a crash between writes can only leave an
+// orphaned document (never read) or a missing alias (recreated on next
+// resolve) — never a second document for the same code.
+func (r *AttrDefRepo) createAttrDef(code, rawKey string) (*model.AttrDef, error) {
+	// Final guard: re-check the code index (single-writer assumption holds
+	// for imports, but this makes the invariant explicit).
+	if data, err := r.store.DB().TurboRawRead(turboKeyAttrDefCode + code); err == nil && len(data) > 0 {
+		var docID int64
+		_, _ = fmt.Sscanf(string(data), "%d", &docID)
+		if ad, err := r.Get(int64(docID)); err == nil {
+			return ad, nil
+		}
+	}
+
+	id, err := r.store.NextID("attrdef")
+	if err != nil {
+		return nil, err
+	}
+
 	ad := &model.AttrDef{
-		ID:           time.Now().UnixNano(), // temp unique ID
+		ID:           id,
 		Code:         code,
-		NameRu:       key,
+		NameRu:       rawKey,
 		Categories:   []int64{},
-		Type:         "string",
+		Type:         model.AttrTypeString,
 		IsActive:     true,
 		IsFilterable: true,
 		IsSortable:   false,
 		SortOrder:    0,
-		Keys:         []string{key},
+		Keys:         []string{rawKey},
 		CreatedAt:    time.Now().Unix(),
 	}
 
-	// Save
-	docKey := fmt.Sprintf("attrdef:%d", ad.ID)
 	buf, _ := json.Marshal(ad)
-	if err := r.store.DocPut(docKey, buf); err != nil {
+	if err := r.store.DocPut(fmt.Sprintf("attrdef:%d", ad.ID), buf); err != nil {
 		return nil, err
 	}
 
-	// Update indexes
-	r.store.DB().TurboRawWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", ad.ID)))
-	r.store.DB().TurboRawWrite(keyIndex, []byte(code))
+	// Code index (raw key -> docID).
+	if err := r.store.TurboWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", ad.ID))); err != nil {
+		return nil, err
+	}
 
-	// Add to list (deferred to batch update to avoid vacuum)
-	// The list will be updated in BatchUpdateAttrDefList
+	// Alias indexes: the raw key and the canonical code both resolve to it.
+	keyLower := strings.ToLower(rawKey)
+	_ = r.store.TurboWrite(turboKeyAttrDefKey+keyLower, []byte(code))
+	if keyLower != code {
+		_ = r.store.TurboWrite(turboKeyAttrDefKey+code, []byte(code))
+	}
+
+	// Registry list: buffer for a single batched write (FlushList). Writing
+	// the whole list per creation would bloat the append-only DB.
+	r.addPendingListCode(code)
 
 	return ad, nil
 }
@@ -151,104 +348,91 @@ func (r *AttrDefRepo) BatchGetOrCreateByKeys(keys []string) (map[string]*model.A
 		return nil, nil
 	}
 
-	created := make(map[string]*model.AttrDef)
-	var newCodes []string
+	resolved := make(map[string]*model.AttrDef)
 
 	for _, rawKey := range keys {
 		if rawKey == "" {
 			continue
 		}
-
-		// Normalize key
 		key := strings.TrimSpace(rawKey)
-		keyLower := strings.ToLower(key)
 
-		// Check if key is already mapped to a code
-		keyIndex := turboKeyAttrDefKey + keyLower
-		codeData, err := r.store.DB().TurboRawRead(keyIndex)
-		if err == nil && len(codeData) > 0 {
-			code := string(codeData)
-			existing, err := r.GetByCode(code)
-			if err == nil {
-				created[key] = existing
+		ad, err := r.GetOrCreateByKey(key)
+		if err != nil {
+			// Invalid key (a value, a sentence…) — skip, not an error for the batch.
+			if errors.Is(err, ErrInvalidAttrKey) {
+				continue
 			}
-			continue
+			return nil, err
 		}
-
-		// Generate code from key
-		code := r.generateCodeFromKey(key)
-
-		// Check if code already exists
-		existing, err := r.GetByCode(code)
-		if err == nil {
-			// Code exists, add key to it
-			existing.Keys = append(existing.Keys, key)
-			buf, _ := json.Marshal(existing)
-			r.store.DocPut(fmt.Sprintf("attrdef:%d", existing.ID), buf)
-			// Update key index
-			r.store.DB().TurboRawWrite(keyIndex, []byte(code))
-			created[key] = existing
-			continue
-		}
-
-		// Create new AttrDef
-		ad := &model.AttrDef{
-			ID:           time.Now().UnixNano(), // temp unique ID
-			Code:         code,
-			NameRu:       key,
-			Categories:   []int64{},
-			Type:         "string",
-			IsActive:     true,
-			IsFilterable: true,
-			IsSortable:   false,
-			SortOrder:    0,
-			Keys:         []string{key},
-			CreatedAt:    time.Now().Unix(),
-		}
-
-		// Save
-		docKey := fmt.Sprintf("attrdef:%d", ad.ID)
-		buf, _ := json.Marshal(ad)
-		if err := r.store.DocPut(docKey, buf); err != nil {
-			continue
-		}
-
-		// Update indexes
-		r.store.DB().TurboRawWrite(turboKeyAttrDefCode+code, []byte(fmt.Sprintf("%d", ad.ID)))
-		r.store.DB().TurboRawWrite(keyIndex, []byte(code))
-
-		created[key] = ad
-		newCodes = append(newCodes, code)
+		resolved[key] = ad
 	}
 
-	// Update list once at the end to avoid vacuum
-	if len(newCodes) > 0 {
-		listData, _ := r.store.DB().TurboRawRead(turboKeyAttrDefList)
-		var codes []string
-		if len(listData) > 0 {
-			json.Unmarshal(listData, &codes)
-		}
-		codes = append(codes, newCodes...)
-		listBytes, _ := json.Marshal(codes)
-		r.store.DB().TurboRawWrite(turboKeyAttrDefList, listBytes)
+	// Flush all buffered codes (this batch + any created on-the-fly earlier)
+	// to the registry list in ONE deduplicated set-union write.
+	if err := r.FlushList(); err != nil {
+		return nil, err
 	}
 
-	return created, nil
+	return resolved, nil
 }
 
-// generateCodeFromKey creates a normalized code from a raw key.
-func (r *AttrDefRepo) generateCodeFromKey(key string) string {
-	code := strings.ToLower(key)
-	code = strings.ReplaceAll(code, " ", "_")
-	code = strings.ReplaceAll(code, "-", "_")
-	// Remove non-alphanumeric chars (except underscore)
-	var result []rune
-	for _, ch := range code {
-		if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' {
-			result = append(result, ch)
+// isInAttrDefList reports whether a code is already present in the registry
+// list (attrdef_list).
+func (r *AttrDefRepo) isInAttrDefList(code string) (bool, error) {
+	data, err := r.store.DB().TurboRawRead(turboKeyAttrDefList)
+	if err != nil || len(data) == 0 {
+		return false, nil
+	}
+	var codes []string
+	if err := json.Unmarshal(data, &codes); err != nil {
+		return false, err
+	}
+	for _, c := range codes {
+		if c == code {
+			return true, nil
 		}
 	}
-	return string(result)
+	return false, nil
+}
+
+// unionAttrDefList adds codes to the registry list as a deduplicated set:
+// the list is read, pre-existing duplicates dropped (self-healing), missing
+// codes appended (sorted for stability), and the whole set written back in
+// one write. Never produces duplicates.
+func (r *AttrDefRepo) unionAttrDefList(codes map[string]bool) error {
+	data, _ := r.store.DB().TurboRawRead(turboKeyAttrDefList)
+	var list []string
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &list); err != nil {
+			list = nil
+		}
+	}
+
+	existing := make(map[string]bool, len(list))
+	var deduped []string
+	for _, c := range list {
+		if c == "" || existing[c] {
+			continue
+		}
+		existing[c] = true
+		deduped = append(deduped, c)
+	}
+
+	added := make([]string, 0, len(codes))
+	for c := range codes {
+		if !existing[c] {
+			existing[c] = true
+			added = append(added, c)
+		}
+	}
+	sort.Strings(added)
+	list = append(deduped, added...)
+
+	buf, err := json.Marshal(list)
+	if err != nil {
+		return err
+	}
+	return r.store.TurboWrite(turboKeyAttrDefList, buf)
 }
 
 func (r *AttrDefRepo) Get(id int64) (*model.AttrDef, error) {
@@ -496,19 +680,39 @@ func (r *AttrDefRepo) updateCatCodesIndex(code string, oldCats, newCats []int64)
 }
 
 func (r *AttrDefRepo) addToCatCodes(catID int64, code string) error {
+	return r.mergeCatCodes(catID, map[string]bool{code: true})
+}
+
+// mergeCatCodes merges a set of codes into attrdef_cat_codes:{catID} with a
+// SINGLE read + a SINGLE write (deduplicated, sorted for stability). Calling
+// this once per category with all its codes avoids O(n) rewrites of the same
+// key, which would bloat the append-only DB.
+func (r *AttrDefRepo) mergeCatCodes(catID int64, newCodes map[string]bool) error {
 	key := turboKeyAttrDefCatCodes + fmt.Sprintf("%d", catID)
 	data, _ := r.store.DB().TurboRawRead(key)
-	var codes []string
+	existing := make(map[string]bool)
 	if data != nil && len(data) > 0 {
-		json.Unmarshal(data, &codes)
-	}
-	for _, c := range codes {
-		if c == code {
-			return nil
+		var codes []string
+		if json.Unmarshal(data, &codes) == nil {
+			for _, c := range codes {
+				if c != "" {
+					existing[c] = true
+				}
+			}
 		}
 	}
-	codes = append(codes, code)
-	buf, _ := json.Marshal(codes)
+	for c := range newCodes {
+		existing[c] = true
+	}
+	merged := make([]string, 0, len(existing))
+	for c := range existing {
+		merged = append(merged, c)
+	}
+	sort.Strings(merged)
+	buf, err := json.Marshal(merged)
+	if err != nil {
+		return err
+	}
 	return r.store.TurboWrite(key, buf)
 }
 
@@ -725,6 +929,40 @@ func (r *AttrDefRepo) UpsertCode(code string, catID int64) error {
 
 	r.addToCatCodes(catID, code)
 	return r.addToAttrDefList(code)
+}
+
+// RemoveCategoryLink unbinds a category from an attribute code:
+//  1. attrdef_cats:{code} — delete the category token (turbo set, no dupes)
+//  2. attrdef_cat_codes:{catID} — remove the code (deduplicated set)
+//  3. AttrDef document — keep the Categories field in sync
+func (r *AttrDefRepo) RemoveCategoryLink(code string, catID int64) error {
+	if code == "" || catID == 0 {
+		return nil
+	}
+
+	// 1. Delete the category token from the code's category index.
+	_, _ = r.store.DB().TurboDeleteIndexString(turboKeyAttrDefCats+code, KeyCategory(catID))
+
+	// 2. Remove the code from the category's code list (reverse index).
+	if err := r.removeFromCatCodes(catID, code); err != nil {
+		return err
+	}
+
+	// 3. Keep the document's Categories field in sync.
+	if ad, err := r.GetByCode(code); err == nil {
+		var newCats []int64
+		for _, c := range ad.Categories {
+			if c != catID {
+				newCats = append(newCats, c)
+			}
+		}
+		ad.Categories = newCats
+		if buf, err := json.Marshal(ad); err == nil {
+			_ = r.store.DocPut(fmt.Sprintf("attrdef:%d", ad.ID), buf)
+		}
+	}
+
+	return nil
 }
 
 func (r *AttrDefRepo) addToAttrDefList(code string) error {
@@ -1057,8 +1295,17 @@ func (r *AttrDefRepo) RebuildAttrValuesFromEANPages(eanPageRepo *EANPageRepo) er
 		}
 	}
 
-	// Write attr_values_cat and attr_label indexes
+	// Write attr_values_cat and attr_label indexes.
+	// Shared keys (attrdef_cat_codes:{catID}, attrdef_list) are accumulated in
+	// memory and written ONCE each, to avoid O(n) rewrites of the same key
+	// (which bloats the append-only DB). Per-(code,value) and per-(code,cat)
+	// keys are unique, so one write each is fine.
+	catCodes := make(map[int64]map[string]bool) // catID -> set of codes
+	listCodes := make(map[string]bool)          // codes for attrdef_list
+
 	for code, catMap := range attrValues {
+		listCodes[code] = true
+
 		// Collect all unique values for this code
 		allValues := make(map[string]struct{})
 		for _, valMap := range catMap {
@@ -1067,7 +1314,7 @@ func (r *AttrDefRepo) RebuildAttrValuesFromEANPages(eanPageRepo *EANPageRepo) er
 			}
 		}
 
-		// Write labels
+		// Write labels (per (code, value) — unique keys, one write each)
 		for val := range allValues {
 			labelKey := "attr_label:" + code + ":" + val
 			if err := r.store.TurboWrite(labelKey, []byte(val)); err != nil {
@@ -1075,7 +1322,7 @@ func (r *AttrDefRepo) RebuildAttrValuesFromEANPages(eanPageRepo *EANPageRepo) er
 			}
 		}
 
-		// Write attr_values_cat per category
+		// Write attr_values_cat per (code, category) — unique keys, one write each
 		for catID, valMap := range catMap {
 			key := turboKeyAttrValuesCat + code + ":" + fmt.Sprintf("%d", catID)
 			buf, err := json.Marshal(valMap)
@@ -1086,15 +1333,26 @@ func (r *AttrDefRepo) RebuildAttrValuesFromEANPages(eanPageRepo *EANPageRepo) er
 			if err := r.store.TurboWrite(key, buf); err != nil {
 				fmt.Printf("WARN: write attr_values_cat %s: %v\n", key, err)
 			}
+			// Track cat -> code for a single batched write below.
+			if catCodes[catID] == nil {
+				catCodes[catID] = make(map[string]bool)
+			}
+			catCodes[catID][code] = true
 		}
+	}
 
-		// Update attrdef_cat_codes for each category
-		for catID := range catMap {
-			r.addToCatCodes(catID, code)
+	// Write attrdef_cat_codes per category ONCE (merged with existing).
+	for catID, codeSet := range catCodes {
+		if err := r.mergeCatCodes(catID, codeSet); err != nil {
+			fmt.Printf("WARN: merge cat_codes %d: %v\n", catID, err)
 		}
+	}
 
-		// Ensure code is in attrdef_list
-		_ = r.addToAttrDefList(code)
+	// Ensure all codes are in attrdef_list in ONE batched write.
+	if len(listCodes) > 0 {
+		if err := r.unionAttrDefList(listCodes); err != nil {
+			fmt.Printf("WARN: union attrdef_list: %v\n", err)
+		}
 	}
 
 	fmt.Printf("[ATTRDEF] RebuildAttrValuesFromEANPages: done in %v (%d pages, %d codes)\n",

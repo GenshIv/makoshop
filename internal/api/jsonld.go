@@ -181,10 +181,10 @@ func buildProductJSONLDBlocks(s *model.SEOSettings, baseURL string, ep *model.EA
 		p["description"] = desc
 	}
 
-	// sku / mpn: prefer the first product's SKU, fall back to the EAN.
+	// sku / mpn: prefer the first product's EAN, fall back to the EAN.
 	sku := ""
 	if len(products) > 0 {
-		sku = products[0].SKU
+		sku = products[0].EAN
 	}
 	if sku == "" {
 		sku = ep.EAN

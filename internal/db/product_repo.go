@@ -333,7 +333,7 @@ func (r *ProductRepo) Update(id int64, updater func(*model.Product)) error {
 // TurboKeyProductList — глобальный индекс всех product ID для быстрого перебора и удаления.
 const TurboKeyProductList = "product_list"
 
-// productUniqueKeyPrefix — префикс для индекса уникальности продукта (SKU+Company+Attributes).
+// productUniqueKeyPrefix — префикс для индекса уникальности продукта (EAN+Company+Attributes).
 const productUniqueKeyPrefix = "product_unique:"
 
 // attrsHash возвращает стабильный хеш от map[string]interface{} атрибутов.
@@ -369,7 +369,7 @@ func kvGet(attrs []model.KeyValue, key string) (string, bool) {
 	return "", false
 }
 
-// productUniqueKey строит ключ уникальности: SKU + CompanyID + option.
+// productUniqueKey строит ключ уникальности: EAN + CompanyID + option.
 // option — модификатор товара (цвет и т.п.), последняя колонка в прайсе.
 func productUniqueKey(sku string, companyID int64, attrs []model.KeyValue) string {
 	if v, ok := kvGet(attrs, "option"); ok && v != "" {
@@ -378,19 +378,19 @@ func productUniqueKey(sku string, companyID int64, attrs []model.KeyValue) strin
 	return fmt.Sprintf("%s:%d", sku, companyID)
 }
 
-// GetOrCreateByKey находит продукт по уникальному ключу (SKU+Company+Attrs) или создаёт новый.
+// GetOrCreateByKey находит продукт по уникальному ключу (EAN+Company+Attrs) или создаёт новый.
 // Если продукт найден — обновляет цену и возвращает существующий ID.
 // Если не найден — создаёт новый и возвращает его ID.
 func (r *ProductRepo) GetOrCreateByKey(p *model.Product) (int64, bool, error) {
-	if p.SKU == "" || p.CompanyID == 0 {
-		// Без SKU/Company создаём как обычно
+	if p.EAN == "" || p.CompanyID == 0 {
+		// Без EAN/Company создаём как обычно
 		if err := r.Create(p); err != nil {
 			return 0, false, err
 		}
 		return p.ID, true, nil
 	}
 
-	key := productUniqueKey(p.SKU, p.CompanyID, p.Attributes)
+	key := productUniqueKey(p.EAN, p.CompanyID, p.Attributes)
 	keyPath := productUniqueKeyPrefix + key
 
 	// Проверяем, есть ли уже такой продукт
@@ -491,6 +491,14 @@ func (r *ProductRepo) GetOrCreateByEAN(p *model.Product, normalizedName string) 
 			}
 			if p.Name != "" && p.Name != existing.Name {
 				existing.Name = p.Name
+				changed = true
+			}
+			if p.ProductURL != "" && p.ProductURL != existing.ProductURL {
+				existing.ProductURL = p.ProductURL
+				changed = true
+			}
+			if p.PurchaseURL != "" && p.PurchaseURL != existing.PurchaseURL {
+				existing.PurchaseURL = p.PurchaseURL
 				changed = true
 			}
 			if len(p.Attributes) > 0 {
@@ -600,6 +608,14 @@ func (r *ProductRepo) BatchGetOrCreateByEAN(products []*model.Product, normalize
 				}
 				if p.Name != "" && p.Name != existing.Name {
 					existing.Name = p.Name
+					changed = true
+				}
+				if p.ProductURL != "" && p.ProductURL != existing.ProductURL {
+					existing.ProductURL = p.ProductURL
+					changed = true
+				}
+				if p.PurchaseURL != "" && p.PurchaseURL != existing.PurchaseURL {
+					existing.PurchaseURL = p.PurchaseURL
 					changed = true
 				}
 				if len(p.Attributes) > 0 {
@@ -714,6 +730,14 @@ func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*mode
 				}
 				if p.Name != "" && p.Name != existing.Name {
 					existing.Name = p.Name
+					changed = true
+				}
+				if p.ProductURL != "" && p.ProductURL != existing.ProductURL {
+					existing.ProductURL = p.ProductURL
+					changed = true
+				}
+				if p.PurchaseURL != "" && p.PurchaseURL != existing.PurchaseURL {
+					existing.PurchaseURL = p.PurchaseURL
 					changed = true
 				}
 				if len(p.Attributes) > 0 {
@@ -1179,7 +1203,7 @@ type PriceRange struct {
 // ProductListItem is the response shape for a product in list results.
 type ProductListItem struct {
 	ID         int64               `json:"id"`
-	SKU        string              `json:"sku"`
+	EAN        string              `json:"sku"`
 	Name       string              `json:"name"`
 	CategoryID int64               `json:"category_id"`
 	CompanyID  int64               `json:"company_id"`
@@ -1244,7 +1268,7 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*EANListRespData, error
 		//	item := ProductListItem{
 		//		ID:       toInt64(m["id"]),
 		//		Name:     toString(m["title"]),
-		//		SKU:      toString(m["ean"]),
+		//		EAN:      toString(m["ean"]),
 		//		Brand:    toString(m["brand"]),
 		//		Currency: toString(m["currency"]),
 		//		Status:   model.ProductStatusActive,

@@ -129,7 +129,6 @@ func (h *Handlers) HandleAttributeValues(w http.ResponseWriter, r *http.Request)
 // --- Products ---
 
 type CreateProductRequest struct {
-	SKU         string           `json:"sku"`
 	EAN         string           `json:"ean,omitempty"` // Standard Catalog Unit — links to landing page
 	Name        string           `json:"name"`
 	Description string           `json:"description,omitempty"`
@@ -288,7 +287,6 @@ func (h *Handlers) HandleProductCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p := &model.Product{
-		SKU:         req.SKU,
 		EAN:         req.EAN,
 		Name:        req.Name,
 		Description: req.Description,
@@ -375,9 +373,6 @@ func (h *Handlers) HandleProductUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.productRepo.Update(id, func(p *model.Product) {
-		if req.SKU != "" {
-			p.SKU = req.SKU
-		}
 		if req.Name != "" {
 			p.Name = req.Name
 		}

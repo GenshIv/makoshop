@@ -12,7 +12,7 @@ import (
 
 const (
 	turboKeyLandingList = "landing_list"
-	turboKeyLandingSCU  = "landing_ean:" // prefix for EAN lookup
+	turboKeyLandingEAN  = "landing_ean:" // prefix for EAN lookup
 )
 
 type LandingRepo struct {
@@ -52,7 +52,7 @@ func (r *LandingRepo) Create(l *model.LandingPage) error {
 	}
 
 	// Turbo index: landing_ean:<ean>
-	eanKey := turboKeyLandingSCU + l.EAN
+	eanKey := turboKeyLandingEAN + l.EAN
 	if err := r.Store.TurboWrite(eanKey, []byte(KeyLandingPage(l.ID))); err != nil {
 		_, _ = r.Store.db.TurboDeleteIndexString(turboKeyLandingList, KeyLandingPage(l.ID))
 		_ = r.Store.DocDelete(KeyLandingPage(l.ID))
@@ -86,7 +86,7 @@ func (r *LandingRepo) CreateNoIndex(l *model.LandingPage) error {
 	}
 
 	// Only write EAN key, don't add to landing_list index
-	eanKey := turboKeyLandingSCU + l.EAN
+	eanKey := turboKeyLandingEAN + l.EAN
 	if err := r.Store.TurboWrite(eanKey, []byte(KeyLandingPage(l.ID))); err != nil {
 		_ = r.Store.DocDelete(KeyLandingPage(l.ID))
 		return fmt.Errorf("turbo index landing_ean: %w", err)
@@ -122,12 +122,12 @@ func (r *LandingRepo) Get(id int64) (*model.LandingPage, error) {
 	return UnmarshalLandingPage(data)
 }
 
-// GetBySCU returns a landing page by EAN.
+// GetByEAN returns a landing page by EAN.
 func (r *LandingRepo) GetByEAN(ean string) (*model.LandingPage, error) {
 	if ean == "" {
 		return nil, fmt.Errorf("ean is empty")
 	}
-	eanKey := turboKeyLandingSCU + ean
+	eanKey := turboKeyLandingEAN + ean
 	data, err := r.Store.db.TurboRawRead(eanKey)
 	if err != nil || len(data) == 0 {
 		return nil, fmt.Errorf("landing page with ean %q not found", ean)
@@ -140,7 +140,7 @@ func (r *LandingRepo) GetByEAN(ean string) (*model.LandingPage, error) {
 // GetBySlug returns a landing page by slug.
 func (r *LandingRepo) GetBySlug(slug string) (*model.LandingPage, error) {
 	// Slugs are derived from EAN, so we can lookup via EAN
-	ean := slugToSCU(slug)
+	ean := slugToEAN(slug)
 	return r.GetByEAN(ean)
 }
 
@@ -162,9 +162,9 @@ func (r *LandingRepo) Update(id int64, updater func(*model.LandingPage)) error {
 
 	// Update EAN index if changed
 	if oldSCU != l.EAN {
-		_ = r.Store.TurboWrite(turboKeyLandingSCU+oldSCU, []byte{}) // clear old
+		_ = r.Store.TurboWrite(turboKeyLandingEAN+oldSCU, []byte{}) // clear old
 		if l.EAN != "" {
-			if err := r.Store.TurboWrite(turboKeyLandingSCU+l.EAN, []byte(strconv.FormatInt(id, 10))); err != nil {
+			if err := r.Store.TurboWrite(turboKeyLandingEAN+l.EAN, []byte(strconv.FormatInt(id, 10))); err != nil {
 				return fmt.Errorf("update landing_scu index: %w", err)
 			}
 		}
@@ -208,7 +208,7 @@ func (r *LandingRepo) Delete(id int64) error {
 	// Remove turbo indexes
 	_, _ = r.Store.db.TurboDeleteIndexString(turboKeyLandingList, KeyLandingPage(id))
 	if l.EAN != "" {
-		_ = r.Store.TurboWrite(turboKeyLandingSCU+l.EAN, []byte{})
+		_ = r.Store.TurboWrite(turboKeyLandingEAN+l.EAN, []byte{})
 	}
 
 	if err := r.Store.DocDelete(KeyLandingPage(id)); err != nil {
@@ -366,8 +366,8 @@ func toLandingSlug(ean string) string {
 	return string(collapsed[start:end])
 }
 
-// slugToSCU reverses the slug back to EAN (approximate).
-func slugToSCU(slug string) string {
+// slugToEAN reverses the slug back to EAN (approximate).
+func slugToEAN(slug string) string {
 	return strings.ReplaceAll(slug, "-", "_")
 }
 

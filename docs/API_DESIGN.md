@@ -236,7 +236,7 @@
 - POST /products
 - Auth: seller
 - Body:
-  - sku
+  - EAN
   - name
   - description
   - category_id

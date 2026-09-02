@@ -79,7 +79,7 @@
 
 5. Product — товар
    - id
-   - sku
+   - ean
    - name
    - description
    - category_id

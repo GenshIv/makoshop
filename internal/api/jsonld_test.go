@@ -142,7 +142,7 @@ func TestBuildProductJSONLDBlocks(t *testing.T) {
 		SeoURL:       "/shop/Rejestratory/TimeLok-300",
 	}
 	products := []model.Product{
-		{SKU: "TimeLok-300NWEPBI", AvgRating: 4.5, ReviewCount: 2},
+		{EAN: "TimeLok-300NWEPBI", AvgRating: 4.5, ReviewCount: 2},
 	}
 	treePath := []string{"Rejestratory"}
 	treePathFull := []db.CategoryTreeNode{{Name: "Rejestratory czasu pracy", Slug: "Rejestratory"}}
@@ -364,7 +364,7 @@ func TestWriteHTMLResponseEANListInjectsJSONLD(t *testing.T) {
 	}
 	data := db.EANListRespData{
 		EANPage:      ep,
-		Products:     []model.Product{{SKU: "TimeLok-300NWEPBI", AvgRating: 4.5, ReviewCount: 2}},
+		Products:     []model.Product{{EAN: "TimeLok-300NWEPBI", AvgRating: 4.5, ReviewCount: 2}},
 		TreePath:     []string{"Rejestratory"},
 		TreePathFull: []db.CategoryTreeNode{{Name: "Rejestratory czasu pracy", Slug: "Rejestratory"}},
 		SEOURL:       "/shop/Rejestratory/TimeLok-300",

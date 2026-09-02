@@ -92,7 +92,7 @@ onMounted(() => {
       <form @submit.prevent="submit" class="bg-surface rounded-lg shadow-sm p-6 space-y-4">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm text-ink-2 mb-1">SKU *</label>
+            <label class="block text-sm text-ink-2 mb-1">EAN *</label>
             <input v-model="form.sku" type="text" class="w-full px-3 py-2 border border-line rounded-lg" required />
           </div>
           <div>

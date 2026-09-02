@@ -12,6 +12,10 @@ import (
 
 var ErrKeyNotFound = errors.New("key not found")
 
+// ErrInvalidAttrKey is returned when a raw attribute key cannot be mapped to
+// a valid attribute code (empty, a value, a sentence, starts with a digit…).
+var ErrInvalidAttrKey = errors.New("invalid attribute key")
+
 type Store struct {
 	db *makodb.ShardedDB
 

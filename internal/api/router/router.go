@@ -169,6 +169,7 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 
 	// POST /admin/change-password — change current user's password (any authenticated user)
 	mux.Handle("/admin/change-password", d.JWT.RequireAuth(http.HandlerFunc(d.adminChangePassword)))
+	// mux.Handle("/admin/change-password", http.HandlerFunc(d.adminChangePassword))
 
 	// GET /admin/products/import/{id} — get import status
 	mux.Handle("/admin/products/import/", d.JWT.RequireRole(http.HandlerFunc(d.adminProductsImportStatus), model.RoleAdmin))

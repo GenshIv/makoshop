@@ -29,7 +29,7 @@ const productJsonLd = computed(() => {
     name: p.name,
     description: p.description || '',
     image: p.images?.[0] || '',
-    sku: p.sku || '',
+    ean: p.ean || '',
     // AggregateRating (required for star snippets)
     aggregateRating: p.avg_rating != null && p.review_count > 0 ? {
       '@type': 'AggregateRating',
@@ -367,7 +367,7 @@ onMounted(() => {
       <!-- Info -->
       <div>
         <h1 class="text-2xl font-bold text-ink">{{ product.name }}</h1>
-        <div v-if="product.sku" class="text-sm text-ink-3 mt-1">SKU: {{ product.sku }}</div>
+        <div v-if="product.sku" class="text-sm text-ink-3 mt-1">EAN: {{ product.sku }}</div>
         <div v-if="product.description" class="mt-4 text-ink-2 whitespace-pre-line text-sm">
           {{ product.description }}
         </div>

@@ -612,26 +612,11 @@ func (h *Handlers) handleRemoveCategoryAttribute(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Remove category from attribute's category list
-	cats, err := h.attrDefRepo.GetCategories(code)
-	if err != nil {
-		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", "attribute not found")
+	// Unbind the category from the attribute (indexes + document, atomically
+	// enough for a single-writer admin endpoint).
+	if err := h.attrDefRepo.RemoveCategoryLink(code, catID); err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
-	}
-
-	var newCats []int64
-	for _, c := range cats {
-		if c != catID {
-			newCats = append(newCats, c)
-		}
-	}
-
-	if len(newCats) == 0 {
-		// No more categories use this attribute — clear it
-		_ = h.store.TurboWrite("attrdef_cats:"+code, []byte{})
-	} else {
-		//buf := makodb.TurboBinaryNew(db.Uint64SliceFromInt64(newCats))
-		//_ = h.store.TurboWrite("attrdef_cats:"+code, buf)
 	}
 
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{

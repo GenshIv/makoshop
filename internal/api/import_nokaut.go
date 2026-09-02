@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	attrsPkg "github.com/GenshIv/makoshop/internal/attrs"
 	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/httpres"
 	"github.com/GenshIv/makoshop/internal/model"
@@ -599,6 +600,16 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 	// import_unified.go), which saves time and avoids re-doing the same global
 	// work for every company.
 
+	// Flush any attribute codes created on-the-fly (HTML parser) to the
+	// registry list in ONE batched write. This covers the case where
+	// newAttrKeys was empty (so Phase 0 / BatchGetOrCreateByKeys did not run)
+	// but the description parser still created new AttrDefs.
+	if h.attrDefRepo != nil {
+		if err := h.attrDefRepo.FlushList(); err != nil {
+			fmt.Printf("[IMPORT-NOKAUT] WARN: FlushList failed: %v\n", err)
+		}
+	}
+
 	// Commit transaction (per-company data: products, indexes, EAN pages).
 	h.importProgress.SetStep(StepCommit)
 	if err := txn.Commit(); err != nil {
@@ -689,15 +700,17 @@ func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, compan
 	// catalog can filter by it (attr.brand=<value>). The AttrDef for the
 	// "brand" code is created in Phase 0 via newAttrKeys.
 	if brand != "" {
-		attrs = append(attrs, model.KeyValue{Key: "brand", Value: brand})
-		newAttrKeys["brand"] = struct{}{}
+		if nv := attrsPkg.NormalizeValue(brand); attrsPkg.ValidValue(nv) {
+			attrs = append(attrs, model.KeyValue{Key: "brand", Value: nv})
+			newAttrKeys["brand"] = struct{}{}
+		}
 	}
 
 	for _, af := range cfg.AttrFields {
 		if val := strings.TrimSpace(offer.Props[af.Field]); val != "" {
-			// Skip attribute values longer than 40 runes
-			if len([]rune(val)) <= 40 {
-				attrs = append(attrs, model.KeyValue{Key: af.Code, Value: html.UnescapeString(val)})
+			// Normalize, split and validate the value (deduplicated).
+			for _, v := range attrsPkg.SplitValues(html.UnescapeString(val)) {
+				attrs = append(attrs, model.KeyValue{Key: af.Code, Value: v})
 			}
 		}
 	}
@@ -754,14 +767,14 @@ func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, compan
 						continue
 					}
 
-					// Add all values for this key
+					// Add all values for this key (normalized + validated).
 					for _, value := range values {
 						if count >= 15 {
 							break
 						}
-						// Skip attribute values longer than 40 runes
-						if len([]rune(value)) <= 40 {
-							attrs = append(attrs, model.KeyValue{Key: ad.Code, Value: value})
+						nv := attrsPkg.NormalizeValue(value)
+						if attrsPkg.ValidValue(nv) {
+							attrs = append(attrs, model.KeyValue{Key: ad.Code, Value: nv})
 						}
 						count++
 					}
@@ -786,6 +799,10 @@ func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, compan
 		description = pricesrc.TruncateHTML(description, 3000)
 	}
 
+	// Final pass: drop duplicate (code, value) pairs coming from different
+	// sources (brand + XML fields + HTML + fallback parsers).
+	attrs = dedupeAttrPairs(attrs)
+
 	return &model.Product{
 		EAN:           ean,
 		Name:          name,
@@ -803,6 +820,26 @@ func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, compan
 		Images:        images,
 		ShopCategory:  shopCategory,
 	}
+}
+
+// dedupeAttrPairs removes duplicate (key, value) pairs, preserving order.
+// Prevents multiple records of the same attribute in product documents and,
+// downstream, in EAN pages and indexes.
+func dedupeAttrPairs(attrs []model.KeyValue) []model.KeyValue {
+	if len(attrs) < 2 {
+		return attrs
+	}
+	seen := make(map[string]bool, len(attrs))
+	result := make([]model.KeyValue, 0, len(attrs))
+	for _, kv := range attrs {
+		k := kv.Key + "\x00" + kv.Value
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		result = append(result, kv)
+	}
+	return result
 }
 
 // mapAvailability converts a raw availability value to product status + stock qty.

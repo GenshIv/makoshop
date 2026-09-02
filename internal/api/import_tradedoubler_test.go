@@ -171,7 +171,7 @@ func TestConvertTradedoublerProduct(t *testing.T) {
 		Images:        []tradedoublerImage{{URL: "https://img.example.com/1.jpg"}},
 		Categories:    []tradedoublerCategory{{Name: "Rejestratory"}},
 	}
-	p, skip := convertTradedoublerProduct(tp, 7, "TestCo", "PLN", cache, newKeys)
+	p, skip := convertTradedoublerProduct(tp, 7, "testco", "TestCo", "PLN", cache, newKeys)
 	if skip {
 		t.Fatal("should not skip")
 	}

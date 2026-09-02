@@ -77,7 +77,9 @@ type tradedoublerProduct struct {
 	Link             string                 `json:"link"`
 	Stock            int                    `json:"stock"`
 	Images           []tradedoublerImage    `json:"images"`
+	ProductImage     tradedoublerImage      `json:"productImage"` // Tradedoubler feed: single product image object
 	Categories       []tradedoublerCategory `json:"categories"`
+	Offers           []tradedoublerOffer    `json:"offers"`
 }
 
 // tradedoublerImage is an image entry (object form) or a bare URL (string form).
@@ -89,6 +91,25 @@ type tradedoublerImage struct {
 type tradedoublerCategory struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
+}
+
+// tradedoublerOffer is an offer within a product. The feed carries the price in
+// offers[0].priceHistory (not at the top level).
+type tradedoublerOffer struct {
+	ID              string               `json:"id"`
+	SourceProductID string               `json:"sourceProductId"`
+	ProductURL      string               `json:"productUrl"`
+	PriceHistory    []tradedoublerPriceH `json:"priceHistory"`
+}
+
+type tradedoublerPriceH struct {
+	Date  int64             `json:"date"`
+	Price tradedoublerMoney `json:"price"`
+}
+
+type tradedoublerMoney struct {
+	Value    json.Number `json:"value"`
+	Currency string      `json:"currency"`
 }
 
 // isTradedoublerURL reports whether the import URL points at a Tradedoubler
@@ -284,14 +305,14 @@ func fetchJSON(client *http.Client, reqURL string, dst interface{}) error {
 // parseTradedoublerProducts converts Tradedoubler API products into
 // model.Product values, ready for the shared import phases. It returns the
 // products and the names (parallel slices) plus the count of skipped items.
-func parseTradedoublerProducts(tps []tradedoublerProduct, companyID int64, companyName, currency string,
+func parseTradedoublerProducts(tps []tradedoublerProduct, companyID int64, companySlug, companyName, currency string,
 	attrDefCache map[string]*model.AttrDef, newAttrKeys map[string]struct{}, limit int) (products []*model.Product, names []string, skipped int) {
 
 	for _, tp := range tps {
 		if limit > 0 && len(products) >= limit {
 			break
 		}
-		p, skip := convertTradedoublerProduct(tp, companyID, companyName, currency, attrDefCache, newAttrKeys)
+		p, skip := convertTradedoublerProduct(tp, companyID, companySlug, companyName, currency, attrDefCache, newAttrKeys)
 		if skip {
 			skipped++
 			continue
@@ -309,7 +330,7 @@ func parseTradedoublerProducts(tps []tradedoublerProduct, companyID int64, compa
 // convertTradedoublerProduct maps a single Tradedoubler product to a
 // model.Product. The second return value is true when the item should be
 // skipped (no name, no usable price, etc.).
-func convertTradedoublerProduct(tp tradedoublerProduct, companyID int64, companyName, currency string,
+func convertTradedoublerProduct(tp tradedoublerProduct, companyID int64, companySlug, companyName, currency string,
 	attrDefCache map[string]*model.AttrDef, newAttrKeys map[string]struct{}) (*model.Product, bool) {
 
 	name := strings.TrimSpace(firstNonEmptyStr(tp.Name, tp.Title))
@@ -318,24 +339,54 @@ func convertTradedoublerProduct(tp tradedoublerProduct, companyID int64, company
 	}
 
 	// Price: Tradedoubler reports it in the smallest currency unit (integer).
-	// A value with a fractional part is already a decimal price.
+	// A value with a fractional part is already a decimal price. The feed
+	// usually carries the price in offers[0].priceHistory, so fall back to
+	// the latest history entry when the top-level field is empty.
 	price, ok := tradedoublerPrice(tp.Price)
+	offerCurrency := ""
+	sourceProductID := ""
+	offerProductURL := ""
+	if len(tp.Offers) > 0 {
+		// sourceProductId is the STABLE product identifier in the feed. It is
+		// used as the EAN/EAN so re-imports match products in place. The offer
+		// id (a UUID) changes on every feed fetch and must NOT be used here.
+		sourceProductID = strings.TrimSpace(tp.Offers[0].SourceProductID)
+		// The purchase link lives in offers[0].productUrl (not at the top
+		// level in the Tradedoubler feed).
+		offerProductURL = strings.TrimSpace(tp.Offers[0].ProductURL)
+		if !ok || price <= 0 {
+			if len(tp.Offers[0].PriceHistory) > 0 {
+				last := tp.Offers[0].PriceHistory[len(tp.Offers[0].PriceHistory)-1]
+				price, ok = tradedoublerPrice(last.Price.Value)
+				offerCurrency = last.Price.Currency
+			}
+		}
+	}
 	if !ok || price <= 0 {
 		return nil, true
 	}
-	cur := strings.TrimSpace(firstNonEmptyStr(tp.PriceCurrency, tp.Currency, currency))
+	cur := strings.TrimSpace(firstNonEmptyStr(tp.PriceCurrency, tp.Currency, offerCurrency, currency))
 	if cur == "" {
 		cur = "PLN"
 	}
 
-	// EAN: prefer an explicit EAN/GTIN/barcode; fall back to the product id.
+	// EAN: prefer an explicit EAN/GTIN/barcode (globally unique, no prefix).
+	// Otherwise derive a STABLE synthetic EAN from the feed's sourceProductId,
+	// prefixed with the company slug: sourceProductId is unique only within a
+	// company, so the prefix makes it globally unique and stable across
+	// re-imports. Never use the offer id (a UUID that changes on every feed
+	// fetch — it would break in-place re-imports and produce duplicates).
 	ean := strings.TrimSpace(firstNonEmptyStr(tp.EAN, tp.GTIN, tp.Barcode))
+	if ean == "" && sourceProductID != "" {
+		prefix := strings.TrimSpace(companySlug)
+		if prefix == "" {
+			prefix = strconv.FormatInt(companyID, 10)
+		}
+		ean = prefix + "_" + sourceProductID
+	}
 	if ean == "" && tp.ID > 0 {
 		ean = strconv.FormatInt(tp.ID, 10)
 	}
-
-	// SKU: use the EAN (the stable identifier) so re-imports match in place.
-	sku := ean
 
 	// Name with company suffix (matches the other importers' convention).
 	fullName := name
@@ -346,9 +397,12 @@ func convertTradedoublerProduct(tp tradedoublerProduct, companyID int64, company
 	// Description: prefer the long description, fall back to the short one.
 	description := strings.TrimSpace(firstNonEmptyStr(tp.Description, tp.ShortDescription))
 
-	// Images: first usable image URL.
+	// Images: first usable image URL. Tradedoubler feeds carry the image in
+	// productImage (a single object); some feeds use the images[] array.
 	var images []string
-	if len(tp.Images) > 0 {
+	if u := strings.TrimSpace(tp.ProductImage.URL); u != "" {
+		images = []string{u}
+	} else if len(tp.Images) > 0 {
 		if u := strings.TrimSpace(tp.Images[0].URL); u != "" {
 			images = []string{u}
 		}
@@ -375,20 +429,32 @@ func convertTradedoublerProduct(tp tradedoublerProduct, companyID int64, company
 		}
 	}
 
-	productURL := strings.TrimSpace(firstNonEmptyStr(tp.ProductURL, tp.URL, tp.Link))
+	// Purchase link: top-level productUrl/url/link, falling back to the offer's
+	// productUrl (where the Tradedoubler feed carries it). The offer's productUrl
+	// is the affiliate/partner tracking URL → PurchaseURL; the direct product
+	// link is derived for ProductURL.
+	purchaseURL := strings.TrimSpace(firstNonEmptyStr(tp.ProductURL, tp.URL, tp.Link, offerProductURL))
+	productURL := extractDirectProductURL(purchaseURL)
+
+	// Quantity: the Tradedoubler feed has no stock/quantity field, so default
+	// to 1 (in stock) when the feed doesn't provide one.
+	stock := int64(tp.Stock)
+	if stock <= 0 {
+		stock = 1
+	}
 
 	p := &model.Product{
-		SKU:         sku,
 		EAN:         ean,
 		Name:        fullName,
 		Description: description,
 		CompanyID:   companyID,
 		Brand:       brand,
-		Price:       price,
+		Price:       price * 100,
 		Currency:    cur,
-		StockQty:    int64(tp.Stock),
+		StockQty:    stock,
 		Status:      model.ProductStatusActive,
 		ProductURL:  productURL,
+		PurchaseURL: purchaseURL,
 		Images:      images,
 		Attributes:  attrs,
 		SEO: model.ProductSEO{

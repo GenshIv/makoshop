@@ -319,7 +319,7 @@ const getScuPreviewSuppliers = (data) => {
   // Group by modification (same logic as EANPageView)
   const groups = new Map();
   for (const p of data.products) {
-    const pureName = (p.name || '').replace(/\s*—\s*[^—]+$/, '').trim() || p.sku || 'Unknown';
+    const pureName = (p.name || '').replace(/\s*—\s*[^—]+$/, '').trim() || p.ean || 'Unknown';
     if (!groups.has(pureName)) {
       groups.set(pureName, { name: pureName, suppliers: [] });
     }
@@ -1386,8 +1386,9 @@ defineOptions({ name: 'CatalogView' });
           </div>
       </div>
 
-      <!-- Categories panel with description and subcategories -->
-      <div class="mt-2 bg-surface rounded-xl border border-line">
+      <!-- Categories panel with description and subcategories. Hidden on the main
+           "All products" page where it would only repeat the title. -->
+      <div v-if="currentBrowseCategory || categoryBannerEl" class="mt-2 bg-surface rounded-xl border border-line">
         <div class="p-4">
           <!-- Breadcrumbs-style path -->
           <div class="flex items-center flex-wrap gap-1 text-xs text-ink-3 mb-2">

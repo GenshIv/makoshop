@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	attrsPkg "github.com/GenshIv/makoshop/internal/attrs"
 	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/httpres"
 	"github.com/GenshIv/makoshop/internal/model"
@@ -203,9 +205,10 @@ type jsonProductFileItem struct {
 
 // jsonOfferFileItem represents an offer within a product.
 type jsonOfferFileItem struct {
-	ID           string           `json:"id"`
-	ProductURL   string           `json:"productUrl"`
-	PriceHistory []jsonPriceEntry `json:"priceHistory"`
+	ID              string           `json:"id"`
+	SourceProductID string           `json:"sourceProductId"`
+	ProductURL      string           `json:"productUrl"`
+	PriceHistory    []jsonPriceEntry `json:"priceHistory"`
 }
 
 // jsonPriceEntry represents a price entry.
@@ -363,7 +366,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 			return result
 		}
 		result.Files = 1 // the feed is one logical source
-		parsed, names, skipped := parseTradedoublerProducts(tps, company.ID, company.Name, currency, attrDefCache, newAttrKeys, limit)
+		parsed, names, skipped := parseTradedoublerProducts(tps, company.ID, company.Slug, company.Name, currency, attrDefCache, newAttrKeys, limit)
 		allParsedProducts = parsed
 		allParsedNames = names
 		result.ProductsSkipped = skipped
@@ -410,7 +413,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 				}
 
 				// Parse the JSON product into a model.Product
-				prod, skip, err := parseJSONProductForImport(jp, company.ID, company.Name, currency, attrDefCache, newAttrKeys, h.attrDefRepo)
+				prod, skip, err := parseJSONProductForImport(jp, company.ID, company.Slug, company.Name, currency, attrDefCache, newAttrKeys, h.attrDefRepo)
 				if err != nil {
 					fmt.Printf("[IMPORT-JSON] WARN: parse product %s: %v\n", jp.Name, err)
 					fileSkipped++
@@ -593,6 +596,15 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		// They run ONCE after all companies have imported
 		// (runGlobalRecalculation in import_unified.go).
 
+		// Flush any attribute codes created on-the-fly (description parser) to
+		// the registry list in ONE batched write (covers the case where Phase 0
+		// did not run but the parser still created new AttrDefs).
+		if h.attrDefRepo != nil {
+			if err := h.attrDefRepo.FlushList(); err != nil {
+				fmt.Printf("[IMPORT-JSON] WARN: FlushList failed: %v\n", err)
+			}
+		}
+
 		// Commit transaction (per-company data: products, indexes, EAN pages).
 		h.importProgress.SetStep(StepCommit)
 		if err := txn.Commit(); err != nil {
@@ -613,7 +625,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 func identityNormalize(s string) string { return s }
 
 // parseJSONProductForImport converts a jsonPriceEntry to a model.Product.
-func parseJSONProductForImport(jp jsonProductFileItem, companyID int64, companyName, currency string,
+func parseJSONProductForImport(jp jsonProductFileItem, companyID int64, companySlug, companyName, currency string,
 	attrDefCache map[string]*model.AttrDef, newAttrKeys map[string]struct{}, attrDefRepo *db.AttrDefRepo) (*model.Product, bool, error) {
 
 	if jp.Name == "" {
@@ -635,17 +647,21 @@ func parseJSONProductForImport(jp jsonProductFileItem, companyID int64, companyN
 		return nil, true, nil
 	}
 
-	// Extract SKU from offer ID
+	// EAN/EAN: derive a STABLE identifier from the feed's sourceProductId,
+	// prefixed with the company slug. sourceProductId is unique only within a
+	// company, so the prefix makes it globally unique and stable across
+	// re-imports. Never use the offer id (a UUID that changes on every feed
+	// fetch — it would break in-place matching, prevent stock actualization,
+	// and produce duplicate EAN pages).
 	sku := ""
-	if len(jp.Offers) > 0 {
-		sku = jp.Offers[0].ID
+	if len(jp.Offers) > 0 && strings.TrimSpace(jp.Offers[0].SourceProductID) != "" {
+		prefix := strings.TrimSpace(companySlug)
+		if prefix == "" {
+			prefix = strconv.FormatInt(companyID, 10)
+		}
+		sku = prefix + "_" + strings.TrimSpace(jp.Offers[0].SourceProductID)
 	}
-
-	// EAN: derive from SKU (first part before dash)
 	ean := sku
-	if idx := strings.Index(sku, "-"); idx > 0 {
-		ean = sku[:idx]
-	}
 
 	// Build name with company suffix
 	name := jp.Name
@@ -670,19 +686,37 @@ func parseJSONProductForImport(jp jsonProductFileItem, companyID int64, companyN
 	// "brand" code is created in Phase 0 via newAttrKeys.
 	var attrs []model.KeyValue
 	if jp.Brand != "" {
-		attrs = append(attrs, model.KeyValue{Key: "brand", Value: jp.Brand})
-		newAttrKeys["brand"] = struct{}{}
+		if nv := attrsPkg.NormalizeValue(jp.Brand); attrsPkg.ValidValue(nv) {
+			attrs = append(attrs, model.KeyValue{Key: "brand", Value: nv})
+			newAttrKeys["brand"] = struct{}{}
+		}
 	}
 
+	// Parse attributes from the description (same core as the Nokaut import).
+	// Descriptions in JSON/Tradedoubler feeds often carry "Key: value" specs.
+	description := pricesrc.CleanHTMLDescription(jp.Description)
+	if description != "" && attrDefRepo != nil {
+		keyParser := pricesrc.NewHTMLAttrKeyParser(attrDefRepo)
+		if htmlAttrs := keyParser.Parse(description); len(htmlAttrs) > 0 {
+			for code, values := range htmlAttrs {
+				for _, value := range values {
+					attrs = append(attrs, model.KeyValue{Key: code, Value: value})
+				}
+			}
+		}
+	}
+
+	// Drop duplicate (code, value) pairs from different sources.
+	attrs = dedupeAttrPairs(attrs)
+
 	p := &model.Product{
-		SKU:         sku,
 		EAN:         ean,
 		Name:        name,
-		Description: jp.Description,
+		Description: description,
 		CompanyID:   companyID,
 		BrandID:     brandID,
 		Brand:       jp.Brand,
-		Price:       price,
+		Price:       price * 100,
 		Currency:    extractedCurrency,
 		StockQty:    0,
 		Status:      model.ProductStatusActive,
@@ -695,8 +729,40 @@ func parseJSONProductForImport(jp jsonProductFileItem, companyID int64, companyN
 	}
 
 	if len(jp.Offers) > 0 {
-		p.ProductURL = jp.Offers[0].ProductURL
+		p.StockQty = int64(len(jp.Offers))
+		// The offer's productUrl is the affiliate/partner purchase link (for
+		// Tradedoubler feeds it is a tracking URL). Store it as PurchaseURL and
+		// derive the direct product link for ProductURL.
+		p.PurchaseURL = strings.TrimSpace(jp.Offers[0].ProductURL)
+		p.ProductURL = extractDirectProductURL(jp.Offers[0].ProductURL)
 	}
 
 	return p, false, nil
+}
+
+// extractDirectProductURL returns the direct product link from an offer URL.
+// Tradedoubler feeds carry a tracking URL of the form
+// "https://pdt.tradedoubler.com/click?...url(<url-encoded direct link>)"; the
+// direct link is extracted and decoded from the url(...) part. If the URL is
+// not a tracking URL (no url(...) part), it is returned as-is (already direct).
+func extractDirectProductURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	const marker = "url("
+	idx := strings.LastIndex(raw, marker)
+	if idx < 0 {
+		return raw // not a tracking URL — already a direct link
+	}
+	rest := raw[idx+len(marker):]
+	end := strings.Index(rest, ")")
+	if end < 0 {
+		return raw
+	}
+	encoded := rest[:end]
+	if decoded, err := url.PathUnescape(encoded); err == nil && decoded != "" {
+		return decoded
+	}
+	return encoded
 }

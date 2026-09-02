@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	attrsPkg "github.com/GenshIv/makoshop/internal/attrs"
 	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/model"
 )
@@ -40,23 +41,13 @@ func (p *HTMLAttrKeyParser) Parse(htmlContent string) map[string][]string {
 	for _, pair := range pairs {
 		ad, err := p.attrDefRepo.GetOrCreateByKey(pair.Key)
 		if err != nil {
+			// Invalid key (value, sentence, …) — skip this pair.
 			continue
 		}
 
-		value := strings.TrimSpace(pair.Value)
-		if value != "" {
-			// Split by commas if present
-			if strings.Contains(value, ",") {
-				parts := strings.Split(value, ",")
-				for _, part := range parts {
-					part = strings.TrimSpace(part)
-					if part != "" {
-						attrs[ad.Code] = append(attrs[ad.Code], part)
-					}
-				}
-			} else {
-				attrs[ad.Code] = append(attrs[ad.Code], value)
-			}
+		// Normalize, split and validate values (deduplicated).
+		for _, v := range attrsPkg.SplitValues(pair.Value) {
+			attrs[ad.Code] = append(attrs[ad.Code], v)
 		}
 	}
 

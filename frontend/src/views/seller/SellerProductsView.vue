@@ -95,7 +95,7 @@ onMounted(fetchProducts);
           <tr>
             <th scope="col" class="px-4 py-3 text-left">ID</th>
             <th scope="col" class="px-4 py-3 text-left">{{ t('seller.name') }}</th>
-            <th scope="col" class="px-4 py-3 text-left">SKU</th>
+            <th scope="col" class="px-4 py-3 text-left">EAN</th>
             <th scope="col" class="px-4 py-3 text-left">{{ t('seller.price') }}</th>
             <th scope="col" class="px-4 py-3 text-left">{{ t('seller.status') }}</th>
             <th scope="col" class="px-4 py-3 text-right">{{ t('seller.actions') }}</th>

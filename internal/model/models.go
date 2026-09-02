@@ -281,7 +281,6 @@ type ProductSEO struct {
 
 type Product struct {
 	ID            int64         `json:"id"`
-	SKU           string        `json:"sku"`
 	EAN           string        `json:"ean,omitempty"` // European barcode — links to landing page
 	Name          string        `json:"name"`
 	Description   string        `json:"description,omitempty"`

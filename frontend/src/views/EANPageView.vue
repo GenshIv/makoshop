@@ -308,7 +308,7 @@ async function initFromData() {
     // No products yet — use page data as fallback
     selectedProduct.value = {
       id: 0,
-      sku: page.value.sku || '',
+      ean: page.value.ean || '',
       name: page.value.title || '',
       price: page.value.min_price,
       currency: page.value.currency || 'EUR',
@@ -461,7 +461,7 @@ const modifications = computed(() => {
   const groups = new Map();
   for (const p of filtered) {
     const pureName = stripCompanyFromName(p.name);
-    const key = pureName || p.sku || t('eanpage.no_name');
+    const key = pureName || p.ean || t('eanpage.no_name');
     if (!groups.has(key)) {
       groups.set(key, { name: key, suppliers: [] });
     }

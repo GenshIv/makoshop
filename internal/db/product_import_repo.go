@@ -74,7 +74,7 @@ func (r *ProductImportRepo) CreateImportJob(reader io.Reader, companyID int64) (
 	job.TotalLines = len(products)
 
 	for i, p := range products {
-		if p.Name == "" || p.SKU == "" {
+		if p.Name == "" || p.EAN == "" {
 			job.SkippedCount++
 			job.Errors = append(job.Errors, fmt.Sprintf("line %d: skipped (missing name or sku)", i+1))
 			continue
@@ -94,7 +94,7 @@ func (r *ProductImportRepo) CreateImportJob(reader io.Reader, companyID int64) (
 
 		if err := r.productRepo.Create(&p); err != nil {
 			job.SkippedCount++
-			job.Errors = append(job.Errors, fmt.Sprintf("line %d: failed to create product %s: %v", i+1, p.SKU, err))
+			job.Errors = append(job.Errors, fmt.Sprintf("line %d: failed to create product %s: %v", i+1, p.EAN, err))
 			continue
 		}
 
