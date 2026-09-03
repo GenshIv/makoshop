@@ -97,6 +97,8 @@ const rebuildEndpoints = {
   all: '/admin/eanpages/catalogize-all',
 };
 
+const deleteAllLoading = ref(false);
+
 const rebuildKey = ref(null);
 
 const askRebuild = (key) => {
@@ -127,6 +129,27 @@ const runRebuild = async (key) => {
     toast.error(t('admin.rebuild_failed', { error: err }));
   } finally {
     systemLoading.value = null;
+  }
+};
+
+const deleteAllKey = ref(null);
+
+const askDeleteAll = () => {
+  deleteAllKey.value = true;
+};
+
+const runDeleteAll = async () => {
+  deleteAllKey.value = null;
+  deleteAllLoading.value = true;
+  try {
+    await api.post('/admin/delete-all', { confirm: true });
+    toast.success(t('admin.delete_all_completed'));
+  } catch (e) {
+    console.error('delete all error:', e);
+    const err = e.response?.data?.message || e.message;
+    toast.error(t('admin.delete_all_failed', { error: err }));
+  } finally {
+    deleteAllLoading.value = false;
   }
 };
 
@@ -236,6 +259,21 @@ onMounted(() => {
         </div>
         <div class="text-[11px] text-ink-3 mt-1">
           {{ t('admin.rebuild_hint') }}
+        </div>
+      </div>
+
+      <!-- Delete all button -->
+      <div class="mb-6">
+        <div class="text-sm font-medium text-ink-2 mb-2">{{ t('admin.delete_all_title') }}</div>
+        <button
+          @click="askDeleteAll"
+          :disabled="deleteAllLoading"
+          class="px-3 py-1.5 text-xs rounded-md border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50"
+        >
+          {{ deleteAllLoading ? '...' : t('admin.delete_all_button') }}
+        </button>
+        <div class="text-[11px] text-ink-3 mt-1">
+          {{ t('admin.delete_all_hint') }}
         </div>
       </div>
 
@@ -374,6 +412,16 @@ onMounted(() => {
       :cancel-text="t('admin.cancel')"
       @confirm="runRebuild(rebuildKey)"
       @cancel="rebuildKey = null"
+    />
+
+    <ConfirmDialog
+      :open="deleteAllKey !== null"
+      :title="t('admin.delete_all_title')"
+      :message="t('admin.delete_all_confirm')"
+      :confirm-text="t('admin.delete_all_button')"
+      :cancel-text="t('admin.cancel')"
+      @confirm="runDeleteAll"
+      @cancel="deleteAllKey = null"
     />
   </div>
 </template>

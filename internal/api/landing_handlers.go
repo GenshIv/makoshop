@@ -1949,6 +1949,9 @@ func (h *Handlers) HandleAdminRebuildAttrDefIndexes(w http.ResponseWriter, r *ht
 	fmt.Println("[REBUILD-ATTRDEF-INDEXES] Starting...")
 	startTime := time.Now()
 
+	// Load field map for cleanup
+	fieldMap := loadAllegroFieldMap()
+
 	// Rebuild cat_codes index
 	if err := h.attrDefRepo.RebuildCatCodesIndex(); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
@@ -1957,7 +1960,7 @@ func (h *Handlers) HandleAdminRebuildAttrDefIndexes(w http.ResponseWriter, r *ht
 
 	// Rebuild attr_values from EAN pages
 	if h.eanPageRepo != nil {
-		if err := h.attrDefRepo.RebuildAttrValuesFromEANPages(h.eanPageRepo); err != nil {
+		if err := h.attrDefRepo.RebuildAttrValuesFromEANPages(h.eanPageRepo, fieldMap); err != nil {
 			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 			return
 		}

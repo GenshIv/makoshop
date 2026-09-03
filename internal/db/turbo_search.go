@@ -287,6 +287,9 @@ func (t *TurboProductSearch) BatchIndexProductstx(txn *Transaction, products []*
 	// Collect vendor (company) index entries for cleanup support
 	vendorIndex := make(map[string][]string) // vendorKey -> []docID
 
+	// Collect attribute values per category for filter indexes
+	attrCatRef := make(map[string]map[int64]map[string]struct{}) // code -> {catID -> {value}}
+
 	for _, p := range products {
 		docID := KeyProduct(p.ID)
 
@@ -323,6 +326,17 @@ func (t *TurboProductSearch) BatchIndexProductstx(txn *Transaction, products []*
 				}
 				attrKey := turboKeyAttr(kv.Key, valStr)
 				indexes[attrKey] = append(indexes[attrKey], docID)
+
+				// Collect for category filter indexes
+				if p.CategoryID != 0 {
+					if attrCatRef[kv.Key] == nil {
+						attrCatRef[kv.Key] = make(map[int64]map[string]struct{})
+					}
+					if attrCatRef[kv.Key][p.CategoryID] == nil {
+						attrCatRef[kv.Key][p.CategoryID] = make(map[string]struct{})
+					}
+					attrCatRef[kv.Key][p.CategoryID][valStr] = struct{}{}
+				}
 			}
 		}
 
@@ -377,6 +391,31 @@ func (t *TurboProductSearch) BatchIndexProductstx(txn *Transaction, products []*
 	for vendorKey, docIDs := range vendorIndex {
 		if _, err := txn.TurboPutBatchIndexString(vendorKey, docIDs); err != nil {
 			fmt.Printf("WARN: turbo batch vendor index %s: %v\n", vendorKey, err)
+		}
+	}
+
+	// Write attribute value indexes per category (for filter UI)
+	for code, catMap := range attrCatRef {
+		for catID, values := range catMap {
+			key := "attr_values_cat:" + code + ":" + strconv.FormatInt(catID, 10)
+			// Read existing values to merge (reads are not part of transaction)
+			existingData, _ := t.store.db.TurboRawRead(key)
+			var existing map[string]bool
+			if len(existingData) > 0 {
+				json.Unmarshal(existingData, &existing)
+			}
+			if existing == nil {
+				existing = make(map[string]bool)
+			}
+			// Merge new values
+			for val := range values {
+				existing[val] = true
+			}
+			// Write back (buffered in transaction)
+			buf, _ := json.Marshal(existing)
+			if err := txn.TurboWrite(key, buf); err != nil {
+				fmt.Printf("WARN: turbo batch attr_values_cat %s: %v\n", key, err)
+			}
 		}
 	}
 

@@ -86,6 +86,7 @@ func NewHandlers(store *db.Store) *Handlers {
 	categoryRepo := db.NewCategoryRepo(store)
 
 	attrDefRepo := db.NewAttrDefRepo(store)
+	attrDefRepo.SetCategoryRepo(categoryRepo)
 
 	// Turbo search: enabled by default. Can be disabled via env flag if needed.
 	turboEnabled := true
@@ -97,7 +98,7 @@ func NewHandlers(store *db.Store) *Handlers {
 
 	eanPageRepo := db.NewEANPageRepo(store)
 	eanPageRepo.SetCategoryRepo(categoryRepo)
-	eanPageRepo.EnableCatalogizeNew(false) // disabled: categories come from price files
+	eanPageRepo.EnableCatalogizeNew(true) // auto-catalogize new EAN pages during import
 	turboSearch.SetEANPageRepo(eanPageRepo)
 
 	// Attach EANPageRepo to CategoryRepo for filtering public tree

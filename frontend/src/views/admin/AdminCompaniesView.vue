@@ -473,6 +473,7 @@ const savePriceConfig = async () => {
 const priceFormats = [
   { value: 'nokaut', label: 'XML (Nokaut)' },
   { value: 'json', label: 'JSON' },
+  { value: 'allegro', label: 'Allegro (JSON + fields)' },
 ];
 
 const jsonImporting = ref(false);
@@ -607,6 +608,7 @@ const emptyUnifiedSettingsForm = () => ({
     availability_map: {},
     attr_fields: [],
     html_attr_rules: [],
+    field_map: {},
   },
 });
 
@@ -638,6 +640,7 @@ const openUnifiedSettings = async (company) => {
       if (!unifiedSettingsForm.value.price_source.attr_fields) unifiedSettingsForm.value.price_source.attr_fields = [];
       if (!unifiedSettingsForm.value.price_source.availability_map) unifiedSettingsForm.value.price_source.availability_map = {};
       if (!unifiedSettingsForm.value.price_source.html_attr_rules) unifiedSettingsForm.value.price_source.html_attr_rules = [];
+      if (!unifiedSettingsForm.value.price_source.field_map) unifiedSettingsForm.value.price_source.field_map = {};
       // Normalize format: empty -> 'nokaut' so the value is always valid.
       if (!unifiedSettingsForm.value.price_source.format) unifiedSettingsForm.value.price_source.format = 'nokaut';
     }
@@ -677,6 +680,52 @@ const addParserRule = () => {
 
 const removeParserRule = (idx) => {
   unifiedSettingsForm.value.price_source.html_attr_rules.splice(idx, 1);
+};
+
+// --- Field map (Allegro feed field codes -> attribute names) ---
+const fieldMapLoading = ref(false);
+const fieldMapNewCode = ref('');
+
+const fieldMapEntries = () => {
+  const fm = unifiedSettingsForm.value?.price_source?.field_map || {};
+  return Object.entries(fm).sort(([a], [b]) => a.localeCompare(b));
+};
+
+const loadDefaultFieldMap = async () => {
+  if (!unifiedSettingsForm.value) return;
+  fieldMapLoading.value = true;
+  try {
+    const res = await api.get('/admin/field-map/default');
+    const fields = res.data?.fields || {};
+    // Merge: keep existing user edits, fill in missing codes from the default.
+    const fm = unifiedSettingsForm.value.price_source.field_map || {};
+    for (const [code, entry] of Object.entries(fields)) {
+      if (!fm[code]) fm[code] = { ...entry };
+    }
+    unifiedSettingsForm.value.price_source.field_map = fm;
+    toast.success(`${Object.keys(fields).length} fields loaded from default map`);
+  } catch (e) {
+    toast.error(e.response?.data?.message || 'Failed to load default field map');
+  } finally {
+    fieldMapLoading.value = false;
+  }
+};
+
+const addFieldMapEntry = () => {
+  const code = fieldMapNewCode.value.trim();
+  if (!code || !unifiedSettingsForm.value) return;
+  if (!unifiedSettingsForm.value.price_source.field_map) {
+    unifiedSettingsForm.value.price_source.field_map = {};
+  }
+  if (!unifiedSettingsForm.value.price_source.field_map[code]) {
+    unifiedSettingsForm.value.price_source.field_map[code] = { name: '' };
+  }
+  fieldMapNewCode.value = '';
+};
+
+const removeFieldMapEntry = (code) => {
+  if (!unifiedSettingsForm.value?.price_source?.field_map) return;
+  delete unifiedSettingsForm.value.price_source.field_map[code];
 };
 
 const saveUnifiedSettings = async () => {
@@ -1428,6 +1477,67 @@ onBeforeUnmount(stopProgressPolling);
               <p v-if="!unifiedSettingsForm.price_source.html_attr_rules || unifiedSettingsForm.price_source.html_attr_rules.length === 0" class="text-xs text-ink-3">
                 No parser rules defined.
               </p>
+            </div>
+          </div>
+
+          <!-- Section: Field Map (Allegro feed field codes -> attribute names) -->
+          <div class="border-b border-line pb-4">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-sm font-semibold text-ink-2">
+                {{ t('admin.field_map') || 'Field Map' }}
+                <span class="text-[11px] text-ink-3 font-normal">({{ fieldMapEntries().length }})</span>
+              </h3>
+              <div class="flex items-center gap-2">
+                <button @click="loadDefaultFieldMap" :disabled="fieldMapLoading" class="text-xs text-purple-700 hover:underline disabled:opacity-50">
+                  {{ fieldMapLoading ? 'Loading...' : (t('admin.field_map_load_default') || 'Load default (Allegro)') }}
+                </button>
+              </div>
+            </div>
+            <p class="text-[11px] text-ink-3 mb-2">
+              {{ t('admin.field_map_hint') || 'Maps raw feed field codes (e.g. Allegro attr_11323) to attribute names. Name is the primary (Polish) label; add translations as needed. "Skip" excludes a field from attributes.' }}
+            </p>
+            <div class="max-h-72 overflow-y-auto border border-line rounded-md">
+              <table class="w-full text-xs">
+                <thead class="sticky top-0 bg-surface-2 text-ink-3">
+                  <tr>
+                    <th class="text-left px-2 py-1 font-medium w-32">Code</th>
+                    <th class="text-left px-2 py-1 font-medium">Name (PL)</th>
+                    <th class="text-left px-2 py-1 font-medium w-24">RU</th>
+                    <th class="text-left px-2 py-1 font-medium w-24">EN</th>
+                    <th class="text-center px-2 py-1 font-medium w-10">Skip</th>
+                    <th class="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="[code, entry] in fieldMapEntries()" :key="code" class="border-t border-line">
+                    <td class="px-2 py-1 font-mono text-[11px] text-ink-2">{{ code }}</td>
+                    <td class="px-2 py-1">
+                      <input v-model="entry.name" type="text" class="w-full px-1.5 py-0.5 text-xs rounded border border-line bg-surface" placeholder="Stan" />
+                    </td>
+                    <td class="px-2 py-1">
+                      <input v-model="entry.name_ru" type="text" class="w-full px-1.5 py-0.5 text-xs rounded border border-line bg-surface" placeholder="—" />
+                    </td>
+                    <td class="px-2 py-1">
+                      <input v-model="entry.name_en" type="text" class="w-full px-1.5 py-0.5 text-xs rounded border border-line bg-surface" placeholder="—" />
+                    </td>
+                    <td class="px-2 py-1 text-center">
+                      <input v-model="entry.skip" type="checkbox" class="accent-purple-600" />
+                    </td>
+                    <td class="px-2 py-1 text-center">
+                      <button @click="removeFieldMapEntry(code)" class="text-red-600 hover:text-red-700" :aria-label="'Remove ' + code">&times;</button>
+                    </td>
+                  </tr>
+                  <tr v-if="fieldMapEntries().length === 0">
+                    <td colspan="6" class="px-2 py-3 text-center text-ink-3">
+                      No fields mapped. Load the default Allegro map or add a code below.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+              <input v-model="fieldMapNewCode" type="text" class="flex-1 px-2 py-1 text-xs rounded-md border border-line bg-surface" placeholder="attr_12345" @keyup.enter="addFieldMapEntry" />
+              <button @click="addFieldMapEntry" class="text-xs text-purple-700 hover:underline">+ Add code</button>
             </div>
           </div>
 

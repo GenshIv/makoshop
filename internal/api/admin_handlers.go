@@ -153,6 +153,10 @@ func (h *Handlers) HandleAdminAttrDefDelete(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if err := h.attrDefRepo.RemoveKeyFromList(code); err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+	}
+
 	httpres.WriteJSON(w, http.StatusOK, map[string]string{"message": "deleted", "code": code})
 }
 
@@ -1001,6 +1005,80 @@ func (h *Handlers) HandleAdminEANPageRecalculateMinPrices(w http.ResponseWriter,
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "ok",
 		"message": "Min prices recalculated and sort indexes rebuilt",
+	})
+}
+
+// HandleAdminDeleteAll deletes all eanpages, products, attributes, and indexes.
+// POST /admin/delete-all
+// WARNING: This is a destructive operation. Requires confirm=true in body.
+func (h *Handlers) HandleAdminDeleteAll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	// Optional: require confirmation in body
+	type req struct {
+		Confirm bool `json:"confirm"`
+	}
+	var body req
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if !body.Confirm {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "set confirm=true in body")
+		return
+	}
+
+	fmt.Println("[DELETE-ALL] Starting deletion of all eanpages, products, attributes...")
+
+	// 1. Delete all products (and their indexes)
+	if err := h.productRepo.DeleteAllProducts(); err != nil {
+		fmt.Printf("[DELETE-ALL] WARN: delete products: %v\n", err)
+	}
+
+	// 2. Delete all EAN pages (and their indexes)
+	if h.eanPageSearch != nil {
+		tokens, _ := h.store.DB().TurboGetIndexTokens(db.TurboKeyEANPageList)
+		if len(tokens) > 0 {
+			fmt.Printf("[DELETE-ALL] Deleting %d EAN pages...\n", len(tokens))
+			docs, _ := h.store.DB().MultiGetByDocIDs(tokens)
+			for i, doc := range docs {
+				if len(doc) == 0 {
+					continue
+				}
+				if i == 0 {
+
+				}
+				sp, err := db.UnmarshalEANPage(doc)
+				if err != nil {
+					continue
+				}
+				_ = h.eanPageSearch.DeleteIndexEANPage(sp)
+				_ = h.eanPageRepo.Delete(sp.ID)
+			}
+			_ = h.store.TurboDelete(db.TurboKeyEANPageList)
+			_ = h.store.TurboDelete(db.TurboKeyEANPageList)
+			_ = h.store.TurboDelete(db.TurboKeyEANPageList)
+		}
+	}
+
+	// 3. Delete all attribute definitions (attrdefs)
+	allAttrDefs, _ := h.attrDefRepo.List()
+	for _, ad := range allAttrDefs {
+		_ = h.attrDefRepo.Delete(ad.Code)
+	}
+
+	// Clear attrdef list
+	_ = h.store.DB().TurboRawDelete("attrdef_list")
+
+	// Clear ID counters
+	_ = h.store.DB().TurboRawDelete("state:next_id:product")
+	_ = h.store.DB().TurboRawDelete("state:next_id:eanpage")
+	_ = h.store.DB().TurboRawDelete("state:next_id:attrdef")
+
+	fmt.Println("[DELETE-ALL] All eanpages, products, attributes deleted.")
+
+	httpres.WriteJSON(w, http.StatusOK, map[string]string{
+		"status": "all eanpages, products, attributes deleted",
 	})
 }
 

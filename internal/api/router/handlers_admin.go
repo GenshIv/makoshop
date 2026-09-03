@@ -128,6 +128,14 @@ func (d *Deps) adminCompany(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if strings.HasSuffix(path, "/field-map/seed") {
+			if r.Method == http.MethodPost {
+				d.AuthHandlers.HandleAdminCompanyFieldMapSeed(w, r)
+				return
+			}
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		switch r.Method {
 		case http.MethodGet:
 			d.AuthHandlers.HandleAdminCompanyGet(w, r)
@@ -236,6 +244,11 @@ func (d *Deps) adminImportNokaut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
+
+// GET /admin/field-map/default — confirmed default Allegro field map
+func (d *Deps) adminFieldMapDefault(w http.ResponseWriter, r *http.Request) {
+	d.AuthHandlers.HandleAdminFieldMapDefault(w, r)
 }
 
 // POST /admin/import-unified — batch import: each company's price file is
@@ -798,6 +811,15 @@ func (d *Deps) adminProductsDeleteAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.Handlers.HandleAdminProductsDeleteAll(w, r)
+}
+
+// POST /admin/delete-all — delete all eanpages, products, attributes (admin only, destructive)
+func (d *Deps) adminDeleteAll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	d.Handlers.HandleAdminDeleteAll(w, r)
 }
 
 // --- Admin: DB shard usage ---

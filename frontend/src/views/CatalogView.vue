@@ -1675,28 +1675,37 @@ defineOptions({ name: 'CatalogView' });
               </label>
             </div>
 
-            <!-- Selected tags (always visible) -->
-            <div v-if="selectedAttrTags(attr).length > 0" class="flex flex-wrap gap-1 mb-1">
-              <button
+            <!-- Selected checkboxes (always visible) -->
+            <div v-if="selectedAttrTags(attr).length > 0" class="space-y-0.5 mb-1">
+              <label
                 v-for="tag in selectedAttrTags(attr)"
                 :key="tag"
-                @click="toggleAttrFilter(attr.code, tag, false)"
-                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-orange-600 text-white border-orange-600"
+                class="flex items-center gap-2 text-xs cursor-pointer py-0.5"
               >
-                {{ enumValueLabel(attr, tag) }}
-              </button>
+                <input
+                  type="checkbox"
+                  checked
+                  @change="toggleAttrFilter(attr.code, tag, false)"
+                  class="w-3.5 h-3.5 accent-orange-600"
+                />
+                <span class="text-ink-1">{{ enumValueLabel(attr, tag) }}</span>
+              </label>
             </div>
 
-            <!-- Visible unselected tags (up to 7) -->
-            <div class="flex flex-wrap gap-1">
-              <button
+            <!-- Visible unselected checkboxes (up to 7) -->
+            <div class="space-y-0.5">
+              <label
                 v-for="tag in visibleUnselectedTags(attr)"
                 :key="tag"
-                @click="toggleAttrFilter(attr.code, tag, true)"
-                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-surface-2 text-ink-2 border-line hover:bg-surface-3"
+                class="flex items-center gap-2 text-xs cursor-pointer py-0.5"
               >
-                {{ enumValueLabel(attr, tag) }}
-              </button>
+                <input
+                  type="checkbox"
+                  @change="toggleAttrFilter(attr.code, tag, true)"
+                  class="w-3.5 h-3.5 accent-orange-600"
+                />
+                <span class="text-ink-2">{{ enumValueLabel(attr, tag) }}</span>
+              </label>
             </div>
 
             <!-- Show more link -->
@@ -1708,7 +1717,7 @@ defineOptions({ name: 'CatalogView' });
               {{ attrExpanded[attr.code] ? t('catalog.hide') : t('catalog.show_more', { count: hiddenUnselectedTags(attr).length }) }}
             </button>
 
-            <!-- Expanded area with search + scrollable tags -->
+            <!-- Expanded area with search + scrollable checkboxes -->
             <div
               v-if="hasMoreUnselectedTags(attr) && attrExpanded[attr.code]"
               class="mt-1 border border-line rounded p-1.5 max-h-48 overflow-y-auto bg-surface-2"
@@ -1720,16 +1729,20 @@ defineOptions({ name: 'CatalogView' });
                 :placeholder="t('catalog.search_attr_placeholder')"
                 class="w-full mb-1.5 px-2 py-0.5 border border-line rounded text-[11px] focus:outline-none focus:ring-1 focus:ring-orange-500"
               />
-              <!-- Tags -->
-              <div class="flex flex-wrap gap-1">
-                <button
+              <!-- Checkboxes -->
+              <div class="space-y-0.5">
+                <label
                   v-for="tag in hiddenUnselectedTags(attr)"
                   :key="tag"
-                  @click="toggleAttrFilter(attr.code, tag, true)"
-                  class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-surface-2 text-ink-2 border-line hover:bg-surface-3"
+                  class="flex items-center gap-2 text-xs cursor-pointer py-0.5"
                 >
-                  {{ enumValueLabel(attr, tag) }}
-                </button>
+                  <input
+                    type="checkbox"
+                    @change="toggleAttrFilter(attr.code, tag, true)"
+                    class="w-3.5 h-3.5 accent-orange-600"
+                  />
+                  <span class="text-ink-2">{{ enumValueLabel(attr, tag) }}</span>
+                </label>
               </div>
             </div>
           </div>
@@ -2008,32 +2021,39 @@ defineOptions({ name: 'CatalogView' });
               {{ attrDisplayName(attr) }}
             </label>
 
-            <!-- Selected tags -->
-            <div v-if="selectedAttrTags(attr).length > 0" class="flex flex-wrap gap-1 mb-1">
-              <button
+            <!-- Selected checkboxes -->
+            <div v-if="selectedAttrTags(attr).length > 0" class="space-y-0.5 mb-1">
+              <label
                 v-for="tag in selectedAttrTags(attr)"
                 :key="tag"
-                @click="toggleAttrFilter(attr.code, tag, false)"
-                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer bg-orange-600 text-white border-orange-600"
+                class="flex items-center gap-2 text-xs cursor-pointer py-0.5"
               >
-                {{ enumValueLabel(attr, tag) }}
-              </button>
+                <input
+                  type="checkbox"
+                  checked
+                  @change="toggleAttrFilter(attr.code, tag, false)"
+                  class="w-3.5 h-3.5 accent-orange-600"
+                />
+                <span class="text-ink-1">{{ enumValueLabel(attr, tag) }}</span>
+              </label>
             </div>
 
-            <!-- All tags (scrollable) -->
+            <!-- All checkboxes (scrollable) -->
             <div class="max-h-40 overflow-y-auto border border-line rounded p-1.5 bg-surface-2">
-              <div class="flex flex-wrap gap-1">
-                <button
+              <div class="space-y-0.5">
+                <label
                   v-for="tag in getAttrOptions(attr)"
                   :key="tag"
-                  @click="toggleAttrFilter(attr.code, tag, !isAttrSelected(attr.code, tag))"
-                  class="inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition cursor-pointer"
-                  :class="isAttrSelected(attr.code, tag)
-                    ? 'bg-orange-600 text-white border-orange-600'
-                    : 'bg-surface-2 text-ink-2 border-line hover:bg-surface-3'"
+                  class="flex items-center gap-2 text-xs cursor-pointer py-0.5"
                 >
-                  {{ enumValueLabel(attr, tag) }}
-                </button>
+                  <input
+                    type="checkbox"
+                    :checked="isAttrSelected(attr.code, tag)"
+                    @change="toggleAttrFilter(attr.code, tag, !isAttrSelected(attr.code, tag))"
+                    class="w-3.5 h-3.5 accent-orange-600"
+                  />
+                  <span class="text-ink-2">{{ enumValueLabel(attr, tag) }}</span>
+                </label>
               </div>
             </div>
           </div>

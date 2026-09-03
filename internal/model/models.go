@@ -125,20 +125,34 @@ type HTMLAttrRule struct {
 	Transform string `json:"transform"` // optional: "trim", "lowercase", "uppercase", "clean_html"
 }
 
+// FieldMapEntry is a single entry in a company's feed field map: it maps a raw
+// feed field code (e.g. Allegro's "attr_11323") to a human-readable attribute
+// name (the Polish name as shown on the source site) plus optional
+// translations. Skip marks fields that must not become attributes.
+type FieldMapEntry struct {
+	Name   string `json:"name"`              // primary name (as on the source site, e.g. Polish)
+	NameRu string `json:"name_ru,omitempty"` // Russian translation
+	NameUa string `json:"name_ua,omitempty"` // Ukrainian translation
+	NameEn string `json:"name_en,omitempty"` // English translation
+	Skip   bool   `json:"skip,omitempty"`    // do not create an attribute for this field
+}
+
 // PriceSourceConfig describes how to parse a specific company's price file.
 // Different companies provide attributes differently, so this is configurable.
 type PriceSourceConfig struct {
-	Format             string            `json:"format,omitempty"`               // "nokaut" (default)
-	Currency           string            `json:"currency,omitempty"`             // e.g. "PLN" (default from company settings)
-	EANField           string            `json:"ean_field,omitempty"`            // property name for EAN (default "EAN")
-	PreviousPriceField string            `json:"previous_price_field,omitempty"` // property name (default "PreviousPrice")
-	ImageField         string            `json:"image_field,omitempty"`          // property name (default "ImageOriginalUrl", fallback <image>)
-	ProductURLField    string            `json:"product_url_field,omitempty"`    // property name (default "ProductUrl", fallback <url>)
-	BrandField         string            `json:"brand_field,omitempty"`          // property name (default "Producent", fallback <producer>)
-	ShopCategoryField  string            `json:"shop_category_field,omitempty"`  // property name (default "ShopProductCategory")
-	AvailabilityMap    map[string]string `json:"availability_map,omitempty"`     // raw value -> "in_stock"|"out_of_stock"
-	AttrFields         []AttrFieldMap    `json:"attr_fields,omitempty"`          // extra attributes to extract
-	HTMLAttrRules      []HTMLAttrRule    `json:"html_attr_rules,omitempty"`      // rules to extract attributes from HTML description
+	Format             string                   `json:"format,omitempty"`               // "nokaut" (default), "json", "allegro"
+	Currency           string                   `json:"currency,omitempty"`             // e.g. "PLN" (default from company settings)
+	EANField           string                   `json:"ean_field,omitempty"`            // property name for EAN (default "EAN")
+	PreviousPriceField string                   `json:"previous_price_field,omitempty"` // property name (default "PreviousPrice")
+	ImageField         string                   `json:"image_field,omitempty"`          // property name (default "ImageOriginalUrl", fallback <image>)
+	ProductURLField    string                   `json:"product_url_field,omitempty"`    // property name (default "ProductUrl", fallback <url>)
+	BrandField         string                   `json:"brand_field,omitempty"`          // property name (default "Producent", fallback <producer>)
+	ShopCategoryField  string                   `json:"shop_category_field,omitempty"`  // property name (default "ShopProductCategory")
+	AvailabilityMap    map[string]string        `json:"availability_map,omitempty"`     // raw value -> "in_stock"|"out_of_stock"
+	AttrFields         []AttrFieldMap           `json:"attr_fields,omitempty"`          // extra attributes to extract
+	HTMLAttrRules      []HTMLAttrRule           `json:"html_attr_rules,omitempty"`      // rules to extract attributes from HTML description
+	FieldMap           map[string]FieldMapEntry `json:"field_map,omitempty"`            // feed field code -> attribute name (Allegro "attr_<id>" etc.)
+	DisablePagination  bool                     `json:"disable_pagination,omitempty"`   // if true, download as single file instead of walking pages
 }
 
 // Normalize canonicalizes the Format field so import dispatch is deterministic:

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	attrsPkg "github.com/GenshIv/makoshop/internal/attrs"
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
@@ -42,23 +43,30 @@ const (
 )
 
 // tradedoublerMeta mirrors the pagination metadata of a Tradedoubler response.
-type tradedoublerMeta struct {
-	Page       int `json:"page"`
-	PageSize   int `json:"pageSize"`
-	TotalItems int `json:"totalItems"`
-	TotalPages int `json:"totalPages"`
+type TradedoublerMeta struct {
+	Page             int `json:"page"`
+	PageSize         int `json:"pageSize"`
+	TotalItems       int `json:"totalItems"`
+	TotalHits        int `json:"totalHits"`
+	TotalPages       int `json:"totalPages"`
+	LimitationNumber int `json:"limitationNumber"`
 }
 
 // tradedoublerPage is the top-level shape of one API response.
 type tradedoublerPage struct {
-	Products []tradedoublerProduct `json:"products"`
-	Meta     tradedoublerMeta      `json:"meta"`
+	Products []TradedoublerProduct `json:"products"`
+	Meta     TradedoublerMeta      `json:"productHeader"`
+}
+
+type FieldsProduct struct {
+	Name  string `json:"name"`
+	Value string `json:"value,omitempty"`
 }
 
 // tradedoublerProduct is a single product as returned by the API. Field names
 // use the documented Tradedoubler names; the parser also tolerates common
 // aliases so a slightly different feed still imports.
-type tradedoublerProduct struct {
+type TradedoublerProduct struct {
 	ID               int64                  `json:"id"`
 	Name             string                 `json:"name"`
 	Title            string                 `json:"title"` // alias
@@ -76,6 +84,7 @@ type tradedoublerProduct struct {
 	URL              string                 `json:"url"` // alias
 	Link             string                 `json:"link"`
 	Stock            int                    `json:"stock"`
+	Fields           []FieldsProduct        `json:"fields"`
 	Images           []tradedoublerImage    `json:"images"`
 	ProductImage     tradedoublerImage      `json:"productImage"` // Tradedoubler feed: single product image object
 	Categories       []tradedoublerCategory `json:"categories"`
@@ -234,15 +243,15 @@ func tradedoublerPageURL(rawURL string, baseQuery url.Values, page int) (string,
 // size is taken from the URL (default 1000, the API maximum). It stops when a
 // page returns fewer products than the page size, when meta.totalPages is
 // reached, or when limit products have been collected (limit<=0 = unlimited).
-func downloadTradedoubler(client *http.Client, rawURL string, limit int) ([]tradedoublerProduct, error) {
+func downloadTradedoubler(client *http.Client, rawURL string, limit int) ([]TradedoublerProduct, error) {
 	page, pageSize, baseQuery, err := tradedoublerPageParams(rawURL)
 	if err != nil {
 		return nil, err
 	}
 
-	var all []tradedoublerProduct
+	var all []TradedoublerProduct
 	current := page
-	for {
+	for current <= 10 {
 		reqURL, uerr := tradedoublerPageURL(rawURL, baseQuery, current)
 		if uerr != nil {
 			return all, uerr
@@ -261,7 +270,7 @@ func downloadTradedoubler(client *http.Client, rawURL string, limit int) ([]trad
 		all = append(all, pageData.Products...)
 		fmt.Printf("[IMPORT-TRADEDoubler] Page %d: %d products (total %d)\n", current, got, len(all))
 
-		if limit > 0 && len(all) >= limit {
+		if limit > 0 && (len(all) >= limit) {
 			all = all[:limit]
 			break
 		}
@@ -305,14 +314,14 @@ func fetchJSON(client *http.Client, reqURL string, dst interface{}) error {
 // parseTradedoublerProducts converts Tradedoubler API products into
 // model.Product values, ready for the shared import phases. It returns the
 // products and the names (parallel slices) plus the count of skipped items.
-func parseTradedoublerProducts(tps []tradedoublerProduct, companyID int64, companySlug, companyName, currency string,
-	attrDefCache map[string]*model.AttrDef, newAttrKeys map[string]struct{}, limit int) (products []*model.Product, names []string, skipped int) {
+func parseTradedoublerProducts(tps []TradedoublerProduct, companyID int64, companySlug, companyName, currency string,
+	attrDefCache map[string]*model.AttrDef, newAttrKeys map[string]struct{}, fieldMap map[string]model.FieldMapEntry, limit int) (products []*model.Product, names []string, skipped int) {
 
 	for _, tp := range tps {
 		if limit > 0 && len(products) >= limit {
 			break
 		}
-		p, skip := convertTradedoublerProduct(tp, companyID, companySlug, companyName, currency, attrDefCache, newAttrKeys)
+		p, skip := convertTradedoublerProduct(tp, companyID, companySlug, companyName, currency, attrDefCache, newAttrKeys, fieldMap)
 		if skip {
 			skipped++
 			continue
@@ -330,8 +339,8 @@ func parseTradedoublerProducts(tps []tradedoublerProduct, companyID int64, compa
 // convertTradedoublerProduct maps a single Tradedoubler product to a
 // model.Product. The second return value is true when the item should be
 // skipped (no name, no usable price, etc.).
-func convertTradedoublerProduct(tp tradedoublerProduct, companyID int64, companySlug, companyName, currency string,
-	attrDefCache map[string]*model.AttrDef, newAttrKeys map[string]struct{}) (*model.Product, bool) {
+func convertTradedoublerProduct(tp TradedoublerProduct, companyID int64, companySlug, companyName, currency string,
+	attrDefCache map[string]*model.AttrDef, newAttrKeys map[string]struct{}, fieldMap map[string]model.FieldMapEntry) (*model.Product, bool) {
 
 	name := strings.TrimSpace(firstNonEmptyStr(tp.Name, tp.Title))
 	if name == "" {
@@ -368,24 +377,6 @@ func convertTradedoublerProduct(tp tradedoublerProduct, companyID int64, company
 	cur := strings.TrimSpace(firstNonEmptyStr(tp.PriceCurrency, tp.Currency, offerCurrency, currency))
 	if cur == "" {
 		cur = "PLN"
-	}
-
-	// EAN: prefer an explicit EAN/GTIN/barcode (globally unique, no prefix).
-	// Otherwise derive a STABLE synthetic EAN from the feed's sourceProductId,
-	// prefixed with the company slug: sourceProductId is unique only within a
-	// company, so the prefix makes it globally unique and stable across
-	// re-imports. Never use the offer id (a UUID that changes on every feed
-	// fetch — it would break in-place re-imports and produce duplicates).
-	ean := strings.TrimSpace(firstNonEmptyStr(tp.EAN, tp.GTIN, tp.Barcode))
-	if ean == "" && sourceProductID != "" {
-		prefix := strings.TrimSpace(companySlug)
-		if prefix == "" {
-			prefix = strconv.FormatInt(companyID, 10)
-		}
-		ean = prefix + "_" + sourceProductID
-	}
-	if ean == "" && tp.ID > 0 {
-		ean = strconv.FormatInt(tp.ID, 10)
 	}
 
 	// Name with company suffix (matches the other importers' convention).
@@ -435,6 +426,58 @@ func convertTradedoublerProduct(tp tradedoublerProduct, companyID int64, company
 	// link is derived for ProductURL.
 	purchaseURL := strings.TrimSpace(firstNonEmptyStr(tp.ProductURL, tp.URL, tp.Link, offerProductURL))
 	productURL := extractDirectProductURL(purchaseURL)
+
+	// Parse coded feed fields (e.g. Allegro "attr_<id>") using the company's
+	// field map. Each mapped field becomes a first-class attribute: the field
+	// code is the stable attribute code, and the map entry supplies the
+	// human-readable name (applied to the AttrDef after Phase 0). Fields that
+	// are absent from the map, or marked Skip, are ignored.
+	//
+	// This must happen BEFORE EAN extraction so that EANs stored in attributes
+	// (e.g. attr_225693 or ean) are found and used.
+	var eanFromAttrs string
+	for _, attr := range tp.Fields {
+		code := strings.TrimSpace(attr.Name)
+		if code == "" {
+			continue
+		}
+		entry, ok := fieldMap[code]
+		if !ok {
+			continue
+		}
+		if entry.Skip {
+			continue
+		}
+		// Check if this field is an EAN field (by code or by mapped name)
+		if code == "ean" || code == "attr_225693" || strings.EqualFold(entry.Name, "EAN") || strings.EqualFold(entry.Name, "Kod EAN") {
+			eanFromAttrs = strings.TrimSpace(attr.Value)
+		}
+		// Use SplitValues to handle comma-separated option lists.
+		for _, value := range attrsPkg.SplitValues(attr.Value) {
+			nv := attrsPkg.NormalizeValue(value)
+			if attrsPkg.ValidValue(nv) {
+				attrs = append(attrs, model.KeyValue{Key: code, Value: nv})
+			}
+		}
+		newAttrKeys[code] = struct{}{}
+	}
+
+	// EAN: prefer an explicit EAN/GTIN/barcode (globally unique, no prefix).
+	// If not found, check the parsed attributes for an EAN field. Otherwise
+	// derive a STABLE synthetic EAN from the feed's sourceProductId, prefixed
+	// with the company slug. Never use the offer id (a UUID that changes on
+	// every feed fetch — it would break in-place re-imports and produce duplicates).
+	ean := strings.TrimSpace(firstNonEmptyStr(tp.EAN, tp.GTIN, tp.Barcode, eanFromAttrs))
+	if ean == "" && sourceProductID != "" {
+		prefix := strings.TrimSpace(companySlug)
+		if prefix == "" {
+			prefix = strconv.FormatInt(companyID, 10)
+		}
+		ean = prefix + "_" + sourceProductID
+	}
+	if ean == "" && tp.ID > 0 {
+		ean = strconv.FormatInt(tp.ID, 10)
+	}
 
 	// Quantity: the Tradedoubler feed has no stock/quantity field, so default
 	// to 1 (in stock) when the feed doesn't provide one.

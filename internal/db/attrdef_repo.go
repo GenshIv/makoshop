@@ -44,6 +44,9 @@ type AttrDefRepo struct {
 	// Instead we buffer the codes in memory and write the list ONCE per batch
 	// via FlushList (a deduplicated set-union).
 	pendingListCodes map[string]bool
+
+	// categoryRepo is used for listing categories during cleanup.
+	categoryRepo *CategoryRepo
 }
 
 func NewAttrDefRepo(store *Store) *AttrDefRepo {
@@ -52,6 +55,11 @@ func NewAttrDefRepo(store *Store) *AttrDefRepo {
 		keyCache:         make(map[string]*model.AttrDef),
 		pendingListCodes: make(map[string]bool),
 	}
+}
+
+// SetCategoryRepo attaches a CategoryRepo for cleanup operations.
+func (r *AttrDefRepo) SetCategoryRepo(cr *CategoryRepo) {
+	r.categoryRepo = cr
 }
 
 // addPendingListCode buffers a newly created code for a later batched list
@@ -849,8 +857,15 @@ func (r *AttrDefRepo) Delete(code string) error {
 	_ = r.store.DocDelete(fmt.Sprintf("attrdef:%d", ad.ID))
 
 	// Remove indexes
-	_ = r.store.TurboWrite(turboKeyAttrDefCode+code, []byte{})
-	_ = r.store.TurboWrite(turboKeyAttrDefCats+code, []byte{})
+
+	_ = r.store.TurboDelete(turboKeyAttrDefCode + code)
+	_ = r.store.TurboDelete(turboKeyAttrDefCats + code)
+
+	return nil
+
+}
+
+func (r *AttrDefRepo) RemoveKeyFromList(code string) error {
 
 	// Remove from list
 	data, _ := r.store.DB().TurboRawRead(turboKeyAttrDefList)
@@ -861,6 +876,38 @@ func (r *AttrDefRepo) Delete(code string) error {
 	var newCodes []string
 	for _, c := range codes {
 		if c != code {
+			newCodes = append(newCodes, c)
+		}
+	}
+	if len(newCodes) > 0 {
+		buf, _ := json.Marshal(newCodes)
+		_ = r.store.TurboWrite(turboKeyAttrDefList, buf)
+	} else {
+		_ = r.store.TurboWrite(turboKeyAttrDefList, []byte{})
+	}
+
+	return nil
+}
+
+func (r *AttrDefRepo) RemoveKeyBatchFromList(codesOut []string) error {
+
+	// Remove from list
+	data, _ := r.store.DB().TurboRawRead(turboKeyAttrDefList)
+	var codes []string
+	if data != nil && len(data) > 0 {
+		json.Unmarshal(data, &codes)
+	}
+	var newCodes []string
+	for _, c := range codes {
+		toDelete := false
+		for _, cOut := range codesOut {
+			if cOut == c {
+				toDelete = true
+				break
+			}
+		}
+
+		if !toDelete {
 			newCodes = append(newCodes, c)
 		}
 	}
@@ -1256,8 +1303,9 @@ func (r *AttrDefRepo) AddCodeToCategory(code string, catID int64) error {
 }
 
 // RebuildAttrValuesFromEANPages rebuilds attr_values_cat and attr_label indexes
-// from all EAN pages in the database.
-func (r *AttrDefRepo) RebuildAttrValuesFromEANPages(eanPageRepo *EANPageRepo) error {
+// from all EAN pages in the database. Also cleans up old attribute definitions
+// that are not used by any EAN page.
+func (r *AttrDefRepo) RebuildAttrValuesFromEANPages(eanPageRepo *EANPageRepo, fieldMap map[string]model.FieldMapEntry) error {
 	fmt.Println("[ATTRDEF] RebuildAttrValuesFromEANPages: starting...")
 	startTime := time.Now()
 
@@ -1355,8 +1403,122 @@ func (r *AttrDefRepo) RebuildAttrValuesFromEANPages(eanPageRepo *EANPageRepo) er
 		}
 	}
 
+	// Clean up old attribute definitions that are not used by any EAN page.
+	// This removes outdated attributes (e.g. "Stan" instead of "attr_11323")
+	// that are remnants from previous imports.
+	allAds, err := r.List()
+	if err != nil {
+		fmt.Printf("[ATTRDEF] WARN: list AttrDefs for cleanup: %v\n", err)
+	} else {
+		// Collect all codes to be deleted
+		var toDelete []string
+		for _, ad := range allAds {
+			if !listCodes[ad.Code] {
+				toDelete = append(toDelete, ad.Code)
+			}
+		}
+
+		// Delete all outdated attribute definitions
+		cleaned := 0
+		for _, code := range toDelete {
+			// Remove from cat -> codes
+			ad, err := r.GetByCode(code)
+			if err != nil {
+				continue
+			}
+			for _, catID := range ad.Categories {
+				r.removeFromCatCodes(catID, code)
+			}
+
+			// Remove doc
+			_ = r.store.DocDelete(fmt.Sprintf("attrdef:%d", ad.ID))
+
+			// Remove indexes
+			_ = r.store.TurboDelete(turboKeyAttrDefCode + code)
+			_ = r.store.TurboDelete(turboKeyAttrDefCats + code)
+
+			cleaned++
+		}
+
+		// Rewrite attrdef_list once with the remaining codes
+		if len(toDelete) > 0 {
+			remaining := make(map[string]bool)
+			for code := range listCodes {
+				remaining[code] = true
+			}
+			var remainingCodes []string
+			for code := range remaining {
+				remainingCodes = append(remainingCodes, code)
+			}
+			buf, _ := json.Marshal(remainingCodes)
+			_ = r.store.TurboWrite(turboKeyAttrDefList, buf)
+		}
+
+		fmt.Printf("[ATTRDEF] Cleanup: removed %d old attribute definitions\n", cleaned)
+	}
+
 	fmt.Printf("[ATTRDEF] RebuildAttrValuesFromEANPages: done in %v (%d pages, %d codes)\n",
 		time.Since(startTime), len(pages), len(attrValues))
+	return nil
+}
+
+// clearAttrValuesForCode removes all attribute values for a given code from the
+// attr_values_cat indexes. This is used to clean up stale filter options when
+// an old attribute definition is removed.
+func (r *AttrDefRepo) clearAttrValuesForCode(code string) error {
+	// List all categories and remove the code from each category's attr_values_cat
+	categories, err := r.categoryRepo.ListAll()
+	if err != nil {
+		return fmt.Errorf("list categories: %w", err)
+	}
+
+	for _, cat := range categories {
+		key := turboKeyAttrValuesCat + code + ":" + fmt.Sprintf("%d", cat.ID)
+		// Write empty JSON object to clear the values
+		if err := r.store.TurboWrite(key, []byte("{}")); err != nil {
+			fmt.Printf("[ATTRDEF] WARN: clear attr_values_cat %s: %v\n", key, err)
+		}
+	}
+
+	// Also clear the attr_label indexes for this code
+	// (We don't know the exact values, so we can't clear them individually)
+	// The attr_label indexes are not critical for the filter UI, so we can
+	// leave them as-is. They will be overwritten by the next import.
+
+	return nil
+}
+
+// CleanupUnusedAttrDefs deletes all attribute definitions that are not in the
+// provided list of codes. This is called after an import to remove outdated
+// attribute definitions that are no longer used.
+func (r *AttrDefRepo) CleanupUnusedAttrDefs(usedCodes map[string]bool) error {
+	// List all attribute definitions
+	allAds, err := r.List()
+	if err != nil {
+		return fmt.Errorf("list AttrDefs: %w", err)
+	}
+
+	cleaned := 0
+	cleanedCodes := []string{}
+	for _, ad := range allAds {
+		// Check if the attribute code is in the used list
+		if !usedCodes[ad.Code] {
+			// Delete the unused attribute definition
+			if err := r.Delete(ad.Code); err != nil {
+				fmt.Printf("[ATTRDEF] WARN: delete unused AttrDef %s: %v\n", ad.Code, err)
+			} else {
+				cleaned++
+				cleanedCodes = append(cleanedCodes, ad.Code)
+
+			}
+		}
+	}
+
+	if err := r.RemoveKeyBatchFromList(cleanedCodes); err != nil {
+		fmt.Printf("[ATTRDEF] WARN: delete unused AttrDef %v\n", err)
+	}
+
+	fmt.Printf("[ATTRDEF] Cleanup: removed %d unused attribute definitions\n", cleaned)
 	return nil
 }
 

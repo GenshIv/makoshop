@@ -531,6 +531,51 @@ func (s *EANPageSearch) UnindexEANPage(sp *model.EANPage) error {
 	return nil
 }
 
+// UnindexEANPage removes a EAN page from all turbo indexes.
+func (s *EANPageSearch) DeleteIndexEANPage(sp *model.EANPage) error {
+	if !s.enabled {
+		return nil
+	}
+
+	if sp.CategoryID != 0 {
+		ancestors, err := s.getCategoryAncestors(sp.CategoryID)
+		if err != nil {
+			ancestors = []int64{sp.CategoryID}
+		}
+		for _, cid := range ancestors {
+			s.db.TurboRawDelete(eanpageKeyCategoryUnion(cid))
+		}
+	}
+
+	if sp.BrandID != 0 {
+		s.db.TurboRawDelete(eanpageKeyBrand(sp.BrandID))
+	}
+
+	// Delete attr_code index (unique codes only)
+	attrCodesSeen := make(map[string]struct{})
+	for _, kv := range sp.Attributes {
+		valStr := kv.Value
+		if valStr != "" {
+			// Skip attribute values longer than 40 runes (consistent with indexing)
+			if model.IsAttrValueTooLong(valStr) {
+				continue
+			}
+			s.db.TurboRawDelete(eanpageKeyAttr(kv.Key, valStr))
+			// Delete from attr_code index (once per code)
+			if _, ok := attrCodesSeen[kv.Key]; !ok {
+				attrCodesSeen[kv.Key] = struct{}{}
+				s.db.TurboRawDelete(eanpageKeyAttrCode(kv.Key))
+			}
+		}
+	}
+
+	for _, tok := range tokenizeEANPage(sp) {
+		s.db.TurboRawDelete(eanpageKeyText(tok))
+	}
+
+	return nil
+}
+
 // BuildSortIndexes rebuilds all sort indexes for EAN pages per category.
 // Each category has its own sort indexes: eanpage_sort:{catID}:{type}
 // and numSort price index: eanpage_price:{catID}

@@ -81,6 +81,11 @@ func (s *Store) TurboWrite(key string, value []byte) error {
 	return s.db.TurboRawWrite(key, value)
 }
 
+// TurboWrite writes a turbo key-value directly.
+func (s *Store) TurboDelete(key string) error {
+	return s.db.TurboRawDelete(key)
+}
+
 // NextID generates and persists the next ID for the given entity type.
 // On first call for an entity type, it reads the last persisted ID from DB.
 func (s *Store) NextID(entityType string) (int64, error) {

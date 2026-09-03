@@ -432,98 +432,6 @@ func productEANKey(ean, normalizedName string, companyID int64) string {
 	return fmt.Sprintf("%s%s|%s|%d", productEANKeyPrefix, ean, normalizedName, companyID)
 }
 
-// GetOrCreateByEAN находит оффер по ключу (EAN, нормализованное имя, компания)
-// либо создаёт новый. Если найден — обновляет цену, старую цену, остаток,
-// изображения и статус (task 5: обновление, а не дублирование).
-// Возвращает (productID, isNew, error).
-func (r *ProductRepo) GetOrCreateByEAN(p *model.Product, normalizedName string) (int64, bool, error) {
-	if p.CompanyID == 0 {
-		if err := r.Create(p); err != nil {
-			return 0, false, err
-		}
-		return p.ID, true, nil
-	}
-
-	keyPath := productEANKey(p.EAN, normalizedName, p.CompanyID)
-
-	// Проверяем, есть ли уже такой оффер
-	data, err := r.store.db.TurboRawRead(keyPath)
-	if err == nil && len(data) > 0 {
-		var existingID int64
-		_, _ = fmt.Sscanf(string(data), "%d", &existingID)
-
-		existing, err := r.Get(existingID)
-		if err == nil {
-			// Обновляем поля из нового прайса
-			changed := false
-			if existing.Price != p.Price {
-				existing.Price = p.Price
-				changed = true
-			}
-			if existing.PreviousPrice != p.PreviousPrice {
-				existing.PreviousPrice = p.PreviousPrice
-				changed = true
-			}
-			if p.StockQty != 0 {
-				existing.StockQty = p.StockQty
-				changed = true
-			}
-			if len(p.Images) > 0 {
-				existing.Images = p.Images
-				changed = true
-			}
-			if p.Status != "" {
-				existing.Status = p.Status
-				changed = true
-			}
-			if p.Description != "" {
-				existing.Description = p.Description
-				changed = true
-			}
-			if p.Brand != "" {
-				existing.Brand = p.Brand
-				changed = true
-			}
-			// Обновляем EAN и имя (могли поправиться в прайсе)
-			if p.EAN != "" && p.EAN != existing.EAN {
-				existing.EAN = p.EAN
-				changed = true
-			}
-			if p.Name != "" && p.Name != existing.Name {
-				existing.Name = p.Name
-				changed = true
-			}
-			if p.ProductURL != "" && p.ProductURL != existing.ProductURL {
-				existing.ProductURL = p.ProductURL
-				changed = true
-			}
-			if p.PurchaseURL != "" && p.PurchaseURL != existing.PurchaseURL {
-				existing.PurchaseURL = p.PurchaseURL
-				changed = true
-			}
-			if len(p.Attributes) > 0 {
-				existing.Attributes = mergeAttributesOverwrite(existing.Attributes, p.Attributes)
-				changed = true
-			}
-			if changed {
-				existing.UpdatedAt = time.Now().Unix()
-				_ = r.store.DocPut(KeyProduct(existingID), MarshalProduct(*existing))
-			}
-			return existingID, false, nil
-		}
-	}
-
-	// Оффера нет — создаём новый
-	if err := r.Create(p); err != nil {
-		return 0, false, err
-	}
-
-	// Записываем уникальный ключ
-	_ = r.store.TurboWrite(keyPath, []byte(fmt.Sprintf("%d", p.ID)))
-
-	return p.ID, true, nil
-}
-
 // BatchGetOrCreateByEAN processes multiple products in batch for better performance.
 // Returns a map of product index to (ID, isNew).
 // NOTE: This method does NOT index products to turbo search. Use BatchIndexProducts separately.
@@ -618,8 +526,14 @@ func (r *ProductRepo) BatchGetOrCreateByEAN(products []*model.Product, normalize
 					existing.PurchaseURL = p.PurchaseURL
 					changed = true
 				}
+				// Always clear and replace attributes on re-import so stale
+				// attributes from previous imports are removed.
 				if len(p.Attributes) > 0 {
-					existing.Attributes = mergeAttributesOverwrite(existing.Attributes, p.Attributes)
+					existing.Attributes = p.Attributes
+					changed = true
+				} else if len(existing.Attributes) > 0 {
+					// Incoming has no attributes — clear the old ones.
+					existing.Attributes = nil
 					changed = true
 				}
 				if changed {
@@ -740,8 +654,14 @@ func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*mode
 					existing.PurchaseURL = p.PurchaseURL
 					changed = true
 				}
+				// Always clear and replace attributes on re-import so stale
+				// attributes from previous imports are removed.
 				if len(p.Attributes) > 0 {
-					existing.Attributes = mergeAttributesOverwrite(existing.Attributes, p.Attributes)
+					existing.Attributes = p.Attributes
+					changed = true
+				} else if len(existing.Attributes) > 0 {
+					// Incoming has no attributes — clear the old ones.
+					existing.Attributes = nil
 					changed = true
 				}
 				if changed {
@@ -1048,9 +968,12 @@ func (r *ProductRepo) DeleteAllProducts() error {
 	}
 
 	// Delete each product
-	for _, doc := range docs {
+	for i, doc := range docs {
 		if len(doc) == 0 {
 			continue
+		}
+		if i == 0 {
+
 		}
 		p, err := UnmarshalProduct(doc)
 		if err != nil {
@@ -1096,7 +1019,7 @@ func (r *ProductRepo) deleteAllEANPages() error {
 		return fmt.Errorf("multi get eanpages: %w", err)
 	}
 
-	for _, doc := range docs {
+	for i, doc := range docs {
 		if len(doc) == 0 {
 			continue
 		}
@@ -1105,8 +1028,11 @@ func (r *ProductRepo) deleteAllEANPages() error {
 			continue
 		}
 		id := sp.ID
+		if i == 0 {
+
+		}
 		// Unindex from EANPageSearch turbo indexes
-		if err := r.eanPageSearch.UnindexEANPage(sp); err != nil {
+		if err := r.eanPageSearch.DeleteIndexEANPage(sp); err != nil {
 			fmt.Printf("[DELETE-ALL] WARN: unindex eanpage %d: %v\n", id, err)
 		}
 		// Delete EAN page doc and its indexes

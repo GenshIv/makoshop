@@ -157,7 +157,10 @@ func (h *Handlers) importCompanyByFormat(company *model.Company, override string
 
 	cr.Format = format
 	switch format {
-	case "json":
+	case "json", "allegro":
+		// "allegro" is a JSON feed with coded fields; it is downloaded page by
+		// page (capped) into a file inside importJSONCompany, then parsed with
+		// the company's field map.
 		r := h.importJSONCompany(company, limit, noDownload, explicitFile)
 		cr.Status = r.Status
 		cr.Files = r.Files

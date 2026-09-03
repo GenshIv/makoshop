@@ -85,9 +85,27 @@ func (r *EANPageRepo) ClearTransaction() {
 
 // LoadCatalogizerCache loads category token indexes for fast batch auto-catalogization.
 // Call this before BatchUpsertFromProducts to avoid repeated TurboRawRead calls.
+// Also rebuilds category tokens if they don't exist.
 func (r *EANPageRepo) LoadCatalogizerCache() error {
 	if r.Store == nil {
 		return nil
+	}
+
+	// Rebuild category tokens if the catalogizer is available
+	if r.Catalogizer != nil {
+		fmt.Printf("[EANPAGE] Catalogizer is set, attempting type assertion...\n")
+		if catz, ok := r.Catalogizer.(interface {
+			RebuildAllCategoryTokens() error
+		}); ok {
+			fmt.Printf("[EANPAGE] Type assertion succeeded, rebuilding category tokens...\n")
+			if err := catz.RebuildAllCategoryTokens(); err != nil {
+				fmt.Printf("[EANPAGE] WARN: rebuild category tokens: %v\n", err)
+			}
+		} else {
+			fmt.Printf("[EANPAGE] Type assertion failed for RebuildAllCategoryTokens\n")
+		}
+	} else {
+		fmt.Printf("[EANPAGE] Catalogizer is not set\n")
 	}
 
 	categories, err := r.CategoryRepo.ListAll()
@@ -1096,7 +1114,7 @@ func (r *EANPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 		created[ean] = s.ID // reuse ID for mapping
 	}
 
-	fmt.Printf("[EANPAGE]: start catologizator")
+	fmt.Printf("[EANPAGE] CatalogizeNew=%v, Catalogizer=%v, newPages=%d\n", r.CatalogizeNew, r.Catalogizer != nil, len(newPages))
 	// Catalogize new EAN pages using TurboTopNByIntersection
 	if r.CatalogizeNew && r.Catalogizer != nil {
 		// Get catalogizer via type assertion
@@ -1109,6 +1127,7 @@ func (r *EANPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 				if s.CategoryID != 0 {
 					continue
 				}
+				fmt.Printf("[EANPAGE] Attempting to catalogize %s (id=%d)\n", ean, s.ID)
 				// Build tokens for this EAN page using Keywords field (product name + shop category)
 				// Fall back to Title if Keywords is empty
 				textForCatalogization := s.Keywords
@@ -1122,9 +1141,11 @@ func (r *EANPageRepo) BatchUpsertFromProducts(products []*model.Product) map[int
 				// Catalogize using TurboTopNByIntersection
 
 				matches := r.MatchProductToCategories(s.Keywords)
+				fmt.Printf("[EANPAGE] Matched %d categories for %s (keywords=%s)\n", len(matches), ean, s.Keywords)
 				newCatID := s.CategoryID
 				if len(matches) > 0 {
 					newCatID = matches[0].NewCategoryID
+					fmt.Printf("[EANPAGE] Best match: cat %d (%s) with score %d\n", newCatID, matches[0].NewCategorySlug, matches[0].Score)
 				}
 
 				if newCatID != s.CategoryID {

@@ -154,6 +154,9 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.Handle("/admin/import-progress", d.JWT.RequireRole(http.HandlerFunc(d.adminImportProgress), model.RoleAdmin))
 	mux.Handle("/admin/products/import", d.JWT.RequireRole(http.HandlerFunc(d.adminProductsImport), model.RoleAdmin))
 
+	// --- Admin Field Map (Allegro feed field codes -> attribute names) ---
+	mux.Handle("/admin/field-map/default", d.JWT.RequireRole(http.HandlerFunc(d.adminFieldMapDefault), model.RoleAdmin))
+
 	// --- Admin Rebuild endpoints ---
 
 	mux.Handle("/admin/rebuild-sort-indexes", d.JWT.RequireRole(http.HandlerFunc(d.adminRebuildSortIndexes), model.RoleAdmin))
@@ -326,6 +329,7 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 
 	mux.Handle("/admin/products/reindex", d.JWT.RequireRole(http.HandlerFunc(d.adminProductsReindex), model.RoleAdmin))
 	mux.Handle("/admin/products/delete-all", d.JWT.RequireRole(http.HandlerFunc(d.adminProductsDeleteAll), model.RoleAdmin))
+	mux.Handle("/admin/delete-all", d.JWT.RequireRole(http.HandlerFunc(d.adminDeleteAll), model.RoleAdmin))
 	mux.HandleFunc("/products", d.products)
 	mux.HandleFunc("/products/turbo", d.productsTurbo)
 	mux.Handle("/products/", d.JWT.OptionalAuth(http.HandlerFunc(d.product)))

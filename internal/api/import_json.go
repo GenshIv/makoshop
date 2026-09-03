@@ -86,6 +86,162 @@ func downloadJSONPriceFile(company *model.Company) (string, error) {
 	return destPath, nil
 }
 
+// allegroDefaultMaxItems caps an Allegro feed download at 1000 items (10 pages
+// of 100). Allegro feeds are paginated and can hold tens of thousands of
+// products; the user wants a bounded, memory-safe download.
+const allegroDefaultMaxItems = 1000
+
+// isAllegroFeed reports whether the company's price source is configured as an
+// Allegro feed (paginated JSON with coded "fields"). Such feeds are downloaded
+// page-by-page (capped) into a file first, then processed from the file.
+func isAllegroFeed(company *model.Company) bool {
+	return strings.EqualFold(strings.TrimSpace(company.PriceSource.Format), "allegro")
+}
+
+// isAllegroURL reports whether the import URL points at an Allegro feed.
+// Allegro feeds use the same paginated JSON format as Tradedoubler but are
+// hosted on allegro.pl domains or contain "allegro" in the path.
+func isAllegroURL(rawURL string) bool {
+	if rawURL == "" {
+		return false
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	if strings.Contains(host, "allegro") {
+		return true
+	}
+	path := strings.ToLower(u.Path)
+	if strings.Contains(path, "allegro") {
+		return true
+	}
+	return false
+}
+
+// allegroPage is the top-level shape of one Allegro feed page. It carries the
+// coded product fields and a productHeader with the total hit count (used to
+// know when the feed is exhausted). It also tolerates the Tradedoubler "meta"
+// block so the same walker can stop on either signal.
+type allegroPage struct {
+	ProductHeader map[string]interface{} `json:"productHeader"`
+	Products      []JsonProductFileItem  `json:"products"`
+	Meta          TradedoublerMeta       `json:"meta"`
+}
+
+// downloadAllegroFeed walks the paginated Allegro feed starting at the page
+// encoded in the URL (default 1) and returns up to limit products (limit<=0
+// means allegroDefaultMaxItems). It stops when a page is empty, when the
+// productHeader.totalHits / meta.totalPages is reached, or when the cap is hit.
+// The page size is taken from the URL (default 100, the Allegro feed default).
+func downloadAllegroFeed(client *http.Client, rawURL string, limit int) ([]JsonProductFileItem, error) {
+	if limit <= 0 {
+		limit = allegroDefaultMaxItems
+	}
+	page, pageSize, baseQuery, err := tradedoublerPageParams(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	// Allegro feeds serve 100 items per page by default; respect an explicit
+	// pageSize from the URL but never exceed the API maximum.
+	if pageSize > tradedoublerMaxPageSize {
+		pageSize = tradedoublerMaxPageSize
+	}
+
+	var all []JsonProductFileItem
+	current := page
+	for {
+		reqURL, uerr := tradedoublerPageURL(rawURL, baseQuery, current)
+		if uerr != nil {
+			return all, uerr
+		}
+		fmt.Printf("[IMPORT-ALLEGRO] Fetching page %d (%d products so far)\n", current, len(all))
+		var pageData allegroPage
+		if ferr := fetchJSON(client, reqURL, &pageData); ferr != nil {
+			return all, fmt.Errorf("page %d: %w", current, ferr)
+		}
+
+		got := len(pageData.Products)
+		if got == 0 {
+			fmt.Printf("[IMPORT-ALLEGRO] Page %d empty, stopping\n", current)
+			break
+		}
+		all = append(all, pageData.Products...)
+		fmt.Printf("[IMPORT-ALLEGRO] Page %d: %d products (total %d)\n", current, got, len(all))
+
+		if len(all) >= limit {
+			all = all[:limit]
+			break
+		}
+
+		// Decide whether there is a next page.
+		next := false
+		switch {
+		case pageData.Meta.TotalPages > 0:
+			next = current < pageData.Meta.TotalPages
+		case pageData.Meta.TotalItems > 0:
+			next = len(all) < pageData.Meta.TotalItems
+		case totalHitsFromHeader(pageData.ProductHeader) > 0:
+			next = len(all) < totalHitsFromHeader(pageData.ProductHeader)
+		default:
+			// No pagination metadata: keep going while the page was full.
+			next = got >= pageSize
+		}
+		if !next {
+			break
+		}
+		current++
+	}
+	return all, nil
+}
+
+// totalHitsFromHeader extracts a numeric totalHits from an Allegro
+// productHeader (the value may arrive as a JSON number or a string).
+func totalHitsFromHeader(header map[string]interface{}) int {
+	if header == nil {
+		return 0
+	}
+	switch v := header["totalHits"].(type) {
+	case float64:
+		return int(v)
+	case json.Number:
+		if n, err := v.Int64(); err == nil {
+			return int(n)
+		}
+	case string:
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return 0
+}
+
+// writeFeedFile writes the downloaded feed products to destPath in the
+// canonical jsonPriceFile shape so the existing file-based parser can consume
+// them (two-stage: download to disk first, then process from the file).
+func writeFeedFile(products []JsonProductFileItem, destPath string) error {
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		return fmt.Errorf("mkdir: %w", err)
+	}
+	// Delete any stale file first so a partial/old feed is never mixed in.
+	_ = os.Remove(destPath)
+
+	f, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("create: %w", err)
+	}
+	defer f.Close()
+
+	doc := jsonPriceFile{Products: products}
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(doc); err != nil {
+		return fmt.Errorf("encode: %w", err)
+	}
+	return nil
+}
+
 // HandleAdminImportJSON imports offers from JSON price files.
 // It is idempotent: existing products are updated in place, never duplicated.
 //
@@ -190,17 +346,27 @@ func (h *Handlers) HandleAdminImportJSON(w http.ResponseWriter, r *http.Request,
 // jsonPriceFile represents the top-level JSON price file structure.
 type jsonPriceFile struct {
 	ProductHeader map[string]interface{} `json:"productHeader"`
-	Products      []jsonProductFileItem  `json:"products"`
+	Products      []JsonProductFileItem  `json:"products"`
 }
 
 // jsonPriceEntry represents a single product in the JSON price file.
-type jsonProductFileItem struct {
+type JsonProductFileItem struct {
 	Name         string                 `json:"name"`
 	Description  string                 `json:"description"`
 	Brand        string                 `json:"brand"`
+	Language     string                 `json:"language"`
+	Fields       []jsonFieldItem        `json:"fields"` // raw feed fields (e.g. Allegro "attr_<id>")
 	Offers       []jsonOfferFileItem    `json:"offers"`
 	Categories   []jsonCategoryFileItem `json:"categories"`
 	ProductImage jsonImageFileItem      `json:"productImage"`
+}
+
+// jsonFieldItem is a single raw feed field: a coded parameter (e.g. Allegro
+// "attr_11323") and its string value. The code is resolved to a human-readable
+// attribute name via the company's FieldMap (see model.FieldMapEntry).
+type jsonFieldItem struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 // jsonOfferFileItem represents an offer within a product.
@@ -269,6 +435,41 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		fmt.Printf("[IMPORT-JSON] %s: detected Tradedoubler paginated API, will walk pages\n", company.Name)
 	}
 
+	// Allegro feeds are a special case of the paginated JSON feed: they carry
+	// coded "fields" (attr_<id>) that are resolved via the company's FieldMap.
+	// They are downloaded page-by-page (capped at allegroDefaultMaxItems) into
+	// a file FIRST, then processed from the file (two-stage, memory-safe).
+	// Detect Allegro feeds by URL (host contains "allegro") OR by company config.
+	isAllegro := isAllegroFeed(company) || isAllegroURL(company.ImportURL)
+	if isAllegro && !company.PriceSource.DisablePagination {
+		fmt.Printf("[IMPORT-JSON] %s: detected Allegro feed, will download pages (cap %d) to file\n", company.Name, allegroDefaultMaxItems)
+	} else if isAllegro {
+		fmt.Printf("[IMPORT-JSON] %s: detected Allegro feed, pagination disabled, will download as single file\n", company.Name)
+	}
+
+	// For Allegro feeds, merge the company's field map with the default Allegro
+	// field map (docs/allegro_field_map.json). The company's map takes precedence.
+	// Load the field map BEFORE the Tradedoubler path so attributes are mapped
+	// correctly even when the feed uses the same URL format as Tradedoubler.
+	fieldMap := company.PriceSource.FieldMap
+	if isAllegro {
+		defaultMap := loadAllegroFieldMap()
+		if defaultMap != nil && len(defaultMap) > 0 {
+			merged := make(map[string]model.FieldMapEntry)
+			// Copy default map first
+			for k, v := range defaultMap {
+				merged[k] = v
+			}
+			// Override with company's map
+			for k, v := range fieldMap {
+				merged[k] = v
+			}
+			fieldMap = merged
+			fmt.Printf("[IMPORT-JSON] %s: merged Allegro field map (%d default + %d company entries)\n",
+				company.Name, len(defaultMap), len(company.PriceSource.FieldMap))
+		}
+	}
+
 	var files []string
 
 	if explicitFile != "" {
@@ -298,7 +499,22 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 			}
 			fmt.Printf("[IMPORT-JSON] Using local JSON files from %s (%d files)\n", dir, len(files))
 		} else if company.ImportURL != "" {
-			if isTradedoubler {
+			if isAllegro && !company.PriceSource.DisablePagination {
+				// Allegro: download pages (capped) into a file, then process it.
+				client := tradedoublerClient()
+				prods, derr := downloadAllegroFeed(client, company.ImportURL, limit)
+				if derr != nil {
+					fmt.Printf("[IMPORT-JSON] WARN: download Allegro feed from %s: %v\n", company.ImportURL, derr)
+					return JSONImportResult{Status: "download_error"}
+				}
+				destPath := filepath.Join(pricesDir, sanitizeFileName(company.Name)+".json")
+				if werr := writeFeedFile(prods, destPath); werr != nil {
+					fmt.Printf("[IMPORT-JSON] WARN: write Allegro feed file %s: %v\n", destPath, werr)
+					return JSONImportResult{Status: "download_error"}
+				}
+				files = []string{destPath}
+				fmt.Printf("[IMPORT-JSON] %s: downloaded %d products to %s\n", company.Name, len(prods), destPath)
+			} else if isTradedoubler {
 				// Paginated API: pages are fetched below (not a single file).
 				fmt.Printf("[IMPORT-JSON] %s: skipping single-file download (paginated API)\n", company.Name)
 			} else {
@@ -337,6 +553,10 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 	// Pre-load attribute definitions to avoid repeated DB hits
 	attrDefCache := make(map[string]*model.AttrDef)
 	newAttrKeys := make(map[string]struct{})
+	// unmappedFields collects feed field codes that have no entry in the
+	// company's field map, so the import report can tell the user which codes
+	// to add (manual analysis of the feed).
+	unmappedFields := make(map[string]struct{})
 	if h.attrDefRepo != nil {
 		if attrDefs, err := h.attrDefRepo.List(); err == nil {
 			for i := range attrDefs {
@@ -356,8 +576,10 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 
 	h.importProgress.SetStep(StepParse)
 
-	if isTradedoubler {
+	if isTradedoubler && !isAllegro {
 		// --- Paginated API path: walk every page and parse the products. ---
+		// (Allegro feeds are handled via the file path above: they are
+		// downloaded to a file first, then parsed with field-map support.)
 		client := tradedoublerClient()
 		tps, derr := downloadTradedoubler(client, company.ImportURL, limit)
 		if derr != nil {
@@ -366,7 +588,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 			return result
 		}
 		result.Files = 1 // the feed is one logical source
-		parsed, names, skipped := parseTradedoublerProducts(tps, company.ID, company.Slug, company.Name, currency, attrDefCache, newAttrKeys, limit)
+		parsed, names, skipped := parseTradedoublerProducts(tps, company.ID, company.Slug, company.Name, currency, attrDefCache, newAttrKeys, fieldMap, limit)
 		allParsedProducts = parsed
 		allParsedNames = names
 		result.ProductsSkipped = skipped
@@ -413,7 +635,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 				}
 
 				// Parse the JSON product into a model.Product
-				prod, skip, err := parseJSONProductForImport(jp, company.ID, company.Slug, company.Name, currency, attrDefCache, newAttrKeys, h.attrDefRepo)
+				prod, skip, err := parseJSONProductForImport(jp, company.ID, company.Slug, company.Name, currency, attrDefCache, newAttrKeys, h.attrDefRepo, fieldMap, unmappedFields)
 				if err != nil {
 					fmt.Printf("[IMPORT-JSON] WARN: parse product %s: %v\n", jp.Name, err)
 					fileSkipped++
@@ -460,6 +682,90 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 				attrDefCache[key] = ad
 			}
 		}
+	}
+
+	// Phase 0.5: Apply field-map names to the created AttrDefs (OUTSIDE TRANSACTION)
+	// ============================================
+	// Coded feed fields (e.g. Allegro "attr_11323") are created in Phase 0 with
+	// a placeholder name (the code itself). Here we set the human-readable names
+	// from the company's field map (Polish primary + translations) so the catalog
+	// displays them properly. Only definitions whose names actually differ are
+	// rewritten, so re-imports are a no-op.
+	//
+	// Also cleans up old attribute definitions that have the mapped name as their
+	// code (e.g. "Stan" instead of "attr_11323"). These are remnants from previous
+	// imports that used the mapped name as the attribute key.
+	if h.attrDefRepo != nil && len(fieldMap) > 0 {
+		fmt.Printf("[IMPORT-JSON] Phase 0.5: Applying field map names (%d entries)...\n", len(fieldMap))
+		applied := 0
+		skipped := 0
+		notFound := 0
+		cleaned := 0
+		for code, entry := range fieldMap {
+			if entry.Skip {
+				skipped++
+				continue
+			}
+			if entry.Name == "" {
+				fmt.Printf("[IMPORT-JSON] Phase 0.5: WARN: empty name for %s\n", code)
+				skipped++
+				continue
+			}
+
+			// Update the attribute definition with the localized names
+			ad, err := h.attrDefRepo.GetByCode(code)
+			if err != nil {
+				notFound++
+				continue // AttrDef absent (field never seen in a product) — skip.
+			}
+			needsUpdate := ad.NamePl != entry.Name ||
+				(entry.NameRu != "" && ad.NameRu != entry.NameRu) ||
+				(entry.NameUa != "" && ad.NameUa != entry.NameUa) ||
+				(entry.NameEn != "" && ad.NameEn != entry.NameEn)
+			if !needsUpdate {
+				skipped++
+				continue
+			}
+			if err := h.attrDefRepo.Update(code, func(a *model.AttrDef) {
+				a.NamePl = entry.Name
+				if entry.NameRu != "" {
+					a.NameRu = entry.NameRu
+				}
+				if entry.NameUa != "" {
+					a.NameUa = entry.NameUa
+				}
+				if entry.NameEn != "" {
+					a.NameEn = entry.NameEn
+				}
+			}); err != nil {
+				fmt.Printf("[IMPORT-JSON] WARN: update AttrDef name for %s: %v\n", code, err)
+			} else {
+				applied++
+				fmt.Printf("[IMPORT-JSON] Phase 0.5: Updated %s -> %s\n", code, entry.Name)
+			}
+
+			// Clean up old attribute definitions with the mapped name as their code
+			// (e.g. "Stan" instead of "attr_11323"). These are remnants from previous
+			// imports that used the mapped name as the attribute key.
+			oldAd, err := h.attrDefRepo.GetByCode(entry.Name)
+			if err == nil && oldAd.Code != code {
+				// Old attribute definition exists with the mapped name as its code
+				// Remove it to avoid duplicate attributes
+				if err := h.attrDefRepo.Delete(oldAd.Code); err != nil {
+					fmt.Printf("[IMPORT-JSON] WARN: delete old AttrDef %s: %v\n", oldAd.Code, err)
+				} else {
+					cleaned++
+					fmt.Printf("[IMPORT-JSON] Phase 0.5: Cleaned up old AttrDef %s (replaced by %s)\n", oldAd.Code, code)
+
+					if err := h.attrDefRepo.RemoveKeyFromList(code); err != nil {
+						fmt.Printf("[IMPORT-JSON] WARN: delete old AttrDef %s: %v\n", oldAd.Code, err)
+					}
+
+				}
+
+			}
+		}
+		fmt.Printf("[IMPORT-JSON] Phase 0.5: Applied %d, skipped %d, not found %d, cleaned %d\n", applied, skipped, notFound, cleaned)
 	}
 
 	// ============================================
@@ -615,6 +921,18 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		fmt.Println("[IMPORT-JSON] Transaction committed successfully")
 	}
 
+	// Report feed fields that had no entry in the company's field map, so the
+	// user knows which codes to add (manual analysis of the feed).
+	if len(unmappedFields) > 0 {
+		codes := make([]string, 0, len(unmappedFields))
+		for code := range unmappedFields {
+			codes = append(codes, code)
+		}
+		sort.Strings(codes)
+		fmt.Printf("[IMPORT-JSON] %s: %d feed field(s) not in the field map (add them in the company's Field Map): %s\n",
+			company.Name, len(codes), strings.Join(codes, ", "))
+	}
+
 	result.Status = "completed"
 	return result
 }
@@ -625,8 +943,9 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 func identityNormalize(s string) string { return s }
 
 // parseJSONProductForImport converts a jsonPriceEntry to a model.Product.
-func parseJSONProductForImport(jp jsonProductFileItem, companyID int64, companySlug, companyName, currency string,
-	attrDefCache map[string]*model.AttrDef, newAttrKeys map[string]struct{}, attrDefRepo *db.AttrDefRepo) (*model.Product, bool, error) {
+func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companySlug, companyName, currency string,
+	attrDefCache map[string]*model.AttrDef, newAttrKeys map[string]struct{},
+	attrDefRepo *db.AttrDefRepo, fieldMap map[string]model.FieldMapEntry, unmappedFields map[string]struct{}) (*model.Product, bool, error) {
 
 	if jp.Name == "" {
 		return nil, true, nil
@@ -647,27 +966,72 @@ func parseJSONProductForImport(jp jsonProductFileItem, companyID int64, companyS
 		return nil, true, nil
 	}
 
-	// EAN/EAN: derive a STABLE identifier from the feed's sourceProductId,
+	// Parse coded feed fields (e.g. Allegro "attr_<id>") using the company's
+	// field map. Each mapped field becomes a first-class attribute: the field
+	// code is the stable attribute code, and the map entry supplies the
+	// human-readable name (applied to the AttrDef after Phase 0). Fields that
+	// are absent from the map, or marked Skip, are ignored (fallback: the
+	// description-based parsing above still runs).
+	var attrs []model.KeyValue
+	if len(jp.Fields) > 0 {
+		for _, f := range jp.Fields {
+			code := strings.TrimSpace(f.Name)
+			if code == "" {
+				continue
+			}
+
+			entry, ok := fieldMap[code]
+			if !ok {
+				// Field not in the map: record it so the import report can tell
+				// the user which codes to add (manual analysis).
+				if unmappedFields != nil {
+					unmappedFields[code] = struct{}{}
+				}
+				continue
+			}
+			if v, ok := fieldMap[code]; ok && v.Name != "" {
+				code = v.Name
+			}
+			if entry.Skip {
+				continue
+			}
+			// Use SplitValues to handle comma-separated option lists (e.g.,
+			// connectors: "HDMI, USB, Thunderbolt"). Each part is validated
+			// individually, matching the behavior of the HTML attribute parser.
+			for _, value := range attrsPkg.SplitValues(f.Value) {
+				attrs = append(attrs, model.KeyValue{Key: code, Value: value})
+			}
+			newAttrKeys[code] = struct{}{}
+		}
+	}
+
+	// EAN: prefer a valid EAN from the attributes (e.g. attr_225693 -> "EAN").
+	// If not found, derive a STABLE identifier from the feed's sourceProductId,
 	// prefixed with the company slug. sourceProductId is unique only within a
 	// company, so the prefix makes it globally unique and stable across
 	// re-imports. Never use the offer id (a UUID that changes on every feed
 	// fetch — it would break in-place matching, prevent stock actualization,
 	// and produce duplicate EAN pages).
-	sku := ""
-	if len(jp.Offers) > 0 && strings.TrimSpace(jp.Offers[0].SourceProductID) != "" {
+	ean := ""
+	for _, attr := range attrs {
+		if attr.Key == "attr_225693" || attr.Key == "ean" || attr.Key == "EAN" {
+			ean = strings.TrimSpace(attr.Value)
+			break
+		}
+	}
+	if ean == "" && len(jp.Offers) > 0 && strings.TrimSpace(jp.Offers[0].SourceProductID) != "" {
 		prefix := strings.TrimSpace(companySlug)
 		if prefix == "" {
 			prefix = strconv.FormatInt(companyID, 10)
 		}
-		sku = prefix + "_" + strings.TrimSpace(jp.Offers[0].SourceProductID)
+		ean = prefix + "_" + strings.TrimSpace(jp.Offers[0].SourceProductID)
 	}
-	ean := sku
 
 	// Build name with company suffix
 	name := jp.Name
-	if companyName != "" {
-		name = name + " — " + companyName
-	}
+	//if companyName != "" {
+	//	name = name // + " — " + companyName
+	//}
 
 	// Extract image URL
 	var images []string
@@ -684,7 +1048,6 @@ func parseJSONProductForImport(jp jsonProductFileItem, companyID int64, companyS
 	// Brand is a first-class attribute: it must land in Attributes so the
 	// catalog can filter by it (attr.brand=<value>). The AttrDef for the
 	// "brand" code is created in Phase 0 via newAttrKeys.
-	var attrs []model.KeyValue
 	if jp.Brand != "" {
 		if nv := attrsPkg.NormalizeValue(jp.Brand); attrsPkg.ValidValue(nv) {
 			attrs = append(attrs, model.KeyValue{Key: "brand", Value: nv})
@@ -692,19 +1055,12 @@ func parseJSONProductForImport(jp jsonProductFileItem, companyID int64, companyS
 		}
 	}
 
-	// Parse attributes from the description (same core as the Nokaut import).
-	// Descriptions in JSON/Tradedoubler feeds often carry "Key: value" specs.
+	// Clean the description but do NOT parse attributes from it for JSON feeds.
+	// Description-based attribute parsing creates junk attributes (e.g. "Procesor",
+	// "Ukryj", "Szukaj...", "0 GHz", "00 - 4") from random text in the description.
+	// JSON/Allegro feeds already provide structured attributes via the "fields"
+	// array, so description parsing is unnecessary and harmful.
 	description := pricesrc.CleanHTMLDescription(jp.Description)
-	if description != "" && attrDefRepo != nil {
-		keyParser := pricesrc.NewHTMLAttrKeyParser(attrDefRepo)
-		if htmlAttrs := keyParser.Parse(description); len(htmlAttrs) > 0 {
-			for code, values := range htmlAttrs {
-				for _, value := range values {
-					attrs = append(attrs, model.KeyValue{Key: code, Value: value})
-				}
-			}
-		}
-	}
 
 	// Drop duplicate (code, value) pairs from different sources.
 	attrs = dedupeAttrPairs(attrs)
@@ -738,6 +1094,48 @@ func parseJSONProductForImport(jp jsonProductFileItem, companyID int64, companyS
 	}
 
 	return p, false, nil
+}
+
+// loadAllegroFieldMap loads the default Allegro field map from
+// docs/allegro_field_map.json. Returns nil if the file cannot be read or parsed.
+func loadAllegroFieldMap() map[string]model.FieldMapEntry {
+	// Try to find the file relative to the working directory
+	filePath := "docs/allegro_field_map.json"
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		// Try relative to the source root (if running from a different directory)
+		filePath = "../docs/allegro_field_map.json"
+		data, err = os.ReadFile(filePath)
+		if err != nil {
+			return nil
+		}
+	}
+
+	var raw struct {
+		Fields  map[string]string `json:"fields"`
+		Special map[string]string `json:"special"`
+		Skip    []string          `json:"skip"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+
+	fieldMap := make(map[string]model.FieldMapEntry)
+	// Load regular fields
+	for code, name := range raw.Fields {
+		fieldMap[code] = model.FieldMapEntry{Name: name}
+	}
+	// Load special fields (EAN, GTIN, category_id) — these are also first-class attributes
+	if raw.Special != nil {
+		for code, name := range raw.Special {
+			fieldMap[code] = model.FieldMapEntry{Name: name}
+		}
+	}
+	// Load skip list
+	for _, code := range raw.Skip {
+		fieldMap[code] = model.FieldMapEntry{Skip: true}
+	}
+	return fieldMap
 }
 
 // extractDirectProductURL returns the direct product link from an offer URL.
