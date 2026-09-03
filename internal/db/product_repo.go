@@ -848,7 +848,7 @@ func (r *ProductRepo) deleteProductTx(txn *Transaction, p *model.Product) error 
 // must match the one used at import time.
 // Returns the number of deleted products.
 func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, importProducts []*model.Product, normalize func(string) string) int {
-	if r.store == nil || companyID == 0 || len(importProducts) == 0 || normalize == nil {
+	if r.store == nil || companyID == 0 || normalize == nil {
 		return 0
 	}
 
@@ -860,9 +860,6 @@ func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, 
 		}
 		key := productEANKey(p.EAN, normalize(p.Name), p.CompanyID)
 		importKeys[key] = struct{}{}
-	}
-	if len(importKeys) == 0 {
-		return 0
 	}
 
 	deleted := 0

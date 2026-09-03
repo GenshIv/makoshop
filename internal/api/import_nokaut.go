@@ -533,7 +533,7 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 	// Removes products for this company that are no longer in the price file.
 	// Runs before indexing so the vendor index still reflects pre-import state.
 	h.importProgress.SetStep(StepCleanup)
-	if len(allParsedProducts) > 0 && h.productRepo != nil {
+	if h.productRepo != nil {
 		fmt.Printf("[IMPORT-NOKAUT] Phase 1.6: Cleaning up stale products for company %d...\n", company.ID)
 		deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, pricesrc.NormalizeName)
 		result.ProductsDeleted = deleted

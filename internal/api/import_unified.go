@@ -140,7 +140,12 @@ func (h *Handlers) importCompanyByFormat(company *model.Company, override string
 	// Paginated APIs (Tradedoubler) are walked page by page inside the JSON
 	// importer, so there is no single file to pre-download for format
 	// detection. Skip it to avoid a wasteful (and possibly failing) request.
-	if company.ImportURL != "" && !noDownload && !isTradedoublerURL(company.ImportURL) {
+	// Allegro feeds are the same: a plain single-file GET of the feed URL would
+	// capture only the FIRST page (e.g. 100 of 5772 products). Let
+	// importJSONCompany own the download so it can walk every page (capped, or
+	// the full feed in single-file mode per the company's DisablePagination).
+	isAllegro := isAllegroFeed(company) || isAllegroURL(company.ImportURL)
+	if company.ImportURL != "" && !noDownload && !isTradedoublerURL(company.ImportURL) && !isAllegro {
 		// Download once and let the content choose the parser.
 		if path, err := downloadPriceFile(company); err == nil {
 			explicitFile = path

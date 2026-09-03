@@ -373,6 +373,7 @@ const emptyPriceForm = () => ({
   desc_en: '',
   price_source: {
     format: 'nokaut',
+    disable_pagination: false,
     ean_field: 'EAN',
     previous_price_field: 'PreviousPrice',
     image_field: 'ImageOriginalUrl',
@@ -475,6 +476,12 @@ const priceFormats = [
   { value: 'json', label: 'JSON' },
   { value: 'allegro', label: 'Allegro (JSON + fields)' },
 ];
+
+// The "single file (no pagination)" option only applies to Allegro feeds:
+// when checked, the whole feed is downloaded into ONE file (no 1000-item cap)
+// and imported as a single file instead of a capped page walk.
+const isAllegroFormat = (form) =>
+  !!form && !!form.price_source && String(form.price_source.format || '').toLowerCase() === 'allegro';
 
 const jsonImporting = ref(false);
 const jsonImportResult = ref(null);
@@ -599,6 +606,7 @@ const emptyUnifiedSettingsForm = () => ({
     import_folder: '',
     currency: '',
     format: 'nokaut',
+    disable_pagination: false,
     ean_field: 'EAN',
     previous_price_field: 'PreviousPrice',
     image_field: 'ImageOriginalUrl',
@@ -797,6 +805,9 @@ let progressTimer = null;
 // Maps company id -> selected. Only companies with an import source are shown,
 // and any combination can be selected (replaces the old single-company imports).
 const selectedImportCompanies = ref({});
+// "Use local file (no download)" for the batch import: import from the local
+// price files instead of downloading from each company's ImportURL.
+const batchNoDownload = ref(false);
 
 // Companies that have an import source (URL or folder) and can be imported.
 const importableCompanies = computed(() =>
@@ -925,7 +936,11 @@ const updateAllPrices = async () => {
     // finalizeUpdateAll reports the result and stops polling once running=false.
     // Keeping the POST short means a browser/proxy timeout can no longer cancel
     // or restart it.
-    await api.post('/admin/import-unified', null, { params: { companies: ids.join(',') } });
+    const params = { companies: ids.join(',') };
+    if (batchNoDownload.value) {
+      params.no_download = '1';
+    }
+    await api.post('/admin/import-unified', null, { params });
     // 202: the run is in flight. Do NOT finalize here — fetchImportProgress
     // will detect completion and call finalizeUpdateAll.
   } catch (e) {
@@ -999,6 +1014,11 @@ onBeforeUnmount(stopProgressPolling);
           {{ t('admin.select_companies_to_import') || 'Select companies to import' }}
         </div>
         <div class="flex items-center gap-2">
+          <label class="inline-flex items-center gap-1.5 text-xs text-ink-3 cursor-pointer">
+            <input v-model="batchNoDownload" type="checkbox" class="accent-purple-600" />
+            {{ t('admin.json_no_download') || 'Use local file (no download)' }}
+          </label>
+          <span class="text-ink-3">·</span>
           <button @click="toggleAllImportCompanies(true)" class="text-xs text-purple-600 hover:underline">
             {{ t('admin.select_all') || 'Select all' }}
           </button>
@@ -1278,6 +1298,11 @@ onBeforeUnmount(stopProgressPolling);
                   <option v-for="src in priceFormats" :key="src.value" :value="src.value">{{ src.label }}</option>
                 </select>
                 <p class="text-[10px] text-ink-3 mt-0.5">Method used to parse this company's price file on import</p>
+                <label v-if="isAllegroFormat(priceForm)" class="inline-flex items-center gap-1.5 text-xs text-ink-3 cursor-pointer mt-1">
+                  <input v-model="priceForm.price_source.disable_pagination" type="checkbox" class="accent-purple-600" />
+                  {{ t('admin.allegro_single_file') || 'Single file (no pagination)' }}
+                </label>
+                <p v-if="isAllegroFormat(priceForm)" class="text-[10px] text-ink-3 mt-0.5">{{ t('admin.allegro_single_file_hint') || 'Download the whole feed into ONE file (no item cap) and import it as a single file' }}</p>
               </div>
               <div>
                 <label class="text-xs text-ink-3 block">{{ t('admin.field_ean') || 'EAN Field' }}</label>
@@ -1443,6 +1468,11 @@ onBeforeUnmount(stopProgressPolling);
                   <option v-for="fmt in priceFormats" :key="fmt.value" :value="fmt.value">{{ fmt.label }}</option>
                 </select>
                 <p class="text-[10px] text-ink-3 mt-0.5">{{ t('admin.format_hint') || 'How this company\'s price file is parsed. Loaded from and saved to this company.' }}</p>
+                <label v-if="isAllegroFormat(unifiedSettingsForm)" class="inline-flex items-center gap-1.5 text-xs text-ink-3 cursor-pointer mt-1">
+                  <input v-model="unifiedSettingsForm.price_source.disable_pagination" type="checkbox" class="accent-purple-600" />
+                  {{ t('admin.allegro_single_file') || 'Single file (no pagination)' }}
+                </label>
+                <p v-if="isAllegroFormat(unifiedSettingsForm)" class="text-[10px] text-ink-3 mt-0.5">{{ t('admin.allegro_single_file_hint') || 'Download the whole feed into ONE file (no item cap) and import it as a single file' }}</p>
               </div>
               <div>
                 <label class="text-xs text-ink-3 block mb-1">{{ t('admin.currency') || 'Currency' }}</label>

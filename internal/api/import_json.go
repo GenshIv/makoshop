@@ -1,6 +1,7 @@
 package api
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -35,7 +36,7 @@ type JSONImportResult struct {
 // downloadJSONPriceFile downloads the company's JSON price file from company.ImportURL
 // and saves it to prices/<company>.json. Returns the saved file path.
 // Always deletes the old file first to ensure a fresh download.
-func downloadJSONPriceFile(company *model.Company) (string, error) {
+func downloadJSONPriceFile(company *model.Company, noDownload bool) (string, error) {
 	// Determine file extension from URL (robust to query/matrix params), default .json
 	ext := priceFileExt(company.ImportURL, ".json")
 
@@ -49,11 +50,17 @@ func downloadJSONPriceFile(company *model.Company) (string, error) {
 		return "", fmt.Errorf("mkdir: %w", err)
 	}
 
+	f, err := os.Open(destPath)
+
+	if noDownload && err == nil && f.Close() == nil {
+		return destPath, nil
+	}
 	// Delete old file first to ensure fresh download
-	if err := os.Remove(destPath); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(destPath); err != nil && !os.IsNotExist(err) && !noDownload {
 		fmt.Printf("[IMPORT-JSON] WARN: remove old file %s: %v\n", destPath, err)
 	} else {
 		fmt.Printf("[IMPORT-JSON] Removed old file %s\n", destPath)
+		return destPath, nil
 	}
 
 	// Large price files can take many minutes to download on a slow link. Use a
@@ -73,7 +80,7 @@ func downloadJSONPriceFile(company *model.Company) (string, error) {
 		return "", fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 
-	f, err := os.Create(destPath)
+	f, err = os.Create(destPath)
 	if err != nil {
 		return "", fmt.Errorf("create: %w", err)
 	}
@@ -131,12 +138,14 @@ type allegroPage struct {
 }
 
 // downloadAllegroFeed walks the paginated Allegro feed starting at the page
-// encoded in the URL (default 1) and returns up to limit products (limit<=0
-// means allegroDefaultMaxItems). It stops when a page is empty, when the
-// productHeader.totalHits / meta.totalPages is reached, or when the cap is hit.
-// The page size is taken from the URL (default 100, the Allegro feed default).
+// encoded in the URL (default 1) and returns up to limit products. limit
+// semantics: limit < 0 means unlimited (download the whole feed), limit == 0
+// means allegroDefaultMaxItems, limit > 0 means exactly that many. It stops
+// when a page is empty, when the productHeader.totalHits / meta.totalPages is
+// reached, or when the cap is hit. The page size is taken from the URL
+// (default 100, the Allegro feed default).
 func downloadAllegroFeed(client *http.Client, rawURL string, limit int) ([]JsonProductFileItem, error) {
-	if limit <= 0 {
+	if limit == 0 {
 		limit = allegroDefaultMaxItems
 	}
 	page, pageSize, baseQuery, err := tradedoublerPageParams(rawURL)
@@ -150,6 +159,11 @@ func downloadAllegroFeed(client *http.Client, rawURL string, limit int) ([]JsonP
 	}
 
 	var all []JsonProductFileItem
+	// seen tracks product identities already collected, so a feed (or a static
+	// file that ignores the page parameter) that keeps returning the same
+	// products cannot loop forever in unlimited mode: a page that adds nothing
+	// new ends the walk.
+	seen := make(map[string]struct{})
 	current := page
 	for {
 		reqURL, uerr := tradedoublerPageURL(rawURL, baseQuery, current)
@@ -167,10 +181,28 @@ func downloadAllegroFeed(client *http.Client, rawURL string, limit int) ([]JsonP
 			fmt.Printf("[IMPORT-ALLEGRO] Page %d empty, stopping\n", current)
 			break
 		}
+
+		newOnPage := 0
+		for _, p := range pageData.Products {
+			id := feedProductIdentity(p)
+			if id == "" {
+				newOnPage++
+				continue
+			}
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			newOnPage++
+		}
+		if newOnPage == 0 {
+			fmt.Printf("[IMPORT-ALLEGRO] Page %d: no new products, stopping\n", current)
+			break
+		}
 		all = append(all, pageData.Products...)
 		fmt.Printf("[IMPORT-ALLEGRO] Page %d: %d products (total %d)\n", current, got, len(all))
 
-		if len(all) >= limit {
+		if limit > 0 && len(all) >= limit {
 			all = all[:limit]
 			break
 		}
@@ -194,6 +226,25 @@ func downloadAllegroFeed(client *http.Client, rawURL string, limit int) ([]JsonP
 		current++
 	}
 	return all, nil
+}
+
+// feedProductIdentity returns a stable identifier for a feed product, used to
+// detect a page that repeats products already collected (a static file or an
+// API that ignores the page parameter). Prefers the offer's sourceProductId,
+// then the offer id, then the product name; returns "" when none is available.
+func feedProductIdentity(p JsonProductFileItem) string {
+	if len(p.Offers) > 0 {
+		if sid := strings.TrimSpace(p.Offers[0].SourceProductID); sid != "" {
+			return "src:" + sid
+		}
+		if oid := strings.TrimSpace(p.Offers[0].ID); oid != "" {
+			return "id:" + oid
+		}
+	}
+	if name := strings.TrimSpace(p.Name); name != "" {
+		return "name:" + name
+	}
+	return ""
 }
 
 // totalHitsFromHeader extracts a numeric totalHits from an Allegro
@@ -444,7 +495,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 	if isAllegro && !company.PriceSource.DisablePagination {
 		fmt.Printf("[IMPORT-JSON] %s: detected Allegro feed, will download pages (cap %d) to file\n", company.Name, allegroDefaultMaxItems)
 	} else if isAllegro {
-		fmt.Printf("[IMPORT-JSON] %s: detected Allegro feed, pagination disabled, will download as single file\n", company.Name)
+		fmt.Printf("[IMPORT-JSON] %s: detected Allegro feed, pagination disabled, will download the FULL feed into a single file (no cap)\n", company.Name)
 	}
 
 	// For Allegro feeds, merge the company's field map with the default Allegro
@@ -487,17 +538,17 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 
 			dir := filepath.Join(pricesDir, importFolder)
 			var err error
-			files, err = filepath.Glob(filepath.Join(dir, "*.json"))
+			destPath, err := downloadJSONPriceFile(company, noDownload)
+
+			files = append(files, destPath)
 			if err != nil {
 				fmt.Printf("[IMPORT-JSON] WARN: glob %s: %v\n", dir, err)
 				return JSONImportResult{Status: "no_files"}
 			}
-			sort.Strings(files)
-			if len(files) == 0 {
-				fmt.Printf("[IMPORT-JSON] WARN: no JSON files in %s\n", dir)
-				return JSONImportResult{Status: "no_files"}
-			}
-			fmt.Printf("[IMPORT-JSON] Using local JSON files from %s (%d files)\n", dir, len(files))
+			// Fallback: the configured "folder" may actually be a single file
+			// name (e.g. prices/allegro2.json) or the file may sit at the top level.
+
+			fmt.Printf("[IMPORT-JSON] Using local JSON files (folder=%q, %d files): %v\n", importFolder, len(files), files)
 		} else if company.ImportURL != "" {
 			if isAllegro && !company.PriceSource.DisablePagination {
 				// Allegro: download pages (capped) into a file, then process it.
@@ -514,12 +565,27 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 				}
 				files = []string{destPath}
 				fmt.Printf("[IMPORT-JSON] %s: downloaded %d products to %s\n", company.Name, len(prods), destPath)
+			} else if isAllegro {
+				// Allegro with pagination disabled: download the feed as a SINGLE
+				// file by doing a plain GET of the ImportURL EXACTLY as configured.
+				// The URL must NOT be rewritten (no page/pageSize params) — the
+				// user's feed URL returns the full price list as-is, and modifying
+				// it breaks the download. The whole response is saved to one file
+				// and imported as a single file. This is the "import as one file,
+				// no pagination" mode.
+				destPath, derr := downloadJSONPriceFile(company, noDownload)
+				if derr != nil {
+					fmt.Printf("[IMPORT-JSON] WARN: download Allegro single file from %s: %v\n", company.ImportURL, derr)
+					return JSONImportResult{Status: "download_error"}
+				}
+				files = []string{destPath}
+				fmt.Printf("[IMPORT-JSON] %s: downloaded Allegro single file (no pagination, URL unchanged) to %s\n", company.Name, destPath)
 			} else if isTradedoubler {
 				// Paginated API: pages are fetched below (not a single file).
 				fmt.Printf("[IMPORT-JSON] %s: skipping single-file download (paginated API)\n", company.Name)
 			} else {
 				// Download the JSON price file from the URL (default: always re-download)
-				destPath, err := downloadJSONPriceFile(company)
+				destPath, err := downloadJSONPriceFile(company, noDownload)
 				if err != nil {
 					fmt.Printf("[IMPORT-JSON] WARN: download JSON price from %s: %v\n", company.ImportURL, err)
 					return JSONImportResult{Status: "download_error"}
@@ -603,29 +669,23 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 				break
 			}
 
-			f, err := os.Open(file)
-			if err != nil {
-				fmt.Printf("[IMPORT-JSON] WARN: open %s: %v\n", file, err)
-				continue
-			}
-
 			fileStart := time.Now()
 			fmt.Printf("[IMPORT-JSON] Parsing %s (file %d/%d)...\n", filepath.Base(file), len(files), len(files))
 
 			var fileParsed int
 			var fileSkipped int
 
-			// First pass: parse JSON and collect all products
+			// First pass: parse JSON and collect all products. The file may be a
+			// ZIP archive (Allegro "unlimited export") — readPriceFileJSON handles
+			// both plain JSON and ZIP transparently.
 			var parsedProducts []*model.Product
 			var parsedNames []string
 
-			var jsonData jsonPriceFile
-			if err := json.NewDecoder(f).Decode(&jsonData); err != nil {
-				fmt.Printf("[IMPORT-JSON] WARN: decode %s: %v\n", file, err)
-				f.Close()
+			jsonData, err := readPriceFileJSON(file)
+			if err != nil {
+				fmt.Printf("[IMPORT-JSON] WARN: load %s: %v\n", file, err)
 				continue
 			}
-			f.Close()
 
 			fmt.Printf("[IMPORT-JSON] Loaded %d products from %s\n", len(jsonData.Products), filepath.Base(file))
 
@@ -773,23 +833,23 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 	// ============================================
 	var allProducts []*model.Product
 
+	// Create application-level transaction BEFORE any writes
+	txn := db.NewTransaction(h.store)
+	if err := txn.Begin(); err != nil {
+		fmt.Printf("[IMPORT-JSON] ERROR: failed to begin transaction: %v\n", err)
+		result.Status = "error_transaction"
+		return result
+	}
+	defer func() {
+		if !txn.IsFinished() {
+			_ = txn.Abort()
+		}
+	}()
+
 	if len(allParsedProducts) > 0 {
 		fmt.Printf("[IMPORT-JSON] Phase 1: Creating/updating %d products (transactional)...\n", len(allParsedProducts))
 		h.importProgress.SetStep(StepProducts)
 		phase1Start := time.Now()
-
-		// Create application-level transaction BEFORE any writes
-		txn := db.NewTransaction(h.store)
-		if err := txn.Begin(); err != nil {
-			fmt.Printf("[IMPORT-JSON] ERROR: failed to begin transaction: %v\n", err)
-			result.Status = "error_transaction"
-			return result
-		}
-		defer func() {
-			if !txn.IsFinished() {
-				_ = txn.Abort()
-			}
-		}()
 
 		// Process in batches to avoid filling up the transaction buffer
 		const batchSize = 100_000
@@ -835,17 +895,6 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 			}
 		}
 		fmt.Printf("[IMPORT-JSON] Phase 1: done in %v\n", time.Since(phase1Start))
-
-		// ============================================
-		// Phase 1.6: Delete stale products not in this import (IN TRANSACTION)
-		// ============================================
-		// Removes products for this company that are no longer in the price file.
-		h.importProgress.SetStep(StepCleanup)
-		fmt.Printf("[IMPORT-JSON] Phase 1.6: Cleaning up stale products for company %d...\n", company.ID)
-		deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, identityNormalize)
-		result.ProductsDeleted = deleted
-		h.importProgress.SetDeleted(deleted)
-		fmt.Printf("[IMPORT-JSON] Phase 1.6: deleted %d stale products\n", deleted)
 
 		// ============================================
 		// Phase 1.5: Batch index all products (IN TRANSACTION)
@@ -912,14 +961,27 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		}
 
 		// Commit transaction (per-company data: products, indexes, EAN pages).
-		h.importProgress.SetStep(StepCommit)
-		if err := txn.Commit(); err != nil {
-			fmt.Printf("[IMPORT-JSON] ERROR: commit transaction failed: %v\n", err)
-			result.Status = "error_commit"
-			return result
-		}
-		fmt.Println("[IMPORT-JSON] Transaction committed successfully")
 	}
+
+	// ============================================
+	// Phase 1.6: Delete stale products not in this import (IN TRANSACTION)
+	// ============================================
+	// Removes products for this company that are no longer in the price file.
+	h.importProgress.SetStep(StepCleanup)
+	fmt.Printf("[IMPORT-JSON] Phase 1.6: Cleaning up stale products for company %d...\n", company.ID)
+	deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, identityNormalize)
+	result.ProductsDeleted = deleted
+	h.importProgress.SetDeleted(deleted)
+	fmt.Printf("[IMPORT-JSON] Phase 1.6: deleted %d stale products\n", deleted)
+
+	// Commit transaction (per-company data: products, indexes, EAN pages).
+	h.importProgress.SetStep(StepCommit)
+	if err := txn.Commit(); err != nil {
+		fmt.Printf("[IMPORT-JSON] ERROR: commit transaction failed: %v\n", err)
+		result.Status = "error_commit"
+		return result
+	}
+	fmt.Println("[IMPORT-JSON] Transaction committed successfully")
 
 	// Report feed fields that had no entry in the company's field map, so the
 	// user knows which codes to add (manual analysis of the feed).
@@ -957,6 +1019,8 @@ func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companyS
 	if len(jp.Offers) > 0 && len(jp.Offers[0].PriceHistory) > 0 {
 		lastPrice := jp.Offers[0].PriceHistory[len(jp.Offers[0].PriceHistory)-1]
 		price = pricesrc.ParsePrice(lastPrice.Price.Value)
+		// Allegro prices are in cents — divide by 100 to get PLN
+		// price = price / 100.0
 		if lastPrice.Price.Currency != "" {
 			extractedCurrency = lastPrice.Price.Currency
 		}
@@ -1072,7 +1136,7 @@ func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companyS
 		CompanyID:   companyID,
 		BrandID:     brandID,
 		Brand:       jp.Brand,
-		Price:       price * 100,
+		Price:       price,
 		Currency:    extractedCurrency,
 		StockQty:    0,
 		Status:      model.ProductStatusActive,
@@ -1094,6 +1158,86 @@ func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companyS
 	}
 
 	return p, false, nil
+}
+
+// fileExists reports whether path exists and is a regular file.
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
+}
+
+// readPriceFileJSON loads a price file and parses it into a jsonPriceFile.
+// Allegro's "unlimited export" (the no-pagination, single-file download) is
+// delivered as a ZIP archive containing the full JSON; when the file is a ZIP
+// the inner JSON entry is extracted transparently. Plain JSON files are parsed
+// as-is.
+func readPriceFileJSON(path string) (jsonPriceFile, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return jsonPriceFile{}, fmt.Errorf("open: %w", err)
+	}
+	defer f.Close()
+
+	// Peek at the first bytes to detect a ZIP archive (magic "PK\x03\x04").
+	hdr := make([]byte, 4)
+	if _, err := io.ReadFull(f, hdr); err != nil {
+		return jsonPriceFile{}, fmt.Errorf("read header: %w", err)
+	}
+	if hdr[0] == 'P' && hdr[1] == 'K' && hdr[2] == 0x03 && hdr[3] == 0x04 {
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return jsonPriceFile{}, fmt.Errorf("seek: %w", err)
+		}
+		return openZipPriceJSON(f)
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return jsonPriceFile{}, fmt.Errorf("seek: %w", err)
+	}
+	var out jsonPriceFile
+	if err := json.NewDecoder(f).Decode(&out); err != nil {
+		return jsonPriceFile{}, fmt.Errorf("decode: %w", err)
+	}
+	return out, nil
+}
+
+// openZipPriceJSON extracts the JSON entry from a ZIP archive and parses it.
+// It prefers an entry whose name ends in ".json" and falls back to the first
+// entry otherwise.
+func openZipPriceJSON(f *os.File) (jsonPriceFile, error) {
+	size, err := f.Seek(0, io.SeekEnd)
+	if err != nil {
+		return jsonPriceFile{}, fmt.Errorf("seek end: %w", err)
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return jsonPriceFile{}, fmt.Errorf("seek start: %w", err)
+	}
+	zr, err := zip.NewReader(f, size)
+	if err != nil {
+		return jsonPriceFile{}, fmt.Errorf("zip open: %w", err)
+	}
+	var target *zip.File
+	for _, entry := range zr.File {
+		if strings.HasSuffix(strings.ToLower(entry.Name), ".json") {
+			target = entry
+			break
+		}
+	}
+	if target == nil && len(zr.File) > 0 {
+		target = zr.File[0]
+	}
+	if target == nil {
+		return jsonPriceFile{}, fmt.Errorf("zip has no entries")
+	}
+	rc, err := target.Open()
+	if err != nil {
+		return jsonPriceFile{}, fmt.Errorf("zip entry open: %w", err)
+	}
+	defer rc.Close()
+	fmt.Printf("[IMPORT-JSON] Extracted ZIP entry %q (%d bytes) from %s\n", target.Name, target.UncompressedSize64, f.Name())
+	var out jsonPriceFile
+	if err := json.NewDecoder(rc).Decode(&out); err != nil {
+		return jsonPriceFile{}, fmt.Errorf("decode zip entry: %w", err)
+	}
+	return out, nil
 }
 
 // loadAllegroFieldMap loads the default Allegro field map from

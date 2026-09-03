@@ -12,6 +12,7 @@ import (
 
 	attrsPkg "github.com/GenshIv/makoshop/internal/attrs"
 	"github.com/GenshIv/makoshop/internal/model"
+	"github.com/GenshIv/makoshop/internal/pricesrc"
 )
 
 // Tradedoubler API 1.0 paginated product import.
@@ -77,7 +78,7 @@ type TradedoublerProduct struct {
 	EAN              string                 `json:"ean"`
 	GTIN             string                 `json:"gtin"` // alias
 	Barcode          string                 `json:"barcode"`
-	Price            json.Number            `json:"price"`
+	Price            string                 `json:"price"`
 	PriceCurrency    string                 `json:"priceCurrency"`
 	Currency         string                 `json:"currency"` // alias
 	ProductURL       string                 `json:"productUrl"`
@@ -117,8 +118,8 @@ type tradedoublerPriceH struct {
 }
 
 type tradedoublerMoney struct {
-	Value    json.Number `json:"value"`
-	Currency string      `json:"currency"`
+	Value    string `json:"value"`
+	Currency string `json:"currency"`
 }
 
 // isTradedoublerURL reports whether the import URL points at a Tradedoubler
@@ -351,7 +352,7 @@ func convertTradedoublerProduct(tp TradedoublerProduct, companyID int64, company
 	// A value with a fractional part is already a decimal price. The feed
 	// usually carries the price in offers[0].priceHistory, so fall back to
 	// the latest history entry when the top-level field is empty.
-	price, ok := tradedoublerPrice(tp.Price)
+	price := pricesrc.ParsePrice(tp.Price)
 	offerCurrency := ""
 	sourceProductID := ""
 	offerProductURL := ""
@@ -363,15 +364,15 @@ func convertTradedoublerProduct(tp TradedoublerProduct, companyID int64, company
 		// The purchase link lives in offers[0].productUrl (not at the top
 		// level in the Tradedoubler feed).
 		offerProductURL = strings.TrimSpace(tp.Offers[0].ProductURL)
-		if !ok || price <= 0 {
+		if price <= 0 {
 			if len(tp.Offers[0].PriceHistory) > 0 {
 				last := tp.Offers[0].PriceHistory[len(tp.Offers[0].PriceHistory)-1]
-				price, ok = tradedoublerPrice(last.Price.Value)
+				price = pricesrc.ParsePrice(last.Price.Value)
 				offerCurrency = last.Price.Currency
 			}
 		}
 	}
-	if !ok || price <= 0 {
+	if price <= 0 {
 		return nil, true
 	}
 	cur := strings.TrimSpace(firstNonEmptyStr(tp.PriceCurrency, tp.Currency, offerCurrency, currency))
@@ -492,7 +493,7 @@ func convertTradedoublerProduct(tp TradedoublerProduct, companyID int64, company
 		Description: description,
 		CompanyID:   companyID,
 		Brand:       brand,
-		Price:       price * 100,
+		Price:       price,
 		Currency:    cur,
 		StockQty:    stock,
 		Status:      model.ProductStatusActive,
