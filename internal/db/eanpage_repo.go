@@ -48,23 +48,31 @@ func (r *EANPageRepo) EnableCatalogizeNew(enabled bool) {
 }
 
 // extractKeywordsFromProduct extracts keywords from product name and shop category.
-// Returns a space-separated string of keywords for catalogization.
+// Returns a space-separated string of individual words (no phrases, no prepositions)
+// for catalogization. The catalogizer will combine them later.
 func extractKeywordsFromProduct(p *model.Product) string {
 	if p == nil {
 		return ""
 	}
 
-	// Start with product name
-	keywords := []string{p.Name}
+	// Tokenize product name into individual words
+	nameTokens := tokenizer.Tokenize(p.Name)
+	keywords := make([]string, 0, len(nameTokens))
+	for _, t := range nameTokens {
+		keywords = append(keywords, t.Word)
+	}
 
-	// Add shop category from Product.ShopCategory field if present
+	// Also tokenize shop category if present (split by ">" first)
 	if p.ShopCategory != "" {
-		// Split by common delimiters and add each part
 		parts := strings.Split(p.ShopCategory, ">")
 		for _, part := range parts {
 			part = strings.TrimSpace(part)
-			if part != "" {
-				keywords = append(keywords, part)
+			if part == "" {
+				continue
+			}
+			catTokens := tokenizer.Tokenize(part)
+			for _, t := range catTokens {
+				keywords = append(keywords, t.Word)
 			}
 		}
 	}

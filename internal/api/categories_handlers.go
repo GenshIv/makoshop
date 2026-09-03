@@ -698,10 +698,11 @@ func (h *Handlers) HandleAdminCategoriesExport(w http.ResponseWriter, r *http.Re
 	})
 }
 
-// HandleAdminCategoriesImport imports category tree from JSON.
+// HandleAdminCategoriesImport imports category tree from JSON (async).
 // POST /api/admin/categories/import
 // Body: { "categories": [ { "name", "parent_id", "slug", "anchor_keywords", "attributes" } ] }
 // Existing categories are matched by name+parent. New ones are created.
+// Returns immediately with status "started"; import runs in background.
 
 func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -744,6 +745,103 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Start import in background goroutine
+	go func(categories []ImportCategory) {
+		// Convert local type to anonymous struct expected by importCategoriesAsync
+		asyncCats := make([]struct {
+			ID             int64    `json:"id,omitempty"`
+			ParentID       *int64   `json:"parent_id,omitempty"`
+			NameRu         string   `json:"name_ru"`
+			NameUa         string   `json:"name_ua"`
+			NamePl         string   `json:"name_pl"`
+			NameEn         string   `json:"name_en"`
+			Slug           string   `json:"slug"`
+			Description    string   `json:"description,omitempty"`
+			DescriptionRu  string   `json:"description_ru,omitempty"`
+			DescriptionUa  string   `json:"description_ua,omitempty"`
+			DescriptionPl  string   `json:"description_pl,omitempty"`
+			DescriptionEn  string   `json:"description_en,omitempty"`
+			ImageLightURL  string   `json:"image_light_url,omitempty"`
+			ImageDarkURL   string   `json:"image_dark_url,omitempty"`
+			IsActive       bool     `json:"is_active"`
+			SortOrder      int      `json:"sort_order"`
+			AnchorKeywords []string `json:"anchor_keywords,omitempty"`
+			Attributes     []string `json:"attributes,omitempty"`
+		}, len(categories))
+
+		for i, cat := range categories {
+			asyncCats[i] = struct {
+				ID             int64    `json:"id,omitempty"`
+				ParentID       *int64   `json:"parent_id,omitempty"`
+				NameRu         string   `json:"name_ru"`
+				NameUa         string   `json:"name_ua"`
+				NamePl         string   `json:"name_pl"`
+				NameEn         string   `json:"name_en"`
+				Slug           string   `json:"slug"`
+				Description    string   `json:"description,omitempty"`
+				DescriptionRu  string   `json:"description_ru,omitempty"`
+				DescriptionUa  string   `json:"description_ua,omitempty"`
+				DescriptionPl  string   `json:"description_pl,omitempty"`
+				DescriptionEn  string   `json:"description_en,omitempty"`
+				ImageLightURL  string   `json:"image_light_url,omitempty"`
+				ImageDarkURL   string   `json:"image_dark_url,omitempty"`
+				IsActive       bool     `json:"is_active"`
+				SortOrder      int      `json:"sort_order"`
+				AnchorKeywords []string `json:"anchor_keywords,omitempty"`
+				Attributes     []string `json:"attributes,omitempty"`
+			}{
+				ID:             cat.ID,
+				ParentID:       cat.ParentID,
+				NameRu:         cat.NameRu,
+				NameUa:         cat.NameUa,
+				NamePl:         cat.NamePl,
+				NameEn:         cat.NameEn,
+				Slug:           cat.Slug,
+				Description:    cat.Description,
+				DescriptionRu:  cat.DescriptionRu,
+				DescriptionUa:  cat.DescriptionUa,
+				DescriptionPl:  cat.DescriptionPl,
+				DescriptionEn:  cat.DescriptionEn,
+				ImageLightURL:  cat.ImageLightURL,
+				ImageDarkURL:   cat.ImageDarkURL,
+				IsActive:       cat.IsActive,
+				SortOrder:      cat.SortOrder,
+				AnchorKeywords: cat.AnchorKeywords,
+				Attributes:     cat.Attributes,
+			}
+		}
+
+		h.importCategoriesAsync(asyncCats)
+	}(req.Categories)
+
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "started",
+		"message": "Category import started in background",
+	})
+}
+
+// importCategoriesAsync runs the category import in the background.
+func (h *Handlers) importCategoriesAsync(categories []struct {
+	ID             int64    `json:"id,omitempty"`
+	ParentID       *int64   `json:"parent_id,omitempty"`
+	NameRu         string   `json:"name_ru"`
+	NameUa         string   `json:"name_ua"`
+	NamePl         string   `json:"name_pl"`
+	NameEn         string   `json:"name_en"`
+	Slug           string   `json:"slug"`
+	Description    string   `json:"description,omitempty"`
+	DescriptionRu  string   `json:"description_ru,omitempty"`
+	DescriptionUa  string   `json:"description_ua,omitempty"`
+	DescriptionPl  string   `json:"description_pl,omitempty"`
+	DescriptionEn  string   `json:"description_en,omitempty"`
+	ImageLightURL  string   `json:"image_light_url,omitempty"`
+	ImageDarkURL   string   `json:"image_dark_url,omitempty"`
+	IsActive       bool     `json:"is_active"`
+	SortOrder      int      `json:"sort_order"`
+	AnchorKeywords []string `json:"anchor_keywords,omitempty"`
+	Attributes     []string `json:"attributes,omitempty"`
+}) {
+
 	// Map: oldID -> newID (for relinking later)
 	oldIDToNewID := make(map[int64]int64)
 	// Map: name -> newID (for finding existing by name only)
@@ -760,7 +858,7 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 	updated := 0
 
 	// First pass: create/update categories WITHOUT setting parent_id (to handle any order)
-	for _, ic := range req.Categories {
+	for _, ic := range categories {
 		slugString := ic.Slug
 
 		// Find existing category by name_en only
@@ -862,7 +960,7 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 	}
 
 	// Second pass: set parent_id based on mappings
-	for _, ic := range req.Categories {
+	for _, ic := range categories {
 		if ic.ParentID != nil && ic.ID != 0 {
 			// Find the category we just created/updated
 			if catID, ok := oldIDToNewID[ic.ID]; ok {
@@ -877,7 +975,7 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 	}
 
 	// Second pass: import attributes
-	for _, ic := range req.Categories {
+	for _, ic := range categories {
 		newID, ok := oldIDToNewID[ic.ID]
 		if newID == 0 && ok && newID != ic.ID {
 			// Try to find by name
@@ -914,15 +1012,6 @@ func (h *Handlers) HandleAdminCategoriesImport(w http.ResponseWriter, r *http.Re
 	if err := h.catalogizer.RebuildAllCategoryTokens(); err != nil {
 		fmt.Printf("[CATEGORY-IMPORT] WARN: rebuild catalogizer tokens failed: %v\n", err)
 	}
-
-	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"status":     "completed",
-		"created":    created,
-		"updated":    updated,
-		"total":      created + updated,
-		"old_id_map": oldIDToNewID,
-		"message":    "Categories imported. Indexes and catalogizer rebuilt.",
-	})
 }
 
 // HandleAdminCategoriesReorder handles bulk reordering of categories (drag-and-drop).

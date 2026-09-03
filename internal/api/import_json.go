@@ -1129,20 +1129,27 @@ func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companyS
 	// Drop duplicate (code, value) pairs from different sources.
 	attrs = dedupeAttrPairs(attrs)
 
+	// Extract shop category from the first category in the feed if present.
+	shopCategory := ""
+	if len(jp.Categories) > 0 && strings.TrimSpace(jp.Categories[0].Name) != "" {
+		shopCategory = strings.TrimSpace(jp.Categories[0].Name)
+	}
+
 	p := &model.Product{
-		EAN:         ean,
-		Name:        name,
-		Description: description,
-		CompanyID:   companyID,
-		BrandID:     brandID,
-		Brand:       jp.Brand,
-		Price:       price,
-		Currency:    extractedCurrency,
-		StockQty:    0,
-		Status:      model.ProductStatusActive,
-		ProductURL:  "",
-		Images:      images,
-		Attributes:  attrs,
+		EAN:          ean,
+		Name:         name,
+		Description:  description,
+		CompanyID:    companyID,
+		BrandID:      brandID,
+		Brand:        jp.Brand,
+		Price:        price,
+		Currency:     extractedCurrency,
+		StockQty:     0,
+		Status:       model.ProductStatusActive,
+		ProductURL:   "",
+		Images:       images,
+		Attributes:   attrs,
+		ShopCategory: shopCategory,
 		SEO: model.ProductSEO{
 			Title: fmt.Sprintf("%s — MakoShop", name),
 		},

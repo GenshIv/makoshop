@@ -11,6 +11,8 @@
 #
 # The resulting ./makoshop binary plus frontend/dist/ are all that is needed
 # to run the server on another machine (no Go module cache, no local replaces).
+rm ./makoshop
+
 set -euo pipefail
 
 cd "$(dirname "$0")"

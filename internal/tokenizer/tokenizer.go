@@ -32,6 +32,12 @@ var stopWords = map[string]bool{
 	"mini": true, "micro": true, "ultra": true, "super": true, "mega": true,
 	"hyper": true, "giga": true, "tera": true,
 	"все": true, "всех": true,
+	// Polish stop words
+	"i": true, "z": true, "do": true, "na": true, "w": true, "o": true,
+	"a": true, "ale": true, "oraz": true, "dla": true, "przez": true,
+	"przy": true, "pod": true, "nad": true, "między": true, "za": true,
+	"przed": true, "po": true, "bez": true, "jako": true, "że": true,
+	"który": true, "ta": true, "to": true, "ten": true, "te": true,
 }
 
 // TokenInfo holds token data
