@@ -3,7 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 // All views are lazy-loaded so Vite can split them into separate chunks.
 const routes = [
   // Public
-  { path: '/', name: 'catalog', component: () => import('../views/CatalogView.vue') },
+  { path: '/', name: 'home', component: () => import('../views/HomeView.vue') },
   { path: '/shop', name: 'shop-catalog', component: () => import('../views/CatalogView.vue') },
   { path: '/shop/:pathMatch(.*)*', name: 'shop-catalog-path', component: () => import('../views/CatalogView.vue') },
   { path: '/company/:slug', name: 'company', component: () => import('../views/CompanyView.vue') },

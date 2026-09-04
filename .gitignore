@@ -1,1 +1,20 @@
 Nothing should be ignored based on the provided file changes. The only modified file is a Vue component (`frontend/src/views/EANPageView.vue`), which is a source code file and should not be added to .gitignore.
+/.claude/
+/.go-env/
+/.gocache/
+/.gomodcache/
+/.gopath/
+/.gotmp/
+/.idea/
+/.junie/
+/.vscode/
+/data/uploads/
+/_tmp/
+/pprof_out/after/alloc_space.prof
+/pprof_out/
+/pprof_server/
+/internal/db/pprof_out/
+/loadtest/pprof_out/
+/loadtest/cmd/pprof_out/
+/makoshop_db.backup-20260902/
+/makoshop_db/

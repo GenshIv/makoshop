@@ -28,7 +28,7 @@ const handleRemoveItem = async (item) => {
 
 const goToCheckout = () => {
   if (cart.items.length === 0) {
-    router.push({ name: 'catalog' });
+    router.push({ name: 'shop-catalog' });
     return;
   }
   router.push({ name: 'checkout' });

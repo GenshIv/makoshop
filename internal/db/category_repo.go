@@ -729,10 +729,7 @@ func (r *CategoryRepo) rebuildFullTreeJSON() {
 	r.store.TurboWrite(turboKeyCategoryTreeAdmin, adminJson)
 
 	// Filter categories: only include those with EAN pages (for public tree)
-	filteredCats := cats
-	if r.eanPageRepo != nil {
-		filteredCats = r.filterCategoriesWithEANPages(cats)
-	}
+	filteredCats := r.filterCategoriesWithEANPages(cats)
 
 	publicTree, _ := r.buildTree(filteredCats, nil)
 	fmt.Printf("[DEBUG] rebuildFullTreeJSON: total=%d, public=%d, admin=%d\n", len(cats), len(publicTree), len(adminTree))
@@ -746,58 +743,31 @@ func (r *CategoryRepo) rebuildFullTreeJSON() {
 	r.store.TurboWrite(turboKeyCategoryPublicIDs, writePublicIDsBlob(filteredCats))
 }
 
-// filterCategoriesWithEANPages filters categories to only include those that have EAN pages
-// (directly or through descendants). This is used for the public category tree.
+// filterCategoriesWithEANPages filters categories to only include those
+// visible in the catalog (with EAN pages directly or through descendants).
+// This is used for the public category tree.
+//
+// The check reads the per-category catalog sort index count
+// (eanpage_sort:{catID}:price_asc) instead of loading EAN page documents:
+// one mmap header probe per category versus a full-DB scan. The sort index
+// covers a category and its whole subtree and is rebuilt from the complete
+// page list on every import/rebuild, so it reflects exactly what the catalog
+// serves.
 func (r *CategoryRepo) filterCategoriesWithEANPages(cats []model.Category) []model.Category {
-	if r.eanPageRepo == nil {
-		return cats
-	}
-
-	// Get categories with EAN pages
-	catsWithPages := r.eanPageRepo.CategoriesWithEANPages()
-	if len(catsWithPages) == 0 {
-		return cats
-	}
-
-	// Build parent map and children map
-	byID := make(map[int64]*model.Category, len(cats))
-	for i := range cats {
-		byID[cats[i].ID] = &cats[i]
-	}
-
-	// Mark categories that have EAN pages directly
-	hasEANPage := make(map[int64]bool)
-	for _, cat := range cats {
-		if _, ok := catsWithPages[cat.ID]; ok {
-			hasEANPage[cat.ID] = true
-		}
-	}
-
-	// Propagate up: if a child has EAN pages, mark parent too
-	changed := true
-	for changed {
-		changed = false
-		for _, cat := range cats {
-			if cat.ParentID != nil && !hasEANPage[cat.ID] && hasEANPage[*cat.ParentID] {
-				continue
-			}
-			if cat.ParentID != nil && hasEANPage[cat.ID] && !hasEANPage[*cat.ParentID] {
-				hasEANPage[*cat.ParentID] = true
-				changed = true
-			}
-		}
-	}
-
-	// Filter: only keep categories marked as having EAN pages
 	result := make([]model.Category, 0, len(cats))
 	for _, cat := range cats {
-		if hasEANPage[cat.ID] {
+		if r.categoryHasVisiblePages(cat.ID) {
 			result = append(result, cat)
 		}
 	}
-
-	fmt.Printf("[DEBUG] filterCategoriesWithEANPages: total=%d, with_pages=%d\n", len(cats), len(result))
 	return result
+}
+
+// categoryHasVisiblePages reports whether the category subtree has at least
+// one EAN page listed in the catalog sort indexes.
+func (r *CategoryRepo) categoryHasVisiblePages(catID int64) bool {
+	stats, err := r.store.DB().TurboSortIndexStats(eanpageSortKey(catID, eanpageSortTypePriceAsc))
+	return err == nil && stats != nil && stats.Count > 0
 }
 
 // rebuildAllAncestorsAndDescendants rebuilds ancestors and descendants caches for all categories.
@@ -1125,10 +1095,9 @@ func (r *CategoryRepo) GetTreeByParent(parentID int64) ([]CategoryTreeNode, erro
 // This is the PUBLIC tree, filtered to only show categories with EAN pages.
 func (r *CategoryRepo) GetTreeJSON() ([]byte, error) {
 	data, err := r.store.DB().TurboRawRead(turboKeyCategoryTreeFull)
-	if err != nil {
-		return nil, err
-	}
-	if len(data) == 0 {
+	if err != nil || len(data) == 0 {
+		// Key absent (fresh DB or the startup background refresh has not
+		// written it yet): rebuild once — cheap, sort-index counts only.
 		r.rebuildFullTreeJSON()
 		data, err = r.store.DB().TurboRawRead(turboKeyCategoryTreeFull)
 		if err != nil || len(data) == 0 {
@@ -1142,10 +1111,9 @@ func (r *CategoryRepo) GetTreeJSON() ([]byte, error) {
 // Shows ALL categories without filtering.
 func (r *CategoryRepo) GetAdminTreeJSON() ([]byte, error) {
 	data, err := r.store.DB().TurboRawRead(turboKeyCategoryTreeAdmin)
-	if err != nil {
-		return nil, err
-	}
-	if len(data) == 0 {
+	if err != nil || len(data) == 0 {
+		// Key absent (fresh DB or the startup background refresh has not
+		// written it yet): rebuild once — cheap, sort-index counts only.
 		r.rebuildFullTreeJSON()
 		data, err = r.store.DB().TurboRawRead(turboKeyCategoryTreeAdmin)
 		if err != nil || len(data) == 0 {

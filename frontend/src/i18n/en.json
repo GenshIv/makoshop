@@ -75,6 +75,7 @@
   },
   "pages": {
     "catalog_title": "Product Catalog — wszyst.pl",
+    "home_title": "Wszyst.pl — compare prices of thousands of products",
     "product_title": "Product — wszyst.pl",
     "cart_title": "Cart — wszyst.pl",
     "checkout_title": "Checkout — wszyst.pl",
@@ -181,6 +182,11 @@
     "loading_products": "Loading products...",
     "view_grid": "Grid",
     "view_list": "List"
+  },
+  "home": {
+    "view_all": "See all",
+    "scroll_left": "Previous items",
+    "scroll_right": "Next items"
   },
   "company": {
     "not_found": "Company not found",
@@ -608,6 +614,15 @@
     "home_hero_headline": "Headline",
     "home_hero_sub": "Subheadline",
     "home_hero_tagline": "Tagline",
+    "home_offers_title": "Home page offers",
+    "home_offers_hint": "Category sections with random products on the home page. Empty list — all root categories in their default order.",
+    "home_offers_per_section": "Products per carousel",
+    "home_offers_per_section_hint": "0 — default (12). From 1 to 20.",
+    "home_offers_categories": "Categories and order",
+    "home_offers_categories_hint": "Check categories for the home page; arrows set the display order. Unchecked categories are not shown.",
+    "home_offers_no_categories": "No root categories with products yet.",
+    "home_offers_move_up": "Move up",
+    "home_offers_move_down": "Move down",
     "name_required": "Name is required",
     "slug_required": "Slug is required",
     "delete_item_confirm": "Delete \"{name}\"?",

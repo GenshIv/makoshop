@@ -54,7 +54,8 @@ const userRole = computed(() => {
 // Product and EAN pages override title/description from their own data
 // via useSeo() in the respective views, so we skip them here.
 const pageTitles = computed(() => ({
-  catalog: t('pages.catalog_title'),
+  home: t('pages.home_title'),
+  'shop-catalog': t('pages.catalog_title'),
   cart: t('pages.cart_title'),
   checkout: t('pages.checkout_title'),
   login: t('pages.login_title'),
@@ -83,7 +84,7 @@ useSeo({
 
 const handleLogout = () => {
   auth.logout();
-  router.push({ name: 'catalog' });
+  router.push({ name: 'home' });
 };
 
 // Close mobile menu on route change
@@ -167,7 +168,7 @@ onBeforeUnmount(() => {
 
           <!-- Search bar (hidden on very small screens) -->
           <form
-            @submit.prevent="$router.push({ name: 'catalog', query: { q: $refs.search?.value } })"
+            @submit.prevent="$router.push({ name: 'shop-catalog', query: { q: $refs.search?.value } })"
             class="flex-1 max-w-xl hidden sm:block"
           >
             <input
@@ -329,7 +330,7 @@ onBeforeUnmount(() => {
 
         <!-- Mobile search (header search is hidden below sm) -->
         <form
-          @submit.prevent="$router.push({ name: 'catalog', query: { q: $refs.mobileSearch?.value } }); mobileMenuOpen = false;"
+          @submit.prevent="$router.push({ name: 'shop-catalog', query: { q: $refs.mobileSearch?.value } }); mobileMenuOpen = false;"
           class="mb-4"
         >
           <input
