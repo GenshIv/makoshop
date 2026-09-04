@@ -22,14 +22,15 @@ import (
 
 // NokautImportResult holds the result of a Nokaut price import operation.
 type NokautImportResult struct {
-	Status          string `json:"status"`
-	Company         string `json:"company,omitempty"`
-	Files           int    `json:"files"`
-	OffersParsed    int    `json:"offers_parsed"`
-	ProductsCreated int    `json:"products_created"`
-	ProductsUpdated int    `json:"products_updated"`
-	ProductsSkipped int    `json:"products_skipped"`
-	ProductsDeleted int    `json:"products_deleted"`
+	Status           string  `json:"status"`
+	Company          string  `json:"company,omitempty"`
+	Files            int     `json:"files"`
+	OffersParsed     int     `json:"offers_parsed"`
+	ProductsCreated  int     `json:"products_created"`
+	ProductsUpdated  int     `json:"products_updated"`
+	ProductsSkipped  int     `json:"products_skipped"`
+	ProductsDeleted  int     `json:"products_deleted"`
+	AffectedEANPages []int64 `json:"-"` // EAN page IDs affected by this import (not serialized)
 }
 
 // pricesDir is the root directory for company price files.
@@ -256,6 +257,9 @@ func (h *Handlers) HandleAdminImportNokaut(w http.ResponseWriter, r *http.Reques
 	h.importProgress.Begin(len(companies))
 	defer h.importProgress.Finish()
 
+	// Collect affected EAN pages across all companies for incremental recalculation
+	affectedEANPages := make(map[int64]struct{})
+
 	// Import each company
 	for i := range companies {
 		company := &companies[i]
@@ -275,6 +279,11 @@ func (h *Handlers) HandleAdminImportNokaut(w http.ResponseWriter, r *http.Reques
 		fmt.Printf("[IMPORT-NOKAUT] Company %s: parsed=%d created=%d updated=%d skipped=%d\n",
 			company.Name, result.OffersParsed, result.ProductsCreated, result.ProductsUpdated, result.ProductsSkipped)
 
+		// Collect affected EAN pages for this company
+		for _, id := range result.AffectedEANPages {
+			affectedEANPages[id] = struct{}{}
+		}
+
 		// Write progress for single-company imports
 		if len(companies) == 1 {
 			result.Company = company.Name
@@ -282,8 +291,14 @@ func (h *Handlers) HandleAdminImportNokaut(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	// Convert map to slice for runGlobalRecalculation
+	affectedSlice := make([]int64, 0, len(affectedEANPages))
+	for id := range affectedEANPages {
+		affectedSlice = append(affectedSlice, id)
+	}
+
 	// Global recalculation: run ONCE after all companies (not per company).
-	if err := h.runGlobalRecalculation(); err != nil {
+	if err := h.runGlobalRecalculation(affectedSlice); err != nil {
 		fmt.Printf("[IMPORT-NOKAUT] WARN: global recalculation: %v\n", err)
 	}
 
@@ -458,6 +473,17 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 		}
 	}
 
+	// Load company prices for change detection (before transaction)
+	priceDoc, err := h.productRepo.LoadCompanyPrices(company.ID)
+	if err != nil {
+		fmt.Printf("[IMPORT-NOKAUT] WARN: load company prices for %d: %v\n", company.ID, err)
+	}
+	var priceMap map[int64]float64
+	if priceDoc != nil {
+		priceMap = priceDoc.Prices
+		fmt.Printf("[IMPORT-NOKAUT] Loaded price document for company %d (%d prices)\n", company.ID, len(priceMap))
+	}
+
 	// ============================================
 	// Phase 1: Batch create/update products (IN TRANSACTION)
 	// ============================================
@@ -492,7 +518,7 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 
 			fmt.Printf("[IMPORT-NOKAUT] Phase 1: Processing batch %d-%d (%d products)...\n", i, end, len(batchProducts))
 
-			ids, isNewMap, err := h.productRepo.BatchGetOrCreateByEANTx(txn, batchProducts, batchNames)
+			ids, isNewMap, err := h.productRepo.BatchGetOrCreateByEANTx(txn, batchProducts, batchNames, priceMap)
 			if err != nil {
 				fmt.Printf("[IMPORT-NOKAUT] WARN: BatchGetOrCreateByEANTx: %v\n", err)
 				result.ProductsSkipped += len(batchProducts)
@@ -576,7 +602,19 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 	}
 
 	// Perform batch upsert within transaction
-	h.eanPageRepo.BatchUpsertFromProductsTx(txn, allProducts)
+	productToEANPage := h.eanPageRepo.BatchUpsertFromProductsTx(txn, allProducts)
+
+	// Collect affected EAN page IDs for incremental recalculation
+	if productToEANPage != nil {
+		eanPageIDs := make(map[int64]struct{})
+		for _, eanPageID := range productToEANPage {
+			eanPageIDs[eanPageID] = struct{}{}
+		}
+		result.AffectedEANPages = make([]int64, 0, len(eanPageIDs))
+		for id := range eanPageIDs {
+			result.AffectedEANPages = append(result.AffectedEANPages, id)
+		}
+	}
 
 	if h.eanPageSearch != nil {
 		allPages, _ := h.eanPageRepo.ListAll()
@@ -619,6 +657,15 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 	}
 
 	fmt.Println("[IMPORT-NOKAUT] Transaction committed successfully")
+
+	// Rebuild company price document from DB to ensure it's in sync
+	if len(allProducts) > 0 {
+		if _, err := h.productRepo.RebuildCompanyPrices(company.ID); err != nil {
+			fmt.Printf("[IMPORT-NOKAUT] WARN: rebuild company prices for %d: %v\n", company.ID, err)
+		} else {
+			fmt.Printf("[IMPORT-NOKAUT] Rebuilt price document for company %d\n", company.ID)
+		}
+	}
 
 	result.Status = "completed"
 	return result

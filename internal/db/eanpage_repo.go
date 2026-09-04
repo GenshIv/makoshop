@@ -1357,6 +1357,70 @@ func (r *EANPageRepo) RecalculateProductCounts() error {
 	return nil
 }
 
+// RecalculateProductCountsForPages recalculates ProductCount only for the specified EAN pages.
+// This is much faster than recalculating all pages when only a subset was affected by import.
+func (r *EANPageRepo) RecalculateProductCountsForPages(pageIDs []int64) error {
+	if r.Store == nil || len(pageIDs) == 0 {
+		return nil
+	}
+
+	// Build ID set for fast lookup
+	idSet := make(map[int64]struct{}, len(pageIDs))
+	for _, id := range pageIDs {
+		idSet[id] = struct{}{}
+	}
+
+	all, err := r.List()
+	if err != nil {
+		return fmt.Errorf("list eanpages: %w", err)
+	}
+
+	updated := 0
+	for i, sp := range all {
+		if _, ok := idSet[sp.ID]; !ok {
+			continue
+		}
+		if sp.EAN == "" {
+			continue
+		}
+
+		key := "ean:" + sp.EAN
+		tokens, err := r.Store.db.TurboGetIndexTokens(key)
+		if err != nil || len(tokens) == 0 {
+			if sp.ProductCount != 0 {
+				sp.ProductCount = 0
+				sp.UpdatedAt = time.Now().Unix()
+				data := MarshalEANPage(sp)
+				if err := r.Store.DocPut(KeyEANPage(sp.ID), data); err != nil {
+					fmt.Printf("WARN: update product_count=0 for eanpage %d: %v\n", sp.ID, err)
+					continue
+				}
+				updated++
+			}
+			continue
+		}
+
+		newCount := len(tokens)
+		if newCount != sp.ProductCount {
+			sp.ProductCount = newCount
+			sp.UpdatedAt = time.Now().Unix()
+			data := MarshalEANPage(sp)
+			if err := r.Store.DocPut(KeyEANPage(sp.ID), data); err != nil {
+				fmt.Printf("WARN: update product_count for eanpage %d: %v\n", sp.ID, err)
+				continue
+			}
+			updated++
+		}
+
+		if (i+1)%10000 == 0 {
+			fmt.Printf("[EANPAGE] RecalculateProductCountsForPages: processed %d / %d (updated %d)\n", i+1, len(all), updated)
+		}
+	}
+
+	fmt.Printf("[EANPAGE] RecalculateProductCountsForPages: done. Updated %d EAN pages.\n", updated)
+	return nil
+}
+
 // RecalculateMinPrices recalculates MinPrice for all EAN pages
 // based on actual product prices linked via EAN.
 // This fixes inconsistencies after bulk imports or price updates.
@@ -1430,6 +1494,81 @@ func (r *EANPageRepo) RecalculateMinPrices(productRepo *ProductRepo) error {
 	}
 
 	fmt.Printf("[EANPAGE] RecalculateMinPrices: done. Updated %d EAN pages.\n", updated)
+	return nil
+}
+
+// RecalculateMinPricesForPages recalculates MinPrice only for the specified EAN pages.
+// This is much faster than recalculating all pages when only a subset was affected by import.
+func (r *EANPageRepo) RecalculateMinPricesForPages(pageIDs []int64, productRepo *ProductRepo) error {
+	if r.Store == nil || productRepo == nil || len(pageIDs) == 0 {
+		return nil
+	}
+
+	// Build ID set for fast lookup
+	idSet := make(map[int64]struct{}, len(pageIDs))
+	for _, id := range pageIDs {
+		idSet[id] = struct{}{}
+	}
+
+	all, err := r.List()
+	if err != nil {
+		return fmt.Errorf("list eanpages: %w", err)
+	}
+
+	updated := 0
+	for i := range all {
+		sp := &all[i]
+		if _, ok := idSet[sp.ID]; !ok {
+			continue
+		}
+		if sp.EAN == "" {
+			continue
+		}
+
+		key := "ean:" + sp.EAN
+		tokens, err := r.Store.db.TurboGetIndexTokens(key)
+		if err != nil || len(tokens) == 0 {
+			continue
+		}
+
+		docs, err := r.Store.db.MultiGetByDocIDs(tokens)
+		if err != nil || len(docs) == 0 {
+			continue
+		}
+
+		var minPrice float64
+		found := false
+		for _, doc := range docs {
+			if len(doc) == 0 {
+				continue
+			}
+			p, err := UnmarshalProduct(doc)
+			if err != nil {
+				continue
+			}
+			if !found || p.Price < minPrice {
+				minPrice = p.Price
+				found = true
+			}
+		}
+
+		if found && minPrice != sp.MinPrice {
+			sp.MinPrice = minPrice
+			sp.UpdatedAt = time.Now().Unix()
+			data := MarshalEANPage(*sp)
+			if err := r.Store.DocPut(KeyEANPage(sp.ID), data); err != nil {
+				fmt.Printf("WARN: update min_price for eanpage %d: %v\n", sp.ID, err)
+				continue
+			}
+			updated++
+		}
+
+		if (i+1)%10000 == 0 {
+			fmt.Printf("[EANPAGE] RecalculateMinPricesForPages: processed %d / %d (updated %d)\n", i+1, len(all), updated)
+		}
+	}
+
+	fmt.Printf("[EANPAGE] RecalculateMinPricesForPages: done. Updated %d EAN pages.\n", updated)
 	return nil
 }
 

@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -771,60 +773,116 @@ func (h *Handlers) HandleAdminEANPageCatalogizeAll(w http.ResponseWriter, r *htt
 	catalogized := 0
 	var results []map[string]interface{}
 
+	// Use worker pool pattern for parallel processing
+	numWorkers := runtime.NumCPU()
+	if numWorkers > 8 {
+		numWorkers = 8 // cap at 8 workers
+	}
+	fmt.Printf("[EANPAGE-CATALOGIZE-ALL] Using %d workers for parallel processing\n", numWorkers)
+
+	// Channel to send EAN pages to workers
+	type workItem struct {
+		index int
+		page  *model.EANPage
+	}
+	workCh := make(chan workItem, len(all))
+
+	// Channel for results from workers
+	type workerResult struct {
+		catalogized int
+		items       []map[string]interface{}
+	}
+	resultCh := make(chan workerResult, numWorkers)
+
+	// Shared catCache with mutex protection
+	var cacheMu sync.RWMutex
 	catCache := map[int64][]string{}
-	for i := range all {
-		sp := &all[i]
 
-		// Build tokens for this EAN page using Keywords field (product name + shop category)
-		// Fall back to Title if Keywords is empty
-		textForCatalogization := sp.Keywords
-		if textForCatalogization == "" {
-			textForCatalogization = sp.Title
-		}
-		if err := catz.BuildEANTokens(sp.ID, textForCatalogization); err != nil {
-			fmt.Printf("WARN: build tokens for eanpage %d: %v\n", sp.ID, err)
-			continue
-		}
+	// Worker function
+	worker := func() {
+		localCatalogized := 0
+		localResults := []map[string]interface{}{}
 
-		if i%20000 == 0 {
-			fmt.Printf("[EANPAGE-CATALOGIZE-ALL] Processed %d EAN pages from total %d. Catalogized %d...\n", i, len(all), catalogized)
-		}
+		for item := range workCh {
+			sp := item.page
 
-		// Get all matching categories
-		matches := h.catalogizer.MatchProductToCategories(sp.Keywords)
-		newCatID := sp.CategoryID
-		if len(matches) > 0 {
-			newCatID = matches[0].NewCategoryID
-		}
-
-		// Catalogize using TurboTopNByIntersection
-		//newCatID, err := catz.CatalogizeEANPageByIntersection(sp.ID)
-		//if err != nil {
-		//	fmt.Printf("WARN: catalogize eanpage %d: %v\n", sp.ID, err)
-		//	continue
-		//}
-
-		newUrl := h.eanPageRepo.ComputeSeoURL(sp.Slug, sp.CategoryID, catCache)
-
-		if (newCatID > 0 && newCatID != sp.CategoryID) || newUrl != sp.SeoURL {
-			sp.SeoURL = newUrl
-			if body.Apply {
-				if err := h.eanPageRepo.Update(sp.ID, func(s *model.EANPage) {
-					s.CategoryID = newCatID
-					s.SeoURL = newUrl
-				}); err != nil {
-					fmt.Printf("WARN: update eanpage %d: %v\n", sp.ID, err)
-					continue
-				}
+			// Build tokens for this EAN page using Keywords field (product name + shop category)
+			// Fall back to Title if Keywords is empty
+			textForCatalogization := sp.Keywords
+			if textForCatalogization == "" {
+				textForCatalogization = sp.Title
 			}
-			catalogized++
-			results = append(results, map[string]interface{}{
-				"eanpage_id":      sp.ID,
-				"ean":             sp.EAN,
-				"old_category_id": sp.CategoryID,
-				"new_category_id": newCatID,
-			})
+			if err := catz.BuildEANTokens(sp.ID, textForCatalogization); err != nil {
+				fmt.Printf("WARN: build tokens for eanpage %d: %v\n", sp.ID, err)
+				continue
+			}
+
+			// Get all matching categories
+			matches := h.catalogizer.MatchProductToCategories(sp.Keywords)
+			newCatID := sp.CategoryID
+			if len(matches) > 0 {
+				newCatID = matches[0].NewCategoryID
+			}
+
+			// Compute SEO URL with shared cache
+			cacheMu.RLock()
+			newUrl := h.eanPageRepo.ComputeSeoURL(sp.Slug, sp.CategoryID, catCache)
+			cacheMu.RUnlock()
+
+			if (newCatID > 0 && newCatID != sp.CategoryID) || newUrl != sp.SeoURL {
+				sp.SeoURL = newUrl
+				if body.Apply {
+					if err := h.eanPageRepo.Update(sp.ID, func(s *model.EANPage) {
+						s.CategoryID = newCatID
+						s.SeoURL = newUrl
+					}); err != nil {
+						fmt.Printf("WARN: update eanpage %d: %v\n", sp.ID, err)
+						continue
+					}
+				}
+				localCatalogized++
+				localResults = append(localResults, map[string]interface{}{
+					"eanpage_id":      sp.ID,
+					"ean":             sp.EAN,
+					"old_category_id": sp.CategoryID,
+					"new_category_id": newCatID,
+				})
+			}
 		}
+
+		resultCh <- workerResult{
+			catalogized: localCatalogized,
+			items:       localResults,
+		}
+	}
+
+	// Start workers
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			worker()
+		}()
+	}
+
+	// Send work items to workers
+	for i, sp := range all {
+		workCh <- workItem{index: i, page: &sp}
+		if (i+1)%20000 == 0 {
+			fmt.Printf("[EANPAGE-CATALOGIZE-ALL] Dispatched %d / %d EAN pages to workers\n", i+1, len(all))
+		}
+	}
+	close(workCh)
+
+	// Wait for all workers to finish
+	wg.Wait()
+	close(resultCh)
+
+	// Collect results from all workers
+	for res := range resultCh {
+		catalogized += res.catalogized
+		results = append(results, res.items...)
 	}
 
 	// Full rebuild of all EAN page indexes if Apply or Force.

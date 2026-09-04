@@ -563,7 +563,8 @@ func (r *ProductRepo) BatchGetOrCreateByEAN(products []*model.Product, normalize
 
 // BatchGetOrCreateByEANTx is the transactional version of BatchGetOrCreateByEAN.
 // All writes are buffered in the transaction and applied atomically on Commit.
-func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*model.Product, normalizedNames []string) (map[int]int64, map[int]bool, error) {
+// priceMap (optional) provides current prices for change detection without loading full product docs.
+func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*model.Product, normalizedNames []string, priceMap map[int64]float64) (map[int]int64, map[int]bool, error) {
 	result := make(map[int]int64)
 	isNewMap := make(map[int]bool)
 
@@ -607,10 +608,18 @@ func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*mode
 
 		if existingID, ok := existingIDs[keyPath]; ok {
 			// Update existing product (in transaction)
+			// Use price map for fast price change detection if available
+			priceChanged := true
+			if priceMap != nil {
+				if oldPrice, ok := priceMap[existingID]; ok {
+					priceChanged = oldPrice != p.Price
+				}
+			}
+
 			existing, err := r.Get(existingID)
 			if err == nil {
 				changed := false
-				if existing.Price != p.Price {
+				if priceChanged || existing.Price != p.Price {
 					existing.Price = p.Price
 					changed = true
 				}
@@ -864,72 +873,85 @@ func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, 
 
 	deleted := 0
 
-	// Get all product docIDs for this company via vendor index.
-	// Fallback: if the vendor index is empty (e.g. data imported before the
-	// index was maintained), scan product_list and filter by company.
-	vendorKey := turboKeyVendor(companyID)
-	tokens, err := r.store.db.TurboGetIndexTokens(vendorKey)
-	if err != nil || len(tokens) == 0 {
-		fmt.Printf("[CLEANUP] Company %d: vendor index empty, falling back to product_list scan\n", companyID)
-		allTokens, err := r.store.db.TurboGetIndexTokens(TurboKeyProductList)
-		if err != nil || len(allTokens) == 0 {
-			return 0
-		}
-		allDocs, err := r.store.db.MultiGetByDocIDs(allTokens)
-		if err != nil || len(allDocs) == 0 {
-			return 0
-		}
-		for _, doc := range allDocs {
-			if len(doc) == 0 {
-				continue
-			}
-			p, err := UnmarshalProduct(doc)
+	// Use price document as source of truth for existing products (faster than loading all docs)
+	priceDoc, err := r.LoadCompanyPrices(companyID)
+	if err == nil && priceDoc != nil && len(priceDoc.Prices) > 0 {
+		// Check each product in the price document
+		for productID := range priceDoc.Prices {
+			p, err := r.Get(productID)
 			if err != nil || p.CompanyID != companyID {
 				continue
 			}
 			key := productEANKey(p.EAN, normalize(p.Name), p.CompanyID)
 			if _, ok := importKeys[key]; ok {
-				continue
+				continue // still in the import — keep it
 			}
+			// Stale product — delete in transaction
 			if err := r.deleteProductTx(txn, p); err != nil {
 				fmt.Printf("WARN: cleanup stale product %d: %v\n", p.ID, err)
 				continue
 			}
 			deleted++
 		}
-		if deleted > 0 {
-			fmt.Printf("[CLEANUP] Company %d: deleted %d stale products (scan fallback)\n", companyID, deleted)
+	} else {
+		// Fallback: use vendor index if price document is not available
+		vendorKey := turboKeyVendor(companyID)
+		tokens, err := r.store.db.TurboGetIndexTokens(vendorKey)
+		if err != nil || len(tokens) == 0 {
+			fmt.Printf("[CLEANUP] Company %d: vendor index empty, falling back to product_list scan\n", companyID)
+			allTokens, err := r.store.db.TurboGetIndexTokens(TurboKeyProductList)
+			if err != nil || len(allTokens) == 0 {
+				return 0
+			}
+			allDocs, err := r.store.db.MultiGetByDocIDs(allTokens)
+			if err != nil || len(allDocs) == 0 {
+				return 0
+			}
+			for _, doc := range allDocs {
+				if len(doc) == 0 {
+					continue
+				}
+				p, err := UnmarshalProduct(doc)
+				if err != nil || p.CompanyID != companyID {
+					continue
+				}
+				key := productEANKey(p.EAN, normalize(p.Name), p.CompanyID)
+				if _, ok := importKeys[key]; ok {
+					continue
+				}
+				if err := r.deleteProductTx(txn, p); err != nil {
+					fmt.Printf("WARN: cleanup stale product %d: %v\n", p.ID, err)
+					continue
+				}
+				deleted++
+			}
+		} else {
+			docs, err := r.store.db.MultiGetByDocIDs(tokens)
+			if err != nil || len(docs) == 0 {
+				return 0
+			}
+			for _, doc := range docs {
+				if len(doc) == 0 {
+					continue
+				}
+				p, err := UnmarshalProduct(doc)
+				if err != nil {
+					continue
+				}
+				if p.CompanyID != companyID {
+					continue
+				}
+				key := productEANKey(p.EAN, normalize(p.Name), p.CompanyID)
+				if _, ok := importKeys[key]; ok {
+					continue
+				}
+				if err := r.deleteProductTx(txn, p); err != nil {
+					fmt.Printf("WARN: cleanup stale product %d: %v\n", p.ID, err)
+					continue
+				}
+				deleted++
+			}
 		}
-		return deleted
-	}
-
-	// Load all products for this company
-	docs, err := r.store.db.MultiGetByDocIDs(tokens)
-	if err != nil || len(docs) == 0 {
-		return 0
-	}
-
-	for _, doc := range docs {
-		if len(doc) == 0 {
-			continue
-		}
-		p, err := UnmarshalProduct(doc)
-		if err != nil {
-			continue
-		}
-		if p.CompanyID != companyID {
-			continue
-		}
-		key := productEANKey(p.EAN, normalize(p.Name), p.CompanyID)
-		if _, ok := importKeys[key]; ok {
-			continue // still in the import — keep it
-		}
-		// Stale product — delete in transaction
-		if err := r.deleteProductTx(txn, p); err != nil {
-			fmt.Printf("WARN: cleanup stale product %d: %v\n", p.ID, err)
-			continue
-		}
-		deleted++
 	}
 
 	if deleted > 0 {

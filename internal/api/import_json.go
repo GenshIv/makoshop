@@ -23,14 +23,15 @@ import (
 
 // JSONImportResult holds the result of a JSON price import operation.
 type JSONImportResult struct {
-	Status          string `json:"status"`
-	Company         string `json:"company,omitempty"`
-	Files           int    `json:"files"`
-	OffersParsed    int    `json:"offers_parsed"`
-	ProductsCreated int    `json:"products_created"`
-	ProductsUpdated int    `json:"products_updated"`
-	ProductsSkipped int    `json:"products_skipped"`
-	ProductsDeleted int    `json:"products_deleted"`
+	Status           string  `json:"status"`
+	Company          string  `json:"company,omitempty"`
+	Files            int     `json:"files"`
+	OffersParsed     int     `json:"offers_parsed"`
+	ProductsCreated  int     `json:"products_created"`
+	ProductsUpdated  int     `json:"products_updated"`
+	ProductsSkipped  int     `json:"products_skipped"`
+	ProductsDeleted  int     `json:"products_deleted"`
+	AffectedEANPages []int64 `json:"-"` // EAN page IDs affected by this import (not serialized)
 }
 
 // downloadJSONPriceFile downloads the company's JSON price file from company.ImportURL
@@ -361,6 +362,9 @@ func (h *Handlers) HandleAdminImportJSON(w http.ResponseWriter, r *http.Request,
 	defer h.importProgress.Finish()
 
 	// Import each company
+	// Collect affected EAN pages across all companies for incremental recalculation
+	affectedEANPages := make(map[int64]struct{})
+
 	for i := range companies {
 		company := &companies[i]
 		fmt.Printf("[IMPORT-JSON] Importing company: %s (ID=%d, url=%q, folder=%q)\n", company.Name, company.ID, company.ImportURL, company.ImportFolder)
@@ -379,6 +383,11 @@ func (h *Handlers) HandleAdminImportJSON(w http.ResponseWriter, r *http.Request,
 		fmt.Printf("[IMPORT-JSON] Company %s: parsed=%d created=%d updated=%d skipped=%d\n",
 			company.Name, result.OffersParsed, result.ProductsCreated, result.ProductsUpdated, result.ProductsSkipped)
 
+		// Collect affected EAN pages for this company
+		for _, id := range result.AffectedEANPages {
+			affectedEANPages[id] = struct{}{}
+		}
+
 		// Write progress for single-company imports
 		if len(companies) == 1 {
 			result.Company = company.Name
@@ -386,8 +395,14 @@ func (h *Handlers) HandleAdminImportJSON(w http.ResponseWriter, r *http.Request,
 		}
 	}
 
+	// Convert map to slice for runGlobalRecalculation
+	affectedSlice := make([]int64, 0, len(affectedEANPages))
+	for id := range affectedEANPages {
+		affectedSlice = append(affectedSlice, id)
+	}
+
 	// Global recalculation: run ONCE after all companies (not per company).
-	if err := h.runGlobalRecalculation(); err != nil {
+	if err := h.runGlobalRecalculation(affectedSlice); err != nil {
 		fmt.Printf("[IMPORT-JSON] WARN: global recalculation: %v\n", err)
 	}
 
@@ -828,6 +843,17 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		fmt.Printf("[IMPORT-JSON] Phase 0.5: Applied %d, skipped %d, not found %d, cleaned %d\n", applied, skipped, notFound, cleaned)
 	}
 
+	// Load company prices for change detection (before transaction)
+	priceDoc, err := h.productRepo.LoadCompanyPrices(company.ID)
+	if err != nil {
+		fmt.Printf("[IMPORT-JSON] WARN: load company prices for %d: %v\n", company.ID, err)
+	}
+	var priceMap map[int64]float64
+	if priceDoc != nil {
+		priceMap = priceDoc.Prices
+		fmt.Printf("[IMPORT-JSON] Loaded price document for company %d (%d prices)\n", company.ID, len(priceMap))
+	}
+
 	// ============================================
 	// Phase 1: Batch create/update products (IN TRANSACTION)
 	// ============================================
@@ -864,7 +890,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 
 			fmt.Printf("[IMPORT-JSON] Phase 1: Processing batch %d-%d (%d products)...\n", i, end, len(batchProducts))
 
-			ids, isNewMap, err := h.productRepo.BatchGetOrCreateByEANTx(txn, batchProducts, batchNames)
+			ids, isNewMap, err := h.productRepo.BatchGetOrCreateByEANTx(txn, batchProducts, batchNames, priceMap)
 			if err != nil {
 				fmt.Printf("[IMPORT-JSON] WARN: BatchGetOrCreateByEANTx: %v\n", err)
 				result.ProductsSkipped += len(batchProducts)
@@ -928,7 +954,19 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		}
 
 		// Perform batch upsert within transaction
-		h.eanPageRepo.BatchUpsertFromProductsTx(txn, allProducts)
+		productToEANPage := h.eanPageRepo.BatchUpsertFromProductsTx(txn, allProducts)
+
+		// Collect affected EAN page IDs for incremental recalculation
+		if productToEANPage != nil {
+			eanPageIDs := make(map[int64]struct{})
+			for _, eanPageID := range productToEANPage {
+				eanPageIDs[eanPageID] = struct{}{}
+			}
+			result.AffectedEANPages = make([]int64, 0, len(eanPageIDs))
+			for id := range eanPageIDs {
+				result.AffectedEANPages = append(result.AffectedEANPages, id)
+			}
+		}
 
 		if h.eanPageSearch != nil {
 			allPages, _ := h.eanPageRepo.ListAll()
@@ -982,6 +1020,15 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		return result
 	}
 	fmt.Println("[IMPORT-JSON] Transaction committed successfully")
+
+	// Rebuild company price document from DB to ensure it's in sync
+	if len(allProducts) > 0 {
+		if _, err := h.productRepo.RebuildCompanyPrices(company.ID); err != nil {
+			fmt.Printf("[IMPORT-JSON] WARN: rebuild company prices for %d: %v\n", company.ID, err)
+		} else {
+			fmt.Printf("[IMPORT-JSON] Rebuilt price document for company %d\n", company.ID)
+		}
+	}
 
 	// Report feed fields that had no entry in the company's field map, so the
 	// user knows which codes to add (manual analysis of the feed).

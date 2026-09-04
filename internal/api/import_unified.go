@@ -14,15 +14,16 @@ import (
 // CompanyImportResult holds the result of importing a single company's price
 // file using its configured format.
 type CompanyImportResult struct {
-	Company         string `json:"company"`
-	Format          string `json:"format"`
-	Status          string `json:"status"`
-	Files           int    `json:"files,omitempty"`
-	OffersParsed    int    `json:"offers_parsed"`
-	ProductsCreated int    `json:"products_created"`
-	ProductsUpdated int    `json:"products_updated"`
-	ProductsSkipped int    `json:"products_skipped"`
-	ProductsDeleted int    `json:"products_deleted,omitempty"`
+	Company          string  `json:"company"`
+	Format           string  `json:"format"`
+	Status           string  `json:"status"`
+	Files            int     `json:"files,omitempty"`
+	OffersParsed     int     `json:"offers_parsed"`
+	ProductsCreated  int     `json:"products_created"`
+	ProductsUpdated  int     `json:"products_updated"`
+	ProductsSkipped  int     `json:"products_skipped"`
+	ProductsDeleted  int     `json:"products_deleted,omitempty"`
+	AffectedEANPages []int64 `json:"-"` // EAN page IDs affected by this import (not serialized)
 }
 
 // UnifiedImportResult holds the result of a batch import across one or more
@@ -174,6 +175,7 @@ func (h *Handlers) importCompanyByFormat(company *model.Company, override string
 		cr.ProductsUpdated = r.ProductsUpdated
 		cr.ProductsSkipped = r.ProductsSkipped
 		cr.ProductsDeleted = r.ProductsDeleted
+		cr.AffectedEANPages = r.AffectedEANPages
 	case "nokaut", "xml":
 		r := h.importNokautCompany(company, limit, explicitFile)
 		cr.Status = r.Status
@@ -183,6 +185,7 @@ func (h *Handlers) importCompanyByFormat(company *model.Company, override string
 		cr.ProductsUpdated = r.ProductsUpdated
 		cr.ProductsSkipped = r.ProductsSkipped
 		cr.ProductsDeleted = r.ProductsDeleted
+		cr.AffectedEANPages = r.AffectedEANPages
 	default:
 		// Folder-based formats (csv/normalized/multi) are handled by their
 		// dedicated endpoints; report them so the caller can act.
@@ -210,38 +213,53 @@ func (h *Handlers) correctCompanyFormat(company *model.Company, format string) {
 // used to) was wasteful and re-did the same global work N times. Consolidating
 // them into one pass after the batch saves time and removes redundant work.
 //
+// If affectedEANPages is provided (non-empty), only those EAN pages are
+// recalculated for product counts and min prices. Otherwise, all pages are
+// recalculated (full rebuild).
+//
 // Steps (all non-transactional, operating on the committed data):
-//   - EAN page product counts
-//   - EAN page min prices
-//   - product sort indexes
+//   - EAN page product counts (incremental if affectedEANPages provided)
+//   - EAN page min prices (incremental if affectedEANPages provided)
 //   - category trees
-//   - EAN page sort indexes
-//   - delivery_method attributes
-func (h *Handlers) runGlobalRecalculation() error {
+//   - (sort indexes temporarily disabled — slow, needs optimization)
+func (h *Handlers) runGlobalRecalculation(affectedEANPages []int64) error {
 	if h.eanPageRepo != nil {
-		if err := h.eanPageRepo.RecalculateProductCounts(); err != nil {
-			return fmt.Errorf("recalculate product counts: %w", err)
-		}
-		if err := h.eanPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
-			return fmt.Errorf("recalculate min prices: %w", err)
+		if len(affectedEANPages) > 0 {
+			fmt.Printf("[IMPORT] Incremental recalculation for %d affected EAN pages\n", len(affectedEANPages))
+			if err := h.eanPageRepo.RecalculateProductCountsForPages(affectedEANPages); err != nil {
+				return fmt.Errorf("recalculate product counts: %w", err)
+			}
+			if err := h.eanPageRepo.RecalculateMinPricesForPages(affectedEANPages, h.productRepo); err != nil {
+				return fmt.Errorf("recalculate min prices: %w", err)
+			}
+		} else {
+			fmt.Println("[IMPORT] Full recalculation for all EAN pages")
+			if err := h.eanPageRepo.RecalculateProductCounts(); err != nil {
+				return fmt.Errorf("recalculate product counts: %w", err)
+			}
+			if err := h.eanPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
+				return fmt.Errorf("recalculate min prices: %w", err)
+			}
 		}
 	}
-	if h.turboSearch != nil {
-		if err := h.turboSearch.BuildSortIndexes(); err != nil {
-			return fmt.Errorf("build product sort indexes: %w", err)
-		}
-	}
+	// Sort index rebuilding disabled temporarily — slow and needs optimization.
+	// Will be re-enabled after proper incremental approach is implemented.
+	// if h.turboSearch != nil {
+	// 	if err := h.turboSearch.BuildSortIndexes(); err != nil {
+	// 		return fmt.Errorf("build product sort indexes: %w", err)
+	// 	}
+	// }
 	if h.categoryRepo != nil {
 		h.categoryRepo.RebuildTrees()
 	}
-	if h.eanPageSearch != nil {
-		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
-			return fmt.Errorf("build EAN page sort indexes: %w", err)
-		}
-		if err := h.eanPageSearch.RecalculateDeliveryMethods(h.companyRepo, h.deliveryMethodRepo); err != nil {
-			fmt.Printf("[IMPORT] WARN: recalculate delivery methods: %v\n", err)
-		}
-	}
+	// if h.eanPageSearch != nil {
+	// 	if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
+	// 		return fmt.Errorf("build EAN page sort indexes: %w", err)
+	// 	}
+	// 	if err := h.eanPageSearch.RecalculateDeliveryMethods(h.companyRepo, h.deliveryMethodRepo); err != nil {
+	// 		fmt.Printf("[IMPORT] WARN: recalculate delivery methods: %v\n", err)
+	// 	}
+	// }
 	return nil
 }
 
@@ -326,6 +344,10 @@ func (h *Handlers) HandleAdminImportUnified(w http.ResponseWriter, r *http.Reque
 
 		startTime := time.Now()
 		result := UnifiedImportResult{Status: "completed"}
+
+		// Collect affected EAN pages across all companies for incremental recalculation
+		affectedEANPages := make(map[int64]struct{})
+
 		for i := range companies {
 			company := &companies[i]
 			format := effectiveImportFormat(company, sourceOverride)
@@ -343,6 +365,11 @@ func (h *Handlers) HandleAdminImportUnified(w http.ResponseWriter, r *http.Reque
 			result.ProductsSkipped += cr.ProductsSkipped
 			result.ProductsDeleted += cr.ProductsDeleted
 
+			// Collect affected EAN pages for this company
+			for _, id := range cr.AffectedEANPages {
+				affectedEANPages[id] = struct{}{}
+			}
+
 			// Finalize this company's progress entry.
 			state := companyResultState(cr)
 			errMsg := ""
@@ -355,6 +382,12 @@ func (h *Handlers) HandleAdminImportUnified(w http.ResponseWriter, r *http.Reque
 				company.Name, cr.Format, cr.Status, cr.OffersParsed, cr.ProductsCreated, cr.ProductsUpdated, cr.ProductsSkipped)
 		}
 
+		// Convert map to slice for runGlobalRecalculation
+		affectedSlice := make([]int64, 0, len(affectedEANPages))
+		for id := range affectedEANPages {
+			affectedSlice = append(affectedSlice, id)
+		}
+
 		// Global recalculation phase: runs ONCE after all companies have
 		// imported (not per company), so the same global work (EAN page counts,
 		// min prices, sort indexes, category trees, delivery methods) is not
@@ -362,7 +395,7 @@ func (h *Handlers) HandleAdminImportUnified(w http.ResponseWriter, r *http.Reque
 		globalIdx := len(companies) + 1
 		h.importProgress.SetCompany(globalIdx, "Global recalculation", "")
 		h.importProgress.SetStep(StepRecalc)
-		if err := h.runGlobalRecalculation(); err != nil {
+		if err := h.runGlobalRecalculation(affectedSlice); err != nil {
 			fmt.Printf("[IMPORT-UNIFIED] ERROR: global recalculation failed: %v\n", err)
 			h.importProgress.CompanyDone(globalIdx, CompanyStateFailed, err.Error())
 			h.importProgress.Fail(err.Error())
