@@ -1,25 +1,16 @@
-.aider*
-/.junie/
-/.vscode/
-/.idea/
-/.continue/
-/_tmp/
-/bin/
-/.gocache/
-/.gopath/
-*.png
-*.hprof
-*.prof
-*.db
-*.lock
-.env
-*.log
+```
+# Dependencies
+node_modules/
 
-# Build artifacts
-/makoshop
-/loadtest/cmd/pprof_out/
-/frontend/.vscode/extensions.json
-/frontend/.vscode/
-/.gomodcache/
-/.go-env/
-/.claude/
+# Environment
+.env
+.env.local
+.env.*
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Editors
+.vscode/
+```

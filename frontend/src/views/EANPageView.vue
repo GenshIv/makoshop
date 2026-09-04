@@ -267,7 +267,66 @@ const filterForm = reactive({
   paymentMethodFilters: [], // array of payment method names
   deliveryTimeFilters: [], // array of delivery time names
   installmentPlanFilters: [], // array of installment plan names
+  priceRange: [0, 0], // [min, max]
+  attributeFilters: {}, // { attrKey: [values] }
 });
+
+// Extract all unique attributes from products for filter UI
+const allProductAttributes = computed(() => {
+  const attrMap = {}; // { attrKey: { label: string, values: Set<string> } }
+  
+  for (const p of products.value) {
+    if (!p.attributes || !Array.isArray(p.attributes)) continue;
+    
+    for (const attr of p.attributes) {
+      if (!attr.key || !attr.value) continue;
+      if (INTERNAL_ATTRS.includes(attr.key)) continue;
+      if (attr.key.toLowerCase().includes('url')) continue;
+      if (String(attr.value).toLowerCase().startsWith('http')) continue;
+      
+      const key = attr.key;
+      const value = String(attr.value);
+      
+      if (!attrMap[key]) {
+        attrMap[key] = {
+          label: attrLabel(key),
+          values: new Set()
+        };
+      }
+      attrMap[key].values.add(value);
+    }
+  }
+  
+  // Convert Sets to sorted arrays
+  const result = {};
+  for (const [key, data] of Object.entries(attrMap)) {
+    result[key] = {
+      label: data.label,
+      values: Array.from(data.values).sort()
+    };
+  }
+  
+  return result;
+});
+
+// Compute price range from products
+const priceRangeStats = computed(() => {
+  if (products.value.length === 0) return { min: 0, max: 0 };
+  const prices = products.value.map(p => p.price).filter(pr => Number.isFinite(pr));
+  if (prices.length === 0) return { min: 0, max: 0 };
+  return {
+    min: Math.min(...prices),
+    max: Math.max(...prices)
+  };
+});
+
+// Watch for products changes to initialize price range
+watch(products, (newProducts) => {
+  if (newProducts.length > 0) {
+    const stats = priceRangeStats.value;
+    filterForm.priceRange = [stats.min, stats.max];
+  }
+}, { immediate: true });
 
 const fetchEANPage = async () => {
   if (props.data) {
@@ -455,6 +514,26 @@ const modifications = computed(() => {
       } catch {
         return false;
       }
+    });
+  }
+
+  // Price range filter
+  const [minPrice, maxPrice] = filterForm.priceRange;
+  if (Number.isFinite(minPrice) && Number.isFinite(maxPrice)) {
+    filtered = filtered.filter(p => {
+      const price = Number(p.price);
+      return Number.isFinite(price) && price >= minPrice && price <= maxPrice;
+    });
+  }
+
+  // Attribute filters (OR inside each attribute, AND between attributes)
+  for (const [attrKey, selectedValues] of Object.entries(filterForm.attributeFilters)) {
+    if (!selectedValues || selectedValues.length === 0) continue;
+    filtered = filtered.filter(p => {
+      if (!p.attributes || !Array.isArray(p.attributes)) return false;
+      const attr = p.attributes.find(a => a.key === attrKey);
+      if (!attr || !attr.value) return false;
+      return selectedValues.includes(String(attr.value));
     });
   }
 
@@ -774,6 +853,32 @@ watch(
   },
   { deep: true }
 );
+
+// Check if any filters are active
+const hasActiveFilters = computed(() => {
+  return (
+    filterForm.companyFilters.length > 0 ||
+    filterForm.paymentMethodFilters.length > 0 ||
+    filterForm.deliveryTimeFilters.length > 0 ||
+    filterForm.installmentPlanFilters.length > 0 ||
+    filterForm.priceRange[0] !== priceRangeStats.value.min ||
+    filterForm.priceRange[1] !== priceRangeStats.value.max ||
+    Object.keys(filterForm.attributeFilters).some(key => 
+      filterForm.attributeFilters[key] && filterForm.attributeFilters[key].length > 0
+    )
+  );
+});
+
+// Clear all filters
+const clearAllFilters = () => {
+  filterForm.companyFilters = [];
+  filterForm.paymentMethodFilters = [];
+  filterForm.deliveryTimeFilters = [];
+  filterForm.installmentPlanFilters = [];
+  filterForm.attributeFilters = {};
+  const stats = priceRangeStats.value;
+  filterForm.priceRange = [stats.min, stats.max];
+};
 </script>
 
 <template>
@@ -1021,20 +1126,20 @@ watch(
           </div>
           <fieldset class="m-0 p-0 border-0 min-w-0">
             <legend class="sr-only">{{ t('eanpage.where_to_buy_base') }}</legend>
-            <div class="divide-y divide-line max-h-[400px] overflow-y-auto">
+            <div class="divide-y divide-line max-h-[480px] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-orange-400">
             <template v-for="(mod, modIdx) in modifications" :key="modIdx">
               <!-- Modification header -->
-              <div v-if="modifications.length > 1" class="px-4 py-2 bg-surface-2 text-xs font-medium text-ink-2">
-                {{ mod.name }}
+              <div v-if="modifications.length > 1" class="px-4 py-2.5 bg-gradient-to-r from-surface-2 to-surface border-b border-line">
+                <div class="text-sm font-semibold text-ink">{{ mod.name }}</div>
               </div>
               <!-- Offers -->
               <label
                 v-for="product in mod.suppliers"
                 :key="product.id"
                 :class="[
-                  'flex items-start gap-4 px-4 py-3 cursor-pointer transition',
+                  'flex items-center gap-4 px-4 py-3.5 cursor-pointer transition group',
                   selectedProduct?.id === product.id
-                    ? 'bg-orange-50 border-l-4 border-orange-600 pl-3'
+                    ? 'bg-orange-50/80 dark:bg-orange-900/20 border-l-4 border-orange-600 pl-3'
                     : 'hover:bg-surface-2 border-l-4 border-transparent'
                 ]"
               >
@@ -1044,35 +1149,48 @@ watch(
                   :value="product.id"
                   :checked="selectedProduct?.id === product.id"
                   @change="selectProduct(product)"
-                  class="w-4 h-4 text-orange-600 border-line focus:ring-orange-500 flex-shrink-0 cursor-pointer mt-1"
+                  class="w-4 h-4 text-orange-600 border-line focus:ring-orange-500 flex-shrink-0 cursor-pointer mt-0.5"
                 />
-                <!-- Left: seller info -->
-                <div class="flex-shrink-0 w-36">
-                  <div class="text-xs font-medium text-ink">
+                <!-- Left: seller info with stock status -->
+                <div class="flex-shrink-0 w-40 min-w-0">
+                  <div class="text-sm font-semibold text-ink truncate" :title="getCompanyName(product)">
                     {{ getCompanyName(product) }}
                   </div>
-                  <span :class="isInStock(product) ? 'text-green-600' : 'text-red-600'" class="text-xs">
-                    {{ isInStock(product) ? t('catalog.in_stock') : t('catalog.out_of_stock') }}
-                  </span>
+                  <div class="flex items-center gap-1.5 mt-1">
+                    <span :class="isInStock(product) ? 'text-green-600 bg-green-50 dark:bg-green-900/20' : 'text-red-600 bg-red-50 dark:bg-red-900/20'" 
+                          class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium">
+                      <span :class="isInStock(product) ? 'before:content-[\'\\20\'] before:w-1.5 before:h-1.5 before:rounded-full before:bg-green-600 before:mr-1.5' : 'before:content-[\'\\20\'] before:w-1.5 before:h-1.5 before:rounded-full before:bg-red-600 before:mr-1.5'">
+                        {{ isInStock(product) ? t('catalog.in_stock') : t('catalog.out_of_stock') }}
+                      </span>
+                    </span>
+                  </div>
                 </div>
-                <!-- Middle: attributes in key-value columns -->
-                <div class="flex-shrink-0 w-48 text-xs text-ink-3">
+                <!-- Middle: attributes as badges/tags -->
+                <div class="flex-1 min-w-0">
                   <template v-if="product.attributes && product.attributes.length">
-                    <div class="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                      <template v-for="attr in product.attributes.filter(a => !INTERNAL_ATTRS.includes(a.key) && !a.key.toLowerCase().includes('url') && !a.value.toLowerCase().startsWith('http')).slice(0, 6)" :key="attr.key">
-                        <div class="truncate font-medium text-ink-2">{{ attr.key }}:</div>
-                        <div class="truncate">{{ attr.value }}</div>
+                    <div class="flex flex-wrap gap-1.5">
+                      <template v-for="attr in product.attributes.filter(a => !INTERNAL_ATTRS.includes(a.key) && !a.key.toLowerCase().includes('url') && !a.value.toLowerCase().startsWith('http')).slice(0, 8)" :key="attr.key">
+                        <div class="inline-flex items-center gap-1 px-2 py-1 bg-surface-2 hover:bg-surface-3 rounded-md text-xs transition">
+                          <span class="font-medium text-ink-2">{{ attrLabel(attr.key) }}:</span>
+                          <span class="text-ink-3">{{ attr.value }}</span>
+                        </div>
                       </template>
                     </div>
                   </template>
+                  <!-- Description preview if available -->
+                  <div v-if="product.description" class="mt-2 text-xs text-ink-3 line-clamp-2">
+                    <div v-html="sanitizeHtml(product.description)" class="[&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4 [&>p]:my-0 [&>li]:my-0 [&>div]:my-0 [&>span]:my-0 [&>strong]:font-semibold"></div>
+                  </div>
                 </div>
-                <!-- Right: description (wide, multi-line) -->
-                <div v-if="product.description" class="flex-1 min-w-0 text-xs text-ink-3 leading-relaxed break-words">
-                  <div v-html="sanitizeHtml(product.description)" class="[&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4 [&>p]:my-0.5 [&>li]:my-0 [&>div]:my-0 [&>span]:my-0 [&>strong]:font-semibold"></div>
-                </div>
-                <!-- Far right: price -->
-                <div class="font-semibold text-orange-600 whitespace-nowrap text-sm flex-shrink-0 mt-1">
-                  {{ formatPrice(product.price, product.currency) }}
+                <!-- Far right: price with emphasis -->
+                <div class="flex-shrink-0 text-right">
+                  <div class="text-lg font-bold text-orange-600 whitespace-nowrap">
+                    {{ formatPrice(product.price, product.currency) }}
+                  </div>
+                  <div v-if="product.previous_price && product.previous_price > product.price" 
+                       class="text-xs text-ink-3 line-through mt-0.5">
+                    {{ formatPrice(product.previous_price, product.currency) }}
+                  </div>
                 </div>
               </label>
             </template>
@@ -1081,46 +1199,123 @@ watch(
         </div>
 
         <!-- Filters — narrow (~2 cols) -->
-        <div v-if="allSuppliers.length >= 1" class="lg:col-span-2 bg-surface rounded-2xl shadow-sm border border-line p-3 space-y-3 text-xs">
-          <!-- Companies -->
+        <div v-if="allSuppliers.length >= 1 || Object.keys(allProductAttributes).length > 0" class="lg:col-span-3 bg-surface rounded-2xl shadow-sm border border-line p-4 space-y-4 text-xs">
+          <!-- Price Range -->
           <div>
-            <div class="font-semibold text-ink-2 mb-1">{{ t('eanpage.filter_by_company') }}</div>
-            <div class="flex flex-col gap-1">
-              <label v-for="company in allSuppliers" :key="company" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
-                <input type="checkbox" :value="company" v-model="filterForm.companyFilters" class="rounded text-orange-600 focus:ring-orange-500" />
-                {{ company }}
+            <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_price', 'Price Range') }}</div>
+            <div class="flex items-center gap-2 mb-2">
+              <input 
+                type="number" 
+                v-model.number="filterForm.priceRange[0]" 
+                class="w-full px-2 py-1.5 bg-surface-2 border border-line rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                :placeholder="String(priceRangeStats.min)"
+                min="0"
+              />
+              <span class="text-ink-3">—</span>
+              <input 
+                type="number" 
+                v-model.number="filterForm.priceRange[1]" 
+                class="w-full px-2 py-1.5 bg-surface-2 border border-line rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                :placeholder="String(priceRangeStats.max)"
+                min="0"
+              />
+            </div>
+            <input 
+              type="range" 
+              v-model.number="filterForm.priceRange[0]" 
+              :min="priceRangeStats.min" 
+              :max="priceRangeStats.max" 
+              step="1"
+              class="w-full h-2 bg-surface-2 rounded-lg appearance-none cursor-pointer accent-orange-600"
+            />
+            <input 
+              type="range" 
+              v-model.number="filterForm.priceRange[1]" 
+              :min="priceRangeStats.min" 
+              :max="priceRangeStats.max" 
+              step="1"
+              class="w-full h-2 bg-surface-2 rounded-lg appearance-none cursor-pointer accent-orange-600 mt-2"
+            />
+            <div class="flex justify-between text-xs text-ink-3 mt-1">
+              <span>{{ formatPrice(priceRangeStats.min, defaultCurrency) }}</span>
+              <span>{{ formatPrice(priceRangeStats.max, defaultCurrency) }}</span>
+            </div>
+          </div>
+
+          <!-- Companies -->
+          <div v-if="allSuppliers.length > 0" class="border-t border-line pt-3">
+            <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_company') }}</div>
+            <div class="flex flex-col gap-1.5 max-h-40 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full">
+              <label v-for="company in allSuppliers" :key="company" class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition">
+                <input type="checkbox" :value="company" v-model="filterForm.companyFilters" class="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-line" />
+                <span class="truncate">{{ company }}</span>
               </label>
             </div>
           </div>
 
-          <div v-if="allPaymentMethods.length > 0" class="border-t border-line pt-2">
-            <div class="font-semibold text-ink-2 mb-1">{{ t('eanpage.filter_by_payment') }}</div>
-            <div class="flex flex-col gap-1">
-              <label v-for="pm in allPaymentMethods" :key="pm" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
-                <input type="checkbox" :value="pm" v-model="filterForm.paymentMethodFilters" class="rounded text-orange-600 focus:ring-orange-500" />
+          <!-- Product Attributes -->
+          <div v-if="Object.keys(allProductAttributes).length > 0" class="border-t border-line pt-3">
+            <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_attributes', 'Product Attributes') }}</div>
+            <div class="space-y-3">
+              <div v-for="(attrData, attrKey) in allProductAttributes" :key="attrKey" class="space-y-1.5">
+                <div class="font-medium text-ink">{{ attrData.label }}</div>
+                <div class="flex flex-col gap-1">
+                  <label 
+                    v-for="value in attrData.values" 
+                    :key="value" 
+                    class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition text-xs"
+                  >
+                    <input 
+                      type="checkbox" 
+                      :value="value" 
+                      v-model="filterForm.attributeFilters[attrKey]" 
+                      class="w-3.5 h-3.5 rounded text-orange-600 focus:ring-orange-500 border-line" 
+                    />
+                    <span class="truncate">{{ value }}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="allPaymentMethods.length > 0" class="border-t border-line pt-3">
+            <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_payment') }}</div>
+            <div class="flex flex-col gap-1.5 max-h-32 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full">
+              <label v-for="pm in allPaymentMethods" :key="pm" class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition">
+                <input type="checkbox" :value="pm" v-model="filterForm.paymentMethodFilters" class="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-line" />
                 {{ pm }}
               </label>
             </div>
           </div>
 
-          <div v-if="allDeliveryTimes.length > 0" class="border-t border-line pt-2">
-            <div class="font-semibold text-ink-2 mb-1">{{ t('eanpage.filter_by_delivery') }}</div>
-            <div class="flex flex-col gap-1">
-              <label v-for="dt in allDeliveryTimes" :key="dt" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
-                <input type="checkbox" :value="dt" v-model="filterForm.deliveryTimeFilters" class="rounded text-orange-600 focus:ring-orange-500" />
+          <div v-if="allDeliveryTimes.length > 0" class="border-t border-line pt-3">
+            <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_delivery') }}</div>
+            <div class="flex flex-col gap-1.5 max-h-32 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full">
+              <label v-for="dt in allDeliveryTimes" :key="dt" class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition">
+                <input type="checkbox" :value="dt" v-model="filterForm.deliveryTimeFilters" class="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-line" />
                 {{ dt }}
               </label>
             </div>
           </div>
 
-          <div v-if="allInstallmentPlans.length > 0" class="border-t border-line pt-2">
-            <div class="font-semibold text-ink-2 mb-1">{{ t('eanpage.filter_by_installment') }}</div>
-            <div class="flex flex-col gap-1">
-              <label v-for="ip in allInstallmentPlans" :key="ip" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
-                <input type="checkbox" :value="ip" v-model="filterForm.installmentPlanFilters" class="rounded text-orange-600 focus:ring-orange-500" />
+          <div v-if="allInstallmentPlans.length > 0" class="border-t border-line pt-3">
+            <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_installment') }}</div>
+            <div class="flex flex-col gap-1.5 max-h-32 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full">
+              <label v-for="ip in allInstallmentPlans" :key="ip" class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition">
+                <input type="checkbox" :value="ip" v-model="filterForm.installmentPlanFilters" class="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-line" />
                 {{ ip }}
               </label>
             </div>
+          </div>
+          
+          <!-- Clear All Filters -->
+          <div v-if="hasActiveFilters" class="border-t border-line pt-3">
+            <button 
+              @click="clearAllFilters"
+              class="w-full px-3 py-2 text-xs font-medium text-ink-2 bg-surface-2 hover:bg-surface-3 rounded-lg transition border border-line"
+            >
+              {{ t('eanpage.clear_filters', 'Clear All Filters') }}
+            </button>
           </div>
         </div>
       </div>
