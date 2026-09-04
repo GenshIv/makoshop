@@ -263,22 +263,43 @@ const fetchCompanySettings = async () => {
 
 const filterForm = reactive({
   sortBy: 'price_asc',
-  companyFilters: [], // array of company names
-  paymentMethodFilters: [], // array of payment method names
-  deliveryTimeFilters: [], // array of delivery time names
-  installmentPlanFilters: [], // array of installment plan names
+  companyFilters: [], // array of company names (checkbox multi-select)
+  paymentMethodFilters: [], // array of payment method names (checkbox multi-select)
+  deliveryTimeFilters: [], // array of delivery time names (checkbox multi-select)
+  installmentPlanFilters: [], // array of installment plan names (checkbox multi-select)
   priceRange: [0, 0], // [min, max]
   attributeFilters: {}, // { attrKey: string[] } - each key maps to array of selected values
 });
 
-// Extract only DIFFERENT attributes from products for filter UI (hide if all products have same value)
+const isAttributeSelected = (key, value) => {
+  return filterForm.attributeFilters[key]?.includes(value) || false;
+};
+
+const toggleAttributeFilter = (key, value, checked) => {
+  const current = filterForm.attributeFilters[key] || [];
+  let updated;
+  if (checked) {
+    updated = [...current, value];
+  } else {
+    updated = current.filter(v => v !== value);
+  }
+  // Create new object to trigger Vue reactivity
+  filterForm.attributeFilters = {
+    ...filterForm.attributeFilters,
+    [key]: updated
+  };
+};
+
+// Extract attributes with different values across products for filter UI
 const allProductAttributes = computed(() => {
-  const attrMap = {}; // { attrKey: { label: string, values: Map<value, count> } }
+  const attrValues = {}; // { attrKey: { label, valueCounts: Map<value, count> } }
   
-  for (const p of products.value) {
+  for (let i = 0; i < products.value.length; i++) {
+    const p = products.value[i];
     if (!p.attributes || !Array.isArray(p.attributes)) continue;
     
-    for (const attr of p.attributes) {
+    for (let j = 0; j < p.attributes.length; j++) {
+      const attr = p.attributes[j];
       if (!attr.key || !attr.value) continue;
       if (INTERNAL_ATTRS.includes(attr.key)) continue;
       if (attr.key.toLowerCase().includes('url')) continue;
@@ -287,27 +308,34 @@ const allProductAttributes = computed(() => {
       const key = attr.key;
       const value = String(attr.value);
       
-      if (!attrMap[key]) {
-        attrMap[key] = {
+      if (!attrValues[key]) {
+        attrValues[key] = {
           label: attrLabel(key),
-          values: new Map()
+          valueCounts: new Map()
         };
       }
       
-      const currentCount = attrMap[key].values.get(value) || 0;
-      attrMap[key].values.set(value, currentCount + 1);
+      const count = attrValues[key].valueCounts.get(value) || 0;
+      attrValues[key].valueCounts.set(value, count + 1);
     }
   }
   
-  // Convert Maps to arrays, but only keep attributes with multiple different values
+  // Only show attributes where some values are not present in all products
+  const totalProducts = products.value.length;
   const result = {};
-  for (const [key, data] of Object.entries(attrMap)) {
-    const valuesArray = Array.from(data.values.entries()); // [[value, count], ...]
-    // Only include attribute if it has more than one distinct value across products
-    if (valuesArray.length > 1) {
+  for (const [key, data] of Object.entries(attrValues)) {
+    const filterableValues = [];
+    for (const [value, count] of data.valueCounts.entries()) {
+      // Only include values that don't appear in all products
+      if (count < totalProducts) {
+        filterableValues.push(value);
+      }
+    }
+    
+    if (filterableValues.length > 0) {
       result[key] = {
         label: data.label,
-        values: valuesArray.map(([v, c]) => v).sort()
+        values: filterableValues.sort()
       };
     }
   }
@@ -537,9 +565,9 @@ const modifications = computed(() => {
     if (!selectedValues || !Array.isArray(selectedValues) || selectedValues.length === 0) continue;
     filtered = filtered.filter(p => {
       if (!p.attributes || !Array.isArray(p.attributes)) return false;
-      const attr = p.attributes.find(a => a.key === attrKey);
-      if (!attr || !attr.value) return false;
-      return selectedValues.includes(String(attr.value));
+      const attrs = p.attributes.filter(a => a.key === attrKey && a.value);
+      if (attrs.length === 0) return false;
+      return attrs.some(a => selectedValues.includes(String(a.value)));
     });
   }
 
@@ -573,56 +601,94 @@ const allSuppliers = computed(() => {
   return result;
 });
 
-// Collect all unique payment methods, delivery times, installment plans from companies on this page
+// Only show company filter if there are multiple companies
+const hasCompanyFilter = computed(() => allSuppliers.value.length > 1);
+
+// Collect payment methods per product, only show options that differ between products
 const allPaymentMethods = computed(() => {
-  const seen = new Set();
-  const result = [];
+  const pmPerProduct = new Map(); // product_id -> Set<payment_method_names>
   for (const p of products.value) {
     if (!p.company_id) continue;
     const settings = companySettingsMap.value[p.company_id];
-    if (!settings) continue;
-    for (const pm of settings.payment_methods) {
-      if (!seen.has(pm.name)) {
-        seen.add(pm.name);
-        result.push(pm.name);
-      }
+    if (!settings || !Array.isArray(settings.payment_methods)) continue;
+    pmPerProduct.set(p.id, new Set(settings.payment_methods.map(pm => pm.name)));
+  }
+  
+  // Find payment methods that are not common to ALL products (i.e., differ)
+  const allPms = new Map(); // pm_name -> count of products having it
+  for (const pms of pmPerProduct.values()) {
+    for (const pm of pms) {
+      allPms.set(pm, (allPms.get(pm) || 0) + 1);
     }
   }
-  return result;
+  
+  // Only show payment methods that some products have and others don't
+  const totalProducts = pmPerProduct.size;
+  const result = [];
+  for (const [pm, count] of allPms.entries()) {
+    if (count < totalProducts) {
+      result.push(pm);
+    }
+  }
+  return result.sort();
 });
 
+// Collect delivery times per product, only show options that differ between products
 const allDeliveryTimes = computed(() => {
-  const seen = new Set();
-  const result = [];
+  const dtPerProduct = new Map(); // product_id -> Set<delivery_time_names>
   for (const p of products.value) {
     if (!p.company_id) continue;
     const settings = companySettingsMap.value[p.company_id];
-    if (!settings) continue;
-    for (const dt of settings.delivery_times) {
-      if (!seen.has(dt.name)) {
-        seen.add(dt.name);
-        result.push(dt.name);
-      }
+    if (!settings || !Array.isArray(settings.delivery_times)) continue;
+    dtPerProduct.set(p.id, new Set(settings.delivery_times.map(dt => dt.name)));
+  }
+  
+  // Find delivery times that are not common to ALL products (i.e., differ)
+  const allDts = new Map(); // dt_name -> count of products having it
+  for (const dts of dtPerProduct.values()) {
+    for (const dt of dts) {
+      allDts.set(dt, (allDts.get(dt) || 0) + 1);
     }
   }
-  return result;
+  
+  // Only show delivery times that some products have and others don't
+  const totalProducts = dtPerProduct.size;
+  const result = [];
+  for (const [dt, count] of allDts.entries()) {
+    if (count < totalProducts) {
+      result.push(dt);
+    }
+  }
+  return result.sort();
 });
 
+// Collect installment plans per product, only show options that differ between products
 const allInstallmentPlans = computed(() => {
-  const seen = new Set();
-  const result = [];
+  const ipPerProduct = new Map(); // product_id -> Set<installment_plan_names>
   for (const p of products.value) {
     if (!p.company_id) continue;
     const settings = companySettingsMap.value[p.company_id];
-    if (!settings) continue;
-    for (const ip of settings.installment_plans) {
-      if (!seen.has(ip.name)) {
-        seen.add(ip.name);
-        result.push(ip.name);
-      }
+    if (!settings || !Array.isArray(settings.installment_plans)) continue;
+    ipPerProduct.set(p.id, new Set(settings.installment_plans.map(ip => ip.name)));
+  }
+  
+  // Find installment plans that are not common to ALL products (i.e., differ)
+  const allIps = new Map(); // ip_name -> count of products having it
+  for (const ips of ipPerProduct.values()) {
+    for (const ip of ips) {
+      allIps.set(ip, (allIps.get(ip) || 0) + 1);
     }
   }
-  return result;
+  
+  // Only show installment plans that some products have and others don't
+  const totalProducts = ipPerProduct.size;
+  const result = [];
+  for (const [ip, count] of allIps.entries()) {
+    if (count < totalProducts) {
+      result.push(ip);
+    }
+  }
+  return result.sort();
 });
 
 const currentImages = computed(() => {
@@ -1163,7 +1229,7 @@ const clearAllFilters = () => {
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
         <!-- Where to buy (offers) — wide (~9 cols) -->
-        <div v-if="modifications.length > 0" class="lg:col-span-9 bg-surface rounded-2xl shadow-sm border border-line overflow-hidden">
+        <div class="lg:col-span-9 bg-surface rounded-2xl shadow-sm border border-line overflow-hidden">
           <div class="px-4 py-3 border-b border-line">
             <h3 class="font-semibold text-ink">
               {{ t('eanpage.where_to_buy_base') }} ({{ filteredOfferCount }} {{ offersPlural }})
@@ -1171,7 +1237,7 @@ const clearAllFilters = () => {
           </div>
           <fieldset class="m-0 p-0 border-0 min-w-0">
             <legend class="sr-only">{{ t('eanpage.where_to_buy_base') }}</legend>
-            <div class="divide-y divide-line max-h-[480px] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-orange-400">
+            <div class="divide-y divide-line">
             <template v-for="(mod, modIdx) in modifications" :key="modIdx">
               <!-- Modification header -->
               <div v-if="modifications.length > 1" class="px-4 py-2.5 bg-gradient-to-r from-surface-2 to-surface border-b border-line">
@@ -1239,12 +1305,16 @@ const clearAllFilters = () => {
                 </div>
               </label>
             </template>
+            <!-- Empty state when no products match filters -->
+            <div v-if="modifications.length === 0" class="px-4 py-8 text-center text-ink-3">
+              {{ t('eanpage.no_products_match_filters', 'No products match the selected filters') }}
+            </div>
             </div>
           </fieldset>
         </div>
 
-        <!-- Filters — narrow (~3 cols) - only show if there are multiple products -->
-        <div v-if="products.length > 1 && (allSuppliers.length >= 1 || Object.keys(allProductAttributes).length > 0)" class="lg:col-span-3 bg-surface rounded-2xl shadow-sm border border-line p-4 space-y-4 text-xs">
+        <!-- Filters — narrow (~3 cols) - show if there are multiple products -->
+        <div v-if="products.length > 1" class="lg:col-span-3 bg-surface rounded-2xl shadow-sm border border-line p-4 space-y-4 text-xs">
           <!-- Price Range -->
           <div>
             <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_price', 'Price Range') }}</div>
@@ -1288,9 +1358,9 @@ const clearAllFilters = () => {
           </div>
 
           <!-- Companies -->
-          <div v-if="allSuppliers.length > 0" class="border-t border-line pt-3">
+          <div v-if="hasCompanyFilter" class="border-t border-line pt-3">
             <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_company') }}</div>
-            <div class="flex flex-col gap-1.5 max-h-40 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full">
+            <div class="flex flex-col gap-1.5">
               <label v-for="company in allSuppliers" :key="company" class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition">
                 <input type="checkbox" :value="company" v-model="filterForm.companyFilters" class="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-line" />
                 <span class="truncate">{{ company }}</span>
@@ -1301,7 +1371,7 @@ const clearAllFilters = () => {
           <!-- Product Attributes -->
           <div v-if="Object.keys(allProductAttributes).length > 0" class="border-t border-line pt-3">
             <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_attributes', 'Product Attributes') }}</div>
-            <div class="space-y-3 max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full pr-1">
+            <div class="space-y-3">
               <div v-for="(attrData, attrKey) in allProductAttributes" :key="attrKey" class="space-y-1.5">
                 <div class="font-medium text-ink text-xs uppercase tracking-wide">{{ attrData.label }}</div>
                 <div class="flex flex-col gap-1">
@@ -1313,7 +1383,8 @@ const clearAllFilters = () => {
                     <input 
                       type="checkbox" 
                       :value="value" 
-                      v-model="filterForm.attributeFilters[attrKey]" 
+                      :checked="isAttributeSelected(attrKey, value)"
+                      @change="toggleAttributeFilter(attrKey, value, $event.target.checked)"
                       class="w-3.5 h-3.5 rounded text-orange-600 focus:ring-orange-500 border-line cursor-pointer" 
                     />
                     <span class="truncate">{{ value }}</span>
@@ -1325,7 +1396,7 @@ const clearAllFilters = () => {
 
           <div v-if="allPaymentMethods.length > 0" class="border-t border-line pt-3">
             <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_payment') }}</div>
-            <div class="flex flex-col gap-1.5 max-h-32 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full">
+            <div class="flex flex-col gap-1.5">
               <label v-for="pm in allPaymentMethods" :key="pm" class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition">
                 <input type="checkbox" :value="pm" v-model="filterForm.paymentMethodFilters" class="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-line" />
                 {{ pm }}
@@ -1335,7 +1406,7 @@ const clearAllFilters = () => {
 
           <div v-if="allDeliveryTimes.length > 0" class="border-t border-line pt-3">
             <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_delivery') }}</div>
-            <div class="flex flex-col gap-1.5 max-h-32 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full">
+            <div class="flex flex-col gap-1.5">
               <label v-for="dt in allDeliveryTimes" :key="dt" class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition">
                 <input type="checkbox" :value="dt" v-model="filterForm.deliveryTimeFilters" class="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-line" />
                 {{ dt }}
@@ -1345,7 +1416,7 @@ const clearAllFilters = () => {
 
           <div v-if="allInstallmentPlans.length > 0" class="border-t border-line pt-3">
             <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_installment') }}</div>
-            <div class="flex flex-col gap-1.5 max-h-32 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full">
+            <div class="flex flex-col gap-1.5">
               <label v-for="ip in allInstallmentPlans" :key="ip" class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition">
                 <input type="checkbox" :value="ip" v-model="filterForm.installmentPlanFilters" class="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-line" />
                 {{ ip }}
