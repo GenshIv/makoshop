@@ -534,7 +534,7 @@ const modifications = computed(() => {
 
   // Attribute filters (OR inside each attribute, AND between attributes)
   for (const [attrKey, selectedValues] of Object.entries(filterForm.attributeFilters)) {
-    if (!selectedValues || selectedValues.length === 0) continue;
+    if (!selectedValues || !Array.isArray(selectedValues) || selectedValues.length === 0) continue;
     filtered = filtered.filter(p => {
       if (!p.attributes || !Array.isArray(p.attributes)) return false;
       const attr = p.attributes.find(a => a.key === attrKey);

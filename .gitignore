@@ -1,5 +1,1 @@
-(frontend/src/views/EANPageView.vue is a source file, and there are no build artifacts, dependencies, or temporary files in the changes)
-
-```gitignore
-
-```
+Nothing should be ignored based on the provided file changes. The only modified file is a Vue component (`frontend/src/views/EANPageView.vue`), which is a source code file and should not be added to .gitignore.
