@@ -268,12 +268,12 @@ const filterForm = reactive({
   deliveryTimeFilters: [], // array of delivery time names
   installmentPlanFilters: [], // array of installment plan names
   priceRange: [0, 0], // [min, max]
-  attributeFilters: {}, // { attrKey: [values] }
+  attributeFilters: {}, // { attrKey: string[] } - each key maps to array of selected values
 });
 
-// Extract all unique attributes from products for filter UI
+// Extract only DIFFERENT attributes from products for filter UI (hide if all products have same value)
 const allProductAttributes = computed(() => {
-  const attrMap = {}; // { attrKey: { label: string, values: Set<string> } }
+  const attrMap = {}; // { attrKey: { label: string, values: Map<value, count> } }
   
   for (const p of products.value) {
     if (!p.attributes || !Array.isArray(p.attributes)) continue;
@@ -290,20 +290,26 @@ const allProductAttributes = computed(() => {
       if (!attrMap[key]) {
         attrMap[key] = {
           label: attrLabel(key),
-          values: new Set()
+          values: new Map()
         };
       }
-      attrMap[key].values.add(value);
+      
+      const currentCount = attrMap[key].values.get(value) || 0;
+      attrMap[key].values.set(value, currentCount + 1);
     }
   }
   
-  // Convert Sets to sorted arrays
+  // Convert Maps to arrays, but only keep attributes with multiple different values
   const result = {};
   for (const [key, data] of Object.entries(attrMap)) {
-    result[key] = {
-      label: data.label,
-      values: Array.from(data.values).sort()
-    };
+    const valuesArray = Array.from(data.values.entries()); // [[value, count], ...]
+    // Only include attribute if it has more than one distinct value across products
+    if (valuesArray.length > 1) {
+      result[key] = {
+        label: data.label,
+        values: valuesArray.map(([v, c]) => v).sort()
+      };
+    }
   }
   
   return result;
@@ -674,6 +680,45 @@ const hasAnyInStock = computed(() => {
 
 // Convert []KeyValue to {key: value} map.
 const INTERNAL_ATTRS = ['product_url', 'purchase_url', 'shop_category'];
+
+// Attributes that differ across products (for display in tags)
+const differingAttributes = computed(() => {
+  const attrMap = {}; // { attrKey: Set<value> }
+  
+  for (const p of products.value) {
+    if (!p.attributes || !Array.isArray(p.attributes)) continue;
+    
+    for (const attr of p.attributes) {
+      if (!attr.key || !attr.value) continue;
+      if (INTERNAL_ATTRS.includes(attr.key)) continue;
+      if (attr.key.toLowerCase().includes('url')) continue;
+      if (String(attr.value).toLowerCase().startsWith('http')) continue;
+      
+      const key = attr.key;
+      const value = String(attr.value);
+      
+      if (!attrMap[key]) {
+        attrMap[key] = new Set();
+      }
+      attrMap[key].add(value);
+    }
+  }
+  
+  // Only keep attributes with multiple different values
+  const result = {};
+  for (const [key, values] of Object.entries(attrMap)) {
+    if (values.size > 1) {
+      result[key] = true;
+    }
+  }
+  
+  return result;
+});
+
+// Check if a specific attribute should be shown in tags (only if it differs)
+const shouldShowAttributeTag = (attrKey) => {
+  return differingAttributes.value[attrKey];
+};
 
 const normalizeAttrs = (attrs) => {
   if (!attrs) return {};
@@ -1117,8 +1162,8 @@ const clearAllFilters = () => {
       <!-- Bottom: offers wide + filters narrow on the right -->
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-        <!-- Where to buy (offers) — wide (~10 cols) -->
-        <div v-if="modifications.length > 0" class="lg:col-span-10 bg-surface rounded-2xl shadow-sm border border-line overflow-hidden">
+        <!-- Where to buy (offers) — wide (~9 cols) -->
+        <div v-if="modifications.length > 0" class="lg:col-span-9 bg-surface rounded-2xl shadow-sm border border-line overflow-hidden">
           <div class="px-4 py-3 border-b border-line">
             <h3 class="font-semibold text-ink">
               {{ t('eanpage.where_to_buy_base') }} ({{ filteredOfferCount }} {{ offersPlural }})
@@ -1165,11 +1210,11 @@ const clearAllFilters = () => {
                     </span>
                   </div>
                 </div>
-                <!-- Middle: attributes as badges/tags -->
+                <!-- Middle: attributes as badges/tags (only differing attributes) -->
                 <div class="flex-1 min-w-0">
                   <template v-if="product.attributes && product.attributes.length">
                     <div class="flex flex-wrap gap-1.5">
-                      <template v-for="attr in product.attributes.filter(a => !INTERNAL_ATTRS.includes(a.key) && !a.key.toLowerCase().includes('url') && !a.value.toLowerCase().startsWith('http')).slice(0, 8)" :key="attr.key">
+                      <template v-for="attr in product.attributes.filter(a => !INTERNAL_ATTRS.includes(a.key) && !a.key.toLowerCase().includes('url') && !a.value.toLowerCase().startsWith('http') && shouldShowAttributeTag(a.key)).slice(0, 8)" :key="attr.key">
                         <div class="inline-flex items-center gap-1 px-2 py-1 bg-surface-2 hover:bg-surface-3 rounded-md text-xs transition">
                           <span class="font-medium text-ink-2">{{ attrLabel(attr.key) }}:</span>
                           <span class="text-ink-3">{{ attr.value }}</span>
@@ -1198,8 +1243,8 @@ const clearAllFilters = () => {
           </fieldset>
         </div>
 
-        <!-- Filters — narrow (~2 cols) -->
-        <div v-if="allSuppliers.length >= 1 || Object.keys(allProductAttributes).length > 0" class="lg:col-span-3 bg-surface rounded-2xl shadow-sm border border-line p-4 space-y-4 text-xs">
+        <!-- Filters — narrow (~3 cols) - only show if there are multiple products -->
+        <div v-if="products.length > 1 && (allSuppliers.length >= 1 || Object.keys(allProductAttributes).length > 0)" class="lg:col-span-3 bg-surface rounded-2xl shadow-sm border border-line p-4 space-y-4 text-xs">
           <!-- Price Range -->
           <div>
             <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_price', 'Price Range') }}</div>

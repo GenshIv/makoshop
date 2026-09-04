@@ -1,16 +1,5 @@
-```
-# Dependencies
-node_modules/
+(frontend/src/views/EANPageView.vue is a source file, and there are no build artifacts, dependencies, or temporary files in the changes)
 
-# Environment
-.env
-.env.local
-.env.*
+```gitignore
 
-# Logs and temp files
-*.log
-*.tmp
-
-# Editors
-.vscode/
 ```
