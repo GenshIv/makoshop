@@ -75,6 +75,7 @@
   },
   "pages": {
     "catalog_title": "Каталог товаров — wszyst.pl",
+    "home_title": "Wszyst.pl — сравниваем цены тысяч товаров",
     "product_title": "Товар — wszyst.pl",
     "cart_title": "Корзина — wszyst.pl",
     "checkout_title": "Оформление заказа — wszyst.pl",
@@ -181,6 +182,11 @@
     "loading_products": "Загружаем товары...",
     "view_grid": "Сетка",
     "view_list": "Список"
+  },
+  "home": {
+    "view_all": "Все товары",
+    "scroll_left": "Предыдущие товары",
+    "scroll_right": "Следующие товары"
   },
   "company": {
     "not_found": "Компания не найдена",
@@ -608,6 +614,15 @@
     "home_hero_headline": "Заголовок",
     "home_hero_sub": "Подзаголовок",
     "home_hero_tagline": "Слоган",
+    "home_offers_title": "Предложения на главной",
+    "home_offers_hint": "Секции категорий со случайными товарами на главной странице. Пустой список — все корневые категории в стандартном порядке.",
+    "home_offers_per_section": "Товаров в карусели",
+    "home_offers_per_section_hint": "0 — по умолчанию (12). От 1 до 20.",
+    "home_offers_categories": "Категории и порядок",
+    "home_offers_categories_hint": "Отметьте категории для главной; стрелки задают порядок показа. Неотмеченные категории не показываются.",
+    "home_offers_no_categories": "Корневых категорий с товарами пока нет.",
+    "home_offers_move_up": "Выше",
+    "home_offers_move_down": "Ниже",
     "name_required": "Укажите название",
     "slug_required": "Укажите слаг",
     "delete_item_confirm": "Удалить \"{name}\"?",

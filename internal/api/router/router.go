@@ -312,6 +312,9 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.HandleFunc("/shop", d.shop)
 	mux.HandleFunc("/shop/", d.shopSub)
 
+	// Home page offers: random sections by root category
+	mux.HandleFunc("/home/offers", d.homeOffers)
+
 	// Attribute values (turbo-based)
 	mux.HandleFunc("/attributes/", d.attributeValues)
 

@@ -263,11 +263,104 @@ const fetchCompanySettings = async () => {
 
 const filterForm = reactive({
   sortBy: 'price_asc',
-  companyFilters: [], // array of company names
-  paymentMethodFilters: [], // array of payment method names
-  deliveryTimeFilters: [], // array of delivery time names
-  installmentPlanFilters: [], // array of installment plan names
+  companyFilters: [], // array of company names (checkbox multi-select)
+  paymentMethodFilters: [], // array of payment method names (checkbox multi-select)
+  deliveryTimeFilters: [], // array of delivery time names (checkbox multi-select)
+  installmentPlanFilters: [], // array of installment plan names (checkbox multi-select)
+  priceRange: [0, 0], // [min, max]
+  attributeFilters: {}, // { attrKey: string[] } - each key maps to array of selected values
 });
+
+const isAttributeSelected = (key, value) => {
+  return filterForm.attributeFilters[key]?.includes(value) || false;
+};
+
+const toggleAttributeFilter = (key, value, checked) => {
+  const current = filterForm.attributeFilters[key] || [];
+  let updated;
+  if (checked) {
+    updated = [...current, value];
+  } else {
+    updated = current.filter(v => v !== value);
+  }
+  // Create new object to trigger Vue reactivity
+  filterForm.attributeFilters = {
+    ...filterForm.attributeFilters,
+    [key]: updated
+  };
+};
+
+// Extract attributes with different values across products for filter UI
+const allProductAttributes = computed(() => {
+  const attrValues = {}; // { attrKey: { label, valueCounts: Map<value, count> } }
+  
+  for (let i = 0; i < products.value.length; i++) {
+    const p = products.value[i];
+    if (!p.attributes || !Array.isArray(p.attributes)) continue;
+    
+    for (let j = 0; j < p.attributes.length; j++) {
+      const attr = p.attributes[j];
+      if (!attr.key || !attr.value) continue;
+      if (INTERNAL_ATTRS.includes(attr.key)) continue;
+      if (attr.key.toLowerCase().includes('url')) continue;
+      if (String(attr.value).toLowerCase().startsWith('http')) continue;
+      
+      const key = attr.key;
+      const value = String(attr.value);
+      
+      if (!attrValues[key]) {
+        attrValues[key] = {
+          label: attrLabel(key),
+          valueCounts: new Map()
+        };
+      }
+      
+      const count = attrValues[key].valueCounts.get(value) || 0;
+      attrValues[key].valueCounts.set(value, count + 1);
+    }
+  }
+  
+  // Only show attributes where some values are not present in all products
+  const totalProducts = products.value.length;
+  const result = {};
+  for (const [key, data] of Object.entries(attrValues)) {
+    const filterableValues = [];
+    for (const [value, count] of data.valueCounts.entries()) {
+      // Only include values that don't appear in all products
+      if (count < totalProducts) {
+        filterableValues.push(value);
+      }
+    }
+    
+    if (filterableValues.length > 0) {
+      result[key] = {
+        label: data.label,
+        values: filterableValues.sort()
+      };
+    }
+  }
+  
+  return result;
+});
+
+// Compute price range from products
+const priceRangeStats = computed(() => {
+  if (products.value.length === 0) return { min: 0, max: 0 };
+  const prices = products.value.map(p => p.price).filter(pr => Number.isFinite(pr));
+  if (prices.length === 0) return { min: 0, max: 0 };
+  return {
+    min: Math.min(...prices),
+    max: Math.max(...prices)
+  };
+});
+
+// Watch for products changes to initialize price range
+watch(products, (newProducts) => {
+  if (newProducts.length > 0) {
+    const stats = priceRangeStats.value;
+    filterForm.priceRange = [stats.min, stats.max];
+  }
+}, { immediate: true });
 
 const fetchEANPage = async () => {
   if (props.data) {
@@ -458,6 +551,26 @@ const modifications = computed(() => {
     });
   }
 
+  // Price range filter
+  const [minPrice, maxPrice] = filterForm.priceRange;
+  if (Number.isFinite(minPrice) && Number.isFinite(maxPrice)) {
+    filtered = filtered.filter(p => {
+      const price = Number(p.price);
+      return Number.isFinite(price) && price >= minPrice && price <= maxPrice;
+    });
+  }
+
+  // Attribute filters (OR inside each attribute, AND between attributes)
+  for (const [attrKey, selectedValues] of Object.entries(filterForm.attributeFilters)) {
+    if (!selectedValues || !Array.isArray(selectedValues) || selectedValues.length === 0) continue;
+    filtered = filtered.filter(p => {
+      if (!p.attributes || !Array.isArray(p.attributes)) return false;
+      const attrs = p.attributes.filter(a => a.key === attrKey && a.value);
+      if (attrs.length === 0) return false;
+      return attrs.some(a => selectedValues.includes(String(a.value)));
+    });
+  }
+
   const groups = new Map();
   for (const p of filtered) {
     const pureName = stripCompanyFromName(p.name);
@@ -488,56 +601,94 @@ const allSuppliers = computed(() => {
   return result;
 });
 
-// Collect all unique payment methods, delivery times, installment plans from companies on this page
+// Only show company filter if there are multiple companies
+const hasCompanyFilter = computed(() => allSuppliers.value.length > 1);
+
+// Collect payment methods per product, only show options that differ between products
 const allPaymentMethods = computed(() => {
-  const seen = new Set();
-  const result = [];
+  const pmPerProduct = new Map(); // product_id -> Set<payment_method_names>
   for (const p of products.value) {
     if (!p.company_id) continue;
     const settings = companySettingsMap.value[p.company_id];
-    if (!settings) continue;
-    for (const pm of settings.payment_methods) {
-      if (!seen.has(pm.name)) {
-        seen.add(pm.name);
-        result.push(pm.name);
-      }
+    if (!settings || !Array.isArray(settings.payment_methods)) continue;
+    pmPerProduct.set(p.id, new Set(settings.payment_methods.map(pm => pm.name)));
+  }
+  
+  // Find payment methods that are not common to ALL products (i.e., differ)
+  const allPms = new Map(); // pm_name -> count of products having it
+  for (const pms of pmPerProduct.values()) {
+    for (const pm of pms) {
+      allPms.set(pm, (allPms.get(pm) || 0) + 1);
     }
   }
-  return result;
+  
+  // Only show payment methods that some products have and others don't
+  const totalProducts = pmPerProduct.size;
+  const result = [];
+  for (const [pm, count] of allPms.entries()) {
+    if (count < totalProducts) {
+      result.push(pm);
+    }
+  }
+  return result.sort();
 });
 
+// Collect delivery times per product, only show options that differ between products
 const allDeliveryTimes = computed(() => {
-  const seen = new Set();
-  const result = [];
+  const dtPerProduct = new Map(); // product_id -> Set<delivery_time_names>
   for (const p of products.value) {
     if (!p.company_id) continue;
     const settings = companySettingsMap.value[p.company_id];
-    if (!settings) continue;
-    for (const dt of settings.delivery_times) {
-      if (!seen.has(dt.name)) {
-        seen.add(dt.name);
-        result.push(dt.name);
-      }
+    if (!settings || !Array.isArray(settings.delivery_times)) continue;
+    dtPerProduct.set(p.id, new Set(settings.delivery_times.map(dt => dt.name)));
+  }
+  
+  // Find delivery times that are not common to ALL products (i.e., differ)
+  const allDts = new Map(); // dt_name -> count of products having it
+  for (const dts of dtPerProduct.values()) {
+    for (const dt of dts) {
+      allDts.set(dt, (allDts.get(dt) || 0) + 1);
     }
   }
-  return result;
+  
+  // Only show delivery times that some products have and others don't
+  const totalProducts = dtPerProduct.size;
+  const result = [];
+  for (const [dt, count] of allDts.entries()) {
+    if (count < totalProducts) {
+      result.push(dt);
+    }
+  }
+  return result.sort();
 });
 
+// Collect installment plans per product, only show options that differ between products
 const allInstallmentPlans = computed(() => {
-  const seen = new Set();
-  const result = [];
+  const ipPerProduct = new Map(); // product_id -> Set<installment_plan_names>
   for (const p of products.value) {
     if (!p.company_id) continue;
     const settings = companySettingsMap.value[p.company_id];
-    if (!settings) continue;
-    for (const ip of settings.installment_plans) {
-      if (!seen.has(ip.name)) {
-        seen.add(ip.name);
-        result.push(ip.name);
-      }
+    if (!settings || !Array.isArray(settings.installment_plans)) continue;
+    ipPerProduct.set(p.id, new Set(settings.installment_plans.map(ip => ip.name)));
+  }
+  
+  // Find installment plans that are not common to ALL products (i.e., differ)
+  const allIps = new Map(); // ip_name -> count of products having it
+  for (const ips of ipPerProduct.values()) {
+    for (const ip of ips) {
+      allIps.set(ip, (allIps.get(ip) || 0) + 1);
     }
   }
-  return result;
+  
+  // Only show installment plans that some products have and others don't
+  const totalProducts = ipPerProduct.size;
+  const result = [];
+  for (const [ip, count] of allIps.entries()) {
+    if (count < totalProducts) {
+      result.push(ip);
+    }
+  }
+  return result.sort();
 });
 
 const currentImages = computed(() => {
@@ -595,6 +746,45 @@ const hasAnyInStock = computed(() => {
 
 // Convert []KeyValue to {key: value} map.
 const INTERNAL_ATTRS = ['product_url', 'purchase_url', 'shop_category'];
+
+// Attributes that differ across products (for display in tags)
+const differingAttributes = computed(() => {
+  const attrMap = {}; // { attrKey: Set<value> }
+  
+  for (const p of products.value) {
+    if (!p.attributes || !Array.isArray(p.attributes)) continue;
+    
+    for (const attr of p.attributes) {
+      if (!attr.key || !attr.value) continue;
+      if (INTERNAL_ATTRS.includes(attr.key)) continue;
+      if (attr.key.toLowerCase().includes('url')) continue;
+      if (String(attr.value).toLowerCase().startsWith('http')) continue;
+      
+      const key = attr.key;
+      const value = String(attr.value);
+      
+      if (!attrMap[key]) {
+        attrMap[key] = new Set();
+      }
+      attrMap[key].add(value);
+    }
+  }
+  
+  // Only keep attributes with multiple different values
+  const result = {};
+  for (const [key, values] of Object.entries(attrMap)) {
+    if (values.size > 1) {
+      result[key] = true;
+    }
+  }
+  
+  return result;
+});
+
+// Check if a specific attribute should be shown in tags (only if it differs)
+const shouldShowAttributeTag = (attrKey) => {
+  return differingAttributes.value[attrKey];
+};
 
 const normalizeAttrs = (attrs) => {
   if (!attrs) return {};
@@ -774,6 +964,32 @@ watch(
   },
   { deep: true }
 );
+
+// Check if any filters are active
+const hasActiveFilters = computed(() => {
+  return (
+    filterForm.companyFilters.length > 0 ||
+    filterForm.paymentMethodFilters.length > 0 ||
+    filterForm.deliveryTimeFilters.length > 0 ||
+    filterForm.installmentPlanFilters.length > 0 ||
+    filterForm.priceRange[0] !== priceRangeStats.value.min ||
+    filterForm.priceRange[1] !== priceRangeStats.value.max ||
+    Object.keys(filterForm.attributeFilters).some(key => 
+      filterForm.attributeFilters[key] && filterForm.attributeFilters[key].length > 0
+    )
+  );
+});
+
+// Clear all filters
+const clearAllFilters = () => {
+  filterForm.companyFilters = [];
+  filterForm.paymentMethodFilters = [];
+  filterForm.deliveryTimeFilters = [];
+  filterForm.installmentPlanFilters = [];
+  filterForm.attributeFilters = {};
+  const stats = priceRangeStats.value;
+  filterForm.priceRange = [stats.min, stats.max];
+};
 </script>
 
 <template>
@@ -1012,8 +1228,8 @@ watch(
       <!-- Bottom: offers wide + filters narrow on the right -->
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-        <!-- Where to buy (offers) — wide (~10 cols) -->
-        <div v-if="modifications.length > 0" class="lg:col-span-10 bg-surface rounded-2xl shadow-sm border border-line overflow-hidden">
+        <!-- Where to buy (offers) — wide (~9 cols) -->
+        <div class="lg:col-span-9 bg-surface rounded-2xl shadow-sm border border-line overflow-hidden">
           <div class="px-4 py-3 border-b border-line">
             <h3 class="font-semibold text-ink">
               {{ t('eanpage.where_to_buy_base') }} ({{ filteredOfferCount }} {{ offersPlural }})
@@ -1021,20 +1237,20 @@ watch(
           </div>
           <fieldset class="m-0 p-0 border-0 min-w-0">
             <legend class="sr-only">{{ t('eanpage.where_to_buy_base') }}</legend>
-            <div class="divide-y divide-line max-h-[400px] overflow-y-auto">
+            <div class="divide-y divide-line">
             <template v-for="(mod, modIdx) in modifications" :key="modIdx">
               <!-- Modification header -->
-              <div v-if="modifications.length > 1" class="px-4 py-2 bg-surface-2 text-xs font-medium text-ink-2">
-                {{ mod.name }}
+              <div v-if="modifications.length > 1" class="px-4 py-2.5 bg-gradient-to-r from-surface-2 to-surface border-b border-line">
+                <div class="text-sm font-semibold text-ink">{{ mod.name }}</div>
               </div>
               <!-- Offers -->
               <label
                 v-for="product in mod.suppliers"
                 :key="product.id"
                 :class="[
-                  'flex items-start gap-4 px-4 py-3 cursor-pointer transition',
+                  'flex items-center gap-4 px-4 py-3.5 cursor-pointer transition group',
                   selectedProduct?.id === product.id
-                    ? 'bg-orange-50 border-l-4 border-orange-600 pl-3'
+                    ? 'bg-orange-50/80 dark:bg-orange-900/20 border-l-4 border-orange-600 pl-3'
                     : 'hover:bg-surface-2 border-l-4 border-transparent'
                 ]"
               >
@@ -1044,83 +1260,178 @@ watch(
                   :value="product.id"
                   :checked="selectedProduct?.id === product.id"
                   @change="selectProduct(product)"
-                  class="w-4 h-4 text-orange-600 border-line focus:ring-orange-500 flex-shrink-0 cursor-pointer mt-1"
+                  class="w-4 h-4 text-orange-600 border-line focus:ring-orange-500 flex-shrink-0 cursor-pointer mt-0.5"
                 />
-                <!-- Left: seller info -->
-                <div class="flex-shrink-0 w-36">
-                  <div class="text-xs font-medium text-ink">
+                <!-- Left: seller info with stock status -->
+                <div class="flex-shrink-0 w-40 min-w-0">
+                  <div class="text-sm font-semibold text-ink truncate" :title="getCompanyName(product)">
                     {{ getCompanyName(product) }}
                   </div>
-                  <span :class="isInStock(product) ? 'text-green-600' : 'text-red-600'" class="text-xs">
-                    {{ isInStock(product) ? t('catalog.in_stock') : t('catalog.out_of_stock') }}
-                  </span>
+                  <div class="flex items-center gap-1.5 mt-1">
+                    <span :class="isInStock(product) ? 'text-green-600 bg-green-50 dark:bg-green-900/20' : 'text-red-600 bg-red-50 dark:bg-red-900/20'" 
+                          class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium">
+                      <span :class="isInStock(product) ? 'before:content-[\'\\20\'] before:w-1.5 before:h-1.5 before:rounded-full before:bg-green-600 before:mr-1.5' : 'before:content-[\'\\20\'] before:w-1.5 before:h-1.5 before:rounded-full before:bg-red-600 before:mr-1.5'">
+                        {{ isInStock(product) ? t('catalog.in_stock') : t('catalog.out_of_stock') }}
+                      </span>
+                    </span>
+                  </div>
                 </div>
-                <!-- Middle: attributes in key-value columns -->
-                <div class="flex-shrink-0 w-48 text-xs text-ink-3">
+                <!-- Middle: attributes as badges/tags (only differing attributes) -->
+                <div class="flex-1 min-w-0">
                   <template v-if="product.attributes && product.attributes.length">
-                    <div class="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                      <template v-for="attr in product.attributes.filter(a => !INTERNAL_ATTRS.includes(a.key) && !a.key.toLowerCase().includes('url') && !a.value.toLowerCase().startsWith('http')).slice(0, 6)" :key="attr.key">
-                        <div class="truncate font-medium text-ink-2">{{ attr.key }}:</div>
-                        <div class="truncate">{{ attr.value }}</div>
+                    <div class="flex flex-wrap gap-1.5">
+                      <template v-for="attr in product.attributes.filter(a => !INTERNAL_ATTRS.includes(a.key) && !a.key.toLowerCase().includes('url') && !a.value.toLowerCase().startsWith('http') && shouldShowAttributeTag(a.key)).slice(0, 8)" :key="attr.key">
+                        <div class="inline-flex items-center gap-1 px-2 py-1 bg-surface-2 hover:bg-surface-3 rounded-md text-xs transition">
+                          <span class="font-medium text-ink-2">{{ attrLabel(attr.key) }}:</span>
+                          <span class="text-ink-3">{{ attr.value }}</span>
+                        </div>
                       </template>
                     </div>
                   </template>
+                  <!-- Description preview if available -->
+                  <div v-if="product.description" class="mt-2 text-xs text-ink-3 line-clamp-2">
+                    <div v-html="sanitizeHtml(product.description)" class="[&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4 [&>p]:my-0 [&>li]:my-0 [&>div]:my-0 [&>span]:my-0 [&>strong]:font-semibold"></div>
+                  </div>
                 </div>
-                <!-- Right: description (wide, multi-line) -->
-                <div v-if="product.description" class="flex-1 min-w-0 text-xs text-ink-3 leading-relaxed break-words">
-                  <div v-html="sanitizeHtml(product.description)" class="[&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4 [&>p]:my-0.5 [&>li]:my-0 [&>div]:my-0 [&>span]:my-0 [&>strong]:font-semibold"></div>
-                </div>
-                <!-- Far right: price -->
-                <div class="font-semibold text-orange-600 whitespace-nowrap text-sm flex-shrink-0 mt-1">
-                  {{ formatPrice(product.price, product.currency) }}
+                <!-- Far right: price with emphasis -->
+                <div class="flex-shrink-0 text-right">
+                  <div class="text-lg font-bold text-orange-600 whitespace-nowrap">
+                    {{ formatPrice(product.price, product.currency) }}
+                  </div>
+                  <div v-if="product.previous_price && product.previous_price > product.price" 
+                       class="text-xs text-ink-3 line-through mt-0.5">
+                    {{ formatPrice(product.previous_price, product.currency) }}
+                  </div>
                 </div>
               </label>
             </template>
+            <!-- Empty state when no products match filters -->
+            <div v-if="modifications.length === 0" class="px-4 py-8 text-center text-ink-3">
+              {{ t('eanpage.no_products_match_filters', 'No products match the selected filters') }}
+            </div>
             </div>
           </fieldset>
         </div>
 
-        <!-- Filters — narrow (~2 cols) -->
-        <div v-if="allSuppliers.length >= 1" class="lg:col-span-2 bg-surface rounded-2xl shadow-sm border border-line p-3 space-y-3 text-xs">
-          <!-- Companies -->
+        <!-- Filters — narrow (~3 cols) - show if there are multiple products -->
+        <div v-if="products.length > 1" class="lg:col-span-3 bg-surface rounded-2xl shadow-sm border border-line p-4 space-y-4 text-xs">
+          <!-- Price Range -->
           <div>
-            <div class="font-semibold text-ink-2 mb-1">{{ t('eanpage.filter_by_company') }}</div>
-            <div class="flex flex-col gap-1">
-              <label v-for="company in allSuppliers" :key="company" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
-                <input type="checkbox" :value="company" v-model="filterForm.companyFilters" class="rounded text-orange-600 focus:ring-orange-500" />
-                {{ company }}
+            <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_price', 'Price Range') }}</div>
+            <div class="flex items-center gap-2 mb-2">
+              <input 
+                type="number" 
+                v-model.number="filterForm.priceRange[0]" 
+                class="w-full px-2 py-1.5 bg-surface-2 border border-line rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                :placeholder="String(priceRangeStats.min)"
+                min="0"
+              />
+              <span class="text-ink-3">—</span>
+              <input 
+                type="number" 
+                v-model.number="filterForm.priceRange[1]" 
+                class="w-full px-2 py-1.5 bg-surface-2 border border-line rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                :placeholder="String(priceRangeStats.max)"
+                min="0"
+              />
+            </div>
+            <input 
+              type="range" 
+              v-model.number="filterForm.priceRange[0]" 
+              :min="priceRangeStats.min" 
+              :max="priceRangeStats.max" 
+              step="1"
+              class="w-full h-2 bg-surface-2 rounded-lg appearance-none cursor-pointer accent-orange-600"
+            />
+            <input 
+              type="range" 
+              v-model.number="filterForm.priceRange[1]" 
+              :min="priceRangeStats.min" 
+              :max="priceRangeStats.max" 
+              step="1"
+              class="w-full h-2 bg-surface-2 rounded-lg appearance-none cursor-pointer accent-orange-600 mt-2"
+            />
+            <div class="flex justify-between text-xs text-ink-3 mt-1">
+              <span>{{ formatPrice(priceRangeStats.min, defaultCurrency) }}</span>
+              <span>{{ formatPrice(priceRangeStats.max, defaultCurrency) }}</span>
+            </div>
+          </div>
+
+          <!-- Companies -->
+          <div v-if="hasCompanyFilter" class="border-t border-line pt-3">
+            <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_company') }}</div>
+            <div class="flex flex-col gap-1.5">
+              <label v-for="company in allSuppliers" :key="company" class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition">
+                <input type="checkbox" :value="company" v-model="filterForm.companyFilters" class="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-line" />
+                <span class="truncate">{{ company }}</span>
               </label>
             </div>
           </div>
 
-          <div v-if="allPaymentMethods.length > 0" class="border-t border-line pt-2">
-            <div class="font-semibold text-ink-2 mb-1">{{ t('eanpage.filter_by_payment') }}</div>
-            <div class="flex flex-col gap-1">
-              <label v-for="pm in allPaymentMethods" :key="pm" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
-                <input type="checkbox" :value="pm" v-model="filterForm.paymentMethodFilters" class="rounded text-orange-600 focus:ring-orange-500" />
+          <!-- Product Attributes -->
+          <div v-if="Object.keys(allProductAttributes).length > 0" class="border-t border-line pt-3">
+            <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_attributes', 'Product Attributes') }}</div>
+            <div class="space-y-3">
+              <div v-for="(attrData, attrKey) in allProductAttributes" :key="attrKey" class="space-y-1.5">
+                <div class="font-medium text-ink text-xs uppercase tracking-wide">{{ attrData.label }}</div>
+                <div class="flex flex-col gap-1">
+                  <label 
+                    v-for="value in attrData.values" 
+                    :key="attrKey + '_' + value" 
+                    class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition text-xs"
+                  >
+                    <input 
+                      type="checkbox" 
+                      :value="value" 
+                      :checked="isAttributeSelected(attrKey, value)"
+                      @change="toggleAttributeFilter(attrKey, value, $event.target.checked)"
+                      class="w-3.5 h-3.5 rounded text-orange-600 focus:ring-orange-500 border-line cursor-pointer" 
+                    />
+                    <span class="truncate">{{ value }}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="allPaymentMethods.length > 0" class="border-t border-line pt-3">
+            <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_payment') }}</div>
+            <div class="flex flex-col gap-1.5">
+              <label v-for="pm in allPaymentMethods" :key="pm" class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition">
+                <input type="checkbox" :value="pm" v-model="filterForm.paymentMethodFilters" class="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-line" />
                 {{ pm }}
               </label>
             </div>
           </div>
 
-          <div v-if="allDeliveryTimes.length > 0" class="border-t border-line pt-2">
-            <div class="font-semibold text-ink-2 mb-1">{{ t('eanpage.filter_by_delivery') }}</div>
-            <div class="flex flex-col gap-1">
-              <label v-for="dt in allDeliveryTimes" :key="dt" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
-                <input type="checkbox" :value="dt" v-model="filterForm.deliveryTimeFilters" class="rounded text-orange-600 focus:ring-orange-500" />
+          <div v-if="allDeliveryTimes.length > 0" class="border-t border-line pt-3">
+            <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_delivery') }}</div>
+            <div class="flex flex-col gap-1.5">
+              <label v-for="dt in allDeliveryTimes" :key="dt" class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition">
+                <input type="checkbox" :value="dt" v-model="filterForm.deliveryTimeFilters" class="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-line" />
                 {{ dt }}
               </label>
             </div>
           </div>
 
-          <div v-if="allInstallmentPlans.length > 0" class="border-t border-line pt-2">
-            <div class="font-semibold text-ink-2 mb-1">{{ t('eanpage.filter_by_installment') }}</div>
-            <div class="flex flex-col gap-1">
-              <label v-for="ip in allInstallmentPlans" :key="ip" class="inline-flex items-center gap-1.5 cursor-pointer text-ink-2">
-                <input type="checkbox" :value="ip" v-model="filterForm.installmentPlanFilters" class="rounded text-orange-600 focus:ring-orange-500" />
+          <div v-if="allInstallmentPlans.length > 0" class="border-t border-line pt-3">
+            <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_installment') }}</div>
+            <div class="flex flex-col gap-1.5">
+              <label v-for="ip in allInstallmentPlans" :key="ip" class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition">
+                <input type="checkbox" :value="ip" v-model="filterForm.installmentPlanFilters" class="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-line" />
                 {{ ip }}
               </label>
             </div>
+          </div>
+          
+          <!-- Clear All Filters -->
+          <div v-if="hasActiveFilters" class="border-t border-line pt-3">
+            <button 
+              @click="clearAllFilters"
+              class="w-full px-3 py-2 text-xs font-medium text-ink-2 bg-surface-2 hover:bg-surface-3 rounded-lg transition border border-line"
+            >
+              {{ t('eanpage.clear_filters', 'Clear All Filters') }}
+            </button>
           </div>
         </div>
       </div>

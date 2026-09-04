@@ -75,6 +75,7 @@
   },
   "pages": {
     "catalog_title": "Каталог товарів — wszyst.pl",
+    "home_title": "Wszyst.pl — порівнюємо ціни тисяч товарів",
     "product_title": "Товар — wszyst.pl",
     "cart_title": "Кошик — wszyst.pl",
     "checkout_title": "Оформлення замовлення — wszyst.pl",
@@ -181,6 +182,11 @@
     "loading_products": "Завантажуємо товари...",
     "view_grid": "Сітка",
     "view_list": "Список"
+  },
+  "home": {
+    "view_all": "Усі товари",
+    "scroll_left": "Попередні товари",
+    "scroll_right": "Наступні товари"
   },
   "company": {
     "not_found": "Компанію не знайдено",
@@ -571,6 +577,15 @@
     "home_hero_headline": "Заголовок",
     "home_hero_sub": "Підзаголовок",
     "home_hero_tagline": "Слоган",
+    "home_offers_title": "Пропозиції на головній",
+    "home_offers_hint": "Секції категорій зі випадковими товарами на головній сторінці. Порожній список — усі кореневі категорії у стандартному порядку.",
+    "home_offers_per_section": "Товарів у каруселі",
+    "home_offers_per_section_hint": "0 — за замовчуванням (12). Від 1 до 20.",
+    "home_offers_categories": "Категорії та порядок",
+    "home_offers_categories_hint": "Позначте категорії для головної; стрілки задають порядок показу. Непозначені категорії не показуються.",
+    "home_offers_no_categories": "Кореневих категорій із товарами поки немає.",
+    "home_offers_move_up": "Вище",
+    "home_offers_move_down": "Нижче",
     "name_required": "Вкажіть назву",
     "delete_item_confirm": "Видалити \"{name}\"?",
     "rebuild_indexes": "Перестроїти індекси",
