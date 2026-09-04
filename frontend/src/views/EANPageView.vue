@@ -1301,20 +1301,20 @@ const clearAllFilters = () => {
           <!-- Product Attributes -->
           <div v-if="Object.keys(allProductAttributes).length > 0" class="border-t border-line pt-3">
             <div class="font-semibold text-ink-2 mb-2">{{ t('eanpage.filter_by_attributes', 'Product Attributes') }}</div>
-            <div class="space-y-3">
+            <div class="space-y-3 max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full pr-1">
               <div v-for="(attrData, attrKey) in allProductAttributes" :key="attrKey" class="space-y-1.5">
-                <div class="font-medium text-ink">{{ attrData.label }}</div>
+                <div class="font-medium text-ink text-xs uppercase tracking-wide">{{ attrData.label }}</div>
                 <div class="flex flex-col gap-1">
                   <label 
                     v-for="value in attrData.values" 
-                    :key="value" 
+                    :key="attrKey + '_' + value" 
                     class="inline-flex items-center gap-2 cursor-pointer text-ink-2 hover:bg-surface-2 p-1 rounded transition text-xs"
                   >
                     <input 
                       type="checkbox" 
                       :value="value" 
                       v-model="filterForm.attributeFilters[attrKey]" 
-                      class="w-3.5 h-3.5 rounded text-orange-600 focus:ring-orange-500 border-line" 
+                      class="w-3.5 h-3.5 rounded text-orange-600 focus:ring-orange-500 border-line cursor-pointer" 
                     />
                     <span class="truncate">{{ value }}</span>
                   </label>
