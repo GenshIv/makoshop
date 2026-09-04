@@ -8,12 +8,13 @@ import SkeletonCard from '../components/SkeletonCard.vue';
 import ViewToggle from '../components/ViewToggle.vue';
 import EmptyState from '../components/EmptyState.vue';
 import BrandingSlot from '../components/BrandingSlot.vue';
+import HomeHero from '../components/HomeHero.vue';
 import { useAnimation } from '../composables/useAnimation';
 import { useBranding } from '../composables/useBranding';
 import { useSettings } from '../composables/useSettings';
 import { useBrandingStore } from '../stores/branding';
 
-const { defaultCurrency, homeHero } = useSettings();
+const { defaultCurrency } = useSettings();
 
 // Lazy-load EANPageView to avoid circular imports
 const EANPageView = defineAsyncComponent(() => import('../views/EANPageView.vue'));
@@ -70,7 +71,6 @@ onBeforeUnmount(() => {
 
 // Branding banner elements for this view (re-evaluated on route/store changes).
 const { useSlotElement } = useBranding();
-const homeBannerEl = useSlotElement('home_banner');
 const categoryBannerEl = useSlotElement('category_banner');
 
 // Current category object from API (with description)
@@ -956,17 +956,6 @@ const showHero = computed(() => {
   return !eanPageData.value && !filters.q && !currentCategory.value;
 });
 
-// Hero text: manual overrides from global settings (per locale, admin-managed)
-// with i18n fallback. Empty/missing fields fall back to the default text.
-const heroText = computed(() => {
-  const custom = homeHero.value?.[locale.value] || {};
-  return {
-    headline: custom.headline || t('catalog.hero_headline'),
-    sub: custom.sub || t('catalog.hero_sub'),
-    tagline: custom.tagline || t('catalog.hero_tagline'),
-  };
-});
-
 
 
 // Sync filters from route
@@ -1275,25 +1264,7 @@ defineOptions({ name: 'CatalogView' });
 
     <!-- Hero intro (home only). The branding banner (if resolved) is rendered
          without padding — the banner itself becomes the hero block. -->
-    <div
-      v-if="showHero"
-      class="hero-glow relative overflow-hidden rounded-2xl border border-line mb-6"
-      :class="homeBannerEl ? '' : 'bg-gradient-to-br from-accent/10 via-surface to-surface-2 py-10 sm:py-14 px-6 text-center'"
-    >
-      <!-- Branding: main page banner (home only) — fills the block edge-to-edge -->
-      <BrandingSlot v-if="homeBannerEl" slot-name="home_banner" />
-      <template v-else>
-        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-ink mb-4 leading-tight">
-          {{ heroText.headline }}
-        </h1>
-        <p class="text-lg sm:text-xl text-ink-2 max-w-2xl mx-auto mb-6 leading-relaxed">
-          {{ heroText.sub }}
-        </p>
-        <p class="inline-flex items-center gap-2 text-sm font-semibold text-accent bg-accent/10 px-4 py-2 rounded-full">
-          {{ heroText.tagline }}
-        </p>
-      </template>
-    </div>
+    <HomeHero v-if="showHero" />
 
     <!-- Root categories grid -->
     <div class="mb-4">

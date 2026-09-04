@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n';
 import api from '../../api';
 import { useToast } from '../../composables/useToast';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const { toast } = useToast();
 const router = useRouter();
 const route = useRoute();
@@ -18,6 +18,86 @@ const searchQuery = ref('');
 const loading = ref(false);
 const editing = ref(null); // { id, data }
 const deleteConfirm = ref(null);
+
+// Catalogizer modal state
+const catalogModal = ref(null); // { eanpage, results, loading }
+const categories = ref([]);
+const addTokenInputs = ref({});
+
+const catDisplayName = (cat) => {
+  if (!cat) return String(cat?.id || '');
+  const langField = `name_${locale.value}`;
+  return cat[langField] || cat.name_en || cat.name_ru || cat.name_ua || cat.name_pl || String(cat.id);
+};
+
+const fetchCategories = async () => {
+  try {
+    const res = await api.get('/admin/categories');
+    const data = res.data;
+    categories.value = Array.isArray(data) ? data : (data?.items || []);
+  } catch (e) {
+    console.error('Failed to fetch categories:', e);
+  }
+};
+
+const getCategoryById = (id) => categories.value.find(c => c.id === id);
+
+const openCatalogModal = async (sp) => {
+  catalogModal.value = { eanpage: sp, results: null, loading: true };
+  try {
+    const res = await api.post('/admin/catalogizer/test', { name: sp.title || sp.ean });
+    catalogModal.value.results = res.data;
+  } catch (e) {
+    console.error('Catalogizer test error:', e);
+    toast.error(t('admin.catalogizer_test_failed') || 'Test failed');
+  } finally {
+    catalogModal.value.loading = false;
+  }
+};
+
+const closeCatalogModal = () => {
+  catalogModal.value = null;
+};
+
+const updateAnchorKeywords = async (catId, newKeywords) => {
+  try {
+    await api.patch(`/admin/categories/${catId}`, { anchor_keywords: newKeywords });
+    await fetchCategories();
+    return true;
+  } catch (e) {
+    console.error('Failed to update anchor_keywords:', e);
+    toast.error(t('admin.catalogizer_update_failed') || 'Update failed');
+    return false;
+  }
+};
+
+const addTokenToCategory = async (catId, token) => {
+  const t = (token || '').trim().toLowerCase();
+  if (!t) return;
+  const cat = categories.value.find(c => c.id === catId);
+  if (!cat) return;
+  const current = cat.anchor_keywords || [];
+  if (current.includes(t)) return;
+  const updated = [...current, t].slice(0, 50);
+  await updateAnchorKeywords(catId, updated);
+};
+
+const removeTokenFromCategory = async (catId, token) => {
+  const cat = categories.value.find(c => c.id === catId);
+  if (!cat) return;
+  const current = cat.anchor_keywords || [];
+  const updated = current.filter(kw => kw !== token);
+  await updateAnchorKeywords(catId, updated);
+};
+
+const onAddTokenInput = (catId, event) => {
+  addTokenInputs.value[catId] = event.target.value;
+};
+
+const handleAddTokenEnter = (catId) => {
+  addTokenToCategory(catId, addTokenInputs.value[catId] || '');
+  addTokenInputs.value[catId] = '';
+};
 
 const fetchEANPages = async () => {
   loading.value = true;
@@ -128,7 +208,10 @@ watch(searchQuery, () => {
   }, 400);
 });
 
-onMounted(fetchEANPages);
+onMounted(() => {
+  fetchEANPages();
+  fetchCategories();
+});
 </script>
 
 <template>
@@ -202,6 +285,12 @@ onMounted(fetchEANPages);
                 </span>
               </td>
               <td class="px-4 py-2 space-x-2">
+                <button
+                  @click="openCatalogModal(sp)"
+                  class="text-purple-600 hover:text-purple-800 text-xs"
+                >
+                  {{ t('admin.catalogize') || 'Catalogize' }}
+                </button>
                 <button
                   @click="startEdit(sp)"
                   class="text-orange-600 hover:text-orange-800 text-xs"
@@ -388,6 +477,110 @@ onMounted(fetchEANPages);
             class="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
           >
             {{ t('common.delete') || 'Delete' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Catalogizer Modal -->
+    <div
+      v-if="catalogModal"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      @click.self="closeCatalogModal"
+    >
+      <div role="dialog" aria-modal="true" class="bg-surface rounded-lg shadow-xl p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <h2 class="text-xl font-bold mb-4 text-purple-700">
+          {{ t('admin.catalogizer_test_title') || 'Catalogize Product' }}
+        </h2>
+
+        <!-- Product info -->
+        <div class="mb-4 bg-surface-2 rounded-lg p-3">
+          <div class="text-sm font-medium text-ink-2">
+            {{ catalogModal.eanpage.title || catalogModal.eanpage.ean }}
+          </div>
+          <div class="text-xs text-ink-3">EAN: {{ catalogModal.eanpage.ean }}</div>
+        </div>
+
+        <!-- Loading -->
+        <div v-if="catalogModal.loading" class="flex justify-center py-8">
+          <div class="animate-spin h-6 w-6 border-4 border-purple-600 border-t-transparent rounded-full"></div>
+        </div>
+
+        <!-- Results -->
+        <div v-else-if="catalogModal.results">
+          <!-- Tokens -->
+          <div class="mb-3 text-sm text-ink-2">
+            <span class="font-medium">{{ t('admin.catalogizer_tokens') || 'Tokens' }}:</span>
+            {{ catalogModal.results.tokens?.join(', ') || '—' }}
+          </div>
+
+          <!-- No matches -->
+          <div v-if="!catalogModal.results.matches || catalogModal.results.matches.length === 0" class="text-sm text-ink-3">
+            {{ t('admin.catalogizer_no_matches') || 'No matches found. Add anchor keywords to relevant categories.' }}
+          </div>
+
+          <!-- Matches -->
+          <div v-else class="space-y-4">
+            <div
+              v-for="m in catalogModal.results.matches"
+              :key="m.NewCategoryID"
+              class="border rounded-lg p-3"
+            >
+              <div class="flex justify-between items-center mb-2">
+                <div>
+                  <span class="font-medium">{{ catDisplayName(getCategoryById(m.NewCategoryID)) || 'Cat #' + m.NewCategoryID }}</span>
+                  <span class="ml-2 text-xs text-ink-3">slug: {{ m.NewCategorySlug }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-semibold text-purple-700">Score: {{ m.Score }}</span>
+                  <span class="text-xs text-ink-3">{{ t('admin.catalogizer_matched') || 'matched' }}: {{ (m.MatchedTokens||[]).join(', ') }}</span>
+                </div>
+              </div>
+
+              <!-- Current anchor keywords -->
+              <div class="mb-2">
+                <div class="text-xs text-ink-3 mb-1">{{ t('admin.catalogizer_anchor_keywords') || 'Anchor keywords' }}:</div>
+                <div class="flex flex-wrap gap-1">
+                  <span
+                    v-for="kw in (getCategoryById(m.NewCategoryID)?.anchor_keywords||[])"
+                    :key="kw"
+                    class="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs"
+                  >
+                    {{ kw }}
+                    <button
+                      @click="removeTokenFromCategory(m.NewCategoryID, kw)"
+                      class="text-purple-500 hover:text-red-600 font-bold leading-none"
+                    >×</button>
+                  </span>
+                  <span v-if="!(getCategoryById(m.NewCategoryID)?.anchor_keywords||[]).length" class="text-xs text-ink-3">(none)</span>
+                </div>
+              </div>
+
+              <!-- Add token -->
+              <div class="flex gap-2">
+                <input
+                  type="text"
+                  :placeholder="t('admin.catalogizer_add_token') || 'Add token'"
+                  class="flex-1 px-2 py-1 text-xs border border-line rounded"
+                  :value="addTokenInputs[m.NewCategoryID] || ''"
+                  @input="onAddTokenInput(m.NewCategoryID, $event)"
+                  @keydown.enter="handleAddTokenEnter(m.NewCategoryID)"
+                />
+                <button
+                  @click="handleAddTokenEnter(m.NewCategoryID)"
+                  class="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                >+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 flex justify-end">
+          <button
+            @click="closeCatalogModal"
+            class="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+          >
+            {{ t('common.close') || 'Close' }}
           </button>
         </div>
       </div>

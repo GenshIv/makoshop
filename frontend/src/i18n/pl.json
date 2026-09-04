@@ -75,6 +75,7 @@
   },
   "pages": {
     "catalog_title": "Katalog produktów — wszyst.pl",
+    "home_title": "Wszyst.pl — porównujemy ceny tysięcy produktów",
     "product_title": "Produkt — wszyst.pl",
     "cart_title": "Koszyk — wszyst.pl",
     "checkout_title": "Realizacja zamówienia — wszyst.pl",
@@ -181,6 +182,11 @@
     "from_price_sellers": "{count} sprzedawców",
     "search_time": "Wyniki w {ms} ms",
     "filters": "Filtry"
+  },
+  "home": {
+    "view_all": "Wszystkie produkty",
+    "scroll_left": "Poprzednie produkty",
+    "scroll_right": "Następne produkty"
   },
   "company": {
     "not_found": "Nie znaleziono firmy",
@@ -572,6 +578,15 @@
     "home_hero_headline": "Nagłówek",
     "home_hero_sub": "Podtytuł",
     "home_hero_tagline": "Hasło",
+    "home_offers_title": "Oferty na stronie głównej",
+    "home_offers_hint": "Sekcje kategorii z losowymi produktami na stronie głównej. Pusta lista — wszystkie kategorie główne w domyślnej kolejności.",
+    "home_offers_per_section": "Produktów w karuzeli",
+    "home_offers_per_section_hint": "0 — domyślnie (12). Od 1 do 20.",
+    "home_offers_categories": "Kategorie i kolejność",
+    "home_offers_categories_hint": "Zaznacz kategorie dla strony głównej; strzałki ustalają kolejność. Niezaznaczone kategorie nie są pokazywane.",
+    "home_offers_no_categories": "Brak kategorii głównych z produktami.",
+    "home_offers_move_up": "W górę",
+    "home_offers_move_down": "W dół",
     "name_required": "Podaj nazwę",
     "slug_required": "Podaj slug",
     "delete_item_confirm": "Usunąć \"{name}\"?",
