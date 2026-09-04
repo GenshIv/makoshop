@@ -545,6 +545,54 @@ func normalizeHomeHero(raw map[string]interface{}) (map[string]map[string]string
 	return result, nil
 }
 
+// --- Home page offers (category sections) settings ---
+
+// homeOffersMaxSections caps the explicit category list length.
+const homeOffersMaxSectionsSetting = 16
+
+// normalizeHomeOffers validates the home offers payload:
+// category_ids — ordered list of root category ids (the order is the display
+// order of sections on the home page; empty means "all root categories in
+// sort_order"), per_section — carousel size per section (0 = default 12).
+func normalizeHomeOffers(raw map[string]interface{}) ([]int64, int, error) {
+	if raw == nil {
+		return nil, 0, nil
+	}
+
+	var ids []int64
+	if rawList, ok := raw["category_ids"].([]interface{}); ok {
+		seen := make(map[int64]struct{}, len(rawList))
+		for _, v := range rawList {
+			f, ok := v.(float64)
+			if !ok {
+				continue
+			}
+			id := int64(f)
+			if id <= 0 {
+				return nil, 0, fmt.Errorf("home_offers.category_ids: invalid id %d", id)
+			}
+			if _, dup := seen[id]; dup {
+				continue
+			}
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+			if len(ids) > homeOffersMaxSectionsSetting {
+				return nil, 0, fmt.Errorf("home_offers.category_ids: max %d categories", homeOffersMaxSectionsSetting)
+			}
+		}
+	}
+
+	perSection := 0
+	if f, ok := raw["per_section"].(float64); ok {
+		perSection = int(f)
+		if perSection < 0 || perSection > homeOffersMaxPerSection {
+			return nil, 0, fmt.Errorf("home_offers.per_section: must be between 0 and %d", homeOffersMaxPerSection)
+		}
+	}
+
+	return ids, perSection, nil
+}
+
 // HandleGlobalSettingsGet returns global settings including default currency.
 // GET /admin/settings
 func (h *Handlers) HandleGlobalSettingsGet(w http.ResponseWriter, r *http.Request) {
@@ -556,21 +604,27 @@ func (h *Handlers) HandleGlobalSettingsGet(w http.ResponseWriter, r *http.Reques
 	defaultCurrency := "PLN" // default currency
 	gaMeasurementID := ""    // Google Analytics measurement ID (empty = GA disabled)
 	homeHero := map[string]map[string]string{}
-	if h.Store != nil {
-		store := h.Store()
-		if val, err := store.DocGet("global_settings"); err == nil && len(val) > 0 {
-			var settings map[string]interface{}
-			if err := json.Unmarshal(val, &settings); err == nil {
-				if cur, ok := settings["default_currency"].(string); ok && cur != "" {
-					defaultCurrency = cur
+	homeOffers := map[string]interface{}{"category_ids": []int64{}, "per_section": 0}
+	if val, err := h.Store().DocGet("global_settings"); err == nil && len(val) > 0 {
+		var settings map[string]interface{}
+		if err := json.Unmarshal(val, &settings); err == nil {
+			if cur, ok := settings["default_currency"].(string); ok && cur != "" {
+				defaultCurrency = cur
+			}
+			if ga, ok := settings["ga_measurement_id"].(string); ok {
+				gaMeasurementID = strings.TrimSpace(ga)
+			}
+			if raw, ok := settings["home_hero"].(map[string]interface{}); ok {
+				if hh, err := normalizeHomeHero(raw); err == nil {
+					homeHero = hh
 				}
-				if ga, ok := settings["ga_measurement_id"].(string); ok {
-					gaMeasurementID = strings.TrimSpace(ga)
-				}
-				if raw, ok := settings["home_hero"].(map[string]interface{}); ok {
-					if hh, err := normalizeHomeHero(raw); err == nil {
-						homeHero = hh
+			}
+			if raw, ok := settings["home_offers"].(map[string]interface{}); ok {
+				if ids, perSection, err := normalizeHomeOffers(raw); err == nil {
+					if ids == nil {
+						ids = []int64{}
 					}
+					homeOffers = map[string]interface{}{"category_ids": ids, "per_section": perSection}
 				}
 			}
 		}
@@ -580,6 +634,7 @@ func (h *Handlers) HandleGlobalSettingsGet(w http.ResponseWriter, r *http.Reques
 		"default_currency":  defaultCurrency,
 		"ga_measurement_id": gaMeasurementID,
 		"home_hero":         homeHero,
+		"home_offers":       homeOffers,
 	})
 }
 
@@ -595,13 +650,9 @@ func (h *Handlers) HandleGlobalSettingsUpdate(w http.ResponseWriter, r *http.Req
 		DefaultCurrency string                 `json:"default_currency,omitempty"`
 		GaMeasurementID string                 `json:"ga_measurement_id"`
 		HomeHero        map[string]interface{} `json:"home_hero"`
+		HomeOffers      map[string]interface{} `json:"home_offers"`
 	}
 	if !httpres.ReadJSON(w, r, &req) {
-		return
-	}
-
-	if h.Store == nil {
-		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "store not available")
 		return
 	}
 
@@ -633,6 +684,23 @@ func (h *Handlers) HandleGlobalSettingsUpdate(w http.ResponseWriter, r *http.Req
 		settings["home_hero"] = hh
 	}
 
+	// Home page offers (category sections): ordered category list + carousel
+	// size. When provided, the payload is replaced wholesale.
+	if req.HomeOffers != nil {
+		ids, perSection, err := normalizeHomeOffers(req.HomeOffers)
+		if err != nil {
+			httpres.WriteError(w, http.StatusBadRequest, "INVALID_PARAM", err.Error())
+			return
+		}
+		if ids == nil {
+			ids = []int64{}
+		}
+		settings["home_offers"] = map[string]interface{}{
+			"category_ids": ids,
+			"per_section":  perSection,
+		}
+	}
+
 	// Save
 	data, err := json.Marshal(settings)
 	if err != nil {
@@ -649,5 +717,6 @@ func (h *Handlers) HandleGlobalSettingsUpdate(w http.ResponseWriter, r *http.Req
 		"default_currency":  settings["default_currency"],
 		"ga_measurement_id": settings["ga_measurement_id"],
 		"home_hero":         settings["home_hero"],
+		"home_offers":       settings["home_offers"],
 	})
 }

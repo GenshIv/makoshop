@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -104,11 +105,18 @@ func NewHandlers(store *db.Store) *Handlers {
 	// Attach EANPageRepo to CategoryRepo for filtering public tree
 	categoryRepo.SetEANPageRepo(eanPageRepo)
 
-	// Build precomputed category tree JSONs at startup. Must run AFTER
-	// SetEANPageRepo so the public tree is filtered to categories that have
-	// EAN pages (directly or via descendants). Rebuilding before this would
-	// produce an unfiltered tree because eanPageRepo is still nil.
-	categoryRepo.RebuildTrees()
+	// Refresh the precomputed category tree JSONs in the background. The
+	// persisted trees are authoritative (every category mutation rewrites
+	// them), so requests serve the stored JSON immediately; this pass only
+	// heals a tree left stale by a crash mid-mutation. The filter probes
+	// per-category catalog sort indexes (no EAN page documents are loaded),
+	// but it still touches thousands of small reads — it must not delay the
+	// listener.
+	go func() {
+		start := time.Now()
+		categoryRepo.RebuildTrees()
+		fmt.Printf("[STARTUP] category trees refreshed in background: %v\n", time.Since(start))
+	}()
 
 	// EANPage search (catalog works on EAN pages)
 	eanPageSearch := db.NewEANPageSearch(store.DB(), eanPageRepo, productRepo, categoryRepo, turboEnabled)

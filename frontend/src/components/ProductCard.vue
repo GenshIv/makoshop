@@ -2,8 +2,11 @@
 import { computed, ref, onBeforeUnmount } from 'vue';
 import { useI18n } from 'vue-i18n';
 import PriceSparkline from './PriceSparkline.vue';
+import { useAuthStore } from '../stores/auth';
+import api from '../api';
 
 const { t } = useI18n();
+const auth = useAuthStore();
 
 const props = defineProps({
   product: { type: Object, required: true },
@@ -16,6 +19,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['click']);
+
+const isAdmin = computed(() => auth.role === 'admin');
 
 // Image fade / wake-on-hover logic (purely visual)
 const isImageActive = ref(false);
@@ -95,6 +100,117 @@ const attrsString = computed(() => {
     .map((a) => a.value)
     .join(' · ');
 });
+
+// Catalogizer modal state
+const catalogModal = ref(null);
+const addTokenInputs = ref({});
+const categories = ref([]);
+const selectedCategorySlug = ref('');
+const categorySearch = ref('');
+const training = ref(false);
+
+const fetchCategories = async () => {
+  try {
+    const res = await api.get('/admin/categories');
+    const data = res.data;
+    categories.value = Array.isArray(data) ? data : (data?.items || []);
+  } catch (e) {
+    console.error('Failed to fetch categories:', e);
+  }
+};
+
+const getCategoryBySlug = (slug) => {
+  return categories.value.find(c => c.slug === slug.trim());
+};
+
+const trainCatalogizer = async () => {
+  training.value = true;
+  try {
+    await api.post('/admin/catalogizer/train');
+    openCatalogModal();
+  } catch (e) {
+    console.error('Train error:', e);
+  } finally {
+    training.value = false;
+  }
+};
+
+const addTokenToSelectedCategory = async () => {
+  const cat = getCategoryBySlug(selectedCategorySlug.value);
+  if (!cat) {
+    console.error('Category not found:', selectedCategorySlug.value);
+    return;
+  }
+  const token = (categorySearch.value || '').trim().toLowerCase();
+  if (!token) return;
+  try {
+    // Fetch current keywords and append new one
+    const res = await api.get(`/admin/categories/${cat.id}`);
+    const current = res.data.anchor_keywords || [];
+    if (current.includes(token)) return;
+    const updated = [...current, token];
+    await api.patch(`/admin/categories/${cat.id}`, { anchor_keywords: updated });
+    categorySearch.value = '';
+    openCatalogModal();
+  } catch (e) {
+    console.error('Failed to add token:', e);
+  }
+};
+
+const openCatalogModal = async () => {
+  const name = props.product.title || props.product.name || '';
+  if (!name) return;
+  catalogModal.value = { loading: true, results: null };
+  await fetchCategories();
+  try {
+    const res = await api.post('/admin/catalogizer/test', { name });
+    catalogModal.value.results = res.data;
+  } catch (e) {
+    console.error('Catalogizer test error:', e);
+  } finally {
+    catalogModal.value.loading = false;
+  }
+};
+
+const closeCatalogModal = () => {
+  catalogModal.value = null;
+};
+
+const addTokenToCategory = async (catId, token) => {
+  const t = (token || '').trim().toLowerCase();
+  if (!t) return;
+  try {
+    const res = await api.get(`/admin/categories/${catId}`);
+    const current = res.data.anchor_keywords || [];
+    if (current.includes(t)) return;
+    const updated = [...current, t];
+    await api.patch(`/admin/categories/${catId}`, { anchor_keywords: updated });
+    openCatalogModal();
+  } catch (e) {
+    console.error('Failed to add token:', e);
+  }
+};
+
+const removeTokenFromCategory = async (catId, token) => {
+  try {
+    const res = await api.get(`/admin/categories/${catId}`);
+    const current = res.data.anchor_keywords || [];
+    const updated = current.filter(kw => kw !== token);
+    await api.patch(`/admin/categories/${catId}`, { anchor_keywords: updated });
+    openCatalogModal();
+  } catch (e) {
+    console.error('Failed to remove token:', e);
+  }
+};
+
+const onAddTokenInput = (catId, event) => {
+  addTokenInputs.value[catId] = event.target.value;
+};
+
+const handleAddTokenEnter = (catId) => {
+  addTokenToCategory(catId, addTokenInputs.value[catId] || '');
+  addTokenInputs.value[catId] = '';
+};
 </script>
 
 <template>
@@ -120,10 +236,20 @@ const attrsString = computed(() => {
     </span>
     <span
       v-if="product.product_count && product.product_count > 1"
-      class="absolute top-2 right-2 z-10 bg-accent text-white text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
+      class="absolute top-2 right-8 z-10 bg-accent text-white text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
     >
       {{ product.product_count }}
     </span>
+
+    <!-- Admin catalogize button -->
+    <button
+      v-if="isAdmin"
+      class="absolute top-2 right-2 z-20 bg-purple-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs hover:bg-purple-700 transition-colors shadow-sm"
+      @click.stop="openCatalogModal"
+      title="Catalogize"
+    >
+      🏷
+    </button>
 
     <!-- Image -->
     <div
@@ -251,6 +377,16 @@ const attrsString = computed(() => {
         </span>
       </div>
 
+      <!-- Admin catalogize button -->
+      <button
+        v-if="isAdmin"
+        class="absolute top-2 right-2 z-20 bg-purple-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs hover:bg-purple-700 transition-colors shadow-sm"
+        @click.stop="openCatalogModal"
+        title="Catalogize"
+      >
+        🏷
+      </button>
+
       <!-- Info: 3 columns - attributes | description | price -->
       <div class="flex-1 min-w-0 flex flex-col">
         <h3 class="font-semibold text-sm text-ink line-clamp-2">{{ title }}</h3>
@@ -290,6 +426,136 @@ const attrsString = computed(() => {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Catalogizer Modal -->
+  <div
+    v-if="catalogModal"
+    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+    @click.self="closeCatalogModal"
+  >
+    <div role="dialog" aria-modal="true" class="bg-surface rounded-lg shadow-xl p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+      <h2 class="text-xl font-bold mb-4 text-purple-700">
+        {{ t('admin.catalogizer_test_title') || 'Catalogize Product' }}
+      </h2>
+
+      <div class="mb-4 bg-surface-2 rounded-lg p-3">
+        <div class="text-sm font-medium text-ink-2">
+          {{ props.product.title || props.product.name }}
+        </div>
+      </div>
+
+      <!-- Train button -->
+      <div class="mb-4">
+        <button
+          @click="trainCatalogizer"
+          :disabled="training"
+          class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {{ training ? 'Training...' : 'Train Catalogizer' }}
+        </button>
+      </div>
+
+      <!-- Add to custom category -->
+      <div class="mb-4 border border-line rounded-lg p-3">
+        <div class="text-xs font-medium text-ink-2 mb-2">Add keyword to any category</div>
+        <div class="flex gap-2 items-start">
+          <input
+            type="text"
+            v-model="selectedCategorySlug"
+            placeholder="Category slug (e.g. smartphones)"
+            class="flex-1 px-2 py-1.5 text-xs border border-line rounded"
+            @keydown.enter="addTokenToSelectedCategory"
+          />
+          <input
+            type="text"
+            v-model="categorySearch"
+            placeholder="Keyword"
+            class="w-32 px-2 py-1.5 text-xs border border-line rounded"
+            @keydown.enter="addTokenToSelectedCategory"
+          />
+          <button
+            @click="addTokenToSelectedCategory"
+            class="px-2 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+          >+</button>
+        </div>
+      </div>
+
+      <div v-if="catalogModal.loading" class="flex justify-center py-8">
+        <div class="animate-spin h-6 w-6 border-4 border-purple-600 border-t-transparent rounded-full"></div>
+      </div>
+
+      <div v-else-if="catalogModal.results">
+        <div class="mb-3 text-sm text-ink-2">
+          <span class="font-medium">{{ t('admin.catalogizer_tokens') || 'Tokens' }}:</span>
+          {{ catalogModal.results.tokens?.join(', ') || '—' }}
+        </div>
+
+        <div v-if="!catalogModal.results.matches || catalogModal.results.matches.length === 0" class="text-sm text-ink-3">
+          {{ t('admin.catalogizer_no_matches') || 'No matches found.' }}
+        </div>
+
+        <div v-else class="space-y-4">
+          <div
+            v-for="m in catalogModal.results.matches"
+            :key="m.NewCategoryID"
+            class="border rounded-lg p-3"
+          >
+            <div class="flex justify-between items-center mb-2">
+              <div>
+                <span class="font-medium">{{ m.NewCategorySlug }}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-purple-700">Score: {{ m.Score }}</span>
+                <span class="text-xs text-ink-3">{{ t('admin.catalogizer_matched') || 'matched' }}: {{ (m.MatchedTokens||[]).join(', ') }}</span>
+              </div>
+            </div>
+
+            <div class="mb-2">
+              <div class="text-xs text-ink-3 mb-1">{{ t('admin.catalogizer_anchor_keywords') || 'Anchor keywords' }}:</div>
+              <div class="flex flex-wrap gap-1">
+                <span
+                  v-for="kw in (m.anchor_keywords||[])"
+                  :key="kw"
+                  class="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs"
+                >
+                  {{ kw }}
+                  <button
+                    @click="removeTokenFromCategory(m.NewCategoryID, kw)"
+                    class="text-purple-500 hover:text-red-600 font-bold leading-none"
+                  >×</button>
+                </span>
+                <span v-if="!(m.anchor_keywords||[]).length" class="text-xs text-ink-3">(none)</span>
+              </div>
+            </div>
+
+            <div class="flex gap-2">
+              <input
+                type="text"
+                :placeholder="t('admin.catalogizer_add_token') || 'Add token'"
+                class="flex-1 px-2 py-1 text-xs border border-line rounded"
+                :value="addTokenInputs[m.NewCategoryID] || ''"
+                @input="onAddTokenInput(m.NewCategoryID, $event)"
+                @keydown.enter="handleAddTokenEnter(m.NewCategoryID)"
+              />
+              <button
+                @click="handleAddTokenEnter(m.NewCategoryID)"
+                class="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+              >+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-end">
+        <button
+          @click="closeCatalogModal"
+          class="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+        >
+          {{ t('common.close') || 'Close' }}
+        </button>
       </div>
     </div>
   </div>

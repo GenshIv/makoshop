@@ -286,6 +286,11 @@ func (d *Deps) shopSub(w http.ResponseWriter, r *http.Request) {
 	d.Handlers.HandleEANPageByPath(w, r)
 }
 
+// GET /home/offers — random category sections for the storefront home page
+func (d *Deps) homeOffers(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleHomeOffers(w, r)
+}
+
 // GET /attributes/{code}/values (turbo-based)
 func (d *Deps) attributeValues(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

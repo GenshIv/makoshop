@@ -719,6 +719,24 @@ func (h *Handlers) HandleAdminCatalogizerTest(w http.ResponseWriter, r *http.Req
 	// Get all matching categories
 	matches := h.catalogizer.MatchProductToCategories(body.Name)
 
+	// Enrich matches with anchor keywords for display
+	type enrichedMatch struct {
+		catalogizer.CatalogizeResult
+		AnchorKeywords []string `json:"anchor_keywords"`
+	}
+	var enrichedMatches []enrichedMatch
+	for _, m := range matches {
+		cat, err := h.categoryRepo.Get(m.NewCategoryID)
+		if err == nil && cat != nil {
+			enrichedMatches = append(enrichedMatches, enrichedMatch{
+				CatalogizeResult: m,
+				AnchorKeywords:   cat.AnchorKeywords,
+			})
+		} else {
+			enrichedMatches = append(enrichedMatches, enrichedMatch{CatalogizeResult: m})
+		}
+	}
+
 	// Get product tokens for display
 	tokens := catalogizer.TokenizeName(body.Name)
 	tokenWords := make([]string, len(tokens))
@@ -729,8 +747,8 @@ func (h *Handlers) HandleAdminCatalogizerTest(w http.ResponseWriter, r *http.Req
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"name":        body.Name,
 		"tokens":      tokenWords,
-		"matches":     matches,
-		"match_count": len(matches),
+		"matches":     enrichedMatches,
+		"match_count": len(enrichedMatches),
 	})
 }
 
@@ -824,10 +842,10 @@ func (h *Handlers) HandleAdminEANPageCatalogizeAll(w http.ResponseWriter, r *htt
 				newCatID = matches[0].NewCategoryID
 			}
 
-			// Compute SEO URL with shared cache
-			cacheMu.RLock()
+			// Compute SEO URL with shared cache (write lock because ComputeSeoURL writes to cache)
+			cacheMu.Lock()
 			newUrl := h.eanPageRepo.ComputeSeoURL(sp.Slug, sp.CategoryID, catCache)
-			cacheMu.RUnlock()
+			cacheMu.Unlock()
 
 			if (newCatID > 0 && newCatID != sp.CategoryID) || newUrl != sp.SeoURL {
 				sp.SeoURL = newUrl

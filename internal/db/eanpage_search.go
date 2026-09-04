@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
@@ -989,6 +990,61 @@ func (s *EANPageSearch) ListWithTurbo(params EANPageListParams) (*EANPageListRes
 		Page:  params.Page,
 		Limit: params.Limit,
 	}, nil
+}
+
+// RandomByCategory returns up to `limit` random EAN pages of a category
+// (including its whole subtree — per-category sort indexes are built for
+// every ancestor) plus the total number of pages in the category (for the
+// UI badge). Cheap randomness: read a random window from the existing
+// eanpage_sort:{catID}:price_asc index instead of a dedicated random index.
+func (s *EANPageSearch) RandomByCategory(catID int64, limit int) ([]silentjson.RawMessage, int, error) {
+	if !s.enabled {
+		return nil, 0, fmt.Errorf("eanpage search is disabled")
+	}
+	if limit < 1 {
+		limit = 12
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	// First probe: page size 1 just to learn the total.
+	probe, err := s.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
+		Name: eanpageSortKey(catID, eanpageSortTypePriceAsc),
+		Page: 0,
+		// Minimal read: docs are fetched again in the random window below.
+		PageSize: 1,
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("turbo sort probe: %w", err)
+	}
+	total := int(probe.Total)
+	if total == 0 {
+		return nil, 0, nil
+	}
+
+	// Random window: a page of `limit` docs starting at page*limit. Any page
+	// whose start is < total is valid; the turbo layer clips the final
+	// partial window to the end of the index, so every doc can appear.
+	pages := (total + limit - 1) / limit
+	res, err := s.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
+		Name:     eanpageSortKey(catID, eanpageSortTypePriceAsc),
+		Page:     rand.Intn(pages),
+		PageSize: limit,
+	})
+	if err != nil {
+		return nil, total, fmt.Errorf("turbo sort page with docs: %w", err)
+	}
+
+	items := make([]silentjson.RawMessage, 0, len(res.Docs))
+	for _, doc := range res.Docs {
+		if doc != nil && len(doc) > 0 {
+			items = append(items, silentjson.RawMessage(doc))
+		}
+	}
+	// Shuffle so items within the window are not price-ordered.
+	rand.Shuffle(len(items), func(i, j int) { items[i], items[j] = items[j], items[i] })
+	return items, total, nil
 }
 
 // ---------- helpers ----------
