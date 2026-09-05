@@ -67,6 +67,58 @@ func NewStore(cfg config.DatabaseConfig) (*Store, error) {
 	return s, nil
 }
 
+func (s *Store) Warmup(progress func(stage string, count int)) {
+	if progress != nil {
+		progress("start", 0)
+	}
+
+	type indexInfo struct {
+		name   string
+		prefix string
+	}
+
+	indexes := []indexInfo{
+		{"eanpage_list", "eanpage:"},
+		{"product_list", "product:"},
+		{"cat_list:", "category:"},
+		{"cat_active:", "category:"},
+		{"company_list:", "company:"},
+		{"user_list:", "user:"},
+		{"order_list:", "order:"},
+		{"review_list:", "review:"},
+		{"comment_list:", "comment:"},
+		{"brand_set_list", "brand_set:"},
+		{"attrdef_list", "attrdef:"},
+		{"landing_list", "landing:"},
+	}
+
+	totalDocs := 0
+	for _, idx := range indexes {
+		tokens, err := s.db.TurboGetIndexTokens(idx.name)
+		if err != nil || len(tokens) == 0 {
+			continue
+		}
+
+		if progress != nil {
+			progress("index:"+idx.name, len(tokens))
+		}
+
+		// Multi-get all documents for this index
+		docs, err := s.db.MultiGetByDocIDs(tokens)
+		if err == nil {
+			totalDocs += len(docs)
+		}
+
+		if progress != nil {
+			progress("docs:"+idx.name, totalDocs)
+		}
+	}
+
+	if progress != nil {
+		progress("complete", totalDocs)
+	}
+}
+
 func (s *Store) Close() error {
 	return s.db.Close()
 }

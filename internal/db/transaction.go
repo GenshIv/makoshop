@@ -194,6 +194,23 @@ func (t *Transaction) DocPut(key string, value []byte) error {
 	return nil
 }
 
+// DocGetBuffered returns the buffered value for a document key written earlier
+// in this transaction (read-your-writes). Returns ("", false) when the key was
+// not written in this transaction; committed state must be read separately.
+func (t *Transaction) DocGetBuffered(key string) ([]byte, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.finished {
+		return nil, false
+	}
+	if _, deleted := t.docDeletes[key]; deleted {
+		return nil, true
+	}
+	val, ok := t.docPuts[key]
+	return val, ok
+}
+
 // TurboWrite buffers a turbo index write.
 func (t *Transaction) TurboWrite(key string, value []byte) error {
 	t.mu.Lock()

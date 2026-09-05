@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { useI18n } from 'vue-i18n';
 import api from '../../api';
 import { useFormat } from '../../composables/useFormat';
@@ -90,11 +90,9 @@ const changePassword = async () => {
 };
 
 const rebuildEndpoints = {
-  counts: '/admin/rebuild-product-counts',
-  sort: '/admin/rebuild-sort-indexes',
-  eanpage: '/admin/rebuild-eanpage-indexes',
-  attrdef: '/admin/rebuild-attrdef-indexes',
-  all: '/admin/eanpages/catalogize-all',
+  reindex: '/admin/reindex',
+  recatalogize: '/admin/eanpages/recatalogize',
+  compact: '/admin/compact',
 };
 
 const deleteAllLoading = ref(false);
@@ -107,12 +105,36 @@ const askRebuild = (key) => {
 
 const rebuildLabel = (key) => {
   return {
-    counts: t('admin.rebuild_product_counts'),
-    sort: t('admin.rebuild_sort_indexes'),
-    eanpage: t('admin.rebuild_eanpage_indexes'),
-    attrdef: t('admin.rebuild_attrdef_indexes'),
-    all: t('admin.rebuild_all_eanpage_indexes'),
+    reindex: t('admin.reindex_button'),
+    recatalogize: t('admin.recatalogize_button'),
+    compact: t('admin.compact_button'),
   }[key];
+};
+
+// Live progress for the async maintenance job (polls /admin/import-progress).
+const jobProgress = ref(null); // snapshot while running
+let progressTimer = null;
+
+const pollProgress = async () => {
+  try {
+    const res = await api.get('/admin/import-progress');
+    const snap = res.data;
+    if (snap?.running) {
+      jobProgress.value = snap;
+    } else if (jobProgress.value) {
+      jobProgress.value = null;
+      systemLoading.value = null;
+      toast.success(t('admin.rebuild_completed', { name: t('admin.maintenance_job') }));
+      return; // stop polling
+    } else {
+      return;
+    }
+    progressTimer = setTimeout(pollProgress, 1500);
+  } catch (e) {
+    console.error('progress poll error:', e);
+    jobProgress.value = null;
+    systemLoading.value = null;
+  }
 };
 
 const runRebuild = async (key) => {
@@ -120,17 +142,20 @@ const runRebuild = async (key) => {
   systemLoading.value = key;
   try {
     const endpoint = rebuildEndpoints[key];
-    const body = key === 'all' ? { apply: true, force: true } : undefined;
-    await api.post(endpoint, body);
-    toast.success(t('admin.rebuild_completed', { name: rebuildLabel(key) }));
+    await api.post(endpoint);
+    toast.success(t('admin.job_started'));
+    pollProgress();
   } catch (e) {
     console.error('rebuild error:', e);
+    systemLoading.value = null;
     const err = e.response?.data?.message || e.message;
     toast.error(t('admin.rebuild_failed', { error: err }));
-  } finally {
-    systemLoading.value = null;
   }
 };
+
+onBeforeUnmount(() => {
+  if (progressTimer) clearTimeout(progressTimer);
+});
 
 const deleteAllKey = ref(null);
 
@@ -217,48 +242,53 @@ onMounted(() => {
         </span>
       </div>
 
-      <!-- System rebuild buttons -->
+      <!-- System maintenance buttons -->
       <div class="mb-6">
         <div class="text-sm font-medium text-ink-2 mb-2">{{ t('admin.system_title') }}</div>
         <div class="flex flex-wrap gap-2">
           <button
-            @click="askRebuild('counts')"
+            @click="askRebuild('reindex')"
             :disabled="systemLoading !== null"
             class="px-3 py-1.5 text-xs rounded-md border border-line bg-surface hover:bg-surface-2 disabled:opacity-50"
           >
-            {{ systemLoading === 'counts' ? '...' : t('admin.rebuild_product_counts') }}
+            {{ systemLoading === 'reindex' ? '...' : t('admin.reindex_button') }}
           </button>
           <button
-            @click="askRebuild('sort')"
-            :disabled="systemLoading !== null"
-            class="px-3 py-1.5 text-xs rounded-md border border-line bg-surface hover:bg-surface-2 disabled:opacity-50"
-          >
-            {{ systemLoading === 'sort' ? '...' : t('admin.rebuild_sort_indexes') }}
-          </button>
-          <button
-            @click="askRebuild('eanpage')"
-            :disabled="systemLoading !== null"
-            class="px-3 py-1.5 text-xs rounded-md border border-line bg-surface hover:bg-surface-2 disabled:opacity-50"
-          >
-            {{ systemLoading === 'eanpage' ? '...' : t('admin.rebuild_eanpage_indexes') }}
-          </button>
-          <button
-            @click="askRebuild('attrdef')"
-            :disabled="systemLoading !== null"
-            class="px-3 py-1.5 text-xs rounded-md border border-line bg-surface hover:bg-surface-2 disabled:opacity-50"
-          >
-            {{ systemLoading === 'attrdef' ? '...' : t('admin.rebuild_attrdef_indexes') }}
-          </button>
-          <button
-            @click="askRebuild('all')"
+            @click="askRebuild('recatalogize')"
             :disabled="systemLoading !== null"
             class="px-3 py-1.5 text-xs rounded-md border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-50"
           >
-            {{ systemLoading === 'all' ? '...' : t('admin.rebuild_all_eanpage_indexes') }}
+            {{ systemLoading === 'recatalogize' ? '...' : t('admin.recatalogize_button') }}
+          </button>
+          <button
+            @click="askRebuild('compact')"
+            :disabled="systemLoading !== null"
+            class="px-3 py-1.5 text-xs rounded-md border border-line bg-surface hover:bg-surface-2 disabled:opacity-50"
+          >
+            {{ systemLoading === 'compact' ? '...' : t('admin.compact_button') }}
           </button>
         </div>
         <div class="text-[11px] text-ink-3 mt-1">
           {{ t('admin.rebuild_hint') }}
+        </div>
+
+        <!-- Live job progress -->
+        <div v-if="jobProgress" class="mt-3 p-3 rounded-lg border border-purple-200 bg-purple-50 dark:bg-slate-800 dark:border-slate-700">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="animate-spin h-3.5 w-3.5 border-2 border-purple-600 border-t-transparent rounded-full"></div>
+            <span class="text-xs font-semibold text-purple-700 dark:text-purple-300">
+              {{ t('admin.maintenance_job') }}
+            </span>
+            <span class="text-xs text-ink-3">{{ jobProgress.status }}</span>
+          </div>
+          <div
+            v-for="c in jobProgress.companies || []"
+            :key="c.index"
+            class="text-[11px] text-ink-2"
+          >
+            {{ c.index }}/{{ jobProgress.total_companies }} · {{ c.name }} · {{ c.step }} ·
+            <span :class="c.status === 'failed' ? 'text-red-600' : ''">{{ c.status }}</span>
+          </div>
         </div>
       </div>
 

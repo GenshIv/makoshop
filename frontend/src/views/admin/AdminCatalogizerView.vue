@@ -91,7 +91,7 @@ const importCategories = async () => {
   input.click();
 };
 
-// EAN Page catalogize all (TurboTopNByIntersection)
+// EAN Page recatalogize (part 3 pipeline job; async with server-side progress)
 const catalogizeAllOpen = ref(false);
 
 const askCatalogizeAll = () => {
@@ -103,13 +103,11 @@ const runCatalogizeAll = async () => {
   running.value = true;
 
   try {
-    const res = await api.post('/admin/eanpages/catalogize-all', {
-      apply: true,
-    });
-    addLog(`Catalogize all complete: processed=${res.data.processed}, catalogized=${res.data.catalogized}`);
-    toast.success(t('admin.catalogizer_catalogize_all_done', { count: res.data.catalogized }));
+    await api.post('/admin/eanpages/recatalogize');
+    addLog('Recatalogize started in the background (progress: System section on the Dashboard).');
+    toast.success(t('admin.job_started'));
   } catch (e) {
-    console.error('Catalogize all error:', e);
+    console.error('Recatalogize error:', e);
     toast.error(t('admin.catalogizer_catalogize_all_failed'));
   } finally {
     running.value = false;

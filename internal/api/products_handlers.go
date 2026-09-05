@@ -456,18 +456,6 @@ func (h *Handlers) HandleProductDelete(w http.ResponseWriter, r *http.Request) {
 
 // ================= Cart handlers =================
 
-// HandleCartCreate creates a new cart.
-// POST /cart
-// Body: {"user_id": <optional>, "session_id": "<optional>"}
-
-func (h *Handlers) HandleAdminProductsReindex(w http.ResponseWriter, r *http.Request) {
-	if err := h.productRepo.ReindexAll(); err != nil {
-		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
-		return
-	}
-	httpres.WriteJSON(w, http.StatusOK, map[string]string{"status": "reindex completed"})
-}
-
 // HandleAdminProductsDeleteAll deletes all products and related indexes.
 // POST /admin/products/delete-all
 // WARNING: This is a destructive operation.

@@ -281,24 +281,6 @@ func (d *Deps) adminProductsImport(w http.ResponseWriter, r *http.Request) {
 
 // --- Admin Rebuild endpoints ---
 
-// POST /admin/rebuild-sort-indexes — rebuild all sort indexes from products
-func (d *Deps) adminRebuildSortIndexes(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
-		d.Handlers.HandleAdminRebuildSortIndexes(w, r)
-		return
-	}
-	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-}
-
-// POST /admin/rebuild-eanpages — rebuild all EAN pages from products
-func (d *Deps) adminRebuildEANPages(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
-		d.Handlers.HandleAdminRebuildEANPages(w, r)
-		return
-	}
-	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-}
-
 // POST /admin/rebuild-category-trees — rebuild precomputed category tree JSONs
 func (d *Deps) adminRebuildCategoryTrees(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
@@ -317,55 +299,31 @@ func (d *Deps) adminDebugCategoryCounts(w http.ResponseWriter, r *http.Request) 
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 }
 
-// POST /admin/rebuild-eanpage-indexes — index all EAN pages into EANPageSearch
-func (d *Deps) adminRebuildEANPageIndexes(w http.ResponseWriter, r *http.Request) {
+// POST /admin/reindex — part 2: global index rebuild (sort indexes, counts,
+// min prices, trees). Async, progress via GET /admin/import-progress.
+func (d *Deps) adminReindex(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
-		d.Handlers.HandleAdminRebuildEANPageIndexes(w, r)
+		d.Handlers.HandleAdminReindex(w, r)
 		return
 	}
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 }
 
-// POST /admin/rebuild-eanpage-sort-indexes — rebuild sort indexes for EAN pages
-func (d *Deps) adminRebuildEANPageSortIndexes(w http.ResponseWriter, r *http.Request) {
+// POST /admin/compact — compact all shards (reclaim dead bytes). Async.
+func (d *Deps) adminCompact(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
-		d.Handlers.HandleAdminRebuildEANPageSortIndexes(w, r)
+		d.Handlers.HandleAdminCompact(w, r)
 		return
 	}
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 }
 
-// POST /admin/rebuild-product-counts — recalculate ProductCount for all EAN pages
-func (d *Deps) adminRebuildProductCounts(w http.ResponseWriter, r *http.Request) {
+// POST /admin/eanpages/recatalogize — part 3: verify-and-repair pass over all
+// products/pages with manual recatalogization. Async, progress via
+// GET /admin/import-progress.
+func (d *Deps) adminEANPageRecatalogize(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
-		d.Handlers.HandleAdminRebuildProductCounts(w, r)
-		return
-	}
-	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-}
-
-// POST /admin/rebuild-category-slugs — rebuild slugs for all categories
-func (d *Deps) adminRebuildCategorySlugs(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
-		d.Handlers.HandleAdminRebuildCategorySlugs(w, r)
-		return
-	}
-	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-}
-
-// POST /admin/rebuild-category-indexes — rebuild all category turbo indexes
-func (d *Deps) adminRebuildCategoryIndexes(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
-		d.Handlers.HandleAdminRebuildCategoryIndexes(w, r)
-		return
-	}
-	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-}
-
-// POST /admin/rebuild-attrdef-indexes — rebuild attrdef cat_codes indexes
-func (d *Deps) adminRebuildAttrDefIndexes(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
-		d.Handlers.HandleAdminRebuildAttrDefIndexes(w, r)
+		d.Handlers.HandleAdminEANPageRecatalogize(w, r)
 		return
 	}
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -747,40 +705,8 @@ func (d *Deps) adminEANPages(w http.ResponseWriter, r *http.Request) {
 	d.Handlers.HandleAdminEANPageList(w, r)
 }
 
-// GET/PATCH/DELETE /admin/eanpages/{id} plus special rebuild/recalculate routes
+// GET/PATCH/DELETE /admin/eanpages/{id}
 func (d *Deps) adminEANPage(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Path
-
-	// POST /admin/eanpages/catalogize-all
-	if path == "/admin/eanpages/catalogize-all" && r.Method == http.MethodPost {
-		d.Handlers.HandleAdminEANPageCatalogizeAll(w, r)
-		return
-	}
-
-	// POST /admin/eanpages/rebuild-tokens
-	if path == "/admin/eanpages/rebuild-tokens" && r.Method == http.MethodPost {
-		d.Handlers.HandleAdminEANPageRebuildTokens(w, r)
-		return
-	}
-
-	// POST /admin/eanpages/rebuild-tokens/{id}
-	if strings.HasPrefix(path, "/admin/eanpages/rebuild-tokens/") && r.Method == http.MethodPost {
-		d.Handlers.HandleAdminEANPageRebuildToken(w, r)
-		return
-	}
-
-	// POST /admin/eanpages/recalculate-product-counts
-	if path == "/admin/eanpages/recalculate-product-counts" && r.Method == http.MethodPost {
-		d.Handlers.HandleAdminEANPageRecalculateCounts(w, r)
-		return
-	}
-
-	// POST /admin/eanpages/recalculate-min-prices
-	if path == "/admin/eanpages/recalculate-min-prices" && r.Method == http.MethodPost {
-		d.Handlers.HandleAdminEANPageRecalculateMinPrices(w, r)
-		return
-	}
-
 	switch r.Method {
 	case http.MethodGet:
 		d.Handlers.HandleAdminEANPageGet(w, r)
@@ -794,15 +720,6 @@ func (d *Deps) adminEANPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Products ---
-
-// POST /admin/products/reindex — rebuild all product indexes (admin only)
-func (d *Deps) adminProductsReindex(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	d.Handlers.HandleAdminProductsReindex(w, r)
-}
 
 // POST /admin/products/delete-all — delete all products (admin only, destructive)
 func (d *Deps) adminProductsDeleteAll(w http.ResponseWriter, r *http.Request) {

@@ -157,18 +157,13 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	// --- Admin Field Map (Allegro feed field codes -> attribute names) ---
 	mux.Handle("/admin/field-map/default", d.JWT.RequireRole(http.HandlerFunc(d.adminFieldMapDefault), model.RoleAdmin))
 
-	// --- Admin Rebuild endpoints ---
+	// --- Admin maintenance (import pipeline parts 2 and 3) ---
 
-	mux.Handle("/admin/rebuild-sort-indexes", d.JWT.RequireRole(http.HandlerFunc(d.adminRebuildSortIndexes), model.RoleAdmin))
-	mux.Handle("/admin/rebuild-eanpages", d.JWT.RequireRole(http.HandlerFunc(d.adminRebuildEANPages), model.RoleAdmin))
+	mux.Handle("/admin/reindex", d.JWT.RequireRole(http.HandlerFunc(d.adminReindex), model.RoleAdmin))
+	mux.Handle("/admin/compact", d.JWT.RequireRole(http.HandlerFunc(d.adminCompact), model.RoleAdmin))
+	mux.Handle("/admin/eanpages/recatalogize", d.JWT.RequireRole(http.HandlerFunc(d.adminEANPageRecatalogize), model.RoleAdmin))
 	mux.Handle("/admin/rebuild-category-trees", d.JWT.RequireRole(http.HandlerFunc(d.adminRebuildCategoryTrees), model.RoleAdmin))
 	mux.Handle("/admin/debug-category-counts", d.JWT.RequireRole(http.HandlerFunc(d.adminDebugCategoryCounts), model.RoleAdmin))
-	mux.Handle("/admin/rebuild-eanpage-indexes", d.JWT.RequireRole(http.HandlerFunc(d.adminRebuildEANPageIndexes), model.RoleAdmin))
-	mux.Handle("/admin/rebuild-eanpage-sort-indexes", d.JWT.RequireRole(http.HandlerFunc(d.adminRebuildEANPageSortIndexes), model.RoleAdmin))
-	mux.Handle("/admin/rebuild-product-counts", d.JWT.RequireRole(http.HandlerFunc(d.adminRebuildProductCounts), model.RoleAdmin))
-	mux.Handle("/admin/rebuild-category-slugs", d.JWT.RequireRole(http.HandlerFunc(d.adminRebuildCategorySlugs), model.RoleAdmin))
-	mux.Handle("/admin/rebuild-category-indexes", d.JWT.RequireRole(http.HandlerFunc(d.adminRebuildCategoryIndexes), model.RoleAdmin))
-	mux.Handle("/admin/rebuild-attrdef-indexes", d.JWT.RequireRole(http.HandlerFunc(d.adminRebuildAttrDefIndexes), model.RoleAdmin))
 
 	// POST /admin/change-password — change current user's password (any authenticated user)
 	mux.Handle("/admin/change-password", d.JWT.RequireAuth(http.HandlerFunc(d.adminChangePassword)))
@@ -330,7 +325,6 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 
 	// --- Products ---
 
-	mux.Handle("/admin/products/reindex", d.JWT.RequireRole(http.HandlerFunc(d.adminProductsReindex), model.RoleAdmin))
 	mux.Handle("/admin/products/delete-all", d.JWT.RequireRole(http.HandlerFunc(d.adminProductsDeleteAll), model.RoleAdmin))
 	mux.Handle("/admin/delete-all", d.JWT.RequireRole(http.HandlerFunc(d.adminDeleteAll), model.RoleAdmin))
 	mux.HandleFunc("/products", d.products)

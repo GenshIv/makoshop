@@ -18,13 +18,11 @@ import (
 // EANPageSearch — turbo-поиск по посадочным страницам (EANPage).
 // Каталог и фильтрация работают по EANPage, не по товарам.
 type EANPageSearch struct {
-	db                 *makodb.ShardedDB
-	repo               *EANPageRepo
-	productRepo        *ProductRepo
-	categoryRepo       *CategoryRepo
-	companyRepo        *CompanyRepo
-	deliveryMethodRepo *DeliveryMethodRepo
-	enabled            bool
+	db           *makodb.ShardedDB
+	repo         *EANPageRepo
+	productRepo  *ProductRepo
+	categoryRepo *CategoryRepo
+	enabled      bool
 
 	// Cache for category descendants to avoid repeated expensive lookups.
 	// Key: catID, Value: []int64 of descendant IDs (not including catID itself).
@@ -32,8 +30,21 @@ type EANPageSearch struct {
 	descCache    map[int64][]int64
 	descCacheTTL time.Duration
 
+	// Cache for category ancestors (same TTL pattern). Indexing walks the
+	// ancestor chain for EVERY page — without the memo that is one category
+	// document read per tree level per page.
+	ancMu       sync.Mutex
+	ancCache    map[int64]ancCacheEntry
+	ancCacheTTL time.Duration
+
 	// Active transaction (nil if not in transaction)
 	txn *makodb.Transaction
+}
+
+// ancCacheEntry is a TTL-guarded ancestors cache entry.
+type ancCacheEntry struct {
+	ids []int64
+	at  time.Time
 }
 
 func NewEANPageSearch(db *makodb.ShardedDB, repo *EANPageRepo, productRepo *ProductRepo, categoryRepo *CategoryRepo, enabled bool) *EANPageSearch {
@@ -45,14 +56,9 @@ func NewEANPageSearch(db *makodb.ShardedDB, repo *EANPageRepo, productRepo *Prod
 		enabled:      enabled,
 		descCache:    make(map[int64][]int64),
 		descCacheTTL: 5 * time.Minute,
+		ancCache:     make(map[int64]ancCacheEntry),
+		ancCacheTTL:  5 * time.Minute,
 	}
-}
-
-// SetCompanyDeliveryRepos attaches company and delivery method repositories
-// required by RecalculateDeliveryMethods (used inside RebuildAllIndexes).
-func (s *EANPageSearch) SetCompanyDeliveryRepos(companyRepo *CompanyRepo, deliveryMethodRepo *DeliveryMethodRepo) {
-	s.companyRepo = companyRepo
-	s.deliveryMethodRepo = deliveryMethodRepo
 }
 
 // SetTransaction sets the active transaction for this search.
@@ -218,6 +224,7 @@ func (s *EANPageSearch) IndexEANPageBatchTx(txn *Transaction, pages []*model.EAN
 	if !s.enabled || len(pages) == 0 {
 		return nil
 	}
+	start := time.Now()
 
 	// Collect all indexes in memory
 	indexes := make(map[string][]string)
@@ -340,6 +347,9 @@ func (s *EANPageSearch) IndexEANPageBatchTx(txn *Transaction, pages []*model.EAN
 		buf, _ := json.Marshal(existing)
 		_ = txn.TurboWrite(key, buf)
 	}
+
+	fmt.Printf("[EANPAGE] IndexEANPageBatchTx: %d pages indexed in %v (%d index keys)\n",
+		len(pages), time.Since(start), len(indexes))
 
 	return nil
 }
@@ -588,7 +598,13 @@ func (s *EANPageSearch) BuildSortIndexes() error {
 	start := time.Now().Unix()
 	fmt.Println("[EANPAGE] Building sort indexes per category...")
 
-	all, err := s.repo.List()
+	// Load pages in batches: the engine paginates the eanpage_list index
+	// directly (offset/limit), each batch is fetched and unmarshalled here.
+	var all []model.EANPage
+	err := s.repo.ForEachEANPageBatch(50000, func(pages []model.EANPage) error {
+		all = append(all, pages...)
+		return nil
+	})
 	if err != nil {
 		return fmt.Errorf("list eanpages: %w", err)
 	}
@@ -641,7 +657,21 @@ func (s *EANPageSearch) BuildSortIndexes() error {
 		}
 	}
 
-	// Build sort indexes for each category
+	// Build sort indexes for each category. All sort-index writes are
+	// buffered in one transaction and committed at the end: the rebuild is
+	// atomic — running out of database space mid-way rolls back instead of
+	// leaving half-written indexes and dead bytes behind.
+	txn := NewTransaction(s.repo.Store)
+	if err := txn.Begin(); err != nil {
+		return fmt.Errorf("begin sort index transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed && !txn.IsFinished() {
+			_ = txn.Abort()
+		}
+	}()
+
 	for catID, entries := range catPricesAsc {
 		if len(entries) == 0 {
 			continue
@@ -658,8 +688,8 @@ func (s *EANPageSearch) BuildSortIndexes() error {
 		for i, e := range entries {
 			docIDsAsc[i] = e.docID
 		}
-		if err := s.db.TurboPutSortIndexString(eanpageSortKey(catID, eanpageSortTypePriceAsc), docIDsAsc); err != nil {
-			fmt.Printf("WARN: sort index %s: %v\n", eanpageSortKey(catID, eanpageSortTypePriceAsc), err)
+		if err := txn.TurboPutSortIndexString(eanpageSortKey(catID, eanpageSortTypePriceAsc), docIDsAsc); err != nil {
+			return fmt.Errorf("sort index %s: %w", eanpageSortKey(catID, eanpageSortTypePriceAsc), err)
 		}
 
 		// Price desc
@@ -674,8 +704,8 @@ func (s *EANPageSearch) BuildSortIndexes() error {
 		for i, e := range entriesDesc {
 			docIDsDesc[i] = e.docID
 		}
-		if err := s.db.TurboPutSortIndexString(eanpageSortKey(catID, eanpageSortTypePriceDesc), docIDsDesc); err != nil {
-			fmt.Printf("WARN: sort index %s: %v\n", eanpageSortKey(catID, eanpageSortTypePriceDesc), err)
+		if err := txn.TurboPutSortIndexString(eanpageSortKey(catID, eanpageSortTypePriceDesc), docIDsDesc); err != nil {
+			return fmt.Errorf("sort index %s: %w", eanpageSortKey(catID, eanpageSortTypePriceDesc), err)
 		}
 
 		// Created at desc
@@ -690,8 +720,8 @@ func (s *EANPageSearch) BuildSortIndexes() error {
 		for i, e := range entriesTime {
 			docIDsTime[i] = e.docID
 		}
-		if err := s.db.TurboPutSortIndexString(eanpageSortKey(catID, eanpageSortTypeCreatedAtDesc), docIDsTime); err != nil {
-			fmt.Printf("WARN: sort index %s: %v\n", eanpageSortKey(catID, eanpageSortTypeCreatedAtDesc), err)
+		if err := txn.TurboPutSortIndexString(eanpageSortKey(catID, eanpageSortTypeCreatedAtDesc), docIDsTime); err != nil {
+			return fmt.Errorf("sort index %s: %w", eanpageSortKey(catID, eanpageSortTypeCreatedAtDesc), err)
 		}
 
 		// NumSort price index
@@ -699,6 +729,11 @@ func (s *EANPageSearch) BuildSortIndexes() error {
 			_, _ = s.db.TurboPutNumSortBatch(eanpageNumSortPriceKey(catID), pairs)
 		}
 	}
+
+	if err := txn.Commit(); err != nil {
+		return fmt.Errorf("commit sort indexes: %w", err)
+	}
+	committed = true
 
 	fmt.Printf("[EANPAGE] Sort indexes built: %d pages, %d categories, %v\n", len(all), len(catPricesAsc), time.Since(time.Unix(start, 0)))
 	return nil
@@ -929,11 +964,10 @@ func (s *EANPageSearch) ListWithTurbo(params EANPageListParams) (*EANPageListRes
 				maxVal,
 				candidatesRaw,
 			)
-			if err == nil && priceRaw != nil && len(priceRaw) > 0 {
-				candidatesRaw = priceRaw
-			} else {
-				candidatesRaw = nil
+			if err != nil {
+				return nil, fmt.Errorf("turbo numSort intersect: %w", err)
 			}
+			candidatesRaw = priceRaw
 		} else {
 			// No other candidates: get price range directly from numSort index
 			priceRaw, err := s.db.TurboGetNumSortRangeRaw(
@@ -941,9 +975,15 @@ func (s *EANPageSearch) ListWithTurbo(params EANPageListParams) (*EANPageListRes
 				minVal,
 				maxVal,
 			)
-			if err == nil && priceRaw != nil && len(priceRaw) > 0 {
-				candidatesRaw = priceRaw
+			if err != nil {
+				return nil, fmt.Errorf("turbo numSort range: %w", err)
 			}
+			candidatesRaw = priceRaw
+		}
+		// A price filter that matches nothing means an EMPTY result — never
+		// fall through with nil candidates (nil = "no filters" downstream).
+		if candidatesRaw == nil || len(candidatesRaw) == 0 {
+			return &EANPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}
 	}
 
@@ -1053,6 +1093,16 @@ func (s *EANPageSearch) getCategoryAncestors(catID int64) ([]int64, error) {
 	if catID == 0 {
 		return nil, nil
 	}
+
+	// Memoized: indexing walks the ancestor chain per page; without the cache
+	// that is one category document read per tree level per page.
+	s.ancMu.Lock()
+	if e, ok := s.ancCache[catID]; ok && time.Since(e.at) < s.ancCacheTTL {
+		s.ancMu.Unlock()
+		return e.ids, nil
+	}
+	s.ancMu.Unlock()
+
 	var ancestors []int64
 	current := catID
 	for current != 0 {
@@ -1063,6 +1113,10 @@ func (s *EANPageSearch) getCategoryAncestors(catID int64) ([]int64, error) {
 		}
 		current = *cat.ParentID
 	}
+
+	s.ancMu.Lock()
+	s.ancCache[catID] = ancCacheEntry{ids: ancestors, at: time.Now()}
+	s.ancMu.Unlock()
 	return ancestors, nil
 }
 
@@ -1123,11 +1177,7 @@ func (s *EANPageSearch) RebuildAllIndexes() error {
 	}
 
 	// Step 2 & 3: Stream all EANPage and accumulate indexes in batches
-	const batchSize = 5000
-	all, err := s.repo.List()
-	if err != nil {
-		return fmt.Errorf("list eanpages: %w", err)
-	}
+	const batchSize = 50000
 
 	// In-memory index accumulator
 	indexes := make(map[string][]string)
@@ -1147,55 +1197,63 @@ func (s *EANPageSearch) RebuildAllIndexes() error {
 		}
 	}
 
-	for i, sp := range all {
-		docIDKey := KeyEANPage(sp.ID)
+	processed := 0
+	err := s.repo.ForEachEANPageBatch(batchSize, func(batch []model.EANPage) error {
+		for _, sp := range batch {
+			docIDKey := KeyEANPage(sp.ID)
 
-		// Category union index for all ancestors.
-		if sp.CategoryID != 0 {
-			ancestors, err := s.getCategoryAncestors(sp.CategoryID)
-			if err != nil {
-				ancestors = []int64{sp.CategoryID}
-			}
-			for _, cid := range ancestors {
-				indexes[eanpageKeyCategoryUnion(cid)] = append(indexes[eanpageKeyCategoryUnion(cid)], docIDKey)
-			}
-		}
-
-		// Brand index
-		if sp.BrandID != 0 {
-			indexes[eanpageKeyBrand(sp.BrandID)] = append(indexes[eanpageKeyBrand(sp.BrandID)], docIDKey)
-		}
-
-		// Vendor index (min company ID among products with this EAN)
-		// For rebuild we approximate: use first product's company if available.
-		// In current model EANPage doesn't store companyID directly;
-		// vendor index is usually not critical for catalog.
-		// If needed, compute from products; for now skip to avoid heavy scan.
-
-		// Attributes index
-		for _, kv := range sp.Attributes {
-			valStr := kv.Value
-			if valStr != "" {
-				// Skip attribute values longer than 40 runes
-				if model.IsAttrValueTooLong(valStr) {
-					continue
+			// Category union index for all ancestors.
+			if sp.CategoryID != 0 {
+				ancestors, err := s.getCategoryAncestors(sp.CategoryID)
+				if err != nil {
+					ancestors = []int64{sp.CategoryID}
 				}
-				indexes[eanpageKeyAttr(kv.Key, valStr)] = append(indexes[eanpageKeyAttr(kv.Key, valStr)], docIDKey)
+				for _, cid := range ancestors {
+					indexes[eanpageKeyCategoryUnion(cid)] = append(indexes[eanpageKeyCategoryUnion(cid)], docIDKey)
+				}
 			}
-		}
 
-		// Text index
-		for _, tok := range tokenizeEANPage(&sp) {
-			indexes[eanpageKeyText(tok)] = append(indexes[eanpageKeyText(tok)], docIDKey)
-		}
+			// Brand index
+			if sp.BrandID != 0 {
+				indexes[eanpageKeyBrand(sp.BrandID)] = append(indexes[eanpageKeyBrand(sp.BrandID)], docIDKey)
+			}
 
-		if (i+1)%batchSize == 0 {
-			flushBatch()
-			fmt.Printf("[EANPAGE] RebuildAllIndexes: processed %d / %d\n", i+1, len(all))
+			// Vendor index (min company ID among products with this EAN)
+			// For rebuild we approximate: use first product's company if available.
+			// In current model EANPage doesn't store companyID directly;
+			// vendor index is usually not critical for catalog.
+			// If needed, compute from products; for now skip to avoid heavy scan.
+
+			// Attributes index
+			for _, kv := range sp.Attributes {
+				valStr := kv.Value
+				if valStr != "" {
+					// Skip attribute values longer than 40 runes
+					if model.IsAttrValueTooLong(valStr) {
+						continue
+					}
+					indexes[eanpageKeyAttr(kv.Key, valStr)] = append(indexes[eanpageKeyAttr(kv.Key, valStr)], docIDKey)
+				}
+			}
+
+			// Text index
+			for _, tok := range tokenizeEANPage(&sp) {
+				indexes[eanpageKeyText(tok)] = append(indexes[eanpageKeyText(tok)], docIDKey)
+			}
+
 		}
+		processed += len(batch)
+		if processed%(batchSize*10) == 0 {
+			fmt.Printf("[EANPAGE] RebuildAllIndexes: processed %d\n", processed)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("stream eanpages: %w", err)
 	}
 
-	// Flush remaining
+	// Single flush: every index key is written EXACTLY ONCE with its full
+	// content — no intermediate rewrites, no dead bytes.
 	flushBatch()
 
 	// Step 4: Rebuild sort/numSort indexes
@@ -1203,14 +1261,8 @@ func (s *EANPageSearch) RebuildAllIndexes() error {
 		fmt.Printf("WARN: rebuild sort indexes: %v\n", err)
 	}
 
-	// Step 5: Recalculate delivery_method attributes (from products' companies)
-	// This must happen after all EAN pages are indexed, so delivery_method
-	// indexes (eanpage_attr, attr_values_cat, attrdef_cat_codes) are correct.
-	if s.companyRepo != nil && s.deliveryMethodRepo != nil {
-		if err := s.RecalculateDeliveryMethods(s.companyRepo, s.deliveryMethodRepo); err != nil {
-			fmt.Printf("WARN: RecalculateDeliveryMethods in RebuildAllIndexes: %v\n", err)
-		}
-	}
+	// delivery_method is a regular page attribute since the import stamps it
+	// from company settings; it is indexed by the standard attribute path.
 
 	fmt.Printf("[EANPAGE] RebuildAllIndexes: done in %v\n", time.Since(time.Unix(start, 0)))
 	return nil
@@ -1326,206 +1378,7 @@ func (s *EANPageSearch) BuildAttrCodeIndexes() error {
 // set of delivery method slugs available for the products within each EAN page.
 const attrCodeDeliveryMethod = "delivery_method"
 
-// RecalculateDeliveryMethods computes the delivery_method attribute for all EAN
-// pages from their products' companies and rebuilds its turbo indexes.
-//
-// For each EAN page it resolves: products (by EAN) -> their companies ->
-// Company.DeliveryMethodIds -> deduplicated DeliveryMethod.Slug values, stores them
-// as a multi-value attribute on the page, then writes the full delivery_method
-// indexes in batch. The index content is built in memory as key -> docIDs and
-// written under the same keys (eanpage_attr:delivery_method:{slug} and
-// eanpage_attr_code:delivery_method), so makodb keeps it consistent.
-//
-// It also maintains the per-category filter indexes so the attribute shows up in
-// category filters: attr_values_cat:delivery_method:{catID} (value set) and
-// attrdef_cat_codes:{catID} (code registration for the category).
-func (s *EANPageSearch) RecalculateDeliveryMethods(companyRepo *CompanyRepo, dmRepo *DeliveryMethodRepo) error {
-	if !s.enabled || companyRepo == nil || dmRepo == nil {
-		return nil
-	}
-
-	start := time.Now().Unix()
-	fmt.Println("[EANPAGE] Recalculating delivery_method attributes...")
-
-	// companies: id -> delivery method ids
-	companies, err := companyRepo.List()
-	if err != nil {
-		return fmt.Errorf("list companies: %w", err)
-	}
-	companyDeliveryIDs := make(map[int64][]int64, len(companies))
-	for _, c := range companies {
-		if len(c.DeliveryMethodIds) > 0 {
-			companyDeliveryIDs[c.ID] = c.DeliveryMethodIds
-		}
-	}
-
-	// delivery methods: id -> slug
-	dms, err := dmRepo.List()
-	if err != nil {
-		return fmt.Errorf("list delivery methods: %w", err)
-	}
-	dmSlugByID := make(map[int64]string, len(dms))
-	for _, dm := range dms {
-		if dm.Slug != "" {
-			dmSlugByID[dm.ID] = dm.Slug
-		}
-	}
-
-	all, err := s.repo.List()
-	if err != nil {
-		return fmt.Errorf("list eanpages: %w", err)
-	}
-
-	// Full index content built in memory: key -> docIDs.
-	indexes := make(map[string][]string)
-	// Category filter indexes: catID -> set of delivery method slugs.
-	catSlugs := make(map[int64]map[string]struct{})
-
-	updated := 0
-	for i := range all {
-		sp := &all[i]
-		if sp.EAN == "" {
-			continue
-		}
-
-		// Products with this EAN via turbo index.
-		tokens, err := s.db.TurboGetIndexTokens("ean:" + sp.EAN)
-		if err != nil || len(tokens) == 0 {
-			continue
-		}
-		docs, err := s.db.MultiGetByDocIDs(tokens)
-		if err != nil || len(docs) == 0 {
-			continue
-		}
-
-		// Deduplicated delivery method slugs across all products' companies.
-		slugsSet := make(map[string]struct{})
-		for _, doc := range docs {
-			if len(doc) == 0 {
-				continue
-			}
-			p, err := UnmarshalProduct(doc)
-			if err != nil {
-				continue
-			}
-			for _, dmID := range companyDeliveryIDs[p.CompanyID] {
-				if slug, ok := dmSlugByID[dmID]; ok && slug != "" {
-					slugsSet[slug] = struct{}{}
-				}
-			}
-		}
-
-		docID := KeyEANPage(sp.ID)
-
-		// Rewrite the delivery_method attribute only when it changed.
-		if !sameStringSet(deliveryMethodSlugsOf(sp.Attributes), slugsSet) {
-			sp.Attributes = setDeliveryMethodAttr(sp.Attributes, slugsSet)
-			sp.UpdatedAt = time.Now().Unix()
-			data := MarshalEANPage(*sp)
-			if err := s.repo.Store.DocPut(docID, data); err != nil {
-				fmt.Printf("WARN: update delivery_method for eanpage %d: %v\n", sp.ID, err)
-				continue
-			}
-			updated++
-		}
-
-		// Accumulate index entries (full content per key).
-		if len(slugsSet) > 0 {
-			codeKey := eanpageKeyAttrCode(attrCodeDeliveryMethod)
-			indexes[codeKey] = append(indexes[codeKey], docID)
-			for slug := range slugsSet {
-				key := eanpageKeyAttr(attrCodeDeliveryMethod, slug)
-				indexes[key] = append(indexes[key], docID)
-			}
-
-			// Track values per own category for the filter UI.
-			if sp.CategoryID != 0 {
-				if catSlugs[sp.CategoryID] == nil {
-					catSlugs[sp.CategoryID] = make(map[string]struct{})
-				}
-				for slug := range slugsSet {
-					catSlugs[sp.CategoryID][slug] = struct{}{}
-				}
-			}
-		}
-
-		if (i+1)%10000 == 0 {
-			fmt.Printf("[EANPAGE] RecalculateDeliveryMethods: processed %d / %d (updated %d)\n", i+1, len(all), updated)
-		}
-	}
-
-	// Write all indexes in batch (one write per key with full content).
-	for key, docIDs := range indexes {
-		if len(docIDs) == 0 {
-			continue
-		}
-		if _, err := s.db.TurboPutBatchIndexString(key, docIDs); err != nil {
-			fmt.Printf("WARN: delivery_method index %s: %v\n", key, err)
-		}
-	}
-
-	// Update per-category filter indexes (same keys IndexEANPageBatch writes for
-	// other attributes), so delivery_method appears in category filters.
-	for catID, slugs := range catSlugs {
-		if len(slugs) == 0 {
-			continue
-		}
-
-		// Merge the value set into attr_values_cat:delivery_method:{catID}.
-		valuesKey := turboKeyAttrValuesCat + attrCodeDeliveryMethod + ":" + strconv.FormatInt(catID, 10)
-		existing, _ := s.db.TurboRawRead(valuesKey)
-		valuesSet := make(map[string]struct{}, len(slugs))
-		if len(existing) > 0 {
-			var m map[string]interface{}
-			if json.Unmarshal(existing, &m) == nil {
-				for v := range m {
-					valuesSet[v] = struct{}{}
-				}
-			}
-		}
-		for slug := range slugs {
-			valuesSet[slug] = struct{}{}
-		}
-		buf, err := json.Marshal(valuesSet)
-		if err != nil {
-			fmt.Printf("WARN: delivery_method attr_values_cat %d: %v\n", catID, err)
-			continue
-		}
-		if err := s.db.TurboRawWrite(valuesKey, buf); err != nil {
-			fmt.Printf("WARN: delivery_method attr_values_cat %d: %v\n", catID, err)
-			continue
-		}
-
-		// Register the code for this category (attrdef_cat_codes:{catID}).
-		codesKey := turboKeyAttrDefCatCodes + strconv.FormatInt(catID, 10)
-		data, _ := s.db.TurboRawRead(codesKey)
-		var codes []string
-		if len(data) > 0 {
-			json.Unmarshal(data, &codes)
-		}
-		found := false
-		for _, c := range codes {
-			if c == attrCodeDeliveryMethod {
-				found = true
-				break
-			}
-		}
-		if !found {
-			codes = append(codes, attrCodeDeliveryMethod)
-			buf, _ := json.Marshal(codes)
-			if err := s.db.TurboRawWrite(codesKey, buf); err != nil {
-				fmt.Printf("WARN: delivery_method attrdef_cat_codes %d: %v\n", catID, err)
-			}
-		}
-	}
-
-	elapsed := time.Since(time.Unix(start, 0))
-	fmt.Printf("[EANPAGE] RecalculateDeliveryMethods: done in %v. Updated %d pages, %d indexes.\n", elapsed, updated, len(indexes))
-	return nil
-}
-
-// deliveryMethodSlugsOf returns the set of delivery_method values stored on a page.
-func deliveryMethodSlugsOf(attrs []model.KeyValue) map[string]struct{} {
+func DeliveryMethodSlugsOf(attrs []model.KeyValue) map[string]struct{} {
 	set := make(map[string]struct{})
 	for _, kv := range attrs {
 		if kv.Key == attrCodeDeliveryMethod && kv.Value != "" {
@@ -1536,7 +1389,7 @@ func deliveryMethodSlugsOf(attrs []model.KeyValue) map[string]struct{} {
 }
 
 // setDeliveryMethodAttr returns attrs with the delivery_method entries replaced by slugs.
-func setDeliveryMethodAttr(attrs []model.KeyValue, slugs map[string]struct{}) []model.KeyValue {
+func SetDeliveryMethodAttr(attrs []model.KeyValue, slugs map[string]struct{}) []model.KeyValue {
 	result := make([]model.KeyValue, 0, len(attrs)+len(slugs))
 	for _, kv := range attrs {
 		if kv.Key == attrCodeDeliveryMethod {
@@ -1556,7 +1409,7 @@ func setDeliveryMethodAttr(attrs []model.KeyValue, slugs map[string]struct{}) []
 }
 
 // sameStringSet reports whether two string sets are equal.
-func sameStringSet(a, b map[string]struct{}) bool {
+func SameStringSet(a, b map[string]struct{}) bool {
 	if len(a) != len(b) {
 		return false
 	}

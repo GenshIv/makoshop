@@ -207,59 +207,89 @@ func (h *Handlers) correctCompanyFormat(company *model.Company, format string) {
 	}
 }
 
-// runGlobalRecalculation runs the company-independent (global) recalculations
-// exactly once, after all per-company imports have committed. These steps do
-// not depend on any single company, so running them per company (as the import
-// used to) was wasteful and re-did the same global work N times. Consolidating
-// them into one pass after the batch saves time and removes redundant work.
-//
-// If affectedEANPages is provided (non-empty), only those EAN pages are
-// recalculated for product counts and min prices. Otherwise, all pages are
-// recalculated (full rebuild).
-//
-// Steps (all non-transactional, operating on the committed data):
-//   - EAN page product counts (incremental if affectedEANPages provided)
-//   - EAN page min prices (incremental if affectedEANPages provided)
-//   - category trees
-//   - (sort indexes temporarily disabled — slow, needs optimization)
-func (h *Handlers) runGlobalRecalculation(affectedEANPages []int64) error {
-	if h.eanPageRepo != nil {
-		if len(affectedEANPages) > 0 {
-			fmt.Printf("[IMPORT] Incremental recalculation for %d affected EAN pages\n", len(affectedEANPages))
-			if err := h.eanPageRepo.RecalculateProductCountsForPages(affectedEANPages); err != nil {
-				return fmt.Errorf("recalculate product counts: %w", err)
-			}
-			if err := h.eanPageRepo.RecalculateMinPricesForPages(affectedEANPages, h.productRepo); err != nil {
-				return fmt.Errorf("recalculate min prices: %w", err)
-			}
-		} else {
-			fmt.Println("[IMPORT] Full recalculation for all EAN pages")
-			if err := h.eanPageRepo.RecalculateProductCounts(); err != nil {
-				return fmt.Errorf("recalculate product counts: %w", err)
-			}
-			if err := h.eanPageRepo.RecalculateMinPrices(h.productRepo); err != nil {
-				return fmt.Errorf("recalculate min prices: %w", err)
-			}
+// companyDeliverySlugs resolves a company's delivery method slugs — read ONCE
+// per company import from the company settings. The slugs are stamped on every
+// affected EAN page as the delivery_method attribute (a regular page
+// attribute) and indexed by the standard attribute path. Nothing else ever
+// recomputes delivery; changing a company's delivery settings means re-running
+// its product import.
+func (h *Handlers) companyDeliverySlugs(company *model.Company) []string {
+	if company == nil || h.deliveryMethodRepo == nil || len(company.DeliveryMethodIds) == 0 {
+		return nil
+	}
+	slugs := make([]string, 0, len(company.DeliveryMethodIds))
+	for _, dmID := range company.DeliveryMethodIds {
+		if dm, err := h.deliveryMethodRepo.Get(dmID); err == nil && dm != nil && dm.Slug != "" {
+			slugs = append(slugs, dm.Slug)
 		}
 	}
-	// Sort index rebuilding disabled temporarily — slow and needs optimization.
-	// Will be re-enabled after proper incremental approach is implemented.
-	// if h.turboSearch != nil {
-	// 	if err := h.turboSearch.BuildSortIndexes(); err != nil {
-	// 		return fmt.Errorf("build product sort indexes: %w", err)
-	// 	}
-	// }
+	return slugs
+}
+
+// buildProductPriceIndex merges all company price documents into one
+// productID -> price map: N small document loads instead of per-product
+// product reads when recalculating page min prices.
+func (h *Handlers) buildProductPriceIndex() map[int64]float64 {
+	prices := make(map[int64]float64)
+	if h.companyRepo == nil || h.productRepo == nil {
+		return prices
+	}
+	companies, err := h.companyRepo.List()
+	if err != nil {
+		fmt.Printf("[IMPORT] WARN: list companies for price index: %v\n", err)
+		return prices
+	}
+	for _, c := range companies {
+		doc, err := h.productRepo.LoadCompanyPrices(c.ID)
+		if err != nil || doc == nil {
+			continue
+		}
+		for id, price := range doc.Prices {
+			prices[id] = price
+		}
+	}
+	return prices
+}
+
+// runGlobalRecalculation is part 2 of the pipeline: the global rebuild run
+// ONCE per import batch (not per company). Counts and min prices for the
+// affected pages are recalculated in one pass from the company price
+// documents (no product document reads), then sort indexes are rebuilt from
+// the committed state, and category trees are refreshed.
+func (h *Handlers) runGlobalRecalculation(affectedEANPages []int64) error {
+	if h.eanPageRepo != nil {
+		pageIDs := affectedEANPages
+		if len(pageIDs) == 0 {
+			fmt.Println("[IMPORT] Full counts/min-price recalculation for all EAN pages")
+			ids, err := h.eanPageRepo.AllEANPageIDs()
+			if err != nil {
+				return fmt.Errorf("list eanpage ids: %w", err)
+			}
+			pageIDs = ids
+		} else {
+			fmt.Printf("[IMPORT] Incremental counts/min-price recalculation for %d affected EAN pages\n", len(pageIDs))
+		}
+		if err := h.eanPageRepo.RecalculateCountsAndMinPricesForPages(pageIDs, h.buildProductPriceIndex()); err != nil {
+			return fmt.Errorf("recalculate counts/min prices: %w", err)
+		}
+	}
+	if h.eanPageSearch != nil {
+		start := time.Now()
+		if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
+			return fmt.Errorf("build EAN page sort indexes: %w", err)
+		}
+		fmt.Printf("[IMPORT] EAN sort indexes rebuilt in %v\n", time.Since(start))
+	}
+	if h.turboSearch != nil {
+		start := time.Now()
+		if err := h.turboSearch.BuildSortIndexes(); err != nil {
+			return fmt.Errorf("build product sort indexes: %w", err)
+		}
+		fmt.Printf("[IMPORT] Product sort indexes rebuilt in %v\n", time.Since(start))
+	}
 	if h.categoryRepo != nil {
 		h.categoryRepo.RebuildTrees()
 	}
-	// if h.eanPageSearch != nil {
-	// 	if err := h.eanPageSearch.BuildSortIndexes(); err != nil {
-	// 		return fmt.Errorf("build EAN page sort indexes: %w", err)
-	// 	}
-	// 	if err := h.eanPageSearch.RecalculateDeliveryMethods(h.companyRepo, h.deliveryMethodRepo); err != nil {
-	// 		fmt.Printf("[IMPORT] WARN: recalculate delivery methods: %v\n", err)
-	// 	}
-	// }
 	return nil
 }
 
@@ -338,9 +368,26 @@ func (h *Handlers) HandleAdminImportUnified(w http.ResponseWriter, r *http.Reque
 
 	// Run the import in the background. The goroutine owns the import lock for
 	// the duration of the run and finalizes the progress tracker when done.
+	// The lock also serializes against shard compaction (compactInBackground
+	// holds it too): page upserts read zero-copy document views from shard
+	// mmaps, which a concurrent compaction would munmap.
 	go func() {
 		defer h.importMu.Unlock()
 		defer h.importProgress.Finish()
+
+		// Bulk import writes churn the mmap shards; auto-vacuum/compaction on
+		// the write path would run mid-import and slow every batch down.
+		// Pause it for the run, restore afterwards (deferred so it is restored
+		// even on early error returns), then reclaim the accumulated dead
+		// bytes with a full compaction (its goroutine takes the import lock
+		// and starts when we release it).
+		if h.store != nil {
+			h.store.DB().SetAutoVacuum(false)
+			defer func() {
+				h.store.DB().SetAutoVacuum(true)
+				h.compactInBackground()
+			}()
+		}
 
 		startTime := time.Now()
 		result := UnifiedImportResult{Status: "completed"}

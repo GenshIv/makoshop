@@ -68,9 +68,6 @@ type Handlers struct {
 	// Live progress tracker for batch price imports (read by
 	// /admin/import-progress). Created once, never reassigned.
 	importProgress *ImportProgress
-
-	// Catalogize lock to prevent concurrent catalogize operations
-	catalogizeMu sync.Mutex
 }
 
 // cachedCatAttrs holds precomputed attribute items for a category.
@@ -228,11 +225,6 @@ func (h *Handlers) SetCompanySettingsRepos(
 	h.deliveryTimeRepo = deliveryTimeRepo
 	h.deliveryMethodRepo = deliveryMethodRepo
 	h.installmentPlanRepo = installmentPlanRepo
-
-	// Also attach to EANPageSearch so RebuildAllIndexes can compute delivery_method attrs.
-	if h.eanPageSearch != nil {
-		h.eanPageSearch.SetCompanyDeliveryRepos(companyRepo, deliveryMethodRepo)
-	}
 }
 
 // InvalidateCatAttrsCache clears cached attrs for a category (called on attr/category changes).

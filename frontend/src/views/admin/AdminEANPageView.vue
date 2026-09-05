@@ -114,33 +114,6 @@ const fetchEANPages = async () => {
   }
 };
 
-const recalculateMinPrices = () => {
-  console.log('Recalculate button clicked! Function exists:', typeof recalculateMinPrices);
-  
-  if (!confirm('Recalculate min prices for all EAN pages? This may take a while.')) {
-    console.log('User cancelled');
-    return;
-  }
-  
-  console.log('Starting recalculation...');
-  const recalcLoading = ref(true);
-  
-  (async () => {
-    try {
-      console.log('Making API call to:', '/admin/eanpages/recalculate-min-prices');
-      const response = await api.post('/admin/eanpages/recalculate-min-prices');
-      console.log('API response:', response);
-      toast.success('Min prices recalculated successfully!');
-      await fetchEANPages();
-    } catch (e) {
-      console.error('Failed to recalculate min prices:', e);
-      toast.error('Failed to recalculate min prices');
-    } finally {
-      recalcLoading.value = false;
-    }
-  })();
-};
-
 const startEdit = (sp) => {
   editing.value = {
     id: sp.id,
@@ -219,12 +192,6 @@ onMounted(() => {
     <div class="flex justify-between items-center mb-6">
       <h1 class="text-2xl font-bold text-purple-700">{{ t('admin.eanpage_title') || 'EAN Pages' }}</h1>
       <div class="flex items-center gap-3">
-        <button
-          @click="recalculateMinPrices"
-          class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm"
-        >
-          Recalculate Min Prices
-        </button>
         <router-link
           to="/admin"
           class="text-sm text-ink-3 hover:text-purple-600"

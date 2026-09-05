@@ -75,7 +75,7 @@
   },
   "pages": {
     "catalog_title": "Katalog produktów — wszyst.pl",
-    "home_title": "Wszyst.pl — porównujemy ceny tysięcy produktów",
+    "home_title": "wszyst.pl — wszystko, czego szukasz, w jednym miejscu",
     "product_title": "Produkt — wszyst.pl",
     "cart_title": "Koszyk — wszyst.pl",
     "checkout_title": "Realizacja zamówienia — wszyst.pl",
@@ -97,8 +97,8 @@
     "admin_categories_title": "Kategorie — Panel administracyjny",
     "admin_analytics_title": "Analityka — Panel administracyjny",
     "admin_promo_title": "Promocje — Panel administracyjny",
-    "default_title": "wszyst.pl — Marketplace",
-    "default_description": "wszyst.pl — onlineowy katalog produktów od zaufanych sprzedawców. Porównuj ceny, czytaj opinie i kupuj z pewnością."
+    "default_title": "wszyst.pl — wszystko, czego szukasz, w jednym miejscu",
+    "default_description": "wszyst.pl — katalog online produktów od sprawdzonych sprzedawców. Wyszukiwarka, filtry i opinie pomogą znaleźć wszystko, czego szukasz — w jednym miejscu."
   },
   "auth": {
     "login": "Logowanie",
@@ -119,8 +119,8 @@
     "email": "Email"
   },
   "catalog": {
-    "hero_headline": "Wpadłeś tylko po to, żeby zerknąć na etui na telefon?",
-    "hero_sub": "Do zobaczenia za dwie godziny z nowym namiotem i zestawem garnków!",
+    "hero_headline": "Wszystko, czego szukasz — w jednym miejscu",
+    "hero_sub": "Produkty od sprawdzonych sprzedawców: wygodna wyszukiwarka, filtry i opinie pomogą Ci szybko znaleźć dokładnie to, czego potrzebujesz.",
     "hero_tagline": "wszyst.pl — mamy wszystko. Dosłownie wszystko.",
     "all_products": "Wszystkie produkty",
     "explore": "Odkrywaj",
@@ -543,6 +543,11 @@
     "rebuild_attrdef_indexes": "Przebuduj indeksy atrybutów",
     "rebuild_all_eanpage_indexes": "Przebuduj wszystkie indeksy EAN Pages",
     "rebuild_hint": "Te operacje mogą zająć trochę czasu i intensywnie używać CPU/IO. Rozważ włączenie trybu konserwacji.",
+    "reindex_button": "Przebudowa indeksów",
+    "compact_button": "Kompakcja bazy",
+    "recatalogize_button": "Rekatalogizacja i naprawa",
+    "maintenance_job": "Operacja w tle",
+    "job_started": "Operacja uruchomiona w tle; postęp pokazany poniżej",
     "rebuild_confirm": "Uruchomić \"{name}\"? To może zająć chwilę.",
     "rebuild_completed": "\"{name}\" zakończone.",
     "rebuild_failed": "Błąd: {error}",

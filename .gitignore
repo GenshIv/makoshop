@@ -18,3 +18,4 @@ Nothing should be ignored based on the provided file changes. The only modified 
 /loadtest/cmd/pprof_out/
 /makoshop_db.backup-20260902/
 /makoshop_db/
+/.zcode/

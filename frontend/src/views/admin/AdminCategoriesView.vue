@@ -325,24 +325,6 @@ const goToAttributes = (cat) => {
   router.push(`/admin/categories/${cat.id}/attributes`);
 };
 
-const rebuildOpen = ref(false);
-
-const askRebuild = () => {
-  rebuildOpen.value = true;
-};
-
-const rebuildIndexes = async () => {
-  rebuildOpen.value = false;
-  try {
-    const response = await api.post('/admin/rebuild-category-indexes?force=1');
-    toast.success(t('admin.rebuild_indexes_done', { result: JSON.stringify(response.data) }));
-    await fetchCategories();
-    await fetchTree();
-  } catch (e) {
-    toast.error(e.response?.data?.message || e.response?.data?.error?.message || t('admin.rebuild_indexes_failed'));
-  }
-};
-
 const handleKeydown = (e) => {
   if (e.key === 'Escape' && showForm.value) {
     resetForm();
@@ -369,9 +351,6 @@ watch(showForm, (val) => {
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold text-purple-700">{{ t('admin.categories_title') }}</h1>
       <div class="flex gap-2">
-        <button @click="askRebuild" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700">
-          {{ t('admin.rebuild_indexes') || 'Rebuild Indexes' }}
-        </button>
         <button @click="openNewCategoryForm" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
           {{ t('admin.add_category') }}
         </button>
@@ -631,16 +610,6 @@ watch(showForm, (val) => {
       :cancel-text="t('admin.cancel')"
       @confirm="deleteCategory(deleteCat)"
       @cancel="deleteCat = null"
-    />
-
-    <ConfirmDialog
-      :open="rebuildOpen"
-      :title="t('admin.categories_title')"
-      :message="t('admin.rebuild_indexes_confirm')"
-      :confirm-text="t('admin.save')"
-      :cancel-text="t('admin.cancel')"
-      @confirm="rebuildIndexes"
-      @cancel="rebuildOpen = false"
     />
   </div>
 </template>

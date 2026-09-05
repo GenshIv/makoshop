@@ -473,16 +473,22 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 		}
 	}
 
-	// Load company prices for change detection (before transaction)
+	// Load company prices for change detection (before transaction). The
+	// document is updated INCREMENTALLY during the import (created/changed/
+	// deleted products) and saved once after commit — no full product rescan.
 	priceDoc, err := h.productRepo.LoadCompanyPrices(company.ID)
 	if err != nil {
 		fmt.Printf("[IMPORT-NOKAUT] WARN: load company prices for %d: %v\n", company.ID, err)
 	}
-	var priceMap map[int64]float64
-	if priceDoc != nil {
-		priceMap = priceDoc.Prices
-		fmt.Printf("[IMPORT-NOKAUT] Loaded price document for company %d (%d prices)\n", company.ID, len(priceMap))
+	if priceDoc == nil {
+		priceDoc = &db.CompanyPricesDoc{Prices: make(map[int64]float64)}
+	} else {
+		fmt.Printf("[IMPORT-NOKAUT] Loaded price document for company %d (%d prices)\n", company.ID, len(priceDoc.Prices))
 	}
+
+	// Company delivery method slugs: read ONCE from the company settings;
+	// stamped on every affected EAN page as a regular attribute.
+	deliverySlugs := h.companyDeliverySlugs(company)
 
 	// ============================================
 	// Phase 1: Batch create/update products (IN TRANSACTION)
@@ -518,7 +524,7 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 
 			fmt.Printf("[IMPORT-NOKAUT] Phase 1: Processing batch %d-%d (%d products)...\n", i, end, len(batchProducts))
 
-			ids, isNewMap, err := h.productRepo.BatchGetOrCreateByEANTx(txn, batchProducts, batchNames, priceMap)
+			_, isNewMap, err := h.productRepo.BatchGetOrCreateByEANTx(txn, batchProducts, batchNames, priceDoc)
 			if err != nil {
 				fmt.Printf("[IMPORT-NOKAUT] WARN: BatchGetOrCreateByEANTx: %v\n", err)
 				result.ProductsSkipped += len(batchProducts)
@@ -534,20 +540,10 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 					h.importProgress.AddUpdated(1)
 				}
 
-				// For EANPage upsert we need the final product state.
-				// New products already have all fields; existing ones may have
-				// merged attributes, so fetch them.
-				var final *model.Product
-				if isNewMap[j] {
-					final = p
-				} else {
-					if prod, err := h.productRepo.Get(ids[j]); err == nil {
-						final = prod
-					} else {
-						final = p
-					}
-				}
-				allProducts = append(allProducts, final)
+				// For existing products BatchGetOrCreateByEANTx replaced the
+				// element with the merged stored product — p is already the
+				// final state, no re-Get needed.
+				allProducts = append(allProducts, p)
 			}
 		}
 	}
@@ -558,10 +554,12 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 	// ============================================
 	// Removes products for this company that are no longer in the price file.
 	// Runs before indexing so the vendor index still reflects pre-import state.
+	// GUARDED: a parse that produced zero products (bad download, broken feed)
+	// must NOT wipe the whole company — same rule as the json path.
 	h.importProgress.SetStep(StepCleanup)
-	if h.productRepo != nil {
+	if h.productRepo != nil && len(allParsedProducts) > 0 {
 		fmt.Printf("[IMPORT-NOKAUT] Phase 1.6: Cleaning up stale products for company %d...\n", company.ID)
-		deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, pricesrc.NormalizeName)
+		deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, pricesrc.NormalizeName, priceDoc)
 		result.ProductsDeleted = deleted
 		h.importProgress.SetDeleted(deleted)
 		fmt.Printf("[IMPORT-NOKAUT] Phase 1.6: deleted %d stale products\n", deleted)
@@ -601,8 +599,9 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 		fmt.Printf("[IMPORT-NOKAUT] WARN: load catalogizer cache: %v\n", err)
 	}
 
-	// Perform batch upsert within transaction
-	productToEANPage := h.eanPageRepo.BatchUpsertFromProductsTx(txn, allProducts)
+	// Perform batch upsert within transaction; affectedPages is the final
+	// in-memory state of every touched page (post merge/catalogize).
+	productToEANPage, affectedPages := h.eanPageRepo.BatchUpsertFromProductsTx(txn, allProducts, deliverySlugs)
 
 	// Collect affected EAN page IDs for incremental recalculation
 	if productToEANPage != nil {
@@ -616,13 +615,11 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 		}
 	}
 
-	if h.eanPageSearch != nil {
-		allPages, _ := h.eanPageRepo.ListAll()
-		pagePtrs := make([]*model.EANPage, len(allPages))
-		for i := range allPages {
-			pagePtrs[i] = &allPages[i]
-		}
-		if err := h.eanPageSearch.IndexEANPageBatchTx(txn, pagePtrs); err != nil {
+	// Index ONLY the affected pages from their in-memory state (not the whole
+	// table: ListAll() would re-index every page in the DB and would miss the
+	// freshly created pages anyway, since they are not committed yet).
+	if h.eanPageSearch != nil && len(affectedPages) > 0 {
+		if err := h.eanPageSearch.IndexEANPageBatchTx(txn, affectedPages); err != nil {
 			fmt.Printf("[IMPORT-NOKAUT] ERROR: index EAN pages failed: %v\n", err)
 			_ = txn.Abort()
 			result.Status = "error_index"
@@ -658,13 +655,11 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 
 	fmt.Println("[IMPORT-NOKAUT] Transaction committed successfully")
 
-	// Rebuild company price document from DB to ensure it's in sync
-	if len(allProducts) > 0 {
-		if _, err := h.productRepo.RebuildCompanyPrices(company.ID); err != nil {
-			fmt.Printf("[IMPORT-NOKAUT] WARN: rebuild company prices for %d: %v\n", company.ID, err)
-		} else {
-			fmt.Printf("[IMPORT-NOKAUT] Rebuilt price document for company %d\n", company.ID)
-		}
+	// Persist the price document updated incrementally during the import
+	// (created/changed prices in Phase 1, deleted prices in Phase 1.6).
+	// This replaces the old full company product rescan.
+	if err := h.productRepo.SaveCompanyPrices(company.ID, priceDoc); err != nil {
+		fmt.Printf("[IMPORT-NOKAUT] WARN: save company prices for %d: %v\n", company.ID, err)
 	}
 
 	result.Status = "completed"

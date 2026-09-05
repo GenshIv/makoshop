@@ -564,9 +564,20 @@ func (r *ProductRepo) BatchGetOrCreateByEAN(products []*model.Product, normalize
 // BatchGetOrCreateByEANTx is the transactional version of BatchGetOrCreateByEAN.
 // All writes are buffered in the transaction and applied atomically on Commit.
 // priceMap (optional) provides current prices for change detection without loading full product docs.
-func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*model.Product, normalizedNames []string, priceMap map[int64]float64) (map[int]int64, map[int]bool, error) {
+// BatchGetOrCreateByEANTx creates or updates products inside the transaction.
+// priceDoc is the company's price document: used for fast price-change
+// detection AND updated in place (created/changed prices) so the caller can
+// persist it after commit without a full company product rescan.
+// For existing products the merged stored state is handed back to the caller
+// through the products slice, so it never needs to re-Get the product.
+func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*model.Product, normalizedNames []string, priceDoc *CompanyPricesDoc) (map[int]int64, map[int]bool, error) {
 	result := make(map[int]int64)
 	isNewMap := make(map[int]bool)
+
+	var priceMap map[int64]float64
+	if priceDoc != nil {
+		priceMap = priceDoc.Prices
+	}
 
 	// First pass: read all existing products in batch
 	existingIDs := make(map[string]int64) // keyPath -> existingID
@@ -676,7 +687,15 @@ func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*mode
 				if changed {
 					existing.UpdatedAt = time.Now().Unix()
 					_ = txn.DocPut(KeyProduct(existingID), MarshalProduct(*existing))
+					// Track the new price in the document (persisted by the
+					// caller after commit).
+					if priceDoc != nil && priceChanged {
+						priceDoc.Prices[existingID] = existing.Price
+					}
 				}
+				// Hand the final stored state back to the caller through the
+				// input slice, so it never needs to re-Get the product.
+				products[i] = existing
 				result[i] = existingID
 				isNewMap[i] = false
 				continue
@@ -690,6 +709,18 @@ func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*mode
 
 		// Write EAN key (in transaction)
 		_ = txn.TurboWrite(keyPath, []byte(fmt.Sprintf("%d", p.ID)))
+
+		// Register the product in the EAN index document (buffered; buffered
+		// loads make repeated calls within one transaction safe).
+		if err := appendEANIndexIDs(txn, r.store, ProductEANIndexKey(p), []int64{p.ID}); err != nil {
+			fmt.Printf("WARN: append ean index for %q: %v\n", p.EAN, err)
+		}
+
+		// Track the new price in the document (persisted by the caller after
+		// commit).
+		if priceDoc != nil {
+			priceDoc.Prices[p.ID] = p.Price
+		}
 
 		result[i] = p.ID
 		isNewMap[i] = true
@@ -844,19 +875,25 @@ func (r *ProductRepo) deleteProductTx(txn *Transaction, p *model.Product) error 
 	}
 	// Remove from product_list (belt-and-suspenders; UnindexProductTx also does it)
 	_ = txn.TurboDeleteIndexString(TurboKeyProductList, KeyProduct(p.ID))
+	// Drop the product from its EAN index document.
+	if err := removeEANIndexID(txn, r.store, ProductEANIndexKey(p), p.ID); err != nil {
+		fmt.Printf("WARN: remove ean index id for %q: %v\n", p.EAN, err)
+	}
 	// Delete document
 	return txn.DocDelete(KeyProduct(p.ID))
 }
 
 // CleanupStaleProductsTx deletes products for a company whose offer key is not
-// present in the import set. It enumerates the company's products via the vendor
-// (company) index, and for each product whose offer key (EAN + normalized name +
-// company) is not among the importProducts' keys, removes it from all indexes
-// and deletes the document — all buffered in the given transaction.
+// present in the import set. It enumerates the company's products via the price
+// document (fallback: vendor index), and for each product whose offer key (EAN +
+// normalized name + company) is not among the importProducts' keys, removes it
+// from all indexes and deletes the document — all buffered in the given
+// transaction. priceDoc is the company's price document passed in by the
+// caller; deleted products' prices are removed from it in place.
 // normalize is the name normalization function used to compute offer keys; it
 // must match the one used at import time.
 // Returns the number of deleted products.
-func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, importProducts []*model.Product, normalize func(string) string) int {
+func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, importProducts []*model.Product, normalize func(string) string, priceDoc *CompanyPricesDoc) int {
 	if r.store == nil || companyID == 0 || normalize == nil {
 		return 0
 	}
@@ -874,8 +911,7 @@ func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, 
 	deleted := 0
 
 	// Use price document as source of truth for existing products (faster than loading all docs)
-	priceDoc, err := r.LoadCompanyPrices(companyID)
-	if err == nil && priceDoc != nil && len(priceDoc.Prices) > 0 {
+	if priceDoc != nil && len(priceDoc.Prices) > 0 {
 		// Check each product in the price document
 		for productID := range priceDoc.Prices {
 			p, err := r.Get(productID)
@@ -891,6 +927,7 @@ func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, 
 				fmt.Printf("WARN: cleanup stale product %d: %v\n", p.ID, err)
 				continue
 			}
+			delete(priceDoc.Prices, productID)
 			deleted++
 		}
 	} else {

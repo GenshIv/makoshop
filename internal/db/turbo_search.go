@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -1128,7 +1129,7 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 
 	// start := time.Now().Unix()
 
-	// 1) AND-индексы
+	// 1) AND-индексы: категория, компания, бренд, текст запроса.
 	var andTokens []string
 
 	if params.CategoryID != 0 {
@@ -1140,7 +1141,6 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 	if params.BrandID != 0 {
 		andTokens = append(andTokens, turboKeyBrand(params.BrandID))
 	}
-
 	if params.Q != "" {
 		tokens := tokenizeQuery(params.Q)
 		for _, tok := range tokens {
@@ -1148,32 +1148,42 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 		}
 	}
 
-	// 2) Пересечение AND
-	var candidates []any
-	var err error
+	// Все фильтры сводятся в один raw-буфер ([count][key128 × N]):
+	// AND-пересечение, затем ценовой диапазон, затем OR-атрибуты.
+	// Инвариант: пустой результат фильтра = пустая выдача, nil = фильтров нет.
+	emptyResult := func() *TurboListResult {
+		return &TurboListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}
+	}
+	var candidatesRaw []byte
 	if len(andTokens) > 0 {
-		candidatesSet, err := t.store.db.TurboBulkIntersect(andTokens)
+		raw, err := t.store.db.TurboBulkIntersectRaw(andTokens)
 		if err != nil {
 			return nil, fmt.Errorf("turbo intersect: %w", err)
 		}
-		// Если фильтры есть, но ничего не найдено — возвращаем пустой результат
-		// (nil от BulkIntersect может означать "индекс не найден", трактуем как пустой)
-		if candidates == nil {
-			candidates = []any{}
-		} else {
-			candidates = append(candidates, candidatesSet)
+		if len(raw) == 0 {
+			return emptyResult(), nil
 		}
+		candidatesRaw = raw
 	}
 
-	// 2.5) Фильтрация по диапазону цены (через price:<range> индексы)
+	// 2) Фильтрация по диапазону цены (через price:<range> индексы)
 	if params.PriceMin > 0 || params.PriceMax > 0 {
 		priceRangeKey := t.priceRangeKeyForFilter(params.PriceMin, params.PriceMax)
 		if priceRangeKey != "" {
-			priceTokens, err := t.store.db.TurboGetIndexTokens(priceRangeKey)
-			if err == nil && len(priceTokens) > 0 {
-				candidates = append(candidates, priceTokens)
-				if len(candidates) == 0 {
-					return &TurboListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
+			priceRaw, err := t.store.db.TurboRawRead(priceRangeKey)
+			if err != nil {
+				return nil, fmt.Errorf("turbo price range read: %w", err)
+			}
+			if len(priceRaw) < 8+16 || binary.LittleEndian.Uint64(priceRaw) == 0 {
+				// В ценовом диапазоне нет ни одного товара.
+				return emptyResult(), nil
+			}
+			if candidatesRaw == nil {
+				candidatesRaw = priceRaw
+			} else {
+				candidatesRaw = makodb.TurboBinaryIntersectRaw([][]byte{candidatesRaw, priceRaw})
+				if len(candidatesRaw) == 0 {
+					return emptyResult(), nil
 				}
 			}
 		}
@@ -1188,19 +1198,20 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 		for _, v := range values {
 			attrTokens = append(attrTokens, turboKeyAttr(code, v))
 		}
-		attrIDs, err := t.store.db.TurboBulkUnion(attrTokens)
+		attrRaw, err := t.store.db.TurboBulkUnionSortedRaw(attrTokens)
 		if err != nil {
-			return &TurboListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
+			return nil, fmt.Errorf("turbo attr union: %w", err)
 		}
-		if len(attrIDs) == 0 {
-			return &TurboListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
+		if len(attrRaw) == 0 {
+			return emptyResult(), nil
 		}
-
-		if candidates == nil {
-			candidates = append(candidates, attrIDs)
-		}
-		if len(candidates) == 0 {
-			return &TurboListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
+		if candidatesRaw == nil {
+			candidatesRaw = attrRaw
+		} else {
+			candidatesRaw = makodb.TurboBinaryIntersectRaw([][]byte{candidatesRaw, attrRaw})
+			if len(candidatesRaw) == 0 {
+				return emptyResult(), nil
+			}
 		}
 	}
 
@@ -1221,16 +1232,28 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 		sortKey = turboSortPriceAsc // по умолчанию
 	}
 
-	condFiltered := makodb.TurboIntersectSetsAny(candidates...)
-	// TurboSortIndexPageWithDocsFromDB: пересечение + сортировка + пагинация + загрузка документов
-	res, err := t.store.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
-		Name:       sortKey,
-		Candidates: condFiltered,    // []Key128 от фасетов (или nil для всех)
-		Page:       params.Page - 1, // 0-based
-		PageSize:   params.Limit,
-		Desc:       false, // true = обратный порядок
-		DocPrefix:  "product:",
-	})
+	var res makodb.TurboSortPageWithDocsResult
+	var err error
+	if candidatesRaw != nil {
+		// Пересечение + сортировка + пагинация + загрузка документов
+		res, err = t.store.db.TurboSortIndexPageRawWithDocsFromDB(
+			sortKey,
+			candidatesRaw,
+			params.Page-1,
+			params.Limit,
+			false,
+			"product:",
+		)
+	} else {
+		res, err = t.store.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
+			Name:       sortKey,
+			Candidates: nil,             // нет фильтров — прямая пагинация индекса
+			Page:       params.Page - 1, // 0-based
+			PageSize:   params.Limit,
+			Desc:       false,
+			DocPrefix:  "product:",
+		})
+	}
 
 	if err != nil {
 		return nil, fmt.Errorf("turbo sort page with docs: %w", err)
@@ -1242,23 +1265,15 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 		if doc == nil {
 			continue
 		}
-		// p, err := UnmarshalProduct(doc)
-		if err != nil {
-			continue
-		}
 		items = append(items, doc)
 	}
 
 	total := int64(res.Total)
 
-	//elapsed := time.Since(start)
-	// fmt.Printf("DEBUG TurboListWithTurbo: total=%d page=%d items=%d time=%v\n",
-	//	total, params.Page, len(items), elapsed)
-
-	// 7) Фасеты (только для запрошенных кодов)
+	// 5) Фасеты (только для запрошенных кодов)
 	var facets *TurboFacets
-	if len(params.FacetCodes) > 0 && condFiltered != nil && len(condFiltered) > 0 {
-		facets = t.computeFacets(condFiltered, params)
+	if len(params.FacetCodes) > 0 && len(candidatesRaw) > 0 {
+		facets = t.computeFacets(candidatesRaw, params)
 	}
 
 	return &TurboListResult{
@@ -1271,10 +1286,9 @@ func (t *TurboProductSearch) ListWithTurbo(params TurboListParams) (*TurboListRe
 }
 
 // computeFacets считает фасеты по доке:
-//   - Для брендов: берёт brand_list, для каждого brandID пересекает brand:<ID> с candidates
 //   - Для атрибутов: для каждого запрошенного code берёт attr_values:<code>,
-//     для каждого valueHash пересекает attr:<code>:<hash> с candidates
-func (t *TurboProductSearch) computeFacets(candidates any, params TurboListParams) *TurboFacets {
+//     для каждого valueHash пересекает attr:<code>:<hash> с кандидатами (raw)
+func (t *TurboProductSearch) computeFacets(candidatesRaw []byte, params TurboListParams) *TurboFacets {
 	facets := &TurboFacets{
 		Brands: make(map[string]int),
 		Attrs:  make(map[string]map[string]int),
@@ -1306,11 +1320,15 @@ func (t *TurboProductSearch) computeFacets(candidates any, params TurboListParam
 		valueCounts := make(map[string]int)
 		for _, hexH := range valueHashes {
 			attrKey := "attr:" + code + ":" + hexH
-			idxTokens, err := t.store.db.TurboGetIndexTokens(attrKey)
-			if err != nil || len(idxTokens) == 0 {
+			idxRaw, err := t.store.db.TurboRawRead(attrKey)
+			if err != nil || len(idxRaw) < 8 || binary.LittleEndian.Uint64(idxRaw) == 0 {
 				continue
 			}
-			count := len(makodb.TurboIntersectSetsAny(candidates, idxTokens))
+			inter := makodb.TurboBinaryIntersectRaw([][]byte{candidatesRaw, idxRaw})
+			count := 0
+			if len(inter) >= 8 {
+				count = int(binary.LittleEndian.Uint64(inter))
+			}
 			if count > 0 {
 				// Получаем значение
 				labelData, _ := t.store.db.TurboRawRead("attr_label:" + code + ":" + hexH)
@@ -1407,10 +1425,10 @@ func (t *TurboProductSearch) GetBrands(catID int64) ([]BrandInfo, error) {
 
 		// If category filter, check if brand has products in that category
 		if catID != 0 {
-			brandTokens, _ := t.store.db.TurboGetIndexTokens("brand:" + strconv.FormatInt(b.ID, 10))
-			catTokens, _ := t.store.db.TurboGetIndexTokens("cat:" + strconv.FormatInt(catID, 10))
-			intersection := makodb.TurboIntersectSetsAny(brandTokens, catTokens)
-			if len(intersection) == 0 {
+			brandRaw, _ := t.store.db.TurboRawRead("brand:" + strconv.FormatInt(b.ID, 10))
+			catRaw, _ := t.store.db.TurboRawRead("cat:" + strconv.FormatInt(catID, 10))
+			intersection := makodb.TurboBinaryIntersectRaw([][]byte{brandRaw, catRaw})
+			if len(intersection) < 8 || binary.LittleEndian.Uint64(intersection) == 0 {
 				continue
 			}
 		}

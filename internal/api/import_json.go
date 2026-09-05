@@ -843,16 +843,22 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		fmt.Printf("[IMPORT-JSON] Phase 0.5: Applied %d, skipped %d, not found %d, cleaned %d\n", applied, skipped, notFound, cleaned)
 	}
 
-	// Load company prices for change detection (before transaction)
+	// Load company prices for change detection (before transaction). The
+	// document is updated INCREMENTALLY during the import (created/changed/
+	// deleted products) and saved once after commit — no full product rescan.
 	priceDoc, err := h.productRepo.LoadCompanyPrices(company.ID)
 	if err != nil {
 		fmt.Printf("[IMPORT-JSON] WARN: load company prices for %d: %v\n", company.ID, err)
 	}
-	var priceMap map[int64]float64
-	if priceDoc != nil {
-		priceMap = priceDoc.Prices
-		fmt.Printf("[IMPORT-JSON] Loaded price document for company %d (%d prices)\n", company.ID, len(priceMap))
+	if priceDoc == nil {
+		priceDoc = &db.CompanyPricesDoc{Prices: make(map[int64]float64)}
+	} else {
+		fmt.Printf("[IMPORT-JSON] Loaded price document for company %d (%d prices)\n", company.ID, len(priceDoc.Prices))
 	}
+
+	// Company delivery method slugs: read ONCE from the company settings;
+	// stamped on every affected EAN page as a regular attribute.
+	deliverySlugs := h.companyDeliverySlugs(company)
 
 	// ============================================
 	// Phase 1: Batch create/update products (IN TRANSACTION)
@@ -890,7 +896,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 
 			fmt.Printf("[IMPORT-JSON] Phase 1: Processing batch %d-%d (%d products)...\n", i, end, len(batchProducts))
 
-			ids, isNewMap, err := h.productRepo.BatchGetOrCreateByEANTx(txn, batchProducts, batchNames, priceMap)
+			_, isNewMap, err := h.productRepo.BatchGetOrCreateByEANTx(txn, batchProducts, batchNames, priceDoc)
 			if err != nil {
 				fmt.Printf("[IMPORT-JSON] WARN: BatchGetOrCreateByEANTx: %v\n", err)
 				result.ProductsSkipped += len(batchProducts)
@@ -906,18 +912,10 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 					h.importProgress.AddUpdated(1)
 				}
 
-				// For EAN page upsert we need the final product state.
-				// New products already have all fields; existing ones may have
-				// merged attributes, so fetch them.
-				var final *model.Product
-				if isNewMap[j] {
-					final = p
-				} else if prod, err := h.productRepo.Get(ids[j]); err == nil {
-					final = prod
-				} else {
-					final = p
-				}
-				allProducts = append(allProducts, final)
+				// For existing products BatchGetOrCreateByEANTx replaced the
+				// element with the merged stored product — p is already the
+				// final state, no re-Get needed.
+				allProducts = append(allProducts, p)
 			}
 		}
 		fmt.Printf("[IMPORT-JSON] Phase 1: done in %v\n", time.Since(phase1Start))
@@ -953,8 +951,9 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 			fmt.Printf("[IMPORT-JSON] WARN: load catalogizer cache: %v\n", err)
 		}
 
-		// Perform batch upsert within transaction
-		productToEANPage := h.eanPageRepo.BatchUpsertFromProductsTx(txn, allProducts)
+		// Perform batch upsert within transaction; affectedPages is the final
+		// in-memory state of every touched page (post merge/catalogize).
+		productToEANPage, affectedPages := h.eanPageRepo.BatchUpsertFromProductsTx(txn, allProducts, deliverySlugs)
 
 		// Collect affected EAN page IDs for incremental recalculation
 		if productToEANPage != nil {
@@ -968,13 +967,11 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 			}
 		}
 
-		if h.eanPageSearch != nil {
-			allPages, _ := h.eanPageRepo.ListAll()
-			pagePtrs := make([]*model.EANPage, len(allPages))
-			for i := range allPages {
-				pagePtrs[i] = &allPages[i]
-			}
-			if err := h.eanPageSearch.IndexEANPageBatchTx(txn, pagePtrs); err != nil {
+		// Index ONLY the affected pages from their in-memory state (not the
+		// whole table: ListAll() would re-index every page in the DB and
+		// would miss freshly created pages anyway — they are not committed yet).
+		if h.eanPageSearch != nil && len(affectedPages) > 0 {
+			if err := h.eanPageSearch.IndexEANPageBatchTx(txn, affectedPages); err != nil {
 				fmt.Printf("[IMPORT-JSON] ERROR: index EAN pages failed: %v\n", err)
 				_ = txn.Abort()
 				result.Status = "error_index"
@@ -983,11 +980,9 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		}
 		fmt.Printf("[IMPORT-JSON] Phase 2: EAN pages done in %v\n", time.Since(phase2Start))
 
-		// NOTE: The global (company-independent) recalculations — EAN page
-		// product counts, min prices, product/EAN-page sort indexes, category
-		// trees, and delivery methods — are no longer run here per company.
-		// They run ONCE after all companies have imported
-		// (runGlobalRecalculation in import_unified.go).
+		// NOTE: Post-commit per-company recalcs (counts, min prices, delivery
+		// attributes) and the global part 2 (sort indexes, trees) are described
+		// in import_unified.go.
 
 		// Flush any attribute codes created on-the-fly (description parser) to
 		// the registry list in ONE batched write (covers the case where Phase 0
@@ -1005,12 +1000,17 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 	// Phase 1.6: Delete stale products not in this import (IN TRANSACTION)
 	// ============================================
 	// Removes products for this company that are no longer in the price file.
-	h.importProgress.SetStep(StepCleanup)
-	fmt.Printf("[IMPORT-JSON] Phase 1.6: Cleaning up stale products for company %d...\n", company.ID)
-	deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, identityNormalize)
-	result.ProductsDeleted = deleted
-	h.importProgress.SetDeleted(deleted)
-	fmt.Printf("[IMPORT-JSON] Phase 1.6: deleted %d stale products\n", deleted)
+	// GUARDED: a parse that produced zero products (bad download, broken feed)
+	// must NOT wipe the whole company — cleanup only runs on a successful
+	// non-empty parse, same as the nokaut path.
+	if len(allParsedProducts) > 0 {
+		h.importProgress.SetStep(StepCleanup)
+		fmt.Printf("[IMPORT-JSON] Phase 1.6: Cleaning up stale products for company %d...\n", company.ID)
+		deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, identityNormalize, priceDoc)
+		result.ProductsDeleted = deleted
+		h.importProgress.SetDeleted(deleted)
+		fmt.Printf("[IMPORT-JSON] Phase 1.6: deleted %d stale products\n", deleted)
+	}
 
 	// Commit transaction (per-company data: products, indexes, EAN pages).
 	h.importProgress.SetStep(StepCommit)
@@ -1021,13 +1021,11 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 	}
 	fmt.Println("[IMPORT-JSON] Transaction committed successfully")
 
-	// Rebuild company price document from DB to ensure it's in sync
-	if len(allProducts) > 0 {
-		if _, err := h.productRepo.RebuildCompanyPrices(company.ID); err != nil {
-			fmt.Printf("[IMPORT-JSON] WARN: rebuild company prices for %d: %v\n", company.ID, err)
-		} else {
-			fmt.Printf("[IMPORT-JSON] Rebuilt price document for company %d\n", company.ID)
-		}
+	// Persist the price document updated incrementally during the import
+	// (created/changed prices in Phase 1, deleted prices in Phase 1.6).
+	// This replaces the old full company product rescan.
+	if err := h.productRepo.SaveCompanyPrices(company.ID, priceDoc); err != nil {
+		fmt.Printf("[IMPORT-JSON] WARN: save company prices for %d: %v\n", company.ID, err)
 	}
 
 	// Report feed fields that had no entry in the company's field map, so the
@@ -1176,10 +1174,16 @@ func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companyS
 	// Drop duplicate (code, value) pairs from different sources.
 	attrs = dedupeAttrPairs(attrs)
 
-	// Extract shop category from the first category in the feed if present.
+	// Extract shop category from the first category in the feed. Allegro
+	// delivers a numeric category ID there — resolve it to the real path
+	// ("Elektronika > Komputery > Laptopy") via the crawled category dump so
+	// keywords/catalogization get actual words.
 	shopCategory := ""
 	if len(jp.Categories) > 0 && strings.TrimSpace(jp.Categories[0].Name) != "" {
-		shopCategory = strings.TrimSpace(jp.Categories[0].Name)
+		shopCategory = resolveAllegroShopCategory(strings.TrimSpace(jp.Categories[0].Name))
+		if shopCategory == "" {
+			shopCategory = strings.TrimSpace(jp.Categories[0].Name)
+		}
 	}
 
 	p := &model.Product{

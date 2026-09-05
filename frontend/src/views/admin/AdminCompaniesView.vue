@@ -492,15 +492,18 @@ const triggerJSONImport = async () => {
   jsonImporting.value = true;
   jsonImportResult.value = null;
   try {
+    // Unified import handles json (and every other format) asynchronously;
+    // poll the shared progress endpoint for the result.
     const params = new URLSearchParams({
-      source: 'json',
       company: String(selectedCompany.value.id),
+      source: 'json',
     });
     if (jsonNoDownload.value) {
       params.set('no_download', '1');
     }
-    const res = await api.post(`/admin/import-prices?${params.toString()}`);
-    jsonImportResult.value = res.data;
+    await api.post(`/admin/import-unified?${params.toString()}`);
+    const snap = await pollImportUntilDone();
+    jsonImportResult.value = companyResultFromProgress(snap, selectedCompany.value.name);
   } catch (e) {
     jsonImportResult.value = { status: 'error', message: e.response?.data?.message || 'Import failed' };
   } finally {
