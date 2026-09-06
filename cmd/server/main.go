@@ -44,7 +44,7 @@ func bootstrapSuperAdmin(userRepo *db.UserRepo) {
 
 	// Create superadmin
 	superadmin := &model.User{
-		Email:        "admin@mako.com",
+		Email:        "info@wsryst.com",
 		PasswordHash: "", // will be set by userRepo.Create
 		Role:         model.RoleAdmin,
 		Status:       model.UserStatusActive,
@@ -58,7 +58,7 @@ func bootstrapSuperAdmin(userRepo *db.UserRepo) {
 
 	fmt.Println("========================================")
 	fmt.Println("SUPERADMIN CREATED (no admins existed)")
-	fmt.Printf("Email:    admin@mako.com\n")
+	fmt.Printf("Email:    info@wsryst.com\n")
 	fmt.Printf("Password: %s\n", password)
 	fmt.Println("Please change the password after first login.")
 	fmt.Println("========================================")
@@ -158,6 +158,40 @@ func main() {
 	defer rt.Close()
 
 	handler := rt.Handler()
+
+	// Preload EAN pages into OS page cache (background, fire-and-forget)
+	go func() {
+		log.Println("Preloading EAN pages into cache...")
+		eanRepo := db.NewEANPageRepo(store)
+		if _, err := eanRepo.List(); err != nil {
+			log.Printf("EAN page preload error: %v", err)
+		} else {
+			log.Println("EAN page preload complete")
+		}
+		catRepo := db.NewCategoryRepo(store)
+
+		if _, err := catRepo.BuildPathMap(); err != nil {
+			log.Printf("Category repo preload error: %v", err)
+		} else {
+			log.Println("Category repo preload complete")
+		}
+	}()
+
+	// Preload category attributes and tree paths (background, fire-and-forget)
+	go func() {
+		log.Println("Preloading category attributes and tree paths...")
+		if err := h.LoadAllTreePaths(); err != nil {
+			log.Printf("Category tree paths preload error: %v", err)
+		} else {
+			log.Println("Category tree paths preload complete")
+		}
+
+		if err := h.LoadAllCategoryAttrs(); err != nil {
+			log.Printf("Category attrs preload error: %v", err)
+		} else {
+			log.Printf("Category attrs preload complete: %d categories", h.CatAttrsCount())
+		}
+	}()
 
 	// Production-hardened HTTP server with sane timeouts.
 	// Note: WriteTimeout is set high to allow long-running imports to complete.

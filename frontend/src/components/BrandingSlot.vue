@@ -30,8 +30,8 @@ const imgClass = computed(() => {
     // Small decorative image in the side gutter.
     return 'w-full max-w-[150px] h-auto rounded-lg object-cover';
   }
-  // Banner slots (home/category): natural aspect ratio, content width.
-  return 'w-full h-auto object-contain';
+  // Banner slots (home/category): fixed aspect ratio to prevent layout shift.
+  return 'w-full aspect-[3/1] object-contain';
 });
 
 const linkTarget = computed(() => {
@@ -42,7 +42,9 @@ const linkTarget = computed(() => {
 });
 
 const loadPriority = computed(() =>
-  props.slotName === 'header_fullwidth' ? 'eager' : 'lazy'
+  props.slotName === 'header_fullwidth' || props.slotName === 'home_banner'
+    ? 'eager'
+    : 'lazy'
 );
 
 // Light image is hidden in dark mode when a dark variant exists

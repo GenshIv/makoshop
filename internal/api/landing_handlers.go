@@ -529,6 +529,7 @@ func (h *Handlers) HandleEANPageByPath(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Step 2: Try to find category by full path
+	var err error
 	catID, err := h.findCategoryByPath(cleanParts)
 	if err == nil {
 		h.handleEANPageCatalog(w, r, catID)
@@ -575,12 +576,13 @@ var eanListRespRegistry = silentjson.BuildRegistry(reflect.TypeOf(db.EANListResp
 func (h *Handlers) handleEANPageCatalog(w http.ResponseWriter, r *http.Request, catID int64) {
 	ctx := r.Context()
 
-	q := r.URL.Query().Get("q")
-	sort := r.URL.Query().Get("sort")
-	pageStr := r.URL.Query().Get("page")
-	limitStr := r.URL.Query().Get("limit")
-	priceMinStr := r.URL.Query().Get("price_min")
-	priceMaxStr := r.URL.Query().Get("price_max")
+	query := r.URL.Query()
+	q := query.Get("q")
+	sort := query.Get("sort")
+	pageStr := query.Get("page")
+	limitStr := query.Get("limit")
+	priceMinStr := query.Get("price_min")
+	priceMaxStr := query.Get("price_max")
 
 	var priceMin, priceMax float64
 	if priceMinStr != "" {
@@ -613,7 +615,7 @@ func (h *Handlers) handleEANPageCatalog(w http.ResponseWriter, r *http.Request, 
 
 	// Parse attribute filters: attr.{code}=value1,value2 or attr.{code}[]=value1,value2
 	attrFilters := make(map[string][]string)
-	query := r.URL.Query()
+
 	for key, values := range query {
 		if len(key) > 5 && key[:5] == "attr." {
 			code := key[5:]
@@ -1474,48 +1476,19 @@ func renderSSRProductCard(m map[string]interface{}, brandLabel string) string {
 }
 
 // findCategoryByPath finds a category ID by its slug path [slug1, slug2, ...].
+// Uses in-memory treePaths for O(1) lookup.
 func (h *Handlers) findCategoryByPath(slugs []string) (int64, error) {
-	if len(slugs) == 0 {
-		return 0, fmt.Errorf("empty path")
+	catID, err := h.categoryRepo.FindCategoryByPath(slugs)
+	if err != nil {
+		return 0, err
 	}
 
-	// Try O(1) lookup by path hash first
-	cat, err := h.categoryRepo.GetByPath(slugs)
-	if err == nil && cat != nil {
-		if !cat.IsActive {
-			return 0, fmt.Errorf("category not found") // hide inactive
-		}
-		return cat.ID, nil
-	}
-
-	// Fallback: walk slug by slug using GetBySlug (O(1) each)
-	var currentID *int64
-	var lastCat *model.Category
-	for i, slug := range slugs {
-		cat, err := h.categoryRepo.GetBySlug(slug)
-		if err != nil || cat == nil {
-			return 0, fmt.Errorf("category not found in path: %s", slug)
-		}
-
-		if i == 0 {
-			currentID = &cat.ID
-			lastCat = cat
-		} else if currentID != nil && cat.ParentID != nil && *cat.ParentID == *currentID {
-			currentID = &cat.ID
-			lastCat = cat
-		} else {
-			return 0, fmt.Errorf("category not found in path: %s", slug)
-		}
-	}
-
-	if lastCat != nil && !lastCat.IsActive {
+	// Verify category is active
+	cat, err := h.categoryRepo.Get(catID)
+	if err != nil || cat == nil || !cat.IsActive {
 		return 0, fmt.Errorf("category not found")
 	}
-
-	if currentID == nil {
-		return 0, fmt.Errorf("path resolution failed")
-	}
-	return *currentID, nil
+	return catID, nil
 }
 
 // buildSEOURL builds the SEO URL for a EAN page.

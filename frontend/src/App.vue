@@ -171,13 +171,18 @@ onBeforeUnmount(() => {
             @submit.prevent="$router.push({ name: 'shop-catalog', query: { q: $refs.search?.value } })"
             class="flex-1 max-w-xl hidden sm:block"
           >
-            <input
-              ref="search"
-              type="text"
-              :placeholder="t('common.search_placeholder')"
-              class="search-field w-full px-4 py-2 border border-line rounded-lg bg-surface-2/50 text-sm placeholder:text-ink-3
-                     focus:outline-none focus:ring-2 focus:ring-accent focus:bg-surface transition"
-            />
+            <div class="relative">
+              <svg xmlns="http://www.w3.org/2000/svg" class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                ref="search"
+                type="text"
+                :placeholder="t('common.search_placeholder')"
+                class="search-field search-bright w-full pl-10 pr-4 py-2.5 border rounded-lg text-sm placeholder:text-ink-3
+                       focus:outline-none transition"
+              />
+            </div>
           </form>
 
           <!-- Right: Nav links -->
@@ -337,7 +342,7 @@ onBeforeUnmount(() => {
             ref="mobileSearch"
             type="text"
             :placeholder="t('common.search_placeholder')"
-            class="w-full px-3 py-2 border border-line rounded-lg text-sm"
+            class="search-field w-full px-3 py-2 border rounded-lg text-sm"
           />
         </form>
 

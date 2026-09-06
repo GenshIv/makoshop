@@ -826,10 +826,10 @@ func (h *AuthHandlers) HandleAdminCreateTestCompanies(w http.ResponseWriter, r *
 	}
 
 	// Find or create admin user
-	adminUser, err := h.userRepo.GetByEmail("admin@mako.com")
+	adminUser, err := h.userRepo.GetByEmail("info@wsryst.com")
 	if err != nil {
 		adminUser = &model.User{
-			Email: "admin@mako.com",
+			Email: "info@wsryst.com",
 			Role:  model.RoleAdmin,
 		}
 		if err := h.userRepo.Create(adminUser, "admin123"); err != nil {

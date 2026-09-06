@@ -43,6 +43,22 @@ const setMaintenance = async (enable) => {
 // System rebuild buttons
 const systemLoading = ref(null); // which button is loading
 
+// Cache invalidation
+const cacheInvalidating = ref(false);
+
+const invalidateCache = async () => {
+  cacheInvalidating.value = true;
+  try {
+    await api.post('/admin/cache/invalidate');
+    toast.success(t('admin.cache_invalidated') || 'Cache invalidated and reloaded');
+  } catch (e) {
+    console.error('cache invalidation error:', e);
+    toast.error(t('admin.cache_invalidation_failed') || 'Cache invalidation failed');
+  } finally {
+    cacheInvalidating.value = false;
+  }
+};
+
 // Password change
 const passwordForm = ref({
   oldPassword: '',
@@ -266,6 +282,13 @@ onMounted(() => {
             class="px-3 py-1.5 text-xs rounded-md border border-line bg-surface hover:bg-surface-2 disabled:opacity-50"
           >
             {{ systemLoading === 'compact' ? '...' : t('admin.compact_button') }}
+          </button>
+          <button
+            @click="invalidateCache"
+            :disabled="cacheInvalidating"
+            class="px-3 py-1.5 text-xs rounded-md border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+          >
+            {{ cacheInvalidating ? '...' : t('admin.invalidate_cache_button') || 'Invalidate Cache' }}
           </button>
         </div>
         <div class="text-[11px] text-ink-3 mt-1">

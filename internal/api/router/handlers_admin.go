@@ -835,6 +835,15 @@ func (d *Deps) adminCatalogizerTrain(w http.ResponseWriter, r *http.Request) {
 	d.Handlers.HandleAdminCatalogizerTrain(w, r)
 }
 
+// POST /admin/cache/invalidate — invalidate and reload category attributes cache
+func (d *Deps) adminInvalidateCache(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	d.Handlers.HandleAdminInvalidateCache(w, r)
+}
+
 // POST /admin/catalogizer/test — test catalogization on a product name
 func (d *Deps) adminCatalogizerTest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

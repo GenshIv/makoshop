@@ -108,6 +108,35 @@ const categories = ref([]);
 const selectedCategorySlug = ref('');
 const categorySearch = ref('');
 const training = ref(false);
+const showCategoryTable = ref(false);
+const catFilterId = ref('');
+const catFilterName = ref('');
+const catFilterParent = ref('');
+
+const filteredCategories = computed(() => {
+  let result = categories.value;
+  if (catFilterId.value) {
+    const id = parseInt(catFilterId.value);
+    if (!isNaN(id)) {
+      result = result.filter(c => c.id === id);
+    }
+  }
+  if (catFilterName.value) {
+    const q = catFilterName.value.toLowerCase();
+    result = result.filter(c => 
+      (c.slug || '').toLowerCase().includes(q) ||
+      (c.name_en || '').toLowerCase().includes(q) ||
+      (c.name_ru || '').toLowerCase().includes(q)
+    );
+  }
+  if (catFilterParent.value) {
+    const pid = parseInt(catFilterParent.value);
+    if (!isNaN(pid)) {
+      result = result.filter(c => c.parent_id === pid);
+    }
+  }
+  return result;
+});
 
 const fetchCategories = async () => {
   try {
@@ -158,7 +187,7 @@ const addTokenToSelectedCategory = async () => {
 };
 
 const openCatalogModal = async () => {
-  const name = props.product.title || props.product.name || '';
+  const name = props.product.keywords || props.product.title || props.product.name || '';
   if (!name) return;
   catalogModal.value = { loading: true, results: null };
   await fetchCategories();
@@ -268,6 +297,8 @@ const handleAddTokenEnter = (catId) => {
         <img
           :src="product.images[0]"
           :alt="title"
+          width="400"
+          height="300"
           loading="lazy"
           decoding="async"
           class="w-full h-full object-contain"
@@ -361,6 +392,8 @@ const handleAddTokenEnter = (catId) => {
           <img
             :src="product.images[0]"
             :alt="title"
+            width="400"
+            height="300"
             loading="lazy"
             decoding="async"
             class="w-full h-full object-cover"
@@ -480,6 +513,71 @@ const handleAddTokenEnter = (catId) => {
             @click="addTokenToSelectedCategory"
             class="px-2 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700"
           >+</button>
+        </div>
+
+        <!-- Collapsible category table -->
+        <div class="mt-3">
+          <button
+            @click="showCategoryTable = !showCategoryTable"
+            class="text-xs text-purple-600 hover:underline"
+          >
+            {{ showCategoryTable ? 'Hide' : 'Show' }} categories ({{ filteredCategories.length }})
+          </button>
+
+          <div v-if="showCategoryTable" class="mt-2">
+            <!-- Filters -->
+            <div class="flex gap-2 mb-2">
+              <input
+                type="text"
+                v-model="catFilterId"
+                placeholder="ID"
+                class="w-16 px-2 py-1 text-xs border border-line rounded"
+              />
+              <input
+                type="text"
+                v-model="catFilterName"
+                placeholder="Name/Slug"
+                class="flex-1 px-2 py-1 text-xs border border-line rounded"
+              />
+              <input
+                type="text"
+                v-model="catFilterParent"
+                placeholder="Parent ID"
+                class="w-20 px-2 py-1 text-xs border border-line rounded"
+              />
+            </div>
+
+            <!-- Table -->
+            <div class="max-h-48 overflow-y-auto border border-line rounded">
+              <table class="w-full text-xs">
+                <thead class="bg-surface-2 sticky top-0">
+                  <tr>
+                    <th class="px-2 py-1 text-left">ID</th>
+                    <th class="px-2 py-1 text-left">Slug</th>
+                    <th class="px-2 py-1 text-left">Name</th>
+                    <th class="px-2 py-1 text-left">Parent</th>
+                    <th class="px-2 py-1 text-left">Keywords</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="c in filteredCategories"
+                    :key="c.id"
+                    class="border-t border-line hover:bg-surface-2 cursor-pointer"
+                    @click="selectedCategorySlug = c.slug"
+                  >
+                    <td class="px-2 py-1">{{ c.id }}</td>
+                    <td class="px-2 py-1 font-medium">{{ c.slug }}</td>
+                    <td class="px-2 py-1">{{ c.name_en || c.name_ru || '—' }}</td>
+                    <td class="px-2 py-1">{{ c.parent_id || '—' }}</td>
+                    <td class="px-2 py-1 text-ink-3 truncate max-w-[200px]">
+                      {{ (c.anchor_keywords || []).join(', ') || '—' }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
 

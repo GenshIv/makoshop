@@ -496,6 +496,31 @@ func (h *Handlers) HandleAdminRebuildAttrCodeIndexes(w http.ResponseWriter, r *h
 	})
 }
 
+// HandleAdminDBWarmup warms up the database by loading all data into RAM.
+// POST /admin/db/warmup
+
+func (h *Handlers) HandleAdminInvalidateCache(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	fmt.Println("[ADMIN] Invalidating and reloading category attributes cache...")
+	start := time.Now()
+	if err := h.InvalidateAndReloadCatAttrs(); err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+	elapsed := time.Since(start)
+
+	fmt.Printf("[ADMIN] Cache invalidated and reloaded in %v (%d categories)\n", elapsed, h.CatAttrsCount())
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "completed",
+		"count":   h.CatAttrsCount(),
+		"elapsed": elapsed.String(),
+	})
+}
+
 // HandleAdminCatalogizerCoverage returns coverage statistics.
 // GET /admin/catalogizer/coverage
 

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
-	"sync"
+	"strings"
 	"time"
 
 	"github.com/GenshIv/makodb/v2"
@@ -76,14 +76,26 @@ func (r *CategoryRepo) bumpTreeEpochTx(txn *Transaction) {
 }
 
 type CategoryRepo struct {
-	store         *Store
-	treePathCache sync.Map // catID int64 → []string
+	store       *Store
+	treePaths   []treePathEntry  // pre-loaded tree paths for all categories
+	ancestors   []ancestorEntry  // pre-loaded ancestor chains for all categories
+	pathToCatID map[string]int64 // reverse lookup: path -> catID
 
 	// EANPageRepo for filtering categories with EAN pages in public tree
 	eanPageRepo *EANPageRepo
 
 	// Active transaction (nil if not in transaction)
 	txn *makodb.Transaction
+}
+
+type treePathEntry struct {
+	catID int64
+	path  []string
+}
+
+type ancestorEntry struct {
+	catID     int64
+	ancestors []int64
 }
 
 func NewCategoryRepo(store *Store) *CategoryRepo {
@@ -347,7 +359,7 @@ func (r *CategoryRepo) rebuildAncestorsCache(catID int64) {
 		}
 		_, _ = r.store.DB().TurboPutBatchIndexString(key, ancestorKeys)
 	}
-	r.treePathCache.Delete(catID)
+	r.removeTreePath(catID)
 }
 
 // computeAncestors computes ancestors from root to parent (not including self).
@@ -396,7 +408,7 @@ func (r *CategoryRepo) rebuildAncestorsCacheTx(txn *Transaction, catID int64) {
 		}
 		_, _ = txn.TurboPutBatchIndexString(key, ancestorKeys)
 	}
-	r.treePathCache.Delete(catID)
+	r.removeTreePath(catID)
 }
 
 // rebuildDescendantsCacheTx is the transactional version of rebuildDescendantsCache.
@@ -489,55 +501,17 @@ func (r *CategoryRepo) GetByPath(pathParts []string) (*model.Category, error) {
 	return r.Get(id)
 }
 
-// GetAncestors returns ancestors from root to parent (cached, O(1)).
+// GetAncestors returns ancestors from root to parent (pre-loaded, O(n) scan).
 func (r *CategoryRepo) GetAncestors(catID int64) ([]int64, error) {
-	key := turboKeyCategoryAncestors + fmt.Sprintf("%d", catID)
-	tokens, err := r.store.DB().TurboGetIndexTokens(key)
-	if err != nil || len(tokens) == 0 {
-		// Fallback: compute
-		return r.computeAncestors(catID), nil
-	}
-	// Use MultiGetByDocIDs to retrieve ancestor categories (tokens already contain full keys)
-	docs, err := r.store.DB().MultiGetByDocIDs(tokens)
-	if err != nil {
-		return nil, fmt.Errorf("get ancestor categories: %w", err)
-	}
-	set := make(map[int64]struct{}, len(docs))
-	for _, doc := range docs {
-		if len(doc) == 0 {
-			continue
+	// Check pre-loaded slice first
+	for _, entry := range r.ancestors {
+		if entry.catID == catID {
+			return entry.ancestors, nil
 		}
-		cat, err := UnmarshalCategory(doc)
-		if err != nil {
-			continue
-		}
-		set[cat.ID] = struct{}{}
 	}
 
-	// NOTE: the turbo index returns tokens sorted by category ID, NOT in tree
-	// (parent-child) order. Callers (breadcrumbs, SEO path building) rely on
-	// root-first order, so reconstruct it by walking the live parent chain and
-	// keeping only IDs present in the cached set. If the cache is stale or
-	// incomplete for this category, fall back to a full recompute.
-	var ids []int64
-	currentID := catID
-	for currentID != 0 {
-		cat, e := r.Get(currentID)
-		if e != nil || cat == nil || cat.ParentID == nil {
-			break
-		}
-		pid := *cat.ParentID
-		if _, ok := set[pid]; !ok {
-			return r.computeAncestors(catID), nil
-		}
-		ids = append(ids, pid)
-		currentID = pid
-	}
-	// Reverse: root first
-	for i, j := 0, len(ids)-1; i < j; i, j = i+1, j-1 {
-		ids[i], ids[j] = ids[j], ids[i]
-	}
-	return ids, nil
+	// Compute on-demand if not in slice
+	return r.computeAncestors(catID), nil
 }
 
 // GetDirectChildren returns immediate children of a category (cached, O(1)).
@@ -657,6 +631,19 @@ func (r *CategoryRepo) RebuildTrees() {
 	// Rebuild ancestors and descendants caches for all categories
 	r.rebuildAllAncestorsAndDescendants()
 	r.invalidateAllParentTrees()
+}
+
+// PreloadAllParentTrees pre-builds all parent subtree JSONs to avoid lazy loading on first request.
+func (r *CategoryRepo) PreloadAllParentTrees() {
+	cats, err := r.ListAll()
+	if err != nil {
+		fmt.Printf("WARN: PreloadAllParentTrees: %v\n", err)
+		return
+	}
+	for _, cat := range cats {
+		r.rebuildParentTreeJSON(cat.ID)
+	}
+	fmt.Printf("[STARTUP] preloaded parent trees for %d categories\n", len(cats))
 }
 
 // RebuildTreesTx is the transactional version of RebuildTrees.
@@ -855,7 +842,7 @@ func (r *CategoryRepo) rebuildAllAncestorsAndDescendantsTx(txn *Transaction) {
 			}
 			ancestorWrites = append(ancestorWrites, batchWrite{key: key, values: ancestorKeys})
 		}
-		r.treePathCache.Delete(cat.ID)
+		r.removeTreePath(cat.ID)
 
 		// Collect descendants
 		descendants := r.computeDescendants(cat.ID)
@@ -1248,11 +1235,92 @@ func (r *CategoryRepo) sortChildren(node *CategoryTreeNode) {
 
 // GetTreePath returns the path from root to the given category as [slug1, slug2, ...].
 // Uses cached ancestors for O(1) lookup, plus in-memory cache for slugs.
-func (r *CategoryRepo) GetTreePath(catID int64) ([]string, error) {
-	if v, ok := r.treePathCache.Load(catID); ok {
-		return v.([]string), nil
+// LoadAllTreePaths pre-computes and caches tree paths for all categories.
+func (r *CategoryRepo) LoadAllTreePaths() error {
+	cats, err := r.ListAll()
+	if err != nil {
+		return fmt.Errorf("list categories: %w", err)
 	}
 
+	r.treePaths = make([]treePathEntry, 0, len(cats))
+	r.ancestors = make([]ancestorEntry, 0, len(cats))
+	for _, cat := range cats {
+		path, err := r.computeTreePath(cat.ID)
+		if err != nil {
+			return fmt.Errorf("tree path for cat %d: %w", cat.ID, err)
+		}
+		r.treePaths = append(r.treePaths, treePathEntry{catID: cat.ID, path: path})
+
+		ancs, err := r.GetAncestors(cat.ID)
+		if err != nil {
+			return fmt.Errorf("ancestors for cat %d: %w", cat.ID, err)
+		}
+		r.ancestors = append(r.ancestors, ancestorEntry{catID: cat.ID, ancestors: ancs})
+	}
+	return nil
+}
+
+// ClearTreePaths clears the cached tree paths and ancestors.
+func (r *CategoryRepo) ClearTreePaths() {
+	r.treePaths = nil
+	r.ancestors = nil
+}
+
+// updateTreePath updates or adds a tree path entry in the slice.
+func (r *CategoryRepo) updateTreePath(catID int64, path []string) {
+	for i, entry := range r.treePaths {
+		if entry.catID == catID {
+			r.treePaths[i].path = path
+			return
+		}
+	}
+	r.treePaths = append(r.treePaths, treePathEntry{catID: catID, path: path})
+}
+
+// removeTreePath removes a tree path entry from the slice.
+func (r *CategoryRepo) removeTreePath(catID int64) {
+	for i, entry := range r.treePaths {
+		if entry.catID == catID {
+			r.treePaths = append(r.treePaths[:i], r.treePaths[i+1:]...)
+			return
+		}
+	}
+}
+
+// FindCategoryByPath finds a category ID by its slug path using in-memory treePaths.
+func (r *CategoryRepo) FindCategoryByPath(slugs []string) (int64, error) {
+	if len(slugs) == 0 {
+		return 0, fmt.Errorf("empty path")
+	}
+
+	expectedPath := strings.Join(slugs, "/")
+
+	for _, entry := range r.treePaths {
+		if strings.Join(entry.path, "/") == expectedPath {
+			return entry.catID, nil
+		}
+	}
+
+	return 0, fmt.Errorf("category not found in path: %s", expectedPath)
+}
+
+func (r *CategoryRepo) GetTreePath(catID int64) ([]string, error) {
+	// Check pre-loaded slice first
+	for _, entry := range r.treePaths {
+		if entry.catID == catID {
+			return entry.path, nil
+		}
+	}
+
+	// Compute on-demand if not in slice
+	path, err := r.computeTreePath(catID)
+	if err != nil {
+		return nil, err
+	}
+	return path, nil
+}
+
+func (r *CategoryRepo) computeTreePath(catID int64) ([]string, error) {
 	ancestors, err := r.GetAncestors(catID)
 	if err != nil {
 		return nil, err
@@ -1262,7 +1330,7 @@ func (r *CategoryRepo) GetTreePath(catID int64) ([]string, error) {
 	for _, aid := range ancestors {
 		cat, err := r.Get(aid)
 		if err != nil {
-			return nil, err
+			continue // Skip missing ancestor
 		}
 		if cat.Slug != "" {
 			path = append(path, cat.Slug)
@@ -1278,7 +1346,6 @@ func (r *CategoryRepo) GetTreePath(catID int64) ([]string, error) {
 		path = append(path, cat.Slug)
 	}
 
-	r.treePathCache.Store(catID, path)
 	return path, nil
 }
 
@@ -1545,7 +1612,7 @@ func (r *CategoryRepo) RebuildIndexesFromDocs() error {
 		}
 
 		// Clear path cache
-		r.treePathCache.Delete(cat.ID)
+		r.removeTreePath(cat.ID)
 
 		// Ancestors cache
 		r.rebuildAncestorsCache(cat.ID)
@@ -1601,7 +1668,7 @@ func (r *CategoryRepo) RebuildAllIndexes() error {
 		}
 
 		// Clear path cache
-		r.treePathCache.Delete(cat.ID)
+		r.removeTreePath(cat.ID)
 
 		// Ancestors cache
 		r.rebuildAncestorsCache(cat.ID)

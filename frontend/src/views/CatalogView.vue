@@ -1558,12 +1558,17 @@ defineOptions({ name: 'CatalogView' });
     >
       <!-- Search -->
       <div class="flex-1 min-w-[200px]">
-        <input
-          v-model="filters.q"
-          type="text"
-          :placeholder="t('catalog.search_placeholder')"
-          class="search-field w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-        />
+        <div class="relative">
+          <svg xmlns="http://www.w3.org/2000/svg" class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            v-model="filters.q"
+            type="text"
+            :placeholder="t('catalog.search_placeholder')"
+            class="search-field search-bright w-full pl-10 pr-3 py-2 border rounded-lg text-sm focus:outline-none"
+          />
+        </div>
       </div>
       <!-- Price range -->
       <div class="flex items-center gap-2">
@@ -1594,7 +1599,7 @@ defineOptions({ name: 'CatalogView' });
               v-model="filters.q"
               type="text"
               :placeholder="t('catalog.search_placeholder')"
-              class="search-field w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+              class="search-field w-full px-3 py-2 border rounded-lg text-sm focus:outline-none"
             />
           </div>
 
@@ -1963,7 +1968,7 @@ defineOptions({ name: 'CatalogView' });
               v-model="filters.q"
               type="text"
               :placeholder="t('catalog.search_placeholder')"
-              class="search-field w-full px-3 py-2 border border-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+              class="search-field w-full px-3 py-2 border rounded-lg text-sm focus:outline-none"
             />
           </div>
 

@@ -54,10 +54,8 @@ type Handlers struct {
 	statsCache   *metrics.Stats
 	statsCacheAt time.Time
 
-	// Category attrs cache: catID -> []db.AttrItem
-	// Cached for 5 minutes, invalidated on attr/category changes via admin.
-	catAttrsMu sync.RWMutex
-	catAttrs   map[int64]cachedCatAttrs
+	// Category attrs: loaded once at startup, no TTL cache
+	catAttrs map[int64][]db.AttrItem
 
 	// Stats collector
 	statsCollector *stats.StatsCollector
@@ -68,12 +66,6 @@ type Handlers struct {
 	// Live progress tracker for batch price imports (read by
 	// /admin/import-progress). Created once, never reassigned.
 	importProgress *ImportProgress
-}
-
-// cachedCatAttrs holds precomputed attribute items for a category.
-type cachedCatAttrs struct {
-	Items []db.AttrItem
-	At    time.Time
 }
 
 func NewHandlers(store *db.Store) *Handlers {
@@ -112,6 +104,12 @@ func NewHandlers(store *db.Store) *Handlers {
 	go func() {
 		start := time.Now()
 		categoryRepo.RebuildTrees()
+		// Rebuild tree paths after RebuildTrees clears them
+		if err := categoryRepo.LoadAllTreePaths(); err != nil {
+			fmt.Printf("[STARTUP] failed to reload tree paths: %v\n", err)
+		}
+		// Preload all parent subtree JSONs to avoid lazy loading on first request
+		categoryRepo.PreloadAllParentTrees()
 		fmt.Printf("[STARTUP] category trees refreshed in background: %v\n", time.Since(start))
 	}()
 
@@ -156,7 +154,7 @@ func NewHandlers(store *db.Store) *Handlers {
 		landingRepo:       landingRepo,
 		eanPageRepo:       eanPageRepo,
 		catalogizer:       catz,
-		catAttrs:          make(map[int64]cachedCatAttrs),
+		catAttrs:          make(map[int64][]db.AttrItem),
 		statsCollector:    statsCollector,
 		importProgress:    NewImportProgress(),
 	}
@@ -227,74 +225,90 @@ func (h *Handlers) SetCompanySettingsRepos(
 	h.installmentPlanRepo = installmentPlanRepo
 }
 
-// InvalidateCatAttrsCache clears cached attrs for a category (called on attr/category changes).
-func (h *Handlers) InvalidateCatAttrsCache(catID int64) {
-	h.catAttrsMu.Lock()
-	delete(h.catAttrs, catID)
-	h.catAttrsMu.Unlock()
-}
-
-// GetCategoryAttrs returns cached category attributes (TTL 5 min).
-func (h *Handlers) GetCategoryAttrs(catID int64) []db.AttrItem {
-	if catID == 0 || h.attrDefRepo == nil {
-		return nil
+// LoadAllCategoryAttrs loads attributes for all categories in batch at startup.
+func (h *Handlers) LoadAllCategoryAttrs() error {
+	cats, err := h.categoryRepo.ListAll()
+	if err != nil {
+		return fmt.Errorf("list categories: %w", err)
 	}
 
-	// Check cache first
-	h.catAttrsMu.RLock()
-	cached, ok := h.catAttrs[catID]
-	h.catAttrsMu.RUnlock()
-	if ok && time.Since(cached.At) < 5*time.Minute {
-		return cached.Items
-	}
-
-	// Build attrs
-	codes, err := h.attrDefRepo.GetCodesForCategoryTree(catID, h.categoryRepo)
-	if err != nil || len(codes) == 0 {
-		return nil
-	}
-
-	items := make([]db.AttrItem, 0, len(codes))
-	for _, code := range codes {
-		// Skip attributes with only 1 EAN page
-		if h.eanPageRepo != nil {
-			eanCount := h.eanPageRepo.CountEANPagesWithAttrCode(code)
-			if eanCount < 2 {
-				continue
-			}
-		}
-
-		values, _ := h.attrDefRepo.GetAttrValuesForCategory(code, catID)
-		if len(values) == 0 {
+	for _, cat := range cats {
+		codes, err := h.attrDefRepo.GetCodesForCategoryTree(cat.ID, h.categoryRepo)
+		if err != nil || len(codes) == 0 {
 			continue
 		}
-		def, _ := h.attrDefRepo.GetByCode(code)
-		attrMap := db.AttrItem{
-			Code:    code,
-			Options: values,
+
+		items := make([]db.AttrItem, 0, len(codes))
+		for _, code := range codes {
+			if h.eanPageRepo != nil {
+				eanCount := h.eanPageRepo.CountEANPagesWithAttrCode(code)
+				if eanCount < 2 {
+					continue
+				}
+			}
+
+			values, _ := h.attrDefRepo.GetAttrValuesForCategory(code, cat.ID)
+			if len(values) == 0 {
+				continue
+			}
+			def, _ := h.attrDefRepo.GetByCode(code)
+			attrMap := db.AttrItem{
+				Code:    code,
+				Options: values,
+			}
+			if def != nil {
+				attrMap.NameRU = def.NameRu
+				attrMap.NameUA = def.NameUa
+				attrMap.NamePL = def.NamePl
+				attrMap.NameEN = def.NameEn
+				attrMap.Type = string(def.Type)
+				attrMap.IsFilterable = def.IsFilterable
+			} else {
+				attrMap.Type = "string"
+				attrMap.IsFilterable = true
+			}
+			items = append(items, attrMap)
 		}
-		if def != nil {
-			attrMap.NameRU = def.NameRu
-			attrMap.NameUA = def.NameUa
-			attrMap.NamePL = def.NamePl
-			attrMap.NameEN = def.NameEn
-			attrMap.Type = string(def.Type)
-			attrMap.IsFilterable = def.IsFilterable
-		} else {
-			attrMap.Type = "string"
-			attrMap.IsFilterable = true
+
+		if len(items) > 0 {
+			h.catAttrs[cat.ID] = items
 		}
-		items = append(items, attrMap)
 	}
 
-	// Store in cache
-	if len(items) > 0 {
-		h.catAttrsMu.Lock()
-		h.catAttrs[catID] = cachedCatAttrs{Items: items, At: time.Now()}
-		h.catAttrsMu.Unlock()
+	return nil
+}
+
+// GetCategoryAttrs returns pre-loaded category attributes.
+func (h *Handlers) GetCategoryAttrs(catID int64) []db.AttrItem {
+	if catID == 0 {
+		return nil
+	}
+	return h.catAttrs[catID]
+}
+
+// CatAttrsCount returns the number of categories with loaded attributes.
+func (h *Handlers) CatAttrsCount() int {
+	return len(h.catAttrs)
+}
+
+// LoadAllTreePaths loads all category tree paths into cache.
+func (h *Handlers) LoadAllTreePaths() error {
+	return h.categoryRepo.LoadAllTreePaths()
+}
+
+// InvalidateAndReloadCatAttrs reloads all category attributes from DB.
+func (h *Handlers) InvalidateAndReloadCatAttrs() error {
+	h.catAttrs = make(map[int64][]db.AttrItem)
+
+	// Clear and reload tree path cache
+	if h.categoryRepo != nil {
+		h.categoryRepo.ClearTreePaths()
+		if err := h.categoryRepo.LoadAllTreePaths(); err != nil {
+			return fmt.Errorf("reload tree paths: %w", err)
+		}
 	}
 
-	return items
+	return h.LoadAllCategoryAttrs()
 }
 
 // --- helpers ---

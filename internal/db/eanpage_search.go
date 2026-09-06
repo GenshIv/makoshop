@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/GenshIv/makodb/v2"
@@ -24,27 +23,8 @@ type EANPageSearch struct {
 	categoryRepo *CategoryRepo
 	enabled      bool
 
-	// Cache for category descendants to avoid repeated expensive lookups.
-	// Key: catID, Value: []int64 of descendant IDs (not including catID itself).
-	descMu       sync.Mutex
-	descCache    map[int64][]int64
-	descCacheTTL time.Duration
-
-	// Cache for category ancestors (same TTL pattern). Indexing walks the
-	// ancestor chain for EVERY page — without the memo that is one category
-	// document read per tree level per page.
-	ancMu       sync.Mutex
-	ancCache    map[int64]ancCacheEntry
-	ancCacheTTL time.Duration
-
 	// Active transaction (nil if not in transaction)
 	txn *makodb.Transaction
-}
-
-// ancCacheEntry is a TTL-guarded ancestors cache entry.
-type ancCacheEntry struct {
-	ids []int64
-	at  time.Time
 }
 
 func NewEANPageSearch(db *makodb.ShardedDB, repo *EANPageRepo, productRepo *ProductRepo, categoryRepo *CategoryRepo, enabled bool) *EANPageSearch {
@@ -54,10 +34,6 @@ func NewEANPageSearch(db *makodb.ShardedDB, repo *EANPageRepo, productRepo *Prod
 		productRepo:  productRepo,
 		categoryRepo: categoryRepo,
 		enabled:      enabled,
-		descCache:    make(map[int64][]int64),
-		descCacheTTL: 5 * time.Minute,
-		ancCache:     make(map[int64]ancCacheEntry),
-		ancCacheTTL:  5 * time.Minute,
 	}
 }
 
@@ -812,9 +788,10 @@ func (s *EANPageSearch) ListWithTurbo(params EANPageListParams) (*EANPageListRes
 		items := make([]silentjson.RawMessage, 0, len(res.Docs))
 		for _, doc := range res.Docs {
 			if doc != nil && len(doc) > 0 {
-				items = append(items, silentjson.RawMessage(doc))
+				items = append(items, doc)
 			}
 		}
+
 		return &EANPageListResult{
 			Items: items,
 			Total: int64(res.Total),
@@ -1094,15 +1071,6 @@ func (s *EANPageSearch) getCategoryAncestors(catID int64) ([]int64, error) {
 		return nil, nil
 	}
 
-	// Memoized: indexing walks the ancestor chain per page; without the cache
-	// that is one category document read per tree level per page.
-	s.ancMu.Lock()
-	if e, ok := s.ancCache[catID]; ok && time.Since(e.at) < s.ancCacheTTL {
-		s.ancMu.Unlock()
-		return e.ids, nil
-	}
-	s.ancMu.Unlock()
-
 	var ancestors []int64
 	current := catID
 	for current != 0 {
@@ -1114,9 +1082,6 @@ func (s *EANPageSearch) getCategoryAncestors(catID int64) ([]int64, error) {
 		current = *cat.ParentID
 	}
 
-	s.ancMu.Lock()
-	s.ancCache[catID] = ancCacheEntry{ids: ancestors, at: time.Now()}
-	s.ancMu.Unlock()
 	return ancestors, nil
 }
 
