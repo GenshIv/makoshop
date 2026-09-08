@@ -559,6 +559,15 @@ func (h *Handlers) HandleAdminProductsImport(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Rebuild product sort indexes cache after import
+	if job.Status == db.ImportStatusCompleted && job.ImportedCount > 0 {
+		if err := h.InvalidateAndReloadCatAttrs(); err != nil {
+			fmt.Printf("[PRODUCTS-IMPORT] WARN: cache reload failed: %v\n", err)
+		} else {
+			fmt.Printf("[PRODUCTS-IMPORT] Product sort indexes rebuilt after import (%d products)\n", job.ImportedCount)
+		}
+	}
+
 	httpres.WriteJSON(w, http.StatusAccepted, map[string]interface{}{
 		"import_id": job.ID,
 		"status":    job.Status,

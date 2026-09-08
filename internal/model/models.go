@@ -242,6 +242,16 @@ type Category struct {
 	UpdatedAt      int64    `json:"updated_at,omitempty"`
 }
 
+// CategoryMapping maps an incoming source category code (from price files) to an internal category.
+type CategoryMapping struct {
+	ID               int64  `json:"id"`
+	SourceCode       string `json:"source_code"`          // e.g., "165" or "Elektronika > Smartfony"
+	TargetCategoryID int64  `json:"target_category_id"`   // internal category ID
+	CompanyID        *int64 `json:"company_id,omitempty"` // nil = global rule
+	CreatedAt        int64  `json:"created_at"`
+	UpdatedAt        int64  `json:"updated_at"`
+}
+
 // AttributeDefinition
 
 type AttrType string
@@ -343,7 +353,6 @@ type LandingPage struct {
 // Путь: /shop/{category_tree}/{slug}
 
 type EANPage struct {
-	ID           int64      `json:"id"`
 	EAN          string     `json:"ean"`                // European barcode (or normalized name if no EAN)
 	Slug         string     `json:"slug"`               // URL-friendly slug (unique)
 	Title        string     `json:"title"`              // SEO title (from first product name)
@@ -673,7 +682,7 @@ const (
 type Vote struct {
 	ID         int64    `json:"id"`
 	TargetType string   `json:"target_type"` // "comment", "review", or "eanpage"
-	TargetID   int64    `json:"target_id"`
+	TargetID   string   `json:"target_id"`
 	UserID     int64    `json:"user_id"`
 	VoteType   VoteType `json:"vote_type"`
 	CreatedAt  int64    `json:"created_at"`
@@ -683,7 +692,7 @@ type Vote struct {
 // UserVote represents the current vote state for a user on a target.
 type UserVote struct {
 	TargetType string   `json:"target_type"`
-	TargetID   int64    `json:"target_id"`
+	TargetID   string   `json:"target_id"`
 	VoteType   VoteType `json:"vote_type"` // "like", "dislike", or "" if not voted
 }
 

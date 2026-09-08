@@ -2,29 +2,49 @@
 import { reactive, ref } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { useAuthStore } from '../stores/auth';
 import LogoMark from '../components/LogoMark.vue';
 
 const router = useRouter();
 const route = useRoute();
-const auth = useAuthStore();
 const { t } = useI18n();
 
 const form = reactive({ email: '', password: '' });
 const error = ref(null);
+const loading = ref(false);
 
+// Use fetch directly instead of axios to avoid interceptor issues.
+// The axios 401 interceptor was clearing the session before login completed.
 const login = async () => {
   if (!form.email || !form.password) {
     error.value = t('auth.fill_all_fields');
     return;
   }
   error.value = null;
+  loading.value = true;
+
   try {
-    await auth.login(form.email, form.password);
+    const res = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: form.email, password: form.password }),
+      credentials: 'same-origin',
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.message || t('auth.login_error'));
+    }
+
+    const data = await res.json();
+    sessionStorage.setItem('jwt', data.token);
+    sessionStorage.setItem('user', JSON.stringify({ id: data.user_id, email: data.email }));
+
     const redirect = route.query.redirect || '/';
-    router.push(redirect);
+    window.location.href = redirect;
   } catch (e) {
-    error.value = e.response?.data?.message || t('auth.login_error');
+    error.value = e.message || t('auth.login_error');
+  } finally {
+    loading.value = false;
   }
 };
 </script>
@@ -50,12 +70,8 @@ const login = async () => {
           <label class="block text-sm text-ink-2 mb-1">{{ t('common.password') }}</label>
           <input v-model="form.password" type="password" class="w-full px-3 py-2 border border-line rounded-lg bg-surface-2/50 focus:outline-none focus:ring-2 focus:ring-accent transition" required />
         </div>
-        <button
-          type="submit"
-          :disabled="auth.loading"
-          class="w-full btn btn-primary"
-        >
-          {{ auth.loading ? t('auth.logging_in') : t('auth.login') }}
+        <button type="submit" :disabled="loading" class="w-full btn btn-primary">
+          {{ loading ? t('auth.logging_in') : t('auth.login') }}
         </button>
       </form>
 

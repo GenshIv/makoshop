@@ -73,11 +73,11 @@ func TestRecalculateCountsAndMinPricesForPages(t *testing.T) {
 
 	prices := map[int64]float64{101: 50, 102: 70, 201: 30}
 
-	if err := repo.RecalculateCountsAndMinPricesForPages([]int64{1, 2, 3}, prices); err != nil {
+	if err := repo.RecalculateCountsAndMinPricesForPages([]string{"111", "222", "333"}, prices); err != nil {
 		t.Fatalf("recalc: %v", err)
 	}
 
-	got1, err := repo.Get(1)
+	got1, err := repo.Get("111")
 	if err != nil {
 		t.Fatalf("get page 1: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestRecalculateCountsAndMinPricesForPages(t *testing.T) {
 		t.Fatalf("page 1 = count %d / min %v, want 2 / 50 (cheapest of 50/70)", got1.ProductCount, got1.MinPrice)
 	}
 
-	got2, err := repo.Get(2)
+	got2, err := repo.Get("222")
 	if err != nil {
 		t.Fatalf("get page 2: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestRecalculateCountsAndMinPricesForPages(t *testing.T) {
 		t.Fatalf("page 2 drifted: count=%d min=%v, want 1/50", got2.ProductCount, got2.MinPrice)
 	}
 
-	got3, err := repo.Get(3)
+	got3, err := repo.Get("333")
 	if err != nil {
 		t.Fatalf("get page 3: %v", err)
 	}
@@ -102,10 +102,10 @@ func TestRecalculateCountsAndMinPricesForPages(t *testing.T) {
 	}
 
 	// Missing price entries: min price must be left unchanged (not zeroed).
-	if err := repo.RecalculateCountsAndMinPricesForPages([]int64{2}, map[int64]float64{}); err != nil {
+	if err := repo.RecalculateCountsAndMinPricesForPages([]string{"222"}, map[int64]float64{}); err != nil {
 		t.Fatalf("recalc without prices: %v", err)
 	}
-	got2b, _ := repo.Get(2)
+	got2b, _ := repo.Get("222")
 	if got2b.MinPrice != 50 {
 		t.Fatalf("page 2 min price = %v, want unchanged 50", got2b.MinPrice)
 	}

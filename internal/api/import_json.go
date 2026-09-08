@@ -16,6 +16,7 @@ import (
 
 	attrsPkg "github.com/GenshIv/makoshop/internal/attrs"
 	"github.com/GenshIv/makoshop/internal/db"
+	"github.com/GenshIv/makoshop/internal/helpers"
 	"github.com/GenshIv/makoshop/internal/httpres"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/makoshop/internal/pricesrc"
@@ -23,15 +24,15 @@ import (
 
 // JSONImportResult holds the result of a JSON price import operation.
 type JSONImportResult struct {
-	Status           string  `json:"status"`
-	Company          string  `json:"company,omitempty"`
-	Files            int     `json:"files"`
-	OffersParsed     int     `json:"offers_parsed"`
-	ProductsCreated  int     `json:"products_created"`
-	ProductsUpdated  int     `json:"products_updated"`
-	ProductsSkipped  int     `json:"products_skipped"`
-	ProductsDeleted  int     `json:"products_deleted"`
-	AffectedEANPages []int64 `json:"-"` // EAN page IDs affected by this import (not serialized)
+	Status           string   `json:"status"`
+	Company          string   `json:"company,omitempty"`
+	Files            int      `json:"files"`
+	OffersParsed     int      `json:"offers_parsed"`
+	ProductsCreated  int      `json:"products_created"`
+	ProductsUpdated  int      `json:"products_updated"`
+	ProductsSkipped  int      `json:"products_skipped"`
+	ProductsDeleted  int      `json:"products_deleted"`
+	AffectedEANPages []string `json:"-"` // EAN page IDs affected by this import (not serialized)
 }
 
 // downloadJSONPriceFile downloads the company's JSON price file from company.ImportURL
@@ -363,7 +364,7 @@ func (h *Handlers) HandleAdminImportJSON(w http.ResponseWriter, r *http.Request,
 
 	// Import each company
 	// Collect affected EAN pages across all companies for incremental recalculation
-	affectedEANPages := make(map[int64]struct{})
+	affectedEANPages := make(map[string]struct{})
 
 	for i := range companies {
 		company := &companies[i]
@@ -396,7 +397,7 @@ func (h *Handlers) HandleAdminImportJSON(w http.ResponseWriter, r *http.Request,
 	}
 
 	// Convert map to slice for runGlobalRecalculation
-	affectedSlice := make([]int64, 0, len(affectedEANPages))
+	affectedSlice := make([]string, 0, len(affectedEANPages))
 	for id := range affectedEANPages {
 		affectedSlice = append(affectedSlice, id)
 	}
@@ -455,9 +456,19 @@ type jsonMoney struct {
 	Currency string `json:"currency"`
 }
 
-// jsonCategoryFileItem represents a category.
+// jsonCategoryFileItem represents a category. Supports both "name" and
+// "tdCategoryName" fields (different price file formats use different names).
 type jsonCategoryFileItem struct {
-	Name string `json:"name"`
+	Name           string `json:"name"`
+	TdCategoryName string `json:"tdCategoryName"`
+}
+
+// CategoryName returns the category name, preferring tdCategoryName if present.
+func (c jsonCategoryFileItem) CategoryName() string {
+	if c.TdCategoryName != "" {
+		return c.TdCategoryName
+	}
+	return c.Name
 }
 
 // jsonImageFileItem represents an image.
@@ -491,6 +502,11 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 	currency := company.Settings.Currency
 	if currency == "" {
 		currency = "PLN"
+	}
+
+	// Load category mapping cache for fast lookups during bulk import.
+	if err := h.categoryMappingRepo.LoadCache(); err != nil {
+		fmt.Printf("[IMPORT-JSON] WARN: load category mapping cache: %v\n", err)
 	}
 
 	// Tradedoubler feeds are served from a paginated JSON API (not a single
@@ -923,6 +939,8 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		// ============================================
 		// Phase 1.5: Batch index all products (IN TRANSACTION)
 		// ============================================
+		usages := h.store.DB().ShardUsages()
+
 		h.importProgress.SetStep(StepIndex)
 		if h.turboSearch != nil && len(allProducts) > 0 {
 			for i := 0; i < len(allProducts); i += batchSize {
@@ -940,6 +958,11 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 			}
 		}
 
+		delta, _ := helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
+		usages = h.store.DB().ShardUsages()
+		if delta > 100_000 {
+
+		}
 		// ============================================
 		// Phase 2: Batch upsert EAN pages + index (IN TRANSACTION)
 		// ============================================
@@ -951,17 +974,49 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 			fmt.Printf("[IMPORT-JSON] WARN: load catalogizer cache: %v\n", err)
 		}
 
+		// Apply explicit category mappings before auto-catalogization.
+		// Products with matching ShopCategory get their CategoryID set directly.
+		mappedCount := 0
+		for _, p := range allProducts {
+			if p.CategoryID != 0 || p.ShopCategory == "" {
+				continue
+			}
+			mapping, err := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
+			if err != nil {
+				fmt.Printf("[IMPORT-JSON] WARN: lookup category mapping: %v\n", err)
+				continue
+			}
+			if mapping != nil {
+				p.CategoryID = mapping.TargetCategoryID
+				mappedCount++
+			}
+		}
+		if mappedCount > 0 {
+			fmt.Printf("[IMPORT-JSON] Applied explicit category mappings to %d products\n", mappedCount)
+		}
+
+		delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
+		usages = h.store.DB().ShardUsages()
+		if delta > 100_000 {
+
+		}
 		// Perform batch upsert within transaction; affectedPages is the final
 		// in-memory state of every touched page (post merge/catalogize).
 		productToEANPage, affectedPages := h.eanPageRepo.BatchUpsertFromProductsTx(txn, allProducts, deliverySlugs)
 
+		delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
+		usages = h.store.DB().ShardUsages()
+		if delta > 100_000 {
+
+		}
+
 		// Collect affected EAN page IDs for incremental recalculation
 		if productToEANPage != nil {
-			eanPageIDs := make(map[int64]struct{})
+			eanPageIDs := make(map[string]struct{})
 			for _, eanPageID := range productToEANPage {
 				eanPageIDs[eanPageID] = struct{}{}
 			}
-			result.AffectedEANPages = make([]int64, 0, len(eanPageIDs))
+			result.AffectedEANPages = make([]string, 0, len(eanPageIDs))
 			for id := range eanPageIDs {
 				result.AffectedEANPages = append(result.AffectedEANPages, id)
 			}
@@ -980,6 +1035,11 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		}
 		fmt.Printf("[IMPORT-JSON] Phase 2: EAN pages done in %v\n", time.Since(phase2Start))
 
+		delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
+		usages = h.store.DB().ShardUsages()
+		if delta > 100_000 {
+
+		}
 		// NOTE: Post-commit per-company recalcs (counts, min prices, delivery
 		// attributes) and the global part 2 (sort indexes, trees) are described
 		// in import_unified.go.
@@ -996,6 +1056,13 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		// Commit transaction (per-company data: products, indexes, EAN pages).
 	}
 
+	usages := h.store.DB().ShardUsages()
+
+	delta, _ := helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
+	usages = h.store.DB().ShardUsages()
+	if delta > 100_000 {
+
+	}
 	// ============================================
 	// Phase 1.6: Delete stale products not in this import (IN TRANSACTION)
 	// ============================================
@@ -1012,6 +1079,11 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		fmt.Printf("[IMPORT-JSON] Phase 1.6: deleted %d stale products\n", deleted)
 	}
 
+	delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
+	usages = h.store.DB().ShardUsages()
+	if delta > 100_000 {
+
+	}
 	// Commit transaction (per-company data: products, indexes, EAN pages).
 	h.importProgress.SetStep(StepCommit)
 	if err := txn.Commit(); err != nil {
@@ -1021,11 +1093,23 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 	}
 	fmt.Println("[IMPORT-JSON] Transaction committed successfully")
 
+	delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
+	usages = h.store.DB().ShardUsages()
+	if delta > 100_000 {
+
+	}
+
 	// Persist the price document updated incrementally during the import
 	// (created/changed prices in Phase 1, deleted prices in Phase 1.6).
 	// This replaces the old full company product rescan.
 	if err := h.productRepo.SaveCompanyPrices(company.ID, priceDoc); err != nil {
 		fmt.Printf("[IMPORT-JSON] WARN: save company prices for %d: %v\n", company.ID, err)
+	}
+
+	delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
+	usages = h.store.DB().ShardUsages()
+	if delta > 100_000 {
+
 	}
 
 	// Report feed fields that had no entry in the company's field map, so the
@@ -1104,6 +1188,10 @@ func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companyS
 			if entry.Skip {
 				continue
 			}
+			// Skip internal Allegro category ID attribute — not useful for users
+			if code == "Kategoria (ID Allegro)" {
+				continue
+			}
 			// Use SplitValues to handle comma-separated option lists (e.g.,
 			// connectors: "HDMI, USB, Thunderbolt"). Each part is validated
 			// individually, matching the behavior of the HTML attribute parser.
@@ -1115,12 +1203,10 @@ func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companyS
 	}
 
 	// EAN: prefer a valid EAN from the attributes (e.g. attr_225693 -> "EAN").
-	// If not found, derive a STABLE identifier from the feed's sourceProductId,
-	// prefixed with the company slug. sourceProductId is unique only within a
-	// company, so the prefix makes it globally unique and stable across
-	// re-imports. Never use the offer id (a UUID that changes on every feed
-	// fetch — it would break in-place matching, prevent stock actualization,
-	// and produce duplicate EAN pages).
+	// If not found, try GTIN. If neither is available, leave ean empty so that
+	// product uniqueness is determined by exact name match + company ID.
+	// Never use sourceProductId or offer id — they change between imports and
+	// produce duplicate EAN pages.
 	ean := ""
 	for _, attr := range attrs {
 		if attr.Key == "attr_225693" || attr.Key == "ean" || attr.Key == "EAN" {
@@ -1128,12 +1214,13 @@ func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companyS
 			break
 		}
 	}
-	if ean == "" && len(jp.Offers) > 0 && strings.TrimSpace(jp.Offers[0].SourceProductID) != "" {
-		prefix := strings.TrimSpace(companySlug)
-		if prefix == "" {
-			prefix = strconv.FormatInt(companyID, 10)
+	if ean == "" {
+		for _, attr := range attrs {
+			if attr.Key == "gtin" || attr.Key == "GTIN" {
+				ean = strings.TrimSpace(attr.Value)
+				break
+			}
 		}
-		ean = prefix + "_" + strings.TrimSpace(jp.Offers[0].SourceProductID)
 	}
 
 	// Build name with company suffix
@@ -1171,6 +1258,12 @@ func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companyS
 	// array, so description parsing is unnecessary and harmful.
 	description := pricesrc.CleanHTMLDescription(jp.Description)
 
+	// Allegro sometimes puts the category ID in the description field (e.g. "323282").
+	// Detect this and clear it so it doesn't appear as product description.
+	if _, err := strconv.Atoi(strings.TrimSpace(description)); err == nil && len(strings.TrimSpace(description)) <= 10 {
+		description = ""
+	}
+
 	// Drop duplicate (code, value) pairs from different sources.
 	attrs = dedupeAttrPairs(attrs)
 
@@ -1179,10 +1272,13 @@ func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companyS
 	// ("Elektronika > Komputery > Laptopy") via the crawled category dump so
 	// keywords/catalogization get actual words.
 	shopCategory := ""
-	if len(jp.Categories) > 0 && strings.TrimSpace(jp.Categories[0].Name) != "" {
-		shopCategory = resolveAllegroShopCategory(strings.TrimSpace(jp.Categories[0].Name))
-		if shopCategory == "" {
-			shopCategory = strings.TrimSpace(jp.Categories[0].Name)
+	if len(jp.Categories) > 0 {
+		catName := strings.TrimSpace(jp.Categories[0].CategoryName())
+		if catName != "" {
+			shopCategory = resolveAllegroShopCategory(catName)
+			if shopCategory == "" {
+				shopCategory = catName
+			}
 		}
 	}
 
@@ -1202,7 +1298,7 @@ func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companyS
 		Attributes:   attrs,
 		ShopCategory: shopCategory,
 		SEO: model.ProductSEO{
-			Title: fmt.Sprintf("%s — MakoShop", name),
+			Title: fmt.Sprintf("%s — Wszyst.pl", name),
 		},
 	}
 

@@ -137,7 +137,7 @@ const cancelEdit = () => {
 const saveEdit = async () => {
   if (!editing.value) return;
   try {
-    await api.patch(`/admin/eanpages/${editing.value.id}`, editing.value.data);
+    await api.patch(`/admin/eanpages/${editing.value.ean}`, editing.value.data);
     editing.value = null;
     await fetchEANPages();
   } catch (e) {
@@ -157,7 +157,7 @@ const cancelDelete = () => {
 const doDelete = async () => {
   if (!deleteConfirm.value) return;
   try {
-    await api.delete(`/admin/eanpages/${deleteConfirm.value.id}`);
+    await api.delete(`/admin/eanpages/${deleteConfirm.value.ean}`);
     deleteConfirm.value = null;
     await fetchEANPages();
   } catch (e) {
@@ -314,7 +314,7 @@ onMounted(() => {
     >
       <div role="dialog" aria-modal="true" class="bg-surface rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <h2 class="text-xl font-bold mb-4 text-purple-700">
-          {{ t('admin.eanpage_edit_title') || 'Edit EAN Page' }} #{{ editing.id }}
+          {{ t('admin.eanpage_edit_title') || 'Edit EAN Page' }} #{{ editing.ean }}
         </h2>
 
         <div class="space-y-4">

@@ -18,3 +18,13 @@ func (d *Deps) adminSeoSettings(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
+
+// GET /admin/seo/export (admin)
+func (d *Deps) adminSeoExport(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleAdminSEOExport(w, r)
+}
+
+// POST /admin/seo/import (admin)
+func (d *Deps) adminSeoImport(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleAdminSEOImport(w, r)
+}

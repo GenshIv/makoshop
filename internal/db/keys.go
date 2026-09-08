@@ -33,7 +33,7 @@ func KeyPromoPlan(id int64) string     { return fmt.Sprintf("promo_plan:%d", id)
 func KeyPromoCampaign(id int64) string { return fmt.Sprintf("promo_campaign:%d", id) }
 func KeyPromoLog(id int64) string      { return fmt.Sprintf("promo_log:%d", id) }
 func KeyLandingPage(id int64) string   { return fmt.Sprintf("landing:%d", id) }
-func KeyEANPage(id int64) string       { return fmt.Sprintf("eanpage:%d", id) }
+func KeyEANPage(id string) string      { return fmt.Sprintf("eanpage:%s", id) }
 func KeyBrandSet(id int64) string      { return fmt.Sprintf("brand_set:%d", id) }
 
 // KeyBrandCatTheme is unique per (category, slot) pair — upsert semantics.

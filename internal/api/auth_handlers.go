@@ -16,6 +16,7 @@ type AuthHandlers struct {
 	userRepo    *db.UserRepo
 	companyRepo *db.CompanyRepo
 	cartRepo    *db.CartRepo
+	productRepo *db.ProductRepo
 	turboSearch *db.TurboProductSearch
 	jwt         *auth.JWTMiddleware
 	secret      string
@@ -34,6 +35,11 @@ func NewAuthHandlers(userRepo *db.UserRepo, companyRepo *db.CompanyRepo, cartRep
 // SetTurboSearch attaches a TurboProductSearch instance to AuthHandlers.
 func (h *AuthHandlers) SetTurboSearch(t *db.TurboProductSearch) {
 	h.turboSearch = t
+}
+
+// SetProductRepo attaches a ProductRepo instance to AuthHandlers.
+func (h *AuthHandlers) SetProductRepo(p *db.ProductRepo) {
+	h.productRepo = p
 }
 
 // getTurboSearch returns the attached TurboProductSearch.
@@ -99,9 +105,18 @@ func (h *AuthHandlers) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	role := model.UserRole(req.Role)
-	if role == "" || (role != model.RoleBuyer && role != model.RoleSeller && role != model.RoleAdmin) {
-		role = model.RoleBuyer
+	// Only allow role specification from localhost (same server).
+	// Remote users always get the default buyer role.
+	role := model.RoleBuyer
+	if req.Role != "" {
+		clientIP := r.RemoteAddr
+		// Check if request is from localhost
+		if strings.HasPrefix(clientIP, "127.0.0.1") || strings.HasPrefix(clientIP, "::1") || strings.HasPrefix(clientIP, "[::1]") {
+			role = model.UserRole(req.Role)
+			if role == "" || (role != model.RoleBuyer && role != model.RoleSeller && role != model.RoleAdmin) {
+				role = model.RoleBuyer
+			}
+		}
 	}
 
 	user := &model.User{
@@ -471,6 +486,13 @@ func (h *AuthHandlers) HandleAdminCompanyDelete(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Delete price history before deleting the company
+	if h.productRepo != nil {
+		if err := h.productRepo.DeleteCompanyPrices(id); err != nil {
+			fmt.Printf("[AUTH] WARN: delete company prices for %d: %v\n", id, err)
+		}
+	}
+
 	if err := h.companyRepo.Delete(id); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
@@ -826,10 +848,10 @@ func (h *AuthHandlers) HandleAdminCreateTestCompanies(w http.ResponseWriter, r *
 	}
 
 	// Find or create admin user
-	adminUser, err := h.userRepo.GetByEmail("info@wsryst.com")
+	adminUser, err := h.userRepo.GetByEmail("info@wszyst.pl")
 	if err != nil {
 		adminUser = &model.User{
-			Email: "info@wsryst.com",
+			Email: "info@wszyst.pl",
 			Role:  model.RoleAdmin,
 		}
 		if err := h.userRepo.Create(adminUser, "admin123"); err != nil {

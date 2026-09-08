@@ -454,6 +454,10 @@ onMounted(() => {
           <div class="font-medium">🔍 {{ t('admin.seo.title') || 'SEO' }}</div>
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.seo.desc') || 'Structured data (JSON-LD) for search engines' }}</div>
         </router-link>
+        <router-link to="/admin/category-mappings" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">🗂️ {{ t('admin.category_mappings.title') || 'Category Mappings' }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('admin.category_mappings.desc') || 'Map source category codes to internal categories' }}</div>
+        </router-link>
       </div>
     </div>
 

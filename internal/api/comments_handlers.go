@@ -77,6 +77,22 @@ func (h *Handlers) HandleCommentsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// EAN pages use string identifiers (EAN or normalized name), not numeric IDs.
+	var targetID int64
+	if targetType == "eanpage" {
+		// For eanpages, pass the raw string as-is (repo will handle it).
+		comments, total, err := h.commentRepo.ListByTargetString(targetType, targetIDStr, 1, 50, "")
+		if err != nil {
+			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+			return
+		}
+		httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
+			"comments": comments,
+			"total":    total,
+		})
+		return
+	}
+
 	targetID, err := strconv.ParseInt(targetIDStr, 10, 64)
 	if err != nil {
 		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid target_id")
@@ -140,14 +156,14 @@ func (h *Handlers) HandleVoteCreate(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		TargetType string         `json:"target_type"` // "comment" or "review"
-		TargetID   int64          `json:"target_id"`
+		TargetID   string         `json:"target_id"`
 		VoteType   model.VoteType `json:"vote_type"` // "like" or "dislike"
 	}
 	if !httpres.ReadJSON(w, r, &req) {
 		return
 	}
 
-	if req.TargetType == "" || req.TargetID <= 0 {
+	if req.TargetType == "" || len(req.TargetID) <= 0 {
 		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "target_type and target_id are required")
 		return
 	}
@@ -169,51 +185,12 @@ func (h *Handlers) HandleVoteCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update like/dislike counts if voting on a comment or eanpage
-	if req.TargetType == "comment" {
-		h.recalculateCommentVoteCounts(req.TargetID)
-	} else if req.TargetType == "eanpage" {
+	if req.TargetType == "eanpage" {
 		h.recalculateEanPageVoteCounts(req.TargetID)
 	}
 
 	// Get updated vote state
 	userVote, _ := h.voteRepo.GetVoteForTarget(req.TargetType, req.TargetID, ctxUser.ID)
-
-	httpres.WriteJSON(w, http.StatusOK, userVote)
-}
-
-// HandleVoteCheck checks if a user has voted on a target.
-// GET /votes/check?target_type=comment&target_id=123
-func (h *Handlers) HandleVoteCheck(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
-		return
-	}
-
-	ctxUser, hasUser := auth.ContextUserFrom(r)
-	if !hasUser {
-		httpres.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
-		return
-	}
-
-	targetType := r.URL.Query().Get("target_type")
-	targetIDStr := r.URL.Query().Get("target_id")
-
-	if targetType == "" || targetIDStr == "" {
-		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "target_type and target_id are required")
-		return
-	}
-
-	targetID, err := strconv.ParseInt(targetIDStr, 10, 64)
-	if err != nil {
-		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid target_id")
-		return
-	}
-
-	userVote, err := h.voteRepo.GetVoteForTarget(targetType, targetID, ctxUser.ID)
-	if err != nil {
-		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
-		return
-	}
 
 	httpres.WriteJSON(w, http.StatusOK, userVote)
 }
@@ -482,13 +459,13 @@ func (h *Handlers) recalculateCommentVoteCounts(commentID int64) {
 }
 
 // recalculateEanPageVoteCounts recalculates like_count and dislike_count for an eanpage.
-func (h *Handlers) recalculateEanPageVoteCounts(eanPageID int64) {
+func (h *Handlers) recalculateEanPageVoteCounts(eanPage string) {
 	// Get votes from turbo index
-	voteKey := "vote_target:eanpage:" + strconv.FormatInt(eanPageID, 10)
+	voteKey := "vote_target:eanpage:" + eanPage
 	tokens, err := h.store.DB().TurboGetIndexTokens(voteKey)
 	if err != nil || len(tokens) == 0 {
 		// No votes - reset counts
-		h.eanPageRepo.UpdateLikeDislikeCount(eanPageID, 0, 0)
+		h.eanPageRepo.UpdateLikeDislikeCount(eanPage, 0, 0)
 		return
 	}
 
@@ -513,5 +490,5 @@ func (h *Handlers) recalculateEanPageVoteCounts(eanPageID int64) {
 		}
 	}
 
-	h.eanPageRepo.UpdateLikeDislikeCount(eanPageID, likes, dislikes)
+	h.eanPageRepo.UpdateLikeDislikeCount(eanPage, likes, dislikes)
 }

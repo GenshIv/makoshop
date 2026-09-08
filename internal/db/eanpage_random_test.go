@@ -146,7 +146,7 @@ func TestRandomByCategory(t *testing.T) {
 		for _, raw := range items {
 			var doc model.EANPage
 			_ = json.Unmarshal(raw, &doc)
-			key += fmt.Sprintf("%d,", doc.ID)
+			key += doc.EAN + ","
 		}
 		seen[key] = struct{}{}
 	}

@@ -98,7 +98,7 @@ func (s *EANPageSearch) IndexEANPage(sp *model.EANPage) error {
 	if !s.enabled {
 		return nil
 	}
-	docID := KeyEANPage(sp.ID)
+	docID := KeyEANPage(sp.EAN)
 
 	// Collect all indexes in memory
 	indexes := make(map[string][]string)
@@ -208,7 +208,7 @@ func (s *EANPageSearch) IndexEANPageBatchTx(txn *Transaction, pages []*model.EAN
 	catCodes := make(map[int64]map[string]struct{})
 
 	for _, sp := range pages {
-		docID := KeyEANPage(sp.ID)
+		docID := KeyEANPage(sp.EAN)
 
 		if sp.CategoryID != 0 {
 			ancestors, err := s.getCategoryAncestors(sp.CategoryID)
@@ -345,7 +345,7 @@ func (s *EANPageSearch) IndexEANPageBatch(pages []*model.EANPage) error {
 	catCodes := make(map[int64]map[string]struct{})
 
 	for _, sp := range pages {
-		docID := KeyEANPage(sp.ID)
+		docID := KeyEANPage(sp.EAN)
 
 		// Category union index for all ancestors.
 		if sp.CategoryID != 0 {
@@ -477,7 +477,7 @@ func (s *EANPageSearch) UnindexEANPage(sp *model.EANPage) error {
 	if !s.enabled {
 		return nil
 	}
-	docID := KeyEANPage(sp.ID)
+	docID := KeyEANPage(sp.EAN)
 
 	if sp.CategoryID != 0 {
 		ancestors, err := s.getCategoryAncestors(sp.CategoryID)
@@ -608,7 +608,7 @@ func (s *EANPageSearch) BuildSortIndexes() error {
 			continue
 		}
 
-		docIDKey := KeyEANPage(sp.ID)
+		docIDKey := KeyEANPage(sp.EAN)
 		priceVal := uint64(sp.MinPrice * 100)
 
 		scCreated := sp.CreatedAt
@@ -1114,12 +1114,13 @@ func tokenizeQueryEANPage(text string) []string {
 
 // RebuildAllIndexes fully rebuilds all EANPage turbo indexes.
 // Strategy:
-//  1. Clear all indexable keys (cat, brand, vendor, sort, numSort) upfront.
+//  1. Clear only category union indexes (pages can move between categories).
+//     Sort/numSort indexes are NOT cleared first — BuildSortIndexes() overwrites them entirely.
 //  2. Stream all EANPage documents, accumulating indexes in memory.
 //  3. Flush accumulated indexes in batches to avoid high memory usage.
-//  4. Rebuild sort/numSort indexes at the end.
+//  4. Rebuild sort/numSort indexes at the end (overwrites old ones).
 //
-// This avoids per-document deletes (vacuum) and ensures no stale indexes remain.
+// This avoids the "empty window" where no pages are available during rebuild.
 func (s *EANPageSearch) RebuildAllIndexes() error {
 	if !s.enabled {
 		return nil
@@ -1136,9 +1137,9 @@ func (s *EANPageSearch) RebuildAllIndexes() error {
 		}
 	}
 
-	// Step 1: Clear all indexable keys
-	if err := s.clearAllIndexes(); err != nil {
-		return fmt.Errorf("clear indexes: %w", err)
+	// Step 1: Clear only category union indexes (sort/numSort will be overwritten)
+	if err := s.clearCategoryUnionIndexes(); err != nil {
+		return fmt.Errorf("clear category union indexes: %w", err)
 	}
 
 	// Step 2 & 3: Stream all EANPage and accumulate indexes in batches
@@ -1165,7 +1166,7 @@ func (s *EANPageSearch) RebuildAllIndexes() error {
 	processed := 0
 	err := s.repo.ForEachEANPageBatch(batchSize, func(batch []model.EANPage) error {
 		for _, sp := range batch {
-			docIDKey := KeyEANPage(sp.ID)
+			docIDKey := KeyEANPage(sp.EAN)
 
 			// Category union index for all ancestors.
 			if sp.CategoryID != 0 {
@@ -1230,6 +1231,27 @@ func (s *EANPageSearch) RebuildAllIndexes() error {
 	// from company settings; it is indexed by the standard attribute path.
 
 	fmt.Printf("[EANPAGE] RebuildAllIndexes: done in %v\n", time.Since(time.Unix(start, 0)))
+	return nil
+}
+
+// clearCategoryUnionIndexes removes only category union indexes.
+// Sort/numSort indexes are NOT cleared — they will be overwritten by BuildSortIndexes().
+func (s *EANPageSearch) clearCategoryUnionIndexes() error {
+	fmt.Println("[EANPAGE] clearCategoryUnionIndexes: clearing category union indexes...")
+
+	categories, err := s.categoryRepo.ListAll()
+	if err != nil {
+		fmt.Printf("WARN: list categories: %v\n", err)
+		categories = nil
+	}
+
+	for _, cat := range categories {
+		if err := s.db.TurboClearIndex(eanpageKeyCategoryUnion(cat.ID)); err != nil {
+			fmt.Printf("WARN: clear cat union index %d: %v\n", cat.ID, err)
+		}
+	}
+
+	fmt.Println("[EANPAGE] clearCategoryUnionIndexes: done.")
 	return nil
 }
 
@@ -1307,7 +1329,7 @@ func (s *EANPageSearch) BuildAttrCodeIndexes() error {
 	indexes := make(map[string][]string)
 
 	for _, sp := range all {
-		docID := KeyEANPage(sp.ID)
+		docID := KeyEANPage(sp.EAN)
 		// Track unique attribute codes per EAN page
 		attrCodesSeen := make(map[string]struct{})
 		for _, kv := range sp.Attributes {

@@ -28,6 +28,6 @@ func TestDebugDupPages(t *testing.T) {
 	pages, _ := h.eanPageRepo.List()
 	fmt.Printf("pages after product create: %d\n", len(pages))
 	for i := range pages {
-		fmt.Printf("  page id=%d ean=%q count=%d cat=%d\n", pages[i].ID, pages[i].EAN, pages[i].ProductCount, pages[i].CategoryID)
+		fmt.Printf("  page ean=%q count=%d cat=%d\n", pages[i].EAN, pages[i].ProductCount, pages[i].CategoryID)
 	}
 }

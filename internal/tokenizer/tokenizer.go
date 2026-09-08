@@ -67,8 +67,8 @@ func Tokenize(text string) []TokenInfo {
 	seen := make(map[uint64]bool)
 
 	for _, word := range words {
-		// Skip short words
-		if len(word) < 4 {
+		// Skip short words (allow 3+ characters)
+		if len(word) < 3 {
 			continue
 		}
 
@@ -183,7 +183,7 @@ func CountTokenOverlap(tokens1, tokens2 []uint64) int {
 
 // Stem returns the stem of a single word.
 func Stem(word string) string {
-	if len(word) < 4 {
+	if len(word) < 3 {
 		return word
 	}
 	if stopWords[strings.ToLower(word)] {

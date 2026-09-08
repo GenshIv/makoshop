@@ -249,10 +249,7 @@ const showScuPreview = (product) => {
 
   // Preview is already active for this product (e.g. mouse moved from the card
   // onto the popup itself) — keep it as-is to avoid a flicker/reset.
-  if (
-    hoveredScuProduct.value?.id === product.id &&
-    (scuPreviewData.value || scuPreviewLoading.value)
-  ) {
+  if (hoveredScuProduct.value === product && (scuPreviewData.value || scuPreviewLoading.value)) {
     // Cancel any pending hide so the popup stays open while on it
     clearTimeout(scuPreviewTimer.value);
     return;
@@ -280,7 +277,7 @@ const showScuPreview = (product) => {
       const response = await api.get(url);
       const data = response.data;
       
-      if (data.ean_page && typeof data.ean_page === 'object' && data.ean_page.id) {
+      if (data.ean_page && typeof data.ean_page === 'object' && data.ean_page.ean) {
         if (!data.category && (data.ean_page.category || currentCategory.value)) {
           data.category = data.ean_page.category || currentCategory.value;
         }
@@ -291,7 +288,7 @@ const showScuPreview = (product) => {
         eanPageCache.value.set(cacheKey, data);
         persistScuPageCache();
         // Only show if this product is still hovered
-        if (hoveredScuProduct.value?.id === product.id) {
+        if (hoveredScuProduct.value === product) {
           scuPreviewData.value = data;
         }
       }
@@ -512,7 +509,7 @@ const fetchProducts = async () => {
     console.log('[CatalogView] data.ean_page:', data.ean_page);
 
     // If the response is an EANPage, store it and render EANPageView
-    if (data.ean_page && typeof data.ean_page === 'object' && data.ean_page.id) {
+    if (data.ean_page && typeof data.ean_page === 'object' && data.ean_page.ean) {
       console.log('[CatalogView] Detected EANPage, setting eanPageData for path:', route.path);
       // Ensure category info is present in the data passed to EANPageView
       if (!data.category && (data.ean_page.category || currentCategory.value)) {
@@ -1020,7 +1017,7 @@ onMounted(async () => {
     delete window.__INITIAL_DATA__; // consume once
 
     // If it's an EANPage
-    if (data.ean_page && typeof data.ean_page === 'object' && data.ean_page.id) {
+    if (data.ean_page && typeof data.ean_page === 'object' && data.ean_page.ean) {
       eanPageData.value = data;
       // Build category path via API for proper localized names
       if (data.category_id || data.ean_page.category_id) {
@@ -1165,7 +1162,7 @@ const goToEANPage = async (product) => {
   // Try to use cached data for inline expansion (animations enabled only)
   if (animationEnabled.value && cacheKey && eanPageCache.value.has(cacheKey)) {
     const data = eanPageCache.value.get(cacheKey);
-    if (data && data.ean_page && typeof data.ean_page === 'object' && data.ean_page.id) {
+    if (data && data.ean_page && typeof data.ean_page === 'object' && data.ean_page.ean) {
       // Ensure category info is present
       if (!data.category && (data.ean_page.category || currentCategory.value)) {
         data.category = data.ean_page.category || currentCategory.value;
@@ -1799,7 +1796,7 @@ defineOptions({ name: 'CatalogView' });
               leave-to-class="opacity-0"
             >
               <div
-                v-if="hoveredScuProduct?.id === product.id && (scuPreviewLoading || scuPreviewData)"
+                v-if="hoveredScuProduct === product && (scuPreviewLoading || scuPreviewData)"
                 class="absolute left-0 top-full z-50 w-72 bg-surface border border-line rounded-xl shadow-xl overflow-hidden"
                 @mouseenter="showScuPreview(product)"
                 @mouseleave="hideScuPreview()"
@@ -1870,7 +1867,7 @@ defineOptions({ name: 'CatalogView' });
               leave-to-class="opacity-0"
             >
               <div
-                v-if="hoveredScuProduct?.id === product.id && (scuPreviewLoading || scuPreviewData)"
+                v-if="hoveredScuProduct === product && (scuPreviewLoading || scuPreviewData)"
                 class="absolute left-0 top-full z-50 w-72 bg-surface border border-line rounded-xl shadow-xl overflow-hidden"
                 @mouseenter="showScuPreview(product)"
                 @mouseleave="hideScuPreview()"

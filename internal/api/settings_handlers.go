@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/GenshIv/makoshop/internal/httpres"
 	"github.com/GenshIv/makoshop/internal/model"
@@ -719,4 +720,125 @@ func (h *Handlers) HandleGlobalSettingsUpdate(w http.ResponseWriter, r *http.Req
 		"home_hero":         settings["home_hero"],
 		"home_offers":       settings["home_offers"],
 	})
+}
+
+// --- Admin: global settings export/import ---
+
+// HandleAdminSettingsExport handles GET /admin/settings/export.
+func (h *Handlers) HandleAdminSettingsExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	defaultCurrency := "PLN"
+	gaMeasurementID := ""
+	homeHero := map[string]map[string]string{}
+	homeOffers := map[string]interface{}{"category_ids": []int64{}, "per_section": 0}
+
+	if val, err := h.Store().DocGet("global_settings"); err == nil && len(val) > 0 {
+		var settings map[string]interface{}
+		if err := json.Unmarshal(val, &settings); err == nil {
+			if cur, ok := settings["default_currency"].(string); ok && cur != "" {
+				defaultCurrency = cur
+			}
+			if ga, ok := settings["ga_measurement_id"].(string); ok {
+				gaMeasurementID = strings.TrimSpace(ga)
+			}
+			if raw, ok := settings["home_hero"].(map[string]interface{}); ok {
+				if hh, err := normalizeHomeHero(raw); err == nil {
+					homeHero = hh
+				}
+			}
+			if raw, ok := settings["home_offers"].(map[string]interface{}); ok {
+				if ids, perSection, err := normalizeHomeOffers(raw); err == nil {
+					if ids == nil {
+						ids = []int64{}
+					}
+					homeOffers = map[string]interface{}{"category_ids": ids, "per_section": perSection}
+				}
+			}
+		}
+	}
+
+	payload := map[string]interface{}{
+		"exported_at":       time.Now().UTC().Format(time.RFC3339),
+		"default_currency":  defaultCurrency,
+		"ga_measurement_id": gaMeasurementID,
+		"home_hero":         homeHero,
+		"home_offers":       homeOffers,
+	}
+
+	httpres.WriteJSON(w, http.StatusOK, payload)
+}
+
+// HandleAdminSettingsImport handles POST /admin/settings/import.
+func (h *Handlers) HandleAdminSettingsImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	var payload struct {
+		DefaultCurrency string                 `json:"default_currency"`
+		GaMeasurementID string                 `json:"ga_measurement_id"`
+		HomeHero        map[string]interface{} `json:"home_hero"`
+		HomeOffers      map[string]interface{} `json:"home_offers"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid JSON")
+		return
+	}
+
+	settings := map[string]interface{}{}
+
+	// Default currency
+	if payload.DefaultCurrency != "" {
+		settings["default_currency"] = payload.DefaultCurrency
+	} else {
+		settings["default_currency"] = "PLN"
+	}
+
+	// GA measurement ID
+	settings["ga_measurement_id"] = strings.TrimSpace(payload.GaMeasurementID)
+
+	// Home hero
+	if payload.HomeHero != nil {
+		hh, err := normalizeHomeHero(payload.HomeHero)
+		if err != nil {
+			httpres.WriteError(w, http.StatusBadRequest, "INVALID_PARAM", err.Error())
+			return
+		}
+		settings["home_hero"] = hh
+	}
+
+	// Home offers
+	if payload.HomeOffers != nil {
+		ids, perSection, err := normalizeHomeOffers(payload.HomeOffers)
+		if err != nil {
+			httpres.WriteError(w, http.StatusBadRequest, "INVALID_PARAM", err.Error())
+			return
+		}
+		if ids == nil {
+			ids = []int64{}
+		}
+		settings["home_offers"] = map[string]interface{}{
+			"category_ids": ids,
+			"per_section":  perSection,
+		}
+	}
+
+	data, err := json.Marshal(settings)
+	if err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	if err := h.Store().DocPut("global_settings", data); err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	httpres.WriteJSON(w, http.StatusOK, map[string]string{"status": "imported"})
 }

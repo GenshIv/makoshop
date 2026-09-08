@@ -181,6 +181,45 @@ const onLogoFile = (field, event) => {
   event.target.value = ''; // allow re-selecting the same file
 };
 
+// ---------- Export/Import ----------
+const exportAll = async () => {
+  try {
+    const res = await api.get('/admin/seo/export');
+    const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const date = new Date().toISOString().slice(0, 10);
+    a.download = `seo-export-${date}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(t('admin.seo.export_success'));
+  } catch (e) {
+    toast.error(e.response?.data?.message || t('admin.seo.export_error'));
+  }
+};
+
+const importAllFileInput = ref(null);
+const triggerImportFile = () => {
+  importAllFileInput.value?.click();
+};
+
+const onImportAllFile = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const res = await api.post('/admin/seo/import', data);
+    toast.success(t('admin.seo.import_success'));
+    load();
+  } catch (e) {
+    toast.error(e.response?.data?.message || t('admin.seo.import_error'));
+  } finally {
+    importAllFileInput.value.value = '';
+  }
+};
+
 onMounted(load);
 </script>
 
@@ -191,13 +230,34 @@ onMounted(load);
         <h1 class="text-xl font-semibold">{{ t('admin.seo.title') }}</h1>
         <p class="text-sm text-ink-3 mt-1">{{ t('admin.seo.subtitle') }}</p>
       </div>
-      <button
-        @click="save"
-        :disabled="saving"
-        class="px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
-      >
-        {{ saving ? t('admin.seo.saving') : t('admin.save') }}
-      </button>
+      <div class="flex items-center gap-2">
+        <button
+          @click="exportAll"
+          class="px-3 py-1.5 text-sm rounded-lg border border-line bg-surface text-ink-2 hover:bg-surface-2 transition"
+        >
+          {{ t('admin.seo.export') }}
+        </button>
+        <button
+          @click="triggerImportFile"
+          class="px-3 py-1.5 text-sm rounded-lg border border-line bg-surface text-ink-2 hover:bg-surface-2 transition"
+        >
+          {{ t('admin.seo.import') }}
+        </button>
+        <input
+          ref="importAllFileInput"
+          type="file"
+          accept=".json"
+          class="hidden"
+          @change="onImportAllFile"
+        />
+        <button
+          @click="save"
+          :disabled="saving"
+          class="px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
+        >
+          {{ saving ? t('admin.seo.saving') : t('admin.save') }}
+        </button>
+      </div>
     </div>
 
     <div v-if="loading" class="bg-surface rounded-xl border border-line p-8 text-center text-ink-3">

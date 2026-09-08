@@ -31,9 +31,10 @@ import (
 )
 
 type catEntry struct {
-	Name  string `json:"name"`
-	Alias string `json:"alias"`
-	Path  string `json:"path,omitempty"` // "Elektronika > Komputery" (root "Allegro" skipped)
+	Name   string `json:"name"`
+	Alias  string `json:"alias"`
+	Path   string `json:"path,omitempty"`   // "Elektronika > Komputery" (root "Allegro" skipped)
+	Parent string `json:"parent,omitempty"` // parent category ID, if known
 }
 
 var (
@@ -85,7 +86,7 @@ func mergePage(cats map[string]catEntry, body string) {
 	path := breadcrumbs(body)
 
 	// Path entries with a numeric id become keys; UUID levels only enrich
-	// the path text.
+	// the path text. Record parent-child relationships from breadcrumb order.
 	for i, e := range path {
 		if e.id == "" || e.name == "" {
 			continue
@@ -94,13 +95,21 @@ func mergePage(cats map[string]catEntry, body string) {
 		prev, ok := cats[e.id]
 		if !ok {
 			cats[e.id] = catEntry{Name: e.name, Alias: e.alias, Path: full}
-			continue
-		}
-		// Prefer the longer path (a deeper page refines shallow knowledge);
-		// keep the first-seen name otherwise.
-		if len(full) > len(prev.Path) {
+		} else if len(full) > len(prev.Path) {
+			// Prefer the longer path (a deeper page refines shallow knowledge).
 			prev.Path = full
 			cats[e.id] = prev
+		}
+		// Record parent from breadcrumb position.
+		for j := i - 1; j >= 0; j-- {
+			if path[j].id != "" {
+				entry := cats[e.id]
+				if entry.Parent == "" {
+					entry.Parent = path[j].id
+					cats[e.id] = entry
+				}
+				break
+			}
 		}
 	}
 

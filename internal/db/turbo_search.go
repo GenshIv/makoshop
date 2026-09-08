@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/GenshIv/makodb/v2"
+	"github.com/GenshIv/makoshop/internal/helpers"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/silentjson/v2"
 )
@@ -194,16 +195,16 @@ func (t *TurboProductSearch) BatchIndexProducts(products []*model.Product) error
 	fmt.Printf("[TURBO] Batch indexing %d products...\n", len(products))
 	start := time.Now()
 
-	// Collect all EAN keys and their docIDs
+	// Collect all docIDs and EAN keys in memory to minimize writes
+	var productListDocIDs []string
 	eanIndex := make(map[string][]string) // eanKey -> []docID
+	priceRangeIndex := make(map[string][]string)
 
 	for _, p := range products {
 		docID := KeyProduct(p.ID)
 
-		// Add to product_list index
-		if _, err := t.store.db.TurboPutIndexString(TurboKeyProductList, docID); err != nil {
-			fmt.Printf("WARN: turbo index product_list: %v\n", err)
-		}
+		// Collect product_list index entries (write in batch after loop)
+		productListDocIDs = append(productListDocIDs, docID)
 
 		// Collect EAN index entries (name-based key for products without EAN)
 		if eanKey := ProductEANIndexKey(p); eanKey != "" {
@@ -211,8 +212,13 @@ func (t *TurboProductSearch) BatchIndexProducts(products []*model.Product) error
 			eanIndex[indexKey] = append(eanIndex[indexKey], docID)
 		}
 
-		// Index price ranges
-		t.indexPriceRanges(p.Price, docID)
+		// Collect price range index entries (write in batch after loop)
+		ranges := priceRanges()
+		for _, r := range ranges {
+			if p.Price >= r.min && p.Price < r.max {
+				priceRangeIndex[r.key] = append(priceRangeIndex[r.key], docID)
+			}
+		}
 	}
 
 	// Build map from EAN to products for efficient lookup
@@ -223,10 +229,24 @@ func (t *TurboProductSearch) BatchIndexProducts(products []*model.Product) error
 		}
 	}
 
+	// Batch write all product_list index entries in one call
+	if len(productListDocIDs) > 0 {
+		if _, err := t.store.db.TurboPutBatchIndexString(TurboKeyProductList, productListDocIDs); err != nil {
+			fmt.Printf("WARN: turbo batch product_list index: %v\n", err)
+		}
+	}
+
 	// Batch write all EAN indexes
 	for eanKey, docIDs := range eanIndex {
 		if _, err := t.store.db.TurboPutBatchIndexString(eanKey, docIDs); err != nil {
 			fmt.Printf("WARN: turbo batch ean index %s: %v\n", eanKey, err)
+		}
+	}
+
+	// Batch write all price range indexes
+	for rangeKey, docIDs := range priceRangeIndex {
+		if _, err := t.store.db.TurboPutBatchIndexString(rangeKey, docIDs); err != nil {
+			fmt.Printf("WARN: turbo batch price range index %s: %v\n", rangeKey, err)
 		}
 	}
 
@@ -279,25 +299,20 @@ func (t *TurboProductSearch) BatchIndexProductstx(txn *Transaction, products []*
 	fmt.Printf("[TURBO] Batch indexing %d products (transactional)...\n", len(products))
 	start := time.Now()
 
-	// Collect all index entries in memory to minimize writes
-	// This prevents vacuum by writing each index only once with all new docIDs
+	// Collect all index entries in memory to minimize writes.
+	// Each index is written only once with all new docIDs — no per-product writes,
+	// which would create vacuum by updating the same index repeatedly.
 	indexes := make(map[string][]string) // indexKey -> []docID
-
-	// Collect all EAN keys and their docIDs
-	eanIndex := make(map[string][]string) // eanKey -> []docID
-	// Collect vendor (company) index entries for cleanup support
-	vendorIndex := make(map[string][]string) // vendorKey -> []docID
-
-	// Collect attribute values per category for filter indexes
-	attrCatRef := make(map[string]map[int64]map[string]struct{}) // code -> {catID -> {value}}
+	eanIndex := make(map[string][]string)
+	vendorIndex := make(map[string][]string)
+	priceRangeIndex := make(map[string][]string) // price range key -> []docID
+	attrCatRef := make(map[string]map[int64]map[string]struct{})
 
 	for _, p := range products {
 		docID := KeyProduct(p.ID)
 
-		// Add to product_list index (in transaction)
-		if _, err := txn.TurboPutIndexString(TurboKeyProductList, docID); err != nil {
-			fmt.Printf("WARN: turbo index product_list: %v\n", err)
-		}
+		// Collect product_list index entries (write in batch after loop)
+		indexes[TurboKeyProductList] = append(indexes[TurboKeyProductList], docID)
 
 		// Collect brand index entries
 		if p.BrandID != 0 {
@@ -359,8 +374,13 @@ func (t *TurboProductSearch) BatchIndexProductstx(txn *Transaction, products []*
 			vendorIndex[vendorKey] = append(vendorIndex[vendorKey], docID)
 		}
 
-		// Index price ranges (in transaction)
-		t.indexPriceRangesTx(txn, p.Price, docID)
+		// Collect price range index entries (write in batch after loop)
+		ranges := priceRanges()
+		for _, r := range ranges {
+			if p.Price >= r.min && p.Price < r.max {
+				priceRangeIndex[r.key] = append(priceRangeIndex[r.key], docID)
+			}
+		}
 	}
 
 	// no vacuum ^
@@ -395,6 +415,15 @@ func (t *TurboProductSearch) BatchIndexProductstx(txn *Transaction, products []*
 		}
 	}
 
+	// Batch write all price range indexes (in transaction)
+	for rangeKey, docIDs := range priceRangeIndex {
+		if _, err := txn.TurboPutBatchIndexString(rangeKey, docIDs); err != nil {
+			fmt.Printf("WARN: turbo batch price range index %s: %v\n", rangeKey, err)
+		}
+	}
+
+	usages := t.store.DB().ShardUsages()
+
 	// Write attribute value indexes per category (for filter UI)
 	for code, catMap := range attrCatRef {
 		for catID, values := range catMap {
@@ -420,6 +449,12 @@ func (t *TurboProductSearch) BatchIndexProductstx(txn *Transaction, products []*
 		}
 	}
 
+	delta, item := helpers.CalculateDeltaOffset(usages, t.store.DB().ShardUsages())
+	usages = t.store.DB().ShardUsages()
+	if delta > 100_000 || item > 0 {
+
+	}
+
 	// Create landing pages in batch (only once per unique EAN)
 	if t.landingRepo != nil {
 		var eans []string
@@ -433,6 +468,12 @@ func (t *TurboProductSearch) BatchIndexProductstx(txn *Transaction, products []*
 			}
 			return ean, ""
 		})
+	}
+
+	delta, item = helpers.CalculateDeltaOffset(usages, t.store.DB().ShardUsages())
+	usages = t.store.DB().ShardUsages()
+	if delta > 100_000 {
+
 	}
 
 	// Link products to landing pages and EAN pages (batch)
@@ -450,8 +491,20 @@ func (t *TurboProductSearch) BatchIndexProductstx(txn *Transaction, products []*
 		_ = t.landingRepo.BatchAddProducts(landingToProducts)
 	}
 
+	delta, item = helpers.CalculateDeltaOffset(usages, t.store.DB().ShardUsages())
+	usages = t.store.DB().ShardUsages()
+	if delta > 100_000 || item == 10 {
+
+	}
+
 	if t.eanPageRepo != nil {
 		_ = t.eanPageRepo.BatchLinkProductsByEAN(eanToProducts)
+	}
+
+	delta, item = helpers.CalculateDeltaOffset(usages, t.store.DB().ShardUsages())
+	usages = t.store.DB().ShardUsages()
+	if delta > 100_000 {
+
 	}
 
 	fmt.Printf("[TURBO] Batch indexed %d products (transactional) in %v\n", len(products), time.Since(start))
@@ -631,7 +684,7 @@ func (t *TurboProductSearch) UnindexProduct(p *model.Product) error {
 		// Remove product from EANPage
 		if t.eanPageRepo != nil {
 			if sp, err := t.eanPageRepo.GetByEAN(p.EAN); err == nil {
-				_ = t.eanPageRepo.RemoveProduct(sp.ID, p.ID)
+				_ = t.eanPageRepo.RemoveProduct(sp.EAN, p.ID)
 			}
 		}
 	}

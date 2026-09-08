@@ -18,30 +18,31 @@ import (
 )
 
 type Handlers struct {
-	store             *db.Store
-	siteURL           string // canonical public base URL (no trailing slash)
-	categoryRepo      *db.CategoryRepo
-	attrDefRepo       *db.AttrDefRepo
-	productRepo       *db.ProductRepo
-	turboSearch       *db.TurboProductSearch
-	eanPageSearch     *db.EANPageSearch
-	landingRepo       *db.LandingRepo
-	eanPageRepo       *db.EANPageRepo
-	companyRepo       *db.CompanyRepo
-	userRepo          *db.UserRepo
-	cartRepo          *db.CartRepo
-	orderRepo         *db.OrderRepo
-	paymentRepo       *db.PaymentRepo
-	reviewRepo        *db.ReviewRepo
-	commentRepo       *db.CommentRepo
-	voteRepo          *db.VoteRepo
-	productImportRepo *db.ProductImportRepo
-	promoPlanRepo     *db.PromoPlanRepo
-	promoCampaignRepo *db.PromoCampaignRepo
-	promoLogRepo      *db.PromoLogRepo
-	brandingRepo      *db.BrandingRepo
-	seoRepo           *db.SEORepo
-	catalogizer       *catalogizer.Catalogizer
+	store               *db.Store
+	siteURL             string // canonical public base URL (no trailing slash)
+	categoryRepo        *db.CategoryRepo
+	attrDefRepo         *db.AttrDefRepo
+	productRepo         *db.ProductRepo
+	turboSearch         *db.TurboProductSearch
+	eanPageSearch       *db.EANPageSearch
+	landingRepo         *db.LandingRepo
+	eanPageRepo         *db.EANPageRepo
+	companyRepo         *db.CompanyRepo
+	userRepo            *db.UserRepo
+	cartRepo            *db.CartRepo
+	orderRepo           *db.OrderRepo
+	paymentRepo         *db.PaymentRepo
+	reviewRepo          *db.ReviewRepo
+	commentRepo         *db.CommentRepo
+	voteRepo            *db.VoteRepo
+	productImportRepo   *db.ProductImportRepo
+	promoPlanRepo       *db.PromoPlanRepo
+	promoCampaignRepo   *db.PromoCampaignRepo
+	promoLogRepo        *db.PromoLogRepo
+	brandingRepo        *db.BrandingRepo
+	seoRepo             *db.SEORepo
+	catalogizer         *catalogizer.Catalogizer
+	categoryMappingRepo *db.CategoryMappingRepo
 
 	// Company settings repos
 	paymentMethodRepo   *db.PaymentMethodRepo
@@ -131,32 +132,33 @@ func NewHandlers(store *db.Store) *Handlers {
 	)
 
 	return &Handlers{
-		store:             store,
-		categoryRepo:      categoryRepo,
-		attrDefRepo:       attrDefRepo,
-		companyRepo:       db.NewCompanyRepo(store),
-		userRepo:          db.NewUserRepo(store),
-		cartRepo:          db.NewCartRepo(store),
-		orderRepo:         db.NewOrderRepo(store),
-		paymentRepo:       db.NewPaymentRepo(store),
-		reviewRepo:        db.NewReviewRepo(store),
-		commentRepo:       db.NewCommentRepo(store),
-		voteRepo:          db.NewVoteRepo(store),
-		productImportRepo: db.NewProductImportRepo(store, productRepo),
-		promoPlanRepo:     promoPlanRepo,
-		promoCampaignRepo: promoCampaignRepo,
-		promoLogRepo:      promoLogRepo,
-		brandingRepo:      db.NewBrandingRepo(store),
-		seoRepo:           db.NewSEORepo(store),
-		productRepo:       productRepo,
-		turboSearch:       turboSearch,
-		eanPageSearch:     eanPageSearch,
-		landingRepo:       landingRepo,
-		eanPageRepo:       eanPageRepo,
-		catalogizer:       catz,
-		catAttrs:          make(map[int64][]db.AttrItem),
-		statsCollector:    statsCollector,
-		importProgress:    NewImportProgress(),
+		store:               store,
+		categoryRepo:        categoryRepo,
+		attrDefRepo:         attrDefRepo,
+		companyRepo:         db.NewCompanyRepo(store),
+		userRepo:            db.NewUserRepo(store),
+		cartRepo:            db.NewCartRepo(store),
+		orderRepo:           db.NewOrderRepo(store),
+		paymentRepo:         db.NewPaymentRepo(store),
+		reviewRepo:          db.NewReviewRepo(store),
+		commentRepo:         db.NewCommentRepo(store),
+		voteRepo:            db.NewVoteRepo(store),
+		productImportRepo:   db.NewProductImportRepo(store, productRepo),
+		promoPlanRepo:       promoPlanRepo,
+		promoCampaignRepo:   promoCampaignRepo,
+		promoLogRepo:        promoLogRepo,
+		brandingRepo:        db.NewBrandingRepo(store),
+		seoRepo:             db.NewSEORepo(store),
+		categoryMappingRepo: db.NewCategoryMappingRepo(store),
+		productRepo:         productRepo,
+		turboSearch:         turboSearch,
+		eanPageSearch:       eanPageSearch,
+		landingRepo:         landingRepo,
+		eanPageRepo:         eanPageRepo,
+		catalogizer:         catz,
+		catAttrs:            make(map[int64][]db.AttrItem),
+		statsCollector:      statsCollector,
+		importProgress:      NewImportProgress(),
 	}
 }
 
@@ -203,6 +205,11 @@ func (h *Handlers) seoSettings() *model.SEOSettings {
 // TurboSearch returns the attached TurboProductSearch.
 func (h *Handlers) TurboSearch() *db.TurboProductSearch {
 	return h.turboSearch
+}
+
+// ProductRepo returns the attached ProductRepo.
+func (h *Handlers) ProductRepo() *db.ProductRepo {
+	return h.productRepo
 }
 
 // StatsCollector returns the attached stats collector.
@@ -305,6 +312,15 @@ func (h *Handlers) InvalidateAndReloadCatAttrs() error {
 		h.categoryRepo.ClearTreePaths()
 		if err := h.categoryRepo.LoadAllTreePaths(); err != nil {
 			return fmt.Errorf("reload tree paths: %w", err)
+		}
+	}
+
+	// Rebuild catalogizer token indexes so new keywords (including short ones) participate in matching
+	if h.catalogizer != nil {
+		if err := h.catalogizer.RebuildAllCategoryTokens(); err != nil {
+			fmt.Printf("[CATALOGIZER] WARN: token index rebuild failed: %v\n", err)
+		} else {
+			fmt.Printf("[CATALOGIZER] Token indexes rebuilt for all categories\n")
 		}
 	}
 

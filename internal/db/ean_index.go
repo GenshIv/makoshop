@@ -121,3 +121,37 @@ func removeEANIndexID(txn *Transaction, store *Store, pageKey string, id int64) 
 	doc.ProductIDs = filtered
 	return SaveEANIndexDoc(txn, store, pageKey, doc)
 }
+
+// removeEANIndexIDs loads the document for pageKey, drops all specified product
+// IDs and writes the document back once. More efficient than calling
+// removeEANIndexID multiple times for the same pageKey.
+func removeEANIndexIDs(txn *Transaction, store *Store, pageKey string, ids []int64) error {
+	if pageKey == "" || len(ids) == 0 {
+		return nil
+	}
+	doc, err := LoadEANIndexDoc(txn, store, pageKey)
+	if err != nil || doc == nil {
+		return err
+	}
+	// Build set of IDs to remove for O(1) lookup
+	toRemove := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		if id != 0 {
+			toRemove[id] = struct{}{}
+		}
+	}
+	filtered := make([]int64, 0, len(doc.ProductIDs))
+	removed := false
+	for _, existing := range doc.ProductIDs {
+		if _, ok := toRemove[existing]; ok {
+			removed = true
+			continue
+		}
+		filtered = append(filtered, existing)
+	}
+	if !removed {
+		return nil
+	}
+	doc.ProductIDs = filtered
+	return SaveEANIndexDoc(txn, store, pageKey, doc)
+}

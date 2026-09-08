@@ -375,6 +375,49 @@ const confirmDeleteOverride = async () => {
   }
 };
 
+// ---------- Export/Import ----------
+const exportAll = async () => {
+  try {
+    const res = await api.get('/admin/branding/export');
+    const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const date = new Date().toISOString().slice(0, 10);
+    a.download = `branding-export-${date}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(t('admin.branding.export_success'));
+  } catch (e) {
+    toast.error(e.response?.data?.message || t('admin.branding.export_error'));
+  }
+};
+
+const importAllFileInput = ref(null);
+const triggerImportFile = () => {
+  importAllFileInput.value?.click();
+};
+
+const onImportAllFile = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const res = await api.post('/admin/branding/import', data);
+    toast.success(t('admin.branding.import_success', {
+      sets: `${res.data.sets_created}+${res.data.sets_updated}`,
+      overrides: res.data.overrides_upserted,
+    }));
+    loadSets();
+    loadOverrides();
+  } catch (e) {
+    toast.error(e.response?.data?.message || t('admin.branding.import_error'));
+  } finally {
+    importAllFileInput.value.value = '';
+  }
+};
+
 onMounted(() => {
   loadSets();
   loadOverrides();
@@ -401,6 +444,26 @@ onMounted(() => {
         >
           {{ t('admin.branding.tab_overrides') }}
         </button>
+        <div class="w-px h-6 bg-line mx-1"></div>
+        <button
+          @click="exportAll"
+          class="px-3 py-1.5 text-sm rounded-lg border border-line bg-surface text-ink-2 hover:bg-surface-2 transition"
+        >
+          {{ t('admin.branding.export') }}
+        </button>
+        <button
+          @click="triggerImportFile"
+          class="px-3 py-1.5 text-sm rounded-lg border border-line bg-surface text-ink-2 hover:bg-surface-2 transition"
+        >
+          {{ t('admin.branding.import') }}
+        </button>
+        <input
+          ref="importAllFileInput"
+          type="file"
+          accept=".json"
+          class="hidden"
+          @change="onImportAllFile"
+        />
       </div>
     </div>
 

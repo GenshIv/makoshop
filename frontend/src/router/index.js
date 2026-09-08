@@ -48,6 +48,7 @@ const routes = [
   { path: '/admin/comments', name: 'admin-comments', component: () => import('../views/admin/AdminCommentsView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/branding', name: 'admin-branding', component: () => import('../views/admin/AdminBrandingView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/seo', name: 'admin-seo', component: () => import('../views/admin/AdminSEOView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
+  { path: '/admin/category-mappings', name: 'admin-category-mappings', component: () => import('../views/admin/AdminCategoryMappingsView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
 ];
 
 const router = createRouter({

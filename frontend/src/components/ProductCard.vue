@@ -23,6 +23,7 @@ const emit = defineEmits(['click']);
 const isAdmin = computed(() => auth.role === 'admin');
 
 // Image fade / wake-on-hover logic (purely visual)
+// Timers are instance-local (declared inside setup, not module-level).
 const isImageActive = ref(false);
 let hoverTimer = null;
 let fadeTimer = null;

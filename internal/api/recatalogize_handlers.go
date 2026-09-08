@@ -341,8 +341,8 @@ func (h *Handlers) runRecatalogize() error {
 		}
 		sp.UpdatedAt = time.Now().Unix()
 		data := db.MarshalEANPage(*sp)
-		if err := txn.DocPut(db.KeyEANPage(sp.ID), data); err != nil {
-			fmt.Printf("[RECATALOGIZE] WARN: buffer page %d: %v\n", sp.ID, err)
+		if err := txn.DocPut(db.KeyEANPage(sp.EAN), data); err != nil {
+			fmt.Printf("[RECATALOGIZE] WARN: buffer page %s: %v\n", sp.EAN, err)
 			continue
 		}
 		updated++
@@ -355,6 +355,20 @@ func (h *Handlers) runRecatalogize() error {
 	// creation matches the import path (incl. auto-catalogization).
 	h.eanPageRepo.LoadCatalogizerCache()
 	if len(missingProducts) > 0 {
+		// Apply explicit category mappings before creating missing pages.
+		for _, p := range missingProducts {
+			if p.CategoryID != 0 || p.ShopCategory == "" {
+				continue
+			}
+			mapping, err := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
+			if err != nil {
+				fmt.Printf("[RECATALOGIZE] WARN: lookup category mapping: %v\n", err)
+				continue
+			}
+			if mapping != nil {
+				p.CategoryID = mapping.TargetCategoryID
+			}
+		}
 		_, createdPages := h.eanPageRepo.BatchUpsertFromProductsTx(txn, missingProducts, nil)
 		if h.eanPageSearch != nil && len(createdPages) > 0 {
 			if err := h.eanPageSearch.IndexEANPageBatchTx(txn, createdPages); err != nil {
@@ -383,6 +397,12 @@ func (h *Handlers) runRecatalogize() error {
 			return err
 		}
 	}
+	// Rebuild keywords from all products on each EAN page (merge logic)
+	h.importProgress.SetStep(StepProducts)
+	if err := h.eanPageRepo.UpdateAllKeywordsFromProducts(h.productRepo); err != nil {
+		return fmt.Errorf("update keywords from products: %w", err)
+	}
+
 	if h.turboSearch != nil {
 		if err := h.turboSearch.BuildSortIndexes(); err != nil {
 			return fmt.Errorf("build product sort indexes: %w", err)

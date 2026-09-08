@@ -52,3 +52,13 @@ func (d *Deps) adminBrandingCatThemes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
+
+// GET /admin/branding/export (admin)
+func (d *Deps) adminBrandingExport(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleAdminBrandingExport(w, r)
+}
+
+// POST /admin/branding/import (admin)
+func (d *Deps) adminBrandingImport(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleAdminBrandingImport(w, r)
+}

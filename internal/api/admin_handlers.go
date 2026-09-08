@@ -235,13 +235,9 @@ func (h *Handlers) HandleAdminEANPageGet(w http.ResponseWriter, r *http.Request)
 		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "id is required")
 		return
 	}
-	id, err := strconv.ParseInt(parts[3], 10, 64)
-	if err != nil {
-		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid id")
-		return
-	}
+	ean := parts[len(parts)-1]
 
-	sp, err := h.eanPageRepo.Get(id)
+	sp, err := h.eanPageRepo.Get(ean)
 	if err != nil {
 		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 		return
@@ -265,11 +261,8 @@ func (h *Handlers) HandleAdminEANPageUpdate(w http.ResponseWriter, r *http.Reque
 		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "id is required")
 		return
 	}
-	id, err := strconv.ParseInt(parts[3], 10, 64)
-	if err != nil {
-		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid id")
-		return
-	}
+
+	ean := parts[len(parts)-1]
 
 	var updates map[string]interface{}
 	if !httpres.ReadJSON(w, r, &updates) {
@@ -336,13 +329,13 @@ func (h *Handlers) HandleAdminEANPageUpdate(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	if err := h.eanPageRepo.Update(id, updater); err != nil {
+	if err := h.eanPageRepo.Update(ean, updater); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 
 	// Reindex EAN page
-	sp, _ := h.eanPageRepo.Get(id)
+	sp, _ := h.eanPageRepo.Get(ean)
 	if sp != nil {
 		_ = h.eanPageSearch.UnindexEANPage(sp)
 		_ = h.eanPageSearch.IndexEANPage(sp)
@@ -365,13 +358,9 @@ func (h *Handlers) HandleAdminEANPageDelete(w http.ResponseWriter, r *http.Reque
 		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "id is required")
 		return
 	}
-	id, err := strconv.ParseInt(parts[3], 10, 64)
-	if err != nil {
-		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid id")
-		return
-	}
+	ean := parts[len(parts)-1]
 
-	sp, err := h.eanPageRepo.Get(id)
+	sp, err := h.eanPageRepo.Get(ean)
 	if err != nil {
 		httpres.WriteError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 		return
@@ -381,7 +370,7 @@ func (h *Handlers) HandleAdminEANPageDelete(w http.ResponseWriter, r *http.Reque
 	_ = h.eanPageSearch.UnindexEANPage(sp)
 
 	// Delete
-	if err := h.eanPageRepo.Delete(id); err != nil {
+	if err := h.eanPageRepo.Delete(ean); err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
@@ -820,7 +809,7 @@ func (h *Handlers) HandleAdminDeleteAll(w http.ResponseWriter, r *http.Request) 
 					continue
 				}
 				_ = h.eanPageSearch.DeleteIndexEANPage(sp)
-				_ = h.eanPageRepo.Delete(sp.ID)
+				_ = h.eanPageRepo.Delete(sp.EAN)
 			}
 			_ = h.store.TurboDelete(db.TurboKeyEANPageList)
 			_ = h.store.TurboDelete(db.TurboKeyEANPageList)

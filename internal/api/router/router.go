@@ -176,6 +176,8 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 
 	// GET /admin/settings (public) — get global settings; PATCH (admin) — update
 	mux.Handle("/admin/settings", spaAwareHandler(http.HandlerFunc(d.adminSettings)))
+	mux.Handle("/admin/settings/export", d.JWT.RequireRole(http.HandlerFunc(d.adminSettingsExport), model.RoleAdmin))
+	mux.Handle("/admin/settings/import", d.JWT.RequireRole(http.HandlerFunc(d.adminSettingsImport), model.RoleAdmin))
 
 	// --- Company settings: Payment Methods (temporarily disabled) ---
 
@@ -254,7 +256,7 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.Handle("/votes", http.HandlerFunc(d.votes))
 
 	// GET /votes/check (auth required)
-	mux.Handle("/votes/check", d.JWT.RequireAuth(http.HandlerFunc(d.votesCheck)))
+	// mux.Handle("/votes/check", d.JWT.RequireAuth(http.HandlerFunc(d.votesCheck)))
 
 	// --- Admin comment endpoints ---
 
@@ -286,9 +288,21 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.Handle("/admin/branding/sets", d.JWT.RequireRole(http.HandlerFunc(d.adminBrandingSets), model.RoleAdmin))
 	mux.Handle("/admin/branding/sets/", d.JWT.RequireRole(http.HandlerFunc(d.adminBrandingSet), model.RoleAdmin))
 	mux.Handle("/admin/branding/category-overrides", d.JWT.RequireRole(http.HandlerFunc(d.adminBrandingCatThemes), model.RoleAdmin))
+	mux.Handle("/admin/branding/export", d.JWT.RequireRole(http.HandlerFunc(d.adminBrandingExport), model.RoleAdmin))
+	mux.Handle("/admin/branding/import", d.JWT.RequireRole(http.HandlerFunc(d.adminBrandingImport), model.RoleAdmin))
 
 	// SEO structured data (JSON-LD) settings (admin)
 	mux.Handle("/admin/seo/settings", d.JWT.RequireRole(http.HandlerFunc(d.adminSeoSettings), model.RoleAdmin))
+	mux.Handle("/admin/seo/export", d.JWT.RequireRole(http.HandlerFunc(d.adminSeoExport), model.RoleAdmin))
+	mux.Handle("/admin/seo/import", d.JWT.RequireRole(http.HandlerFunc(d.adminSeoImport), model.RoleAdmin))
+
+	// Category mappings (admin)
+	mux.Handle("/admin/category-mappings", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappings), model.RoleAdmin))
+	mux.Handle("/admin/category-mappings/", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMapping), model.RoleAdmin))
+	mux.Handle("/admin/category-mappings/scan", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappingsScan), model.RoleAdmin))
+	mux.Handle("/admin/category-mappings/apply-scan", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappingsApplyScan), model.RoleAdmin))
+	mux.Handle("/admin/category-mappings/export", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappingsExport), model.RoleAdmin))
+	mux.Handle("/admin/category-mappings/import", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappingsImport), model.RoleAdmin))
 
 	// Companies (public read, admin write)
 	mux.HandleFunc("/companies", d.companies)

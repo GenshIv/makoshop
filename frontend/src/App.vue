@@ -9,6 +9,7 @@ import LogoMark from './components/LogoMark.vue';
 import CookieConsentBanner from './components/CookieConsentBanner.vue';
 import ShardUsageBar from './components/ShardUsageBar.vue';
 import BackToTop from './components/BackToTop.vue';
+import SearchOverlay from './components/SearchOverlay.vue';
 import { useCookieConsent } from './composables/useCookieConsent';
 import { useTheme } from './composables/useTheme';
 import { useAnimation } from './composables/useAnimation';
@@ -40,6 +41,8 @@ const auth = useAuthStore();
 
 const mobileMenuOpen = ref(false);
 const categoriesSidebarOpen = ref(false);
+const searchOverlayOpen = ref(false);
+const searchQuery = ref('');
 
 const isAuthenticated = computed(() => auth.isAuthenticated);
 const userRole = computed(() => {
@@ -129,10 +132,10 @@ onBeforeUnmount(() => {
   <div class="min-h-screen flex flex-col bg-surface-2/40">
     <!-- Header -->
     <header class="bg-surface shadow-sm border-b border-line sticky top-0 z-30">
-      <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between h-16 gap-4">
+      <div class="max-w-app mx-auto px-3 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-4">
           <!-- Left: Logo + mobile buttons -->
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-1.5 sm:gap-3">
             <!-- Mobile menu button -->
             <button
               @click="mobileMenuOpen = !mobileMenuOpen"
@@ -147,53 +150,77 @@ onBeforeUnmount(() => {
             <!-- Categories button (mobile) -->
             <button
               @click="categoriesSidebarOpen = true"
-              class="lg:hidden px-3 py-1.5 bg-surface-2 text-ink-2 rounded-lg text-sm hover:bg-surface-3 flex items-center gap-1"
+              class="lg:hidden px-2 py-1.5 bg-surface-2 text-ink-2 rounded-lg text-sm hover:bg-surface-3 flex items-center gap-1"
               :aria-label="t('common.categories')"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h10M4 18h6" />
               </svg>
-              {{ t('common.categories') }}
+              <span class="hidden xs:inline">{{ t('common.categories') }}</span>
             </button>
 
             <!-- Logo: MK monogram mark + wordmark. The mark is hidden on
                  very small screens to keep the mobile header layout intact. -->
-            <router-link to="/" class="logo-link flex items-center gap-2.5 transition-opacity hover:opacity-80">
+            <router-link to="/" class="logo-link flex items-center gap-2 sm:gap-2.5 transition-opacity hover:opacity-80">
               <LogoMark class="hidden sm:block h-8 w-auto text-ink" />
-              <span class="text-2xl font-extrabold tracking-tight whitespace-nowrap text-accent">
+              <span class="text-lg sm:text-2xl font-extrabold tracking-tight whitespace-nowrap text-accent">
                 wszyst<span class="text-ink-2">.pl</span>
               </span>
             </router-link>
           </div>
 
           <!-- Search bar (hidden on very small screens) -->
-          <form
-            @submit.prevent="$router.push({ name: 'shop-catalog', query: { q: $refs.search?.value } })"
-            class="flex-1 max-w-xl hidden sm:block"
-          >
-            <div class="relative">
-              <svg xmlns="http://www.w3.org/2000/svg" class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div class="flex-1 max-w-xl hidden sm:block">
+            <button
+              type="button"
+              @click="searchOverlayOpen = true"
+              class="w-full pl-4 pr-4 py-2.5 border border-orange-500 rounded-lg text-sm placeholder:text-ink-3
+                     focus:outline-none transition bg-surface hover:bg-surface-2 flex items-center gap-3 cursor-pointer relative"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-orange-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              <input
-                ref="search"
-                type="text"
-                :placeholder="t('common.search_placeholder')"
-                class="search-field search-bright w-full pl-10 pr-4 py-2.5 border rounded-lg text-sm placeholder:text-ink-3
-                       focus:outline-none transition"
-              />
-            </div>
-          </form>
+              <span class="text-ink-3">{{ t('common.search_placeholder') }}</span>
+            </button>
+          </div>
 
           <!-- Right: Nav links -->
-          <nav class="flex items-center gap-2 sm:gap-3">
+          <nav class="flex items-center gap-1.5 sm:gap-3">
+            <!-- Mobile search button -->
+            <button
+              @click="searchOverlayOpen = true"
+              class="sm:hidden p-2 text-ink-2 hover:bg-surface-2 rounded-lg"
+              :aria-label="t('common.search')"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
+
+            <!-- Mobile theme switcher -->
+            <button
+              @click="theme = theme === THEMES.LIGHT ? THEMES.DARK : theme === THEMES.DARK ? THEMES.AUTO : THEMES.LIGHT"
+              class="sm:hidden p-2 text-ink-2 hover:bg-surface-2 rounded-lg"
+              :aria-label="theme === THEMES.LIGHT ? 'Light' : theme === THEMES.DARK ? 'Dark' : 'Auto'"
+            >
+              <svg v-if="theme === THEMES.LIGHT" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              <svg v-else-if="theme === THEMES.DARK" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+              <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </button>
+
             <!-- Desktop auth links -->
-            <template v-if="!isAuthenticated" class="hidden sm:flex items-center gap-2">
+            <div v-if="!isAuthenticated" class="hidden sm:flex items-center gap-2">
               <router-link to="/login" class="text-sm text-ink-2 hover:text-accent px-2 py-1 transition-colors">{{ t('common.login') }}</router-link>
               <router-link to="/register" class="btn btn-primary btn-sm">{{ t('common.register') }}</router-link>
-            </template>
+            </div>
 
-            <template v-else class="hidden sm:flex items-center gap-2">
+            <div v-else class="hidden sm:flex items-center gap-2">
               <div class="flex items-center gap-1">
                 <router-link to="/profile" class="text-sm text-ink-2 hover:text-accent transition-colors">
                   {{ auth.user?.name || auth.user?.email }}
@@ -209,7 +236,7 @@ onBeforeUnmount(() => {
                 {{ t('common.admin_panel') }}
               </router-link>
               <button @click="handleLogout" class="text-xs text-ink-3 hover:text-red-600 px-1 transition-colors">{{ t('common.logout') }}</button>
-            </template>
+            </div>
 
             <!-- Mobile auth dropdown trigger -->
             <div v-if="isAuthenticated" class="sm:hidden relative">
@@ -423,6 +450,12 @@ onBeforeUnmount(() => {
 
     <!-- Cookie Consent Banner -->
     <CookieConsentBanner />
+
+    <!-- Search Overlay -->
+    <SearchOverlay
+      v-model="searchOverlayOpen"
+      v-model:query="searchQuery"
+    />
 
     <!-- Back to top -->
     <BackToTop />

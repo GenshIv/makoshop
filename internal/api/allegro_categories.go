@@ -17,9 +17,10 @@ import (
 // words for catalogization.
 
 type allegroCatEntry struct {
-	Name  string `json:"name"`
-	Alias string `json:"alias"`
-	Path  string `json:"path"`
+	Name   string `json:"name"`
+	Alias  string `json:"alias"`
+	Path   string `json:"path"`
+	Parent string `json:"parent,omitempty"`
 }
 
 var (
@@ -39,10 +40,49 @@ func loadAllegroCategories() map[string]allegroCatEntry {
 			fmt.Printf("[IMPORT-ALLEGRO] WARN: parse allegro_categories.json: %v\\n", err)
 			return
 		}
+		// Reconstruct missing paths using parent relationships.
+		reconstructPaths(m)
 		allegroCats = m
 		fmt.Printf("[IMPORT-ALLEGRO] category dump loaded: %d categories\\n", len(allegroCats))
 	})
 	return allegroCats
+}
+
+// reconstructPaths fills in missing Path fields by walking up the parent chain.
+func reconstructPaths(cats map[string]allegroCatEntry) {
+	visited := make(map[string]bool)
+	for id, entry := range cats {
+		if entry.Path != "" || entry.Parent == "" {
+			continue
+		}
+		// Walk up to find an ancestor with a known path.
+		path := reconstructPathFor(id, cats, visited)
+		if path != "" {
+			entry.Path = path
+			cats[id] = entry
+		}
+	}
+}
+
+func reconstructPathFor(id string, cats map[string]allegroCatEntry, visited map[string]bool) string {
+	if visited[id] {
+		return "" // cycle detected
+	}
+	visited[id] = true
+	entry := cats[id]
+	if entry.Parent == "" {
+		return ""
+	}
+	parent := cats[entry.Parent]
+	if parent.Path != "" {
+		return parent.Path + " > " + entry.Name
+	}
+	// Parent also missing path — recurse.
+	parentPath := reconstructPathFor(entry.Parent, cats, visited)
+	if parentPath != "" {
+		return parentPath + " > " + entry.Name
+	}
+	return ""
 }
 
 // resolveAllegroShopCategory maps a feed category reference (a numeric ID,

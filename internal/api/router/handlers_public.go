@@ -114,11 +114,6 @@ func (d *Deps) votes(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /votes/check (auth required)
-func (d *Deps) votesCheck(w http.ResponseWriter, r *http.Request) {
-	d.Handlers.HandleVoteCheck(w, r)
-}
-
 // --- Categories (public and admin share same CRUD for now) ---
 
 // GET /categories

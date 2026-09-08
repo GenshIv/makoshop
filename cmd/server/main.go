@@ -44,7 +44,7 @@ func bootstrapSuperAdmin(userRepo *db.UserRepo) {
 
 	// Create superadmin
 	superadmin := &model.User{
-		Email:        "info@wsryst.com",
+		Email:        "info@wszyst.pl",
 		PasswordHash: "", // will be set by userRepo.Create
 		Role:         model.RoleAdmin,
 		Status:       model.UserStatusActive,
@@ -58,7 +58,7 @@ func bootstrapSuperAdmin(userRepo *db.UserRepo) {
 
 	fmt.Println("========================================")
 	fmt.Println("SUPERADMIN CREATED (no admins existed)")
-	fmt.Printf("Email:    info@wsryst.com\n")
+	fmt.Printf("Email:    info@wszyst.pl\n")
 	fmt.Printf("Password: %s\n", password)
 	fmt.Println("Please change the password after first login.")
 	fmt.Println("========================================")
@@ -143,6 +143,8 @@ func main() {
 	authHandlers := api.NewAuthHandlers(userRepo, companyRepo, cartRepo, jwtMiddleware, cfg.Auth.JWTSecret)
 	// Attach turboSearch to authHandlers for company products endpoint
 	authHandlers.SetTurboSearch(h.TurboSearch())
+	// Attach productRepo to authHandlers for company deletion (price cleanup)
+	authHandlers.SetProductRepo(h.ProductRepo())
 
 	// Build the router: the full route table and the middleware chain (security
 	// headers, maintenance, stats, metrics, gzip) live in internal/api/router.
@@ -158,6 +160,19 @@ func main() {
 	defer rt.Close()
 
 	handler := rt.Handler()
+
+	// Periodic cache rebuild every 15 minutes (background, fire-and-forget)
+	cacheTicker := time.NewTicker(15 * time.Minute)
+	go func() {
+		for range cacheTicker.C {
+			log.Println("Periodic cache rebuild starting...")
+			if err := h.InvalidateAndReloadCatAttrs(); err != nil {
+				log.Printf("Periodic cache rebuild error: %v", err)
+			} else {
+				log.Println("Periodic cache rebuild complete")
+			}
+		}
+	}()
 
 	// Preload EAN pages into OS page cache (background, fire-and-forget)
 	go func() {

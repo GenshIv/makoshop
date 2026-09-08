@@ -381,6 +381,14 @@ const fetchEANPage = async () => {
     treePath.value = data.tree_path || [];
     treePathFull.value = data.tree_path_full || [];
 
+    // Initialize price range filter before selecting product
+    if (products.value.length > 0) {
+      const prices = products.value.map(p => Number(p.price)).filter(Number.isFinite);
+      if (prices.length > 0) {
+        filterForm.priceRange = [Math.min(...prices), Math.max(...prices)];
+      }
+    }
+
     await initFromData();
   } catch (e) {
     error.value = e.response?.data?.error?.message || t('eanpage.not_found');
@@ -551,9 +559,9 @@ const modifications = computed(() => {
     });
   }
 
-  // Price range filter
+  // Price range filter (skip if still at default [0, 0])
   const [minPrice, maxPrice] = filterForm.priceRange;
-  if (Number.isFinite(minPrice) && Number.isFinite(maxPrice)) {
+  if (Number.isFinite(minPrice) && Number.isFinite(maxPrice) && !(minPrice === 0 && maxPrice === 0)) {
     filtered = filtered.filter(p => {
       const price = Number(p.price);
       return Number.isFinite(price) && price >= minPrice && price <= maxPrice;
@@ -897,11 +905,11 @@ const votePage = async (voteType) => {
     toast.error(t('eanpage.login_first', 'Login first'));
     return;
   }
-  if (!page.value?.id) return;
+  if (!page.value?.ean) return;
   try {
     const res = await api.post('/votes', {
       target_type: 'eanpage',
-      target_id: page.value.id,
+      target_id: page.value.ean,
       vote_type: voteType,
     });
     pageUserVote.value = res.data.vote_type;
@@ -917,10 +925,10 @@ const votePage = async (voteType) => {
 
 // Load user's vote on this page
 const loadPageVote = async () => {
-  if (!user.value || !page.value?.id) return;
+  if (!user.value || !page.value?.ean) return;
   try {
     const res = await api.get('/votes/check', {
-      params: { target_type: 'eanpage', target_id: page.value.id }
+      params: { target_type: 'eanpage', target_id: page.value.ean }
     });
     pageUserVote.value = res.data.vote_type || null;
     if (page.value) {
@@ -947,6 +955,23 @@ onMounted(() => {
   loadPageVote();
 });
 
+// Watch for route changes (SPA navigation between EAN pages)
+watch(
+  () => route.path,
+  (newPath, oldPath) => {
+    if (newPath !== oldPath && !props.data) {
+      // Reset filters and refetch for new page
+      filterForm.companyFilters = [];
+      filterForm.paymentMethodFilters = [];
+      filterForm.deliveryTimeFilters = [];
+      filterForm.installmentPlanFilters = [];
+      filterForm.attributeFilters = {};
+      filterForm.priceRange = [0, 0];
+      fetchEANPage();
+    }
+  }
+);
+
 // Watch for props.data changes (when rendered from CatalogView)
 watch(
   () => props.data,
@@ -959,6 +984,20 @@ watch(
       treePath.value = newData.tree_path || [];
       treePathFull.value = newData.tree_path_full || [];
       loading.value = false;
+
+      // Reset filters for new product
+      filterForm.companyFilters = [];
+      filterForm.paymentMethodFilters = [];
+      filterForm.deliveryTimeFilters = [];
+      filterForm.installmentPlanFilters = [];
+      filterForm.attributeFilters = {};
+      const prices = products.value.map(p => Number(p.price)).filter(Number.isFinite);
+      if (prices.length > 0) {
+        filterForm.priceRange = [Math.min(...prices), Math.max(...prices)];
+      } else {
+        filterForm.priceRange = [0, 0];
+      }
+
       initFromData();
     }
   },
@@ -1228,8 +1267,8 @@ const clearAllFilters = () => {
       <!-- Bottom: offers wide + filters narrow on the right -->
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-        <!-- Where to buy (offers) — wide (~9 cols) -->
-        <div class="lg:col-span-9 bg-surface rounded-2xl shadow-sm border border-line overflow-hidden">
+        <!-- Where to buy (offers) — wide (~9 cols), hidden when only one offer -->
+        <div v-if="products.length > 1" class="lg:col-span-9 bg-surface rounded-2xl shadow-sm border border-line overflow-hidden">
           <div class="px-4 py-3 border-b border-line">
             <h3 class="font-semibold text-ink">
               {{ t('eanpage.where_to_buy_base') }} ({{ filteredOfferCount }} {{ offersPlural }})
@@ -1244,66 +1283,115 @@ const clearAllFilters = () => {
                 <div class="text-sm font-semibold text-ink">{{ mod.name }}</div>
               </div>
               <!-- Offers -->
-              <label
-                v-for="product in mod.suppliers"
-                :key="product.id"
-                :class="[
-                  'flex items-center gap-4 px-4 py-3.5 cursor-pointer transition group',
-                  selectedProduct?.id === product.id
-                    ? 'bg-orange-50/80 dark:bg-orange-900/20 border-l-4 border-orange-600 pl-3'
-                    : 'hover:bg-surface-2 border-l-4 border-transparent'
-                ]"
-              >
-                <input
-                  type="radio"
-                  name="ean-product"
-                  :value="product.id"
-                  :checked="selectedProduct?.id === product.id"
-                  @change="selectProduct(product)"
-                  class="w-4 h-4 text-orange-600 border-line focus:ring-orange-500 flex-shrink-0 cursor-pointer mt-0.5"
-                />
-                <!-- Left: seller info with stock status -->
-                <div class="flex-shrink-0 w-40 min-w-0">
-                  <div class="text-sm font-semibold text-ink truncate" :title="getCompanyName(product)">
-                    {{ getCompanyName(product) }}
-                  </div>
-                  <div class="flex items-center gap-1.5 mt-1">
-                    <span :class="isInStock(product) ? 'text-green-600 bg-green-50 dark:bg-green-900/20' : 'text-red-600 bg-red-50 dark:bg-red-900/20'" 
-                          class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium">
-                      <span :class="isInStock(product) ? 'before:content-[\'\\20\'] before:w-1.5 before:h-1.5 before:rounded-full before:bg-green-600 before:mr-1.5' : 'before:content-[\'\\20\'] before:w-1.5 before:h-1.5 before:rounded-full before:bg-red-600 before:mr-1.5'">
-                        {{ isInStock(product) ? t('catalog.in_stock') : t('catalog.out_of_stock') }}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-                <!-- Middle: attributes as badges/tags (only differing attributes) -->
-                <div class="flex-1 min-w-0">
-                  <template v-if="product.attributes && product.attributes.length">
-                    <div class="flex flex-wrap gap-1.5">
-                      <template v-for="attr in product.attributes.filter(a => !INTERNAL_ATTRS.includes(a.key) && !a.key.toLowerCase().includes('url') && !a.value.toLowerCase().startsWith('http') && shouldShowAttributeTag(a.key)).slice(0, 8)" :key="attr.key">
-                        <div class="inline-flex items-center gap-1 px-2 py-1 bg-surface-2 hover:bg-surface-3 rounded-md text-xs transition">
-                          <span class="font-medium text-ink-2">{{ attrLabel(attr.key) }}:</span>
-                          <span class="text-ink-3">{{ attr.value }}</span>
-                        </div>
-                      </template>
+              <template v-for="product in mod.suppliers" :key="product.id">
+                <!-- Single offer: show as active without radio button -->
+                <div
+                  v-if="products.length === 1"
+                  class="flex items-center gap-4 px-4 py-3.5 bg-orange-50/80 dark:bg-orange-900/20 border-l-4 border-orange-600 pl-3"
+                >
+                  <!-- Left: seller info with stock status -->
+                  <div class="flex-shrink-0 w-40 min-w-0">
+                    <div class="text-sm font-semibold text-ink truncate" :title="getCompanyName(product)">
+                      {{ getCompanyName(product) }}
                     </div>
-                  </template>
-                  <!-- Description preview if available -->
-                  <div v-if="product.description" class="mt-2 text-xs text-ink-3 line-clamp-2">
-                    <div v-html="sanitizeHtml(product.description)" class="[&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4 [&>p]:my-0 [&>li]:my-0 [&>div]:my-0 [&>span]:my-0 [&>strong]:font-semibold"></div>
+                    <div class="flex items-center gap-1.5 mt-1">
+                      <span :class="isInStock(product) ? 'text-green-600 bg-green-50 dark:bg-green-900/20' : 'text-red-600 bg-red-50 dark:bg-red-900/20'" 
+                            class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium">
+                        <span :class="isInStock(product) ? 'before:content-[\'\\20\'] before:w-1.5 before:h-1.5 before:rounded-full before:bg-green-600 before:mr-1.5' : 'before:content-[\'\\20\'] before:w-1.5 before:h-1.5 before:rounded-full before:bg-red-600 before:mr-1.5'">
+                          {{ isInStock(product) ? t('catalog.in_stock') : t('catalog.out_of_stock') }}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                  <!-- Middle: attributes as badges/tags (only differing attributes) -->
+                  <div class="flex-1 min-w-0">
+                    <template v-if="product.attributes && product.attributes.length">
+                      <div class="flex flex-wrap gap-1.5">
+                        <template v-for="attr in product.attributes.filter(a => !INTERNAL_ATTRS.includes(a.key) && !a.key.toLowerCase().includes('url') && !a.value.toLowerCase().startsWith('http') && shouldShowAttributeTag(a.key)).slice(0, 8)" :key="attr.key">
+                          <div class="inline-flex items-center gap-1 px-2 py-1 bg-surface-2 hover:bg-surface-3 rounded-md text-xs transition">
+                            <span class="font-medium text-ink-2">{{ attrLabel(attr.key) }}:</span>
+                            <span class="text-ink-3">{{ attr.value }}</span>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+                    <!-- Description preview if available -->
+                    <div v-if="product.description" class="mt-2 text-xs text-ink-3 line-clamp-2">
+                      <div v-html="sanitizeHtml(product.description)" class="[&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4 [&>p]:my-0 [&>li]:my-0 [&>div]:my-0 [&>span]:my-0 [&>strong]:font-semibold"></div>
+                    </div>
+                  </div>
+                  <!-- Far right: price with emphasis -->
+                  <div class="flex-shrink-0 text-right">
+                    <div class="text-lg font-bold text-orange-600 whitespace-nowrap">
+                      {{ formatPrice(product.price, product.currency) }}
+                    </div>
+                    <div v-if="product.previous_price && product.previous_price > product.price" 
+                         class="text-xs text-ink-3 line-through mt-0.5">
+                      {{ formatPrice(product.previous_price, product.currency) }}
+                    </div>
                   </div>
                 </div>
-                <!-- Far right: price with emphasis -->
-                <div class="flex-shrink-0 text-right">
-                  <div class="text-lg font-bold text-orange-600 whitespace-nowrap">
-                    {{ formatPrice(product.price, product.currency) }}
+                <!-- Multiple offers: show with radio button -->
+                <label
+                  v-else
+                  :class="[
+                    'flex items-center gap-4 px-4 py-3.5 cursor-pointer transition group',
+                    selectedProduct?.id === product.id
+                      ? 'bg-orange-50/80 dark:bg-orange-900/20 border-l-4 border-orange-600 pl-3'
+                      : 'hover:bg-surface-2 border-l-4 border-transparent'
+                  ]"
+                >
+                  <input
+                    type="radio"
+                    name="ean-product"
+                    :value="product.id"
+                    :checked="selectedProduct?.id === product.id"
+                    @change="selectProduct(product)"
+                    class="w-4 h-4 text-orange-600 border-line focus:ring-orange-500 flex-shrink-0 cursor-pointer mt-0.5"
+                  />
+                  <!-- Left: seller info with stock status -->
+                  <div class="flex-shrink-0 w-40 min-w-0">
+                    <div class="text-sm font-semibold text-ink truncate" :title="getCompanyName(product)">
+                      {{ getCompanyName(product) }}
+                    </div>
+                    <div class="flex items-center gap-1.5 mt-1">
+                      <span :class="isInStock(product) ? 'text-green-600 bg-green-50 dark:bg-green-900/20' : 'text-red-600 bg-red-50 dark:bg-red-900/20'" 
+                            class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium">
+                        <span :class="isInStock(product) ? 'before:content-[\'\\20\'] before:w-1.5 before:h-1.5 before:rounded-full before:bg-green-600 before:mr-1.5' : 'before:content-[\'\\20\'] before:w-1.5 before:h-1.5 before:rounded-full before:bg-red-600 before:mr-1.5'">
+                          {{ isInStock(product) ? t('catalog.in_stock') : t('catalog.out_of_stock') }}
+                        </span>
+                      </span>
+                    </div>
                   </div>
-                  <div v-if="product.previous_price && product.previous_price > product.price" 
-                       class="text-xs text-ink-3 line-through mt-0.5">
-                    {{ formatPrice(product.previous_price, product.currency) }}
+                  <!-- Middle: attributes as badges/tags (only differing attributes) -->
+                  <div class="flex-1 min-w-0">
+                    <template v-if="product.attributes && product.attributes.length">
+                      <div class="flex flex-wrap gap-1.5">
+                        <template v-for="attr in product.attributes.filter(a => !INTERNAL_ATTRS.includes(a.key) && !a.key.toLowerCase().includes('url') && !a.value.toLowerCase().startsWith('http') && shouldShowAttributeTag(a.key)).slice(0, 8)" :key="attr.key">
+                          <div class="inline-flex items-center gap-1 px-2 py-1 bg-surface-2 hover:bg-surface-3 rounded-md text-xs transition">
+                            <span class="font-medium text-ink-2">{{ attrLabel(attr.key) }}:</span>
+                            <span class="text-ink-3">{{ attr.value }}</span>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+                    <!-- Description preview if available -->
+                    <div v-if="product.description" class="mt-2 text-xs text-ink-3 line-clamp-2">
+                      <div v-html="sanitizeHtml(product.description)" class="[&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4 [&>p]:my-0 [&>li]:my-0 [&>div]:my-0 [&>span]:my-0 [&>strong]:font-semibold"></div>
+                    </div>
                   </div>
-                </div>
-              </label>
+                  <!-- Far right: price with emphasis -->
+                  <div class="flex-shrink-0 text-right">
+                    <div class="text-lg font-bold text-orange-600 whitespace-nowrap">
+                      {{ formatPrice(product.price, product.currency) }}
+                    </div>
+                    <div v-if="product.previous_price && product.previous_price > product.price" 
+                         class="text-xs text-ink-3 line-through mt-0.5">
+                      {{ formatPrice(product.previous_price, product.currency) }}
+                    </div>
+                  </div>
+                </label>
+              </template>
             </template>
             <!-- Empty state when no products match filters -->
             <div v-if="modifications.length === 0" class="px-4 py-8 text-center text-ink-3">
@@ -1442,7 +1530,7 @@ const clearAllFilters = () => {
       <h2 class="text-xl font-bold text-ink mb-4">{{ t('eanpage.comments_title', 'User Comments') }}</h2>
       <CommentSection
         target-type="eanpage"
-        :target-id="page.id"
+        :target-id="page.ean"
       />
     </div>
   </div>

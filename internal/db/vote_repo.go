@@ -38,7 +38,7 @@ func (r *VoteRepo) Create(vote *model.Vote) error {
 	}
 
 	// Index: vote by target
-	targetKey := fmt.Sprintf("vote_target:%s:%d", vote.TargetType, vote.TargetID)
+	targetKey := fmt.Sprintf("vote_target:%s:%s", vote.TargetType, vote.TargetID)
 	if _, err := r.store.db.TurboPutIndexString(targetKey, KeyVote(vote.ID)); err != nil {
 		_ = r.store.DocDelete(KeyVote(vote.ID))
 		return fmt.Errorf("turbo index vote by target: %w", err)
@@ -68,8 +68,8 @@ func (r *VoteRepo) Get(id int64) (*model.Vote, error) {
 }
 
 // GetVoteByTargetAndUser returns the vote for a target and user, or nil if not found.
-func (r *VoteRepo) GetVoteByTargetAndUser(targetType string, targetID, userID int64) (*model.Vote, error) {
-	targetKey := fmt.Sprintf("vote_target:%s:%d", targetType, targetID)
+func (r *VoteRepo) GetVoteByTargetAndUser(targetType, targetID string, userID int64) (*model.Vote, error) {
+	targetKey := fmt.Sprintf("vote_target:%s:%s", targetType, targetID)
 	tokens, err := r.store.db.TurboGetIndexTokens(targetKey)
 	if err != nil || len(tokens) == 0 {
 		return nil, nil
@@ -116,7 +116,7 @@ func (r *VoteRepo) Delete(id int64) error {
 		return err
 	}
 
-	targetKey := fmt.Sprintf("vote_target:%s:%d", vote.TargetType, vote.TargetID)
+	targetKey := fmt.Sprintf("vote_target:%s:%s", vote.TargetType, vote.TargetID)
 	userKey := fmt.Sprintf("vote_user:%d", vote.UserID)
 	_, _ = r.store.db.TurboDeleteIndexString(targetKey, KeyVote(id))
 	_, _ = r.store.db.TurboDeleteIndexString(userKey, KeyVote(id))
@@ -128,7 +128,7 @@ func (r *VoteRepo) Delete(id int64) error {
 }
 
 // GetVoteForTarget returns the user's vote on a specific target.
-func (r *VoteRepo) GetVoteForTarget(targetType string, targetID, userID int64) (*model.UserVote, error) {
+func (r *VoteRepo) GetVoteForTarget(targetType, targetID string, userID int64) (*model.UserVote, error) {
 	vote, err := r.GetVoteByTargetAndUser(targetType, targetID, userID)
 	if err != nil {
 		return nil, err

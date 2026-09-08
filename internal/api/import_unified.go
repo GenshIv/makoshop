@@ -14,16 +14,16 @@ import (
 // CompanyImportResult holds the result of importing a single company's price
 // file using its configured format.
 type CompanyImportResult struct {
-	Company          string  `json:"company"`
-	Format           string  `json:"format"`
-	Status           string  `json:"status"`
-	Files            int     `json:"files,omitempty"`
-	OffersParsed     int     `json:"offers_parsed"`
-	ProductsCreated  int     `json:"products_created"`
-	ProductsUpdated  int     `json:"products_updated"`
-	ProductsSkipped  int     `json:"products_skipped"`
-	ProductsDeleted  int     `json:"products_deleted,omitempty"`
-	AffectedEANPages []int64 `json:"-"` // EAN page IDs affected by this import (not serialized)
+	Company          string   `json:"company"`
+	Format           string   `json:"format"`
+	Status           string   `json:"status"`
+	Files            int      `json:"files,omitempty"`
+	OffersParsed     int      `json:"offers_parsed"`
+	ProductsCreated  int      `json:"products_created"`
+	ProductsUpdated  int      `json:"products_updated"`
+	ProductsSkipped  int      `json:"products_skipped"`
+	ProductsDeleted  int      `json:"products_deleted,omitempty"`
+	AffectedEANPages []string `json:"-"` // EAN page IDs affected by this import (not serialized)
 }
 
 // UnifiedImportResult holds the result of a batch import across one or more
@@ -256,7 +256,7 @@ func (h *Handlers) buildProductPriceIndex() map[int64]float64 {
 // affected pages are recalculated in one pass from the company price
 // documents (no product document reads), then sort indexes are rebuilt from
 // the committed state, and category trees are refreshed.
-func (h *Handlers) runGlobalRecalculation(affectedEANPages []int64) error {
+func (h *Handlers) runGlobalRecalculation(affectedEANPages []string) error {
 	if h.eanPageRepo != nil {
 		pageIDs := affectedEANPages
 		if len(pageIDs) == 0 {
@@ -271,6 +271,17 @@ func (h *Handlers) runGlobalRecalculation(affectedEANPages []int64) error {
 		}
 		if err := h.eanPageRepo.RecalculateCountsAndMinPricesForPages(pageIDs, h.buildProductPriceIndex()); err != nil {
 			return fmt.Errorf("recalculate counts/min prices: %w", err)
+		}
+
+		// Rebuild EAN page keywords from current product data (picks up tokenizer changes)
+		if len(affectedEANPages) == 0 && h.productRepo != nil {
+			start := time.Now()
+			fmt.Println("[IMPORT] Rebuilding EAN page keywords from products...")
+			if err := h.eanPageRepo.UpdateAllKeywordsFromProducts(h.productRepo); err != nil {
+				fmt.Printf("[IMPORT] WARN: keyword rebuild failed: %v\n", err)
+			} else {
+				fmt.Printf("[IMPORT] EAN page keywords rebuilt in %v\n", time.Since(start))
+			}
 		}
 	}
 	if h.eanPageSearch != nil {
@@ -393,7 +404,7 @@ func (h *Handlers) HandleAdminImportUnified(w http.ResponseWriter, r *http.Reque
 		result := UnifiedImportResult{Status: "completed"}
 
 		// Collect affected EAN pages across all companies for incremental recalculation
-		affectedEANPages := make(map[int64]struct{})
+		affectedEANPages := make(map[string]struct{})
 
 		for i := range companies {
 			company := &companies[i]
@@ -430,7 +441,7 @@ func (h *Handlers) HandleAdminImportUnified(w http.ResponseWriter, r *http.Reque
 		}
 
 		// Convert map to slice for runGlobalRecalculation
-		affectedSlice := make([]int64, 0, len(affectedEANPages))
+		affectedSlice := make([]string, 0, len(affectedEANPages))
 		for id := range affectedEANPages {
 			affectedSlice = append(affectedSlice, id)
 		}
@@ -449,6 +460,13 @@ func (h *Handlers) HandleAdminImportUnified(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		h.importProgress.CompanyDone(globalIdx, CompanyStateCompleted, "")
+
+		// Rebuild product sort indexes cache after import
+		if err := h.InvalidateAndReloadCatAttrs(); err != nil {
+			fmt.Printf("[IMPORT-UNIFIED] WARN: cache reload failed: %v\n", err)
+		} else {
+			fmt.Printf("[IMPORT-UNIFIED] Product sort indexes rebuilt after import\n")
+		}
 
 		if result.Status == "completed" && result.OffersParsed == 0 && result.ProductsCreated == 0 && result.ProductsUpdated == 0 {
 			result.Status = "no_products"

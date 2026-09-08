@@ -91,8 +91,8 @@ func TestRunRecatalogize(t *testing.T) {
 
 	// P1: correct count/price; assign the catalogizer's category so the page
 	// is fully in place -> must stay untouched (by the page pass).
-	p1 := pageByEAN("111")
-	if err := h.eanPageRepo.Update(p1.ID, func(s *model.EANPage) {
+	pageByEAN("111")
+	if err := h.eanPageRepo.Update("111", func(s *model.EANPage) {
 		s.CategoryID = cat.ID
 		s.SeoURL = "/shop/laptops/" + s.Slug
 	}); err != nil {
@@ -100,8 +100,8 @@ func TestRunRecatalogize(t *testing.T) {
 	}
 
 	// P2: stale count/min-price, no category -> must be repaired.
-	p2 := pageByEAN("222")
-	if err := h.eanPageRepo.Update(p2.ID, func(s *model.EANPage) {
+	pageByEAN("222")
+	if err := h.eanPageRepo.Update("222", func(s *model.EANPage) {
 		s.ProductCount = 5
 		s.MinPrice = 999
 	}); err != nil {
@@ -123,7 +123,7 @@ func TestRunRecatalogize(t *testing.T) {
 	}
 
 	// P1 unchanged (except the delivery attribute pass).
-	got1, err := h.eanPageRepo.Get(p1.ID)
+	got1, err := h.eanPageRepo.Get("111")
 	if err != nil {
 		t.Fatalf("get p1: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestRunRecatalogize(t *testing.T) {
 	}
 
 	// P2 repaired.
-	got2, err := h.eanPageRepo.Get(p2.ID)
+	got2, err := h.eanPageRepo.Get("222")
 	if err != nil {
 		t.Fatalf("get p2: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestRunRecatalogize(t *testing.T) {
 	}
 
 	// P3 alive with zero offers (pages are never deleted — SEO).
-	got3, err := h.eanPageRepo.Get(p3.ID)
+	got3, err := h.eanPageRepo.Get("333")
 	if err != nil {
 		t.Fatalf("orphan p3 must stay alive: %v", err)
 	}

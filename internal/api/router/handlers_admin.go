@@ -365,6 +365,20 @@ func (d *Deps) adminSettings(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 }
 
+// GET /admin/settings/export (admin) — export global settings
+func (d *Deps) adminSettingsExport(w http.ResponseWriter, r *http.Request) {
+	d.JWT.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		d.Handlers.HandleAdminSettingsExport(w, r)
+	}), model.RoleAdmin).ServeHTTP(w, r)
+}
+
+// POST /admin/settings/import (admin) — import global settings
+func (d *Deps) adminSettingsImport(w http.ResponseWriter, r *http.Request) {
+	d.JWT.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		d.Handlers.HandleAdminSettingsImport(w, r)
+	}), model.RoleAdmin).ServeHTTP(w, r)
+}
+
 // --- Company settings: Delivery Times ---
 
 // GET /admin/delivery-times (public); POST (admin)

@@ -79,6 +79,65 @@ func (r *CommentRepo) Get(id int64) (*model.Comment, error) {
 	return UnmarshalComment(data)
 }
 
+// ListByTargetString returns comments for a target with a string identifier
+// (used by EAN pages where the target ID is an EAN string, not an integer).
+func (r *CommentRepo) ListByTargetString(targetType string, targetIDStr string, page, limit int, statusFilter string) ([]model.Comment, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	key := fmt.Sprintf("comment_target:%s:%s", targetType, targetIDStr)
+	tokens, err := r.store.db.TurboGetIndexTokens(key)
+	if err != nil || len(tokens) == 0 {
+		return nil, 0, nil
+	}
+
+	docs, err := r.store.db.MultiGetByDocIDs(tokens)
+	if err != nil {
+		return nil, 0, fmt.Errorf("multi get comments: %w", err)
+	}
+
+	var comments []model.Comment
+	for _, doc := range docs {
+		if len(doc) == 0 {
+			continue
+		}
+		comment, err := UnmarshalComment(doc)
+		if err != nil {
+			continue
+		}
+		if statusFilter != "" && string(comment.Status) != statusFilter {
+			continue
+		}
+		comments = append(comments, *comment)
+	}
+
+	// Sort by created_at desc (newest first)
+	for i := len(comments)/2 - 1; i >= 0; i-- {
+		j := len(comments) - 1 - i
+		if comments[i].CreatedAt < comments[j].CreatedAt {
+			comments[i], comments[j] = comments[j], comments[i]
+		}
+	}
+
+	total := int64(len(comments))
+	start := (page - 1) * limit
+	if start >= len(comments) {
+		return []model.Comment{}, total, nil
+	}
+	end := start + limit
+	if end > len(comments) {
+		end = len(comments)
+	}
+	return comments[start:end], total, nil
+}
+
 // ListByTarget returns comments for a target with pagination.
 func (r *CommentRepo) ListByTarget(targetType string, targetID int64, page, limit int, statusFilter string) ([]model.Comment, int64, error) {
 	if page < 1 {

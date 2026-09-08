@@ -74,8 +74,8 @@ onMounted(() => {
   <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <HomeHero />
 
-    <!-- Root categories tiles row -->
-    <div class="mb-8">
+    <!-- Root categories tiles row (desktop only) -->
+    <div class="mb-8 hidden sm:block">
       <div v-if="rootCatsLoading" class="flex gap-2">
         <div v-for="i in 12" :key="i" class="flex-1 aspect-square rounded-lg bg-surface-3 animate-pulse" />
       </div>

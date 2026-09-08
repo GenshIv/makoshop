@@ -579,6 +579,10 @@ func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*mode
 		priceMap = priceDoc.Prices
 	}
 
+	// Collect new product IDs per EAN key for batched index writes.
+	// Each EAN index document is written once with all new IDs, not per-product.
+	eanIndexUpdates := make(map[string][]int64)
+
 	// First pass: read all existing products in batch
 	existingIDs := make(map[string]int64) // keyPath -> existingID
 	var keysToRead []string
@@ -684,6 +688,10 @@ func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*mode
 					existing.Attributes = nil
 					changed = true
 				}
+				if len(p.ShopCategory) > 0 {
+					existing.ShopCategory = p.ShopCategory
+				}
+
 				if changed {
 					existing.UpdatedAt = time.Now().Unix()
 					_ = txn.DocPut(KeyProduct(existingID), MarshalProduct(*existing))
@@ -693,6 +701,7 @@ func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*mode
 						priceDoc.Prices[existingID] = existing.Price
 					}
 				}
+
 				// Hand the final stored state back to the caller through the
 				// input slice, so it never needs to re-Get the product.
 				products[i] = existing
@@ -710,10 +719,10 @@ func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*mode
 		// Write EAN key (in transaction)
 		_ = txn.TurboWrite(keyPath, []byte(fmt.Sprintf("%d", p.ID)))
 
-		// Register the product in the EAN index document (buffered; buffered
-		// loads make repeated calls within one transaction safe).
-		if err := appendEANIndexIDs(txn, r.store, ProductEANIndexKey(p), []int64{p.ID}); err != nil {
-			fmt.Printf("WARN: append ean index for %q: %v\n", p.EAN, err)
+		// Collect for batched EAN index write (write once per EAN key after loop)
+		eank := ProductEANIndexKey(p)
+		if eank != "" {
+			eanIndexUpdates[eank] = append(eanIndexUpdates[eank], p.ID)
 		}
 
 		// Track the new price in the document (persisted by the caller after
@@ -724,6 +733,13 @@ func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*mode
 
 		result[i] = p.ID
 		isNewMap[i] = true
+	}
+
+	// Batched EAN index writes: one write per EAN key with all new product IDs.
+	for eank, ids := range eanIndexUpdates {
+		if err := appendEANIndexIDs(txn, r.store, eank, ids); err != nil {
+			fmt.Printf("WARN: batch append ean index for %q: %v\n", eank, err)
+		}
 	}
 
 	return result, isNewMap, nil
@@ -856,7 +872,7 @@ func (r *ProductRepo) DeleteProductByID(id int64) error {
 	// Remove from EANPage if linked
 	if r.eanPageSearch != nil && p.EAN != "" {
 		if sp, err := r.eanPageSearch.repo.GetByEAN(p.EAN); err == nil {
-			_ = r.eanPageSearch.repo.RemoveProduct(sp.ID, id)
+			_ = r.eanPageSearch.repo.RemoveProduct(sp.EAN, id)
 		}
 	}
 
@@ -879,6 +895,18 @@ func (r *ProductRepo) deleteProductTx(txn *Transaction, p *model.Product) error 
 	if err := removeEANIndexID(txn, r.store, ProductEANIndexKey(p), p.ID); err != nil {
 		fmt.Printf("WARN: remove ean index id for %q: %v\n", p.EAN, err)
 	}
+	// Delete document
+	return txn.DocDelete(KeyProduct(p.ID))
+}
+
+// deleteProductNoEANIndexTx is like deleteProductTx but skips the EAN index
+// removal. Used by CleanupStaleProductsTx to batch EAN index updates.
+func (r *ProductRepo) deleteProductNoEANIndexTx(txn *Transaction, p *model.Product) error {
+	if r.turboSearch != nil {
+		_ = r.turboSearch.UnindexProductTx(txn, p)
+	}
+	// Remove from product_list (belt-and-suspenders; UnindexProductTx also does it)
+	_ = txn.TurboDeleteIndexString(TurboKeyProductList, KeyProduct(p.ID))
 	// Delete document
 	return txn.DocDelete(KeyProduct(p.ID))
 }
@@ -908,6 +936,9 @@ func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, 
 		importKeys[key] = struct{}{}
 	}
 
+	// Collect product IDs to remove per EAN key for batched index writes.
+	eanIndexRemovals := make(map[string][]int64)
+
 	deleted := 0
 
 	// Use price document as source of truth for existing products (faster than loading all docs)
@@ -922,10 +953,14 @@ func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, 
 			if _, ok := importKeys[key]; ok {
 				continue // still in the import — keep it
 			}
-			// Stale product — delete in transaction
-			if err := r.deleteProductTx(txn, p); err != nil {
+			// Stale product — delete in transaction (skip EAN index removal for batching)
+			if err := r.deleteProductNoEANIndexTx(txn, p); err != nil {
 				fmt.Printf("WARN: cleanup stale product %d: %v\n", p.ID, err)
 				continue
+			}
+			eank := ProductEANIndexKey(p)
+			if eank != "" {
+				eanIndexRemovals[eank] = append(eanIndexRemovals[eank], p.ID)
 			}
 			delete(priceDoc.Prices, productID)
 			deleted++
@@ -956,9 +991,13 @@ func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, 
 				if _, ok := importKeys[key]; ok {
 					continue
 				}
-				if err := r.deleteProductTx(txn, p); err != nil {
+				if err := r.deleteProductNoEANIndexTx(txn, p); err != nil {
 					fmt.Printf("WARN: cleanup stale product %d: %v\n", p.ID, err)
 					continue
+				}
+				eank := ProductEANIndexKey(p)
+				if eank != "" {
+					eanIndexRemovals[eank] = append(eanIndexRemovals[eank], p.ID)
 				}
 				deleted++
 			}
@@ -982,12 +1021,23 @@ func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, 
 				if _, ok := importKeys[key]; ok {
 					continue
 				}
-				if err := r.deleteProductTx(txn, p); err != nil {
+				if err := r.deleteProductNoEANIndexTx(txn, p); err != nil {
 					fmt.Printf("WARN: cleanup stale product %d: %v\n", p.ID, err)
 					continue
 				}
+				eank := ProductEANIndexKey(p)
+				if eank != "" {
+					eanIndexRemovals[eank] = append(eanIndexRemovals[eank], p.ID)
+				}
 				deleted++
 			}
+		}
+	}
+
+	// Batched EAN index removals: one write per EAN key with all removed product IDs.
+	for eank, ids := range eanIndexRemovals {
+		if err := removeEANIndexIDs(txn, r.store, eank, ids); err != nil {
+			fmt.Printf("WARN: batch remove ean index for %q: %v\n", eank, err)
 		}
 	}
 
@@ -1083,13 +1133,13 @@ func (r *ProductRepo) deleteAllEANPages() error {
 		if err != nil {
 			continue
 		}
-		id := sp.ID
+		id := sp.EAN
 		if i == 0 {
 
 		}
 		// Unindex from EANPageSearch turbo indexes
 		if err := r.eanPageSearch.DeleteIndexEANPage(sp); err != nil {
-			fmt.Printf("[DELETE-ALL] WARN: unindex eanpage %d: %v\n", id, err)
+			fmt.Printf("[DELETE-ALL] WARN: unindex eanpage %s: %v\n", id, err)
 		}
 		// Delete EAN page doc and its indexes
 		_ = r.eanPageSearch.repo.Delete(id)

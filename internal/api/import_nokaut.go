@@ -22,15 +22,15 @@ import (
 
 // NokautImportResult holds the result of a Nokaut price import operation.
 type NokautImportResult struct {
-	Status           string  `json:"status"`
-	Company          string  `json:"company,omitempty"`
-	Files            int     `json:"files"`
-	OffersParsed     int     `json:"offers_parsed"`
-	ProductsCreated  int     `json:"products_created"`
-	ProductsUpdated  int     `json:"products_updated"`
-	ProductsSkipped  int     `json:"products_skipped"`
-	ProductsDeleted  int     `json:"products_deleted"`
-	AffectedEANPages []int64 `json:"-"` // EAN page IDs affected by this import (not serialized)
+	Status           string   `json:"status"`
+	Company          string   `json:"company,omitempty"`
+	Files            int      `json:"files"`
+	OffersParsed     int      `json:"offers_parsed"`
+	ProductsCreated  int      `json:"products_created"`
+	ProductsUpdated  int      `json:"products_updated"`
+	ProductsSkipped  int      `json:"products_skipped"`
+	ProductsDeleted  int      `json:"products_deleted"`
+	AffectedEANPages []string `json:"-"` // EAN page IDs affected by this import (not serialized)
 }
 
 // pricesDir is the root directory for company price files.
@@ -258,7 +258,7 @@ func (h *Handlers) HandleAdminImportNokaut(w http.ResponseWriter, r *http.Reques
 	defer h.importProgress.Finish()
 
 	// Collect affected EAN pages across all companies for incremental recalculation
-	affectedEANPages := make(map[int64]struct{})
+	affectedEANPages := make(map[string]struct{})
 
 	// Import each company
 	for i := range companies {
@@ -292,7 +292,7 @@ func (h *Handlers) HandleAdminImportNokaut(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Convert map to slice for runGlobalRecalculation
-	affectedSlice := make([]int64, 0, len(affectedEANPages))
+	affectedSlice := make([]string, 0, len(affectedEANPages))
 	for id := range affectedEANPages {
 		affectedSlice = append(affectedSlice, id)
 	}
@@ -599,17 +599,37 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 		fmt.Printf("[IMPORT-NOKAUT] WARN: load catalogizer cache: %v\n", err)
 	}
 
+	// Apply explicit category mappings before auto-catalogization.
+	mappedCount := 0
+	for _, p := range allProducts {
+		if p.CategoryID != 0 || p.ShopCategory == "" {
+			continue
+		}
+		mapping, err := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
+		if err != nil {
+			fmt.Printf("[IMPORT-NOKAUT] WARN: lookup category mapping: %v\n", err)
+			continue
+		}
+		if mapping != nil {
+			p.CategoryID = mapping.TargetCategoryID
+			mappedCount++
+		}
+	}
+	if mappedCount > 0 {
+		fmt.Printf("[IMPORT-NOKAUT] Applied explicit category mappings to %d products\n", mappedCount)
+	}
+
 	// Perform batch upsert within transaction; affectedPages is the final
 	// in-memory state of every touched page (post merge/catalogize).
 	productToEANPage, affectedPages := h.eanPageRepo.BatchUpsertFromProductsTx(txn, allProducts, deliverySlugs)
 
 	// Collect affected EAN page IDs for incremental recalculation
 	if productToEANPage != nil {
-		eanPageIDs := make(map[int64]struct{})
+		eanPageIDs := make(map[string]struct{})
 		for _, eanPageID := range productToEANPage {
 			eanPageIDs[eanPageID] = struct{}{}
 		}
-		result.AffectedEANPages = make([]int64, 0, len(eanPageIDs))
+		result.AffectedEANPages = make([]string, 0, len(eanPageIDs))
 		for id := range eanPageIDs {
 			result.AffectedEANPages = append(result.AffectedEANPages, id)
 		}

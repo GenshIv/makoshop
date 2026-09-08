@@ -18,11 +18,7 @@ const eanpageIDsKeyPrefix = "eanpage_ids:"
 
 // EANPageIDsDoc is one registry bucket: page IDs in [b*10000, (b+1)*10000).
 type EANPageIDsDoc struct {
-	IDs []int64 `json:"ids"`
-}
-
-func eanpageIDsKey(id int64) string {
-	return eanpageIDsKeyPrefix + strconv.FormatInt(id/registryBucket, 10)
+	EANs []string `json:"eans"`
 }
 
 // loadIDsDoc reads one registry bucket (read-your-writes inside a transaction).
@@ -59,53 +55,62 @@ func saveIDsDoc(txn *Transaction, store *Store, key string, doc *EANPageIDsDoc) 
 }
 
 // RegisterEANPageID adds a page ID to its registry bucket (idempotent).
-func RegisterEANPageID(txn *Transaction, store *Store, id int64) error {
-	if id <= 0 {
+func RegisterEANPageID(txn *Transaction, store *Store, ean string) error {
+	if len(ean) <= 0 {
 		return nil
 	}
-	key := eanpageIDsKey(id)
-	doc, err := loadIDsDoc(txn, store, key)
-	if err != nil {
-		return err
-	}
-	if doc == nil {
-		doc = &EANPageIDsDoc{}
-	}
-	for _, existing := range doc.IDs {
-		if existing == id {
-			return nil
+	/*
+		doc, err := loadIDsDoc(txn, store, key)
+		if err != nil {
+			return err
 		}
-	}
-	doc.IDs = append(doc.IDs, id)
-	return saveIDsDoc(txn, store, key, doc)
+		if doc == nil {
+			doc = &EANPageIDsDoc{}
+		}
+		for _, existing := range doc.IDs {
+			if existing == id {
+				return nil
+			}
+		}
+
+
+		doc.IDs = append(doc.IDs, id)
+		return saveIDsDoc(txn, store, key, doc)
+
+	*/
+	return nil
 }
 
 // UnregisterEANPageID removes a page ID from its registry bucket.
-func UnregisterEANPageID(txn *Transaction, store *Store, id int64) error {
-	if id <= 0 {
+func UnregisterEANPageID(txn *Transaction, store *Store, ean string) error {
+	if len(ean) <= 0 {
 		return nil
 	}
-	key := eanpageIDsKey(id)
-	doc, err := loadIDsDoc(txn, store, key)
-	if err != nil || doc == nil {
-		return err
-	}
-	filtered := doc.IDs[:0]
-	for _, existing := range doc.IDs {
-		if existing != id {
-			filtered = append(filtered, existing)
+	/*
+		key := eanpageIDsKey(id)
+		doc, err := loadIDsDoc(txn, store, key)
+		if err != nil || doc == nil {
+			return err
 		}
-	}
-	if len(filtered) == len(doc.IDs) {
-		return nil
-	}
-	doc.IDs = filtered
-	return saveIDsDoc(txn, store, key, doc)
+		filtered := doc.IDs[:0]
+		for _, existing := range doc.IDs {
+			if existing != id {
+				filtered = append(filtered, existing)
+			}
+		}
+		if len(filtered) == len(doc.IDs) {
+			return nil
+		}
+		doc.IDs = filtered
+		return saveIDsDoc(txn, store, key, doc)
+
+	*/
+	return nil
 }
 
 // LoadEANPageIDsFromRegistry returns all registered page IDs by walking the
 // bucket range derived from the ID counter. Missing buckets are simply empty.
-func LoadEANPageIDsFromRegistry(store *Store) []int64 {
+func LoadEANPageIDsFromRegistry(store *Store) []string {
 	data, err := store.DocGet("state:next_id:eanpage")
 	if err != nil || len(data) == 0 {
 		return nil
@@ -114,33 +119,25 @@ func LoadEANPageIDsFromRegistry(store *Store) []int64 {
 	if _, err := fmt.Sscanf(string(data), "%d", &maxID); err != nil || maxID <= 0 {
 		return nil
 	}
-	ids := make([]int64, 0, maxID)
+	ids := make([]string, 0, maxID)
 	for b := int64(0); b <= maxID/registryBucket; b++ {
 		doc, err := loadIDsDoc(nil, store, eanpageIDsKeyPrefix+strconv.FormatInt(b, 10))
 		if err != nil || doc == nil {
 			continue
 		}
-		ids = append(ids, doc.IDs...)
+		ids = append(ids, doc.EANs...)
 	}
 	return ids
 }
 
 // SaveEANPageIDsToRegistry persists the ID set into bucket documents
 // (backfill for databases whose pages predate the registry).
-func SaveEANPageIDsToRegistry(store *Store, ids []int64) error {
-	buckets := make(map[int64][]int64)
-	for _, id := range ids {
-		if id <= 0 {
-			continue
-		}
-		b := id / registryBucket
-		buckets[b] = append(buckets[b], id)
+func SaveEANPageIDsToRegistry(store *Store, ids []string) error {
+
+	key := eanpageIDsKeyPrefix
+	if err := saveIDsDoc(nil, store, key, &EANPageIDsDoc{EANs: ids}); err != nil {
+		return err
 	}
-	for b, list := range buckets {
-		key := eanpageIDsKeyPrefix + strconv.FormatInt(b, 10)
-		if err := saveIDsDoc(nil, store, key, &EANPageIDsDoc{IDs: list}); err != nil {
-			return err
-		}
-	}
+
 	return nil
 }
