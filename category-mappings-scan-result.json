@@ -825,7 +825,7 @@
     "company_id": 5
   },
   {
-    "source_code": "112737",
+    "source_code": "Krzesła do salonu",
     "target_category_id": 88,
     "company_id": 6
   },
@@ -1650,7 +1650,7 @@
     "company_id": 9
   },
   {
-    "source_code": "110889",
+    "source_code": "Salaterki, półmiski",
     "target_category_id": 282,
     "company_id": 6
   },
@@ -1825,7 +1825,7 @@
     "company_id": 5
   },
   {
-    "source_code": "112735",
+    "source_code": "Komody do salonu, pokoju",
     "target_category_id": 88,
     "company_id": 6
   },
@@ -6695,7 +6695,7 @@
     "company_id": 9
   },
   {
-    "source_code": "112738",
+    "source_code": "Stoły do salonu",
     "target_category_id": 88,
     "company_id": 6
   },
@@ -7205,7 +7205,7 @@
     "company_id": 13
   },
   {
-    "source_code": "112733",
+    "source_code": "Wieszaki do przedpokoju",
     "target_category_id": 106,
     "company_id": 6
   },
@@ -8028,5 +8028,355 @@
     "source_code": "Książki / Nauki humanistyczne",
     "target_category_id": 159,
     "company_id": 13
+  },
+  {
+    "source_code": "Elektronika > Komputery",
+    "target_category_id": 19,
+    "company_id": 5
+  },
+  {
+    "source_code": "Elektronika > Telefony i Akcesoria",
+    "target_category_id": 15,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród",
+    "target_category_id": 52,
+    "company_id": 5
+  },
+  {
+    "source_code": "Kultura i rozrywka > Książki",
+    "target_category_id": 140,
+    "company_id": 5
+  },
+  {
+    "source_code": "Kultura i rozrywka > Gry",
+    "target_category_id": 196,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Wyposażenie",
+    "target_category_id": 89,
+    "company_id": 5
+  },
+  {
+    "source_code": "Elektronika > Telefony i Akcesoria > Akcesoria GSM",
+    "target_category_id": 15,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Meble",
+    "target_category_id": 85,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Meble > Kuchnia",
+    "target_category_id": 53,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria",
+    "target_category_id": 399,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Dachy",
+    "target_category_id": 399,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Elektryka i akcesoria",
+    "target_category_id": 399,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Ogrodzenia i bramy",
+    "target_category_id": 412,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Drzwi",
+    "target_category_id": 295,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Podłogi",
+    "target_category_id": 398,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Ogród",
+    "target_category_id": 94,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Ogród > Narzędzia ogrodnicze",
+    "target_category_id": 100,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Narzędzia",
+    "target_category_id": 399,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Oświetlenie",
+    "target_category_id": 410,
+    "company_id": 5
+  },
+  {
+    "source_code": "Kultura i rozrywka > Gry > Karciane",
+    "target_category_id": 183,
+    "company_id": 5
+  },
+  {
+    "source_code": "Elektronika > Fotografia",
+    "target_category_id": 345,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko",
+    "target_category_id": 133,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko > Zabawki",
+    "target_category_id": 201,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko > Zabawki > Edukacyjne",
+    "target_category_id": 209,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Elektryka i akcesoria > Zabezpieczenia i rozdzielnice",
+    "target_category_id": 399,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Kuchnia",
+    "target_category_id": 53,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Łazienka i toaleta",
+    "target_category_id": 70,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Kuchnia > Zlewozmywaki",
+    "target_category_id": 72,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Ogrodzenia i bramy > Napędy",
+    "target_category_id": 412,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko > Artykuły szkolne",
+    "target_category_id": 224,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko > Artykuły szkolne > Artykuły papiernicze",
+    "target_category_id": 223,
+    "company_id": 5
+  },
+  {
+    "source_code": "Elektronika > RTV i AGD > AGD do zabudowy",
+    "target_category_id": 31,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Prace na wysokości",
+    "target_category_id": 399,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Meble > Akcesoria",
+    "target_category_id": 399,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Ogród > Meble ogrodowe",
+    "target_category_id": 97,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Ogród > Meble ogrodowe > Hamaki",
+    "target_category_id": 97,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko > Wózki",
+    "target_category_id": 133,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko > Akcesoria dla mamy i dziecka",
+    "target_category_id": 133,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko > Artykuły szkolne > Śniadaniówki i bidony",
+    "target_category_id": 134,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Ogród > Narzędzia ogrodnicze > Kosiarki",
+    "target_category_id": 325,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Ogród > Narzędzia ogrodnicze > Kosiarki > Kosiarki spalinowe",
+    "target_category_id": 325,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Meble > Kuchnia > Zestawy mebli kuchennych",
+    "target_category_id": 53,
+    "company_id": 5
+  },
+  {
+    "source_code": "Elektronika > Konsole i automaty",
+    "target_category_id": 196,
+    "company_id": 5
+  },
+  {
+    "source_code": "Elektronika > Sprzęt estradowy, studyjny i DJ-ski",
+    "target_category_id": 12,
+    "company_id": 5
+  },
+  {
+    "source_code": "Elektronika > Sprzęt estradowy, studyjny i DJ-ski > Mikrofony i akcesoria",
+    "target_category_id": 317,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Narzędzia > Imadła",
+    "target_category_id": 399,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Meble > Akcesoria > Fronty",
+    "target_category_id": 399,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Dachy > Elementy montażowe",
+    "target_category_id": 399,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Podłogi > Chemia do podłóg",
+    "target_category_id": 398,
+    "company_id": 5
+  },
+  {
+    "source_code": "Elektronika > RTV i AGD > AGD do zabudowy > Chłodziarki do wina",
+    "target_category_id": 26,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Oświetlenie > Oprawy oświetleniowe",
+    "target_category_id": 410,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko > Akcesoria dla mamy i dziecka > Smoczki uspokajające i gryzaki",
+    "target_category_id": 134,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko > Akcesoria dla mamy i dziecka > Akcesoria dla mamy",
+    "target_category_id": 133,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko > Akcesoria dla mamy i dziecka > Akcesoria dla mamy > Biustonosze do karmienia",
+    "target_category_id": 134,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko > Akcesoria dla mamy i dziecka > Akcesoria dla mamy > Kremy dla mamy",
+    "target_category_id": 131,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko > Akcesoria dla mamy i dziecka > Osłonki na piersi",
+    "target_category_id": 134,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko > Artykuły szkolne > Worki",
+    "target_category_id": 224,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Prace na wysokości > Drabiny",
+    "target_category_id": 399,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dziecko > Akcesoria dla mamy i dziecka > Nianie elektroniczne i monitory oddechu",
+    "target_category_id": 134,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Drzwi > Kłódki",
+    "target_category_id": 295,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Narzędzia > Przyrządy miernicze > Poziomice laserowe",
+    "target_category_id": 420,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Podłogi > Panele podłogowe",
+    "target_category_id": 398,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Podłogi > Panele podłogowe > Panele winylowe",
+    "target_category_id": 398,
+    "company_id": 5
+  },
+  {
+    "source_code": "Kultura i rozrywka > Gry > Karciane > Kolekcjonerskie",
+    "target_category_id": 185,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Ogród > Agrowłókniny i akcesoria",
+    "target_category_id": 105,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Łazienka i toaleta > Kompakty WC",
+    "target_category_id": 80,
+    "company_id": 5
+  },
+  {
+    "source_code": "Kultura i rozrywka > Książki > Książki do nauki języka obcego > Angielski",
+    "target_category_id": 161,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Elektryka i akcesoria > Zabezpieczenia i rozdzielnice > Rozdzielnice",
+    "target_category_id": 399,
+    "company_id": 5
+  },
+  {
+    "source_code": "Dom i Ogród > Wyposażenie > Florystyka",
+    "target_category_id": 89,
+    "company_id": 5
+  },
+  {
+    "source_code": "Elektronika > Roboty AI",
+    "target_category_id": 19,
+    "company_id": 5
   }
 ]
