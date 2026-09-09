@@ -851,7 +851,7 @@
   },
   {
     "source_code": "Kuchnia / Akcesoria kuchenne / Przybory kuchenne",
-    "target_category_id": 44,
+    "target_category_id": 400,
     "company_id": 5
   },
   {
@@ -2056,7 +2056,7 @@
   },
   {
     "source_code": "Wnętrze / Szkło użytkowe / Kieliszki / Kieliszki do wina",
-    "target_category_id": 26,
+    "target_category_id": 391,
     "company_id": 5
   },
   {
@@ -3381,7 +3381,7 @@
   },
   {
     "source_code": "Przybory kuchenne",
-    "target_category_id": 44,
+    "target_category_id": 400,
     "company_id": 18
   },
   {
@@ -3571,7 +3571,7 @@
   },
   {
     "source_code": "Elektronika > Komputery > Akcesoria (Laptop, PC) > Akcesoria > Skórki na laptopa",
-    "target_category_id": 349,
+    "target_category_id": 332,
     "company_id": 9
   },
   {
@@ -6111,7 +6111,7 @@
   },
   {
     "source_code": "Armatura / Kuchnia / Akcesoria kuchenne / Akcesoria / Akcesoria kuchenne",
-    "target_category_id": 44,
+    "target_category_id": 400,
     "company_id": 5
   },
   {
@@ -6541,7 +6541,7 @@
   },
   {
     "source_code": "Kuchnia / Akcesoria kuchenne",
-    "target_category_id": 44,
+    "target_category_id": 400,
     "company_id": 5
   },
   {
