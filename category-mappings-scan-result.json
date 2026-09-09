@@ -246,7 +246,7 @@
   },
   {
     "source_code": "Elektronika > Telefony i Akcesoria > Urządzenia stacjonarne > Urządzenia VOIP > Telefony",
-    "target_category_id": 334,
+    "target_category_id": 333,
     "company_id": 9
   },
   {
@@ -411,7 +411,7 @@
   },
   {
     "source_code": "Wnętrze / Zastawy stołowe / Dzbanki do kawy i herbaty",
-    "target_category_id": 41,
+    "target_category_id": 401,
     "company_id": 5
   },
   {
@@ -821,7 +821,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo profesjonalne / Chłodziarki",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -1086,12 +1086,12 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Zamrażarki Słupkowe",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
     "source_code": "Elektronika > Telefony i Akcesoria > Akcesoria GSM > Anteny i wzmacniacze > Stacjonarne",
-    "target_category_id": 390,
+    "target_category_id": 6,
     "company_id": 9
   },
   {
@@ -1971,7 +1971,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Chłodziarki do piwa",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -2656,7 +2656,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Urządzenia do pielęgnacji ciała\\Suszarki do włosów",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 16
   },
   {
@@ -2791,7 +2791,7 @@
   },
   {
     "source_code": "Telefony i akcesoria\\Akcesoria telefoniczne\\Ładowarki do telefonów",
-    "target_category_id": 334,
+    "target_category_id": 333,
     "company_id": 11
   },
   {
@@ -2936,7 +2936,7 @@
   },
   {
     "source_code": "Kontrolery do gier",
-    "target_category_id": 347,
+    "target_category_id": 198,
     "company_id": 18
   },
   {
@@ -3046,7 +3046,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Akcesoria i zestawy AGD\\Akcesoria i części do AGD",
-    "target_category_id": 74,
+    "target_category_id": 23,
     "company_id": 11
   },
   {
@@ -3216,7 +3216,7 @@
   },
   {
     "source_code": "AGD duże / Pralnictwo / Suszarki wolnostojące",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -3236,7 +3236,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo profesjonalne / Winiarki",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -3326,7 +3326,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Zamrażarki szufladowe",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -3346,7 +3346,7 @@
   },
   {
     "source_code": "Elektronika > Telefony i Akcesoria > Radiokomunikacja > Sprzęt krótkofalarski > Radiostacje > Stacjonarne",
-    "target_category_id": 390,
+    "target_category_id": 337,
     "company_id": 9
   },
   {
@@ -3356,7 +3356,7 @@
   },
   {
     "source_code": "AGD duże / Akcesoria AGD",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -3706,12 +3706,12 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Chłodziarko-zamrażarki",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
     "source_code": "AGD duże / Akcesoria AGD / Akcesoria do AGD",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -3891,7 +3891,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Zamrażarki skrzyniowe",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -4271,7 +4271,7 @@
   },
   {
     "source_code": "AGD duże / Kuchenki gazowe i elektryczne",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -4341,7 +4341,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo profesjonalne / Stoły chłodnicze",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -4906,7 +4906,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo profesjonalne / Chłodziarki do piwa/napojów",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -5441,7 +5441,7 @@
   },
   {
     "source_code": "Elektronika > Telefony i Akcesoria > Smartfony i telefony komórkowe",
-    "target_category_id": 334,
+    "target_category_id": 333,
     "company_id": 9
   },
   {
@@ -5611,7 +5611,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Akcesoria do chłodnictwa",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -5786,7 +5786,7 @@
   },
   {
     "source_code": "Elektronika > Telefony i Akcesoria > Urządzenia stacjonarne > Telefony przewodowe",
-    "target_category_id": 334,
+    "target_category_id": 333,
     "company_id": 9
   },
   {
@@ -5826,7 +5826,7 @@
   },
   {
     "source_code": "Elektronika > Telefony i Akcesoria > Urządzenia stacjonarne > Telefony bezprzewodowe",
-    "target_category_id": 334,
+    "target_category_id": 333,
     "company_id": 9
   },
   {
@@ -5961,7 +5961,7 @@
   },
   {
     "source_code": "AGD duże / Usługi",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -5996,7 +5996,7 @@
   },
   {
     "source_code": "AGD duże / Minikuchnie i szafki",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -6371,7 +6371,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo profesjonalne / Zamrażarki skrzyniowe",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -6526,7 +6526,7 @@
   },
   {
     "source_code": "AGD duże / Akcesoria AGD / Akcesoria do okapów kuchennych",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -7001,7 +7001,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo profesjonalne / Zamrażarki słupkowe",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -7071,7 +7071,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Winiarki",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -7226,7 +7226,7 @@
   },
   {
     "source_code": "AGD duże / Pralnictwo",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -7311,7 +7311,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Winiarki / Akcesoria i prezenty",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -7661,7 +7661,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Chłodziarki wolnostojące",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -7681,7 +7681,7 @@
   },
   {
     "source_code": "AGD duże / Zmywarki wolnostojące",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
