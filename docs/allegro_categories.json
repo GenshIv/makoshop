@@ -1,0 +1,3291 @@
+{
+  "01": {
+    "name": "JY32499-01",
+    "alias": "akcesoria-dla-mamy-oslonki-na-piersi-257945?marka=JY32499-01"
+  },
+  "1": {
+    "name": "Muzyka",
+    "alias": "muzyka"
+  },
+  "10": {
+    "name": "RTV i AGD",
+    "alias": "rtv-i-agd",
+    "path": "Elektronika > RTV i AGD"
+  },
+  "10532": {
+    "name": "Folie i szk\u0142a ochronne",
+    "alias": "akcesoria-gsm-folie-i-szkla-ochronne-10532"
+  },
+  "10774": {
+    "name": "\u0179r\u00f3d\u0142a \u015bwiat\u0142a",
+    "alias": "oswietlenie-zrodla-swiatla-10774"
+  },
+  "11": {
+    "name": "Sprz\u0119t audio dla domu",
+    "alias": "sprzet-audio-dla-domu-11"
+  },
+  "110190": {
+    "name": "Odzie\u017c ochronna i robocza",
+    "alias": "narzedzia-odziez-ochronna-i-robocza-110190"
+  },
+  "110192": {
+    "name": "Dalmierze",
+    "alias": "przyrzady-miernicze-dalmierze-110192"
+  },
+  "110193": {
+    "name": "K\u0105towniki",
+    "alias": "przyrzady-miernicze-katowniki-110193"
+  },
+  "110194": {
+    "name": "Wykrywacze",
+    "alias": "przyrzady-miernicze-wykrywacze-110194"
+  },
+  "110195": {
+    "name": "Sauny i akcesoria",
+    "alias": "wyposazenie-sauny-i-akcesoria-110195"
+  },
+  "110589": {
+    "name": "Aparaty analogowe",
+    "alias": "aparaty-analogowe-110589"
+  },
+  "110618": {
+    "name": "Aparaty cyfrowe",
+    "alias": "aparaty-cyfrowe-110618"
+  },
+  "110672": {
+    "name": "Zasilanie aparat\u00f3w",
+    "alias": "zasilanie-aparatow-110672"
+  },
+  "110696": {
+    "name": "Lampy b\u0142yskowe",
+    "alias": "lampy-blyskowe-110696"
+  },
+  "110879": {
+    "name": "Zastawa sto\u0142owa",
+    "alias": "wyposazenie-zastawa-stolowa-110879"
+  },
+  "110907": {
+    "name": "Kwietniki",
+    "alias": "florystyka-kwietniki-110907"
+  },
+  "111853": {
+    "name": "Rynny i rury spustowe",
+    "alias": "dachy-rynny-i-rury-spustowe-111853"
+  },
+  "111854": {
+    "name": "Wi\u0119\u017aby i podbitki",
+    "alias": "dachy-wiezby-i-podbitki-111854"
+  },
+  "111855": {
+    "name": "Gniazda",
+    "alias": "elektryka-i-akcesoria-gniazda-111855"
+  },
+  "111856": {
+    "name": "Przed\u0142u\u017cacze",
+    "alias": "elektryka-i-akcesoria-przedluzacze-111856"
+  },
+  "111861": {
+    "name": "Bidety",
+    "alias": "lazienka-i-toaleta-bidety-111861"
+  },
+  "111863": {
+    "name": "Miski WC",
+    "alias": "lazienka-i-toaleta-miski-wc-111863"
+  },
+  "111864": {
+    "name": "Zestawy",
+    "alias": "lazienka-i-toaleta-zestawy-111864"
+  },
+  "111865": {
+    "name": "Ogrzewanie",
+    "alias": "budownictwo-i-akcesoria-ogrzewanie-111865"
+  },
+  "111893": {
+    "name": "Prz\u0119s\u0142a",
+    "alias": "ogrodzenia-i-bramy-przesla-111893"
+  },
+  "111894": {
+    "name": "Siatka i panele ogrodzeniowe",
+    "alias": "ogrodzenia-i-bramy-siatka-i-panele-ogrodzeniowe-111894"
+  },
+  "1120": {
+    "name": "Anteny i wzmacniacze",
+    "alias": "akcesoria-gsm-anteny-i-wzmacniacze-1120"
+  },
+  "112712": {
+    "name": "Pozosta\u0142e",
+    "alias": "akcesoria-pozostale-112712"
+  },
+  "112714": {
+    "name": "Cargo i kosze",
+    "alias": "kuchnia-cargo-i-kosze-112714"
+  },
+  "112715": {
+    "name": "Hamulce i ograniczniki",
+    "alias": "akcesoria-hamulce-i-ograniczniki-112715"
+  },
+  "112716": {
+    "name": "K\u00f3\u0142ka",
+    "alias": "akcesoria-kolka-112716"
+  },
+  "112717": {
+    "name": "Nogi i n\u00f3\u017cki",
+    "alias": "akcesoria-nogi-i-nozki-112717"
+  },
+  "112718": {
+    "name": "Ociekarki",
+    "alias": "akcesoria-ociekarki-112718"
+  },
+  "112719": {
+    "name": "O\u015bwietlenie",
+    "alias": "akcesoria-oswietlenie-112719"
+  },
+  "112720": {
+    "name": "Podno\u015bniki",
+    "alias": "akcesoria-podnosniki-112720"
+  },
+  "112721": {
+    "name": "Prowadnice",
+    "alias": "akcesoria-prowadnice-112721"
+  },
+  "112722": {
+    "name": "Szuflady",
+    "alias": "kuchnia-szuflady-112722"
+  },
+  "112723": {
+    "name": "\u015arodki piel\u0119gnuj\u0105ce i naprawcze",
+    "alias": "akcesoria-srodki-pielegnujace-i-naprawcze-112723"
+  },
+  "112724": {
+    "name": "Uchwyty",
+    "alias": "akcesoria-uchwyty-112724"
+  },
+  "112725": {
+    "name": "Zawiasy",
+    "alias": "akcesoria-zawiasy-112725"
+  },
+  "112726": {
+    "name": "Hokery",
+    "alias": "kuchnia-hokery-112726"
+  },
+  "112727": {
+    "name": "Kredensy i witryny",
+    "alias": "kuchnia-kredensy-i-witryny-112727"
+  },
+  "112728": {
+    "name": "Krzes\u0142a",
+    "alias": "kuchnia-krzesla-112728"
+  },
+  "112729": {
+    "name": "P\u00f3\u0142ki",
+    "alias": "kuchnia-polki-112729"
+  },
+  "112730": {
+    "name": "Sto\u0142ki i taborety",
+    "alias": "kuchnia-stolki-i-taborety-112730"
+  },
+  "112731": {
+    "name": "Sto\u0142y kuchenne",
+    "alias": "kuchnia-stoly-kuchenne-112731"
+  },
+  "112732": {
+    "name": "Zestawy mebli kuchennych",
+    "alias": "kuchnia-zestawy-mebli-kuchennych-112732",
+    "path": "Dom i Ogr\u00f3d > Meble > Kuchnia > Zestawy mebli kuchennych"
+  },
+  "11763": {
+    "name": "Dziecko",
+    "alias": "/dzial/dziecko",
+    "path": "Dziecko"
+  },
+  "11764": {
+    "name": "Odzie\u017c",
+    "alias": "odziez-11764"
+  },
+  "118": {
+    "name": "Czasopisma",
+    "alias": "czasopisma-118"
+  },
+  "11818": {
+    "name": "Zabawki",
+    "alias": "zabawki-11818",
+    "path": "Dziecko > Zabawki"
+  },
+  "11819": {
+    "name": "Plastyczne",
+    "alias": "zabawki-plastyczne-11819"
+  },
+  "11820": {
+    "name": "Dla niemowl\u0105t",
+    "alias": "zabawki-dla-niemowlat-11820"
+  },
+  "11821": {
+    "name": "Edukacyjne",
+    "alias": "zabawki-edukacyjne-11821",
+    "path": "Dziecko > Zabawki > Edukacyjne"
+  },
+  "11823": {
+    "name": "Klocki",
+    "alias": "zabawki-klocki-11823"
+  },
+  "11825": {
+    "name": "Lalki i akcesoria",
+    "alias": "zabawki-lalki-i-akcesoria-11825"
+  },
+  "11837": {
+    "name": "Maskotki",
+    "alias": "zabawki-maskotki-11837"
+  },
+  "11840": {
+    "name": "Puzzle",
+    "alias": "zabawki-puzzle-11840"
+  },
+  "11841": {
+    "name": "Zdalnie sterowane",
+    "alias": "zabawki-zdalnie-sterowane-11841"
+  },
+  "11842": {
+    "name": "Pozosta\u0142e",
+    "alias": "zabawki-pozostale-11842"
+  },
+  "121183": {
+    "name": "Sony",
+    "alias": "smartfony-i-telefony-komorkowe-sony-121183"
+  },
+  "121237": {
+    "name": "Zabawne gad\u017cety",
+    "alias": "wyposazenie-zabawne-gadzety-121237"
+  },
+  "121255": {
+    "name": "No\u017cyce i sekatory",
+    "alias": "narzedzia-ogrodnicze-nozyce-i-sekatory-121255"
+  },
+  "121256": {
+    "name": "Pi\u0142y",
+    "alias": "narzedzia-ogrodnicze-pily-121256"
+  },
+  "121502": {
+    "name": "Linia\u0142y kraw\u0119dziowe",
+    "alias": "przyrzady-miernicze-linialy-krawedziowe-121502"
+  },
+  "121505": {
+    "name": "Suwmiarki",
+    "alias": "przyrzady-miernicze-suwmiarki-121505"
+  },
+  "121571": {
+    "name": "Niwelatory",
+    "alias": "przyrzady-miernicze-niwelatory-121571"
+  },
+  "122233": {
+    "name": "Konsole i automaty",
+    "alias": "konsole-i-automaty",
+    "path": "Elektronika > Konsole i automaty"
+  },
+  "122234": {
+    "name": "Nintendo Game Boy Advance",
+    "alias": "nintendo-game-boy-advance-122234"
+  },
+  "122237": {
+    "name": "Nintendo Game Boy",
+    "alias": "nintendo-game-boy-122237"
+  },
+  "122240": {
+    "name": "Microsoft Xbox",
+    "alias": "microsoft-xbox-122240"
+  },
+  "122243": {
+    "name": "Microsoft Xbox 360",
+    "alias": "microsoft-xbox-360-122243"
+  },
+  "122255": {
+    "name": "Nintendo 3DS i 2DS",
+    "alias": "nintendo-3ds-i-2ds-122255"
+  },
+  "122256": {
+    "name": "Nintendo 64",
+    "alias": "nintendo-64-122256"
+  },
+  "122257": {
+    "name": "Nintendo DS",
+    "alias": "nintendo-ds-122257"
+  },
+  "122261": {
+    "name": "Nintendo GameCube",
+    "alias": "nintendo-gamecube-122261"
+  },
+  "122264": {
+    "name": "Nintendo SNES i NES",
+    "alias": "nintendo-snes-i-nes-122264"
+  },
+  "122267": {
+    "name": "Nintendo Wii",
+    "alias": "nintendo-wii-122267"
+  },
+  "122273": {
+    "name": "Sega Dreamcast",
+    "alias": "sega-dreamcast-122273"
+  },
+  "122274": {
+    "name": "Sega inne",
+    "alias": "sega-inne-122274"
+  },
+  "122275": {
+    "name": "Sony PlayStation 2 (PS2)",
+    "alias": "sony-playstation-2-ps2-122275"
+  },
+  "122284": {
+    "name": "Sony PlayStation 3 (PS3)",
+    "alias": "sony-playstation-3-ps3-122284"
+  },
+  "122292": {
+    "name": "Sony PlayStation (PSX)",
+    "alias": "sony-playstation-psx-122292"
+  },
+  "122300": {
+    "name": "Sony PS Vita",
+    "alias": "sony-ps-vita-122300"
+  },
+  "122301": {
+    "name": "Sony PSP",
+    "alias": "sony-psp-122301"
+  },
+  "122317": {
+    "name": "&#x27;Gierki&#x27; elektroniczne",
+    "alias": "gierki-elektroniczne-122317"
+  },
+  "122318": {
+    "name": "Pegasus",
+    "alias": "pegasus-122318"
+  },
+  "122319": {
+    "name": "Automaty do gier",
+    "alias": "automaty-do-gier-122319"
+  },
+  "122329": {
+    "name": "Pozosta\u0142e",
+    "alias": "pozostale-122329"
+  },
+  "122332": {
+    "name": "Sprz\u0119t estradowy, studyjny i DJ-ski",
+    "alias": "sprzet-estradowy-studyjny-i-dj-ski",
+    "path": "Elektronika > Sprz\u0119t estradowy, studyjny i DJ-ski"
+  },
+  "122340": {
+    "name": "Gramofony dla DJ-\u00f3w",
+    "alias": "gramofony-dla-dj-ow-122340"
+  },
+  "122349": {
+    "name": "Kable, przewody i wtyki",
+    "alias": "kable-przewody-i-wtyki-122349"
+  },
+  "122354": {
+    "name": "Mikrofony i akcesoria",
+    "alias": "sprzet-estradowy-studyjny-i-dj-ski-mikrofony-i-akcesoria-122354",
+    "path": "Elektronika > Sprz\u0119t estradowy, studyjny i DJ-ski > Mikrofony i akcesoria"
+  },
+  "122355": {
+    "name": "Mikrofony bezprzewodowe",
+    "alias": "mikrofony-i-akcesoria-mikrofony-bezprzewodowe-122355"
+  },
+  "122360": {
+    "name": "Mikrofony przewodowe",
+    "alias": "mikrofony-i-akcesoria-mikrofony-przewodowe-122360"
+  },
+  "122368": {
+    "name": "Statywy i uchwyty",
+    "alias": "mikrofony-i-akcesoria-statywy-i-uchwyty-122368"
+  },
+  "122369": {
+    "name": "Pozosta\u0142e",
+    "alias": "mikrofony-i-akcesoria-pozostale-122369"
+  },
+  "122370": {
+    "name": "Miksery audio",
+    "alias": "miksery-audio-122370"
+  },
+  "122374": {
+    "name": "Nag\u0142o\u015bnienie",
+    "alias": "naglosnienie-122374"
+  },
+  "122385": {
+    "name": "Sceny, estrady, podesty",
+    "alias": "sceny-estrady-podesty-122385"
+  },
+  "122386": {
+    "name": "S\u0142uchawki",
+    "alias": "sluchawki-122386"
+  },
+  "122389": {
+    "name": "\u015awiat\u0142o i efekty",
+    "alias": "swiatlo-i-efekty-122389"
+  },
+  "122406": {
+    "name": "Video dla studia",
+    "alias": "video-dla-studia-122406"
+  },
+  "122407": {
+    "name": "Walizki i torby",
+    "alias": "walizki-i-torby-122407"
+  },
+  "122412": {
+    "name": "Urz\u0105dzenia rejestruj\u0105ce",
+    "alias": "urzadzenia-rejestrujace-122412"
+  },
+  "122414": {
+    "name": "Pozosta\u0142e",
+    "alias": "pozostale-122414"
+  },
+  "122640": {
+    "name": "Instrumenty",
+    "alias": "instrumenty"
+  },
+  "123": {
+    "name": "Wyposa\u017cenie",
+    "alias": "wyposazenie-123",
+    "path": "Dom i Ogr\u00f3d > Wyposa\u017cenie"
+  },
+  "124882": {
+    "name": "Literatura i instrukcje",
+    "alias": "literatura-i-instrukcje-124882"
+  },
+  "124883": {
+    "name": "Sprz\u0119t optyczny",
+    "alias": "sprzet-optyczny-124883"
+  },
+  "125154": {
+    "name": "Huawei",
+    "alias": "smartfony-i-telefony-komorkowe-huawei-125154"
+  },
+  "125348": {
+    "name": "Szuflady do podgrzewania",
+    "alias": "agd-do-zabudowy-szuflady-do-podgrzewania-125348"
+  },
+  "125349": {
+    "name": "Chemia gospodarcza",
+    "alias": "agd-do-zabudowy-chemia-gospodarcza-125349"
+  },
+  "125422": {
+    "name": "Nintendo Wii U",
+    "alias": "nintendo-wii-u-125422"
+  },
+  "126": {
+    "name": "Pozosta\u0142e",
+    "alias": "budownictwo-i-akcesoria-pozostale-126"
+  },
+  "126183": {
+    "name": "Kompostowniki",
+    "alias": "ogrod-kompostowniki-126183"
+  },
+  "126184": {
+    "name": "Odstraszacze zwierz\u0105t",
+    "alias": "ogrod-odstraszacze-zwierzat-126184"
+  },
+  "126185": {
+    "name": "Szamba i oczyszczalnie",
+    "alias": "ogrod-szamba-i-oczyszczalnie-126185"
+  },
+  "126186": {
+    "name": "Agrow\u0142\u00f3kniny",
+    "alias": "agrowlokniny-i-akcesoria-agrowlokniny-126186"
+  },
+  "126187": {
+    "name": "Doniczki i pojemniki",
+    "alias": "ogrod-doniczki-i-pojemniki-126187"
+  },
+  "126188": {
+    "name": "Nawozy i preparaty",
+    "alias": "ogrod-nawozy-i-preparaty-126188"
+  },
+  "126189": {
+    "name": "Pod\u0142o\u017ca",
+    "alias": "ogrod-podloza-126189"
+  },
+  "127363": {
+    "name": "Cz\u0119\u015bci",
+    "alias": "agd-do-zabudowy-czesci-127363"
+  },
+  "127376": {
+    "name": "ZTE",
+    "alias": "smartfony-i-telefony-komorkowe-zte-127376"
+  },
+  "128": {
+    "name": "Pozosta\u0142e",
+    "alias": "wyposazenie-pozostale-128"
+  },
+  "1291": {
+    "name": "Zestawy akcesori\u00f3w",
+    "alias": "akcesoria-gsm-zestawy-akcesoriow-1291"
+  },
+  "1328": {
+    "name": "Pozosta\u0142e",
+    "alias": "pozostale-1328"
+  },
+  "1333": {
+    "name": "Akcesoria i cz\u0119\u015bci serwisowe",
+    "alias": "akcesoria-gsm-akcesoria-i-czesci-serwisowe-1333"
+  },
+  "14508": {
+    "name": "Smycze, breloki",
+    "alias": "akcesoria-gsm-smycze-breloki-14508"
+  },
+  "146538": {
+    "name": "Motorola",
+    "alias": "smartfony-i-telefony-komorkowe-motorola-146538"
+  },
+  "146562": {
+    "name": "Sony PlayStation 4 (PS4)",
+    "alias": "sony-playstation-4-ps4-146562"
+  },
+  "147134": {
+    "name": "Microsoft Xbox One",
+    "alias": "microsoft-xbox-one-147134"
+  },
+  "147642": {
+    "name": "Agregaty pr\u0105dotw\u00f3rcze",
+    "alias": "narzedzia-agregaty-pradotworcze-147642"
+  },
+  "147643": {
+    "name": "Osprz\u0119t do elektronarz\u0119dzi",
+    "alias": "narzedzia-akcesoria-i-osprzet-147643"
+  },
+  "147644": {
+    "name": "Bruzdownice",
+    "alias": "narzedzia-bruzdownice-147644"
+  },
+  "147645": {
+    "name": "Frezarki",
+    "alias": "narzedzia-frezarki-147645"
+  },
+  "147646": {
+    "name": "Imad\u0142a",
+    "alias": "narzedzia-imadla-147646",
+    "path": "Dom i Ogr\u00f3d > Narz\u0119dzia > Imad\u0142a"
+  },
+  "147647": {
+    "name": "Klucze",
+    "alias": "narzedzia-klucze-147647"
+  },
+  "147648": {
+    "name": "Lutownice",
+    "alias": "narzedzia-lutownice-147648"
+  },
+  "147649": {
+    "name": "M\u0142otki, przecinaki i d\u0142uta",
+    "alias": "narzedzia-mlotki-przecinaki-i-dluta-147649"
+  },
+  "147650": {
+    "name": "M\u0142otowiertarki",
+    "alias": "narzedzia-mlotowiertarki-147650"
+  },
+  "147651": {
+    "name": "M\u0142oty udarowe",
+    "alias": "narzedzia-mloty-udarowe-147651"
+  },
+  "147652": {
+    "name": "Myjki ci\u015bnieniowe",
+    "alias": "narzedzia-myjki-cisnieniowe-147652"
+  },
+  "147653": {
+    "name": "Odkurzacze przemys\u0142owe",
+    "alias": "narzedzia-odkurzacze-przemyslowe-147653"
+  },
+  "147654": {
+    "name": "Opalarki",
+    "alias": "narzedzia-opalarki-147654"
+  },
+  "147655": {
+    "name": "Pi\u0142y i pilarki",
+    "alias": "narzedzia-pily-i-pilarki-147655"
+  },
+  "147657": {
+    "name": "Spr\u0119\u017carki i kompresory",
+    "alias": "narzedzia-sprezarki-i-kompresory-147657"
+  },
+  "147658": {
+    "name": "Strugi",
+    "alias": "narzedzia-strugi-147658"
+  },
+  "147659": {
+    "name": "Szczypce, no\u017cyce, obc\u0119gi",
+    "alias": "narzedzia-szczypce-nozyce-obcegi-147659"
+  },
+  "147661": {
+    "name": "Wkr\u0119taki",
+    "alias": "narzedzia-wkretaki-147661"
+  },
+  "147662": {
+    "name": "Wkr\u0119tarki",
+    "alias": "narzedzia-wkretarki-147662"
+  },
+  "147663": {
+    "name": "Wyrzynarki",
+    "alias": "narzedzia-wyrzynarki-147663"
+  },
+  "147664": {
+    "name": "Zgrzewarki",
+    "alias": "narzedzia-zgrzewarki-147664"
+  },
+  "147666": {
+    "name": "Zestawy narz\u0119dzi",
+    "alias": "narzedzia-zestawy-narzedzi-147666"
+  },
+  "148162": {
+    "name": "Oczka wodne",
+    "alias": "ogrod-oczka-wodne-148162"
+  },
+  "148442": {
+    "name": "Przedmioty dekoracyjne",
+    "alias": "ogrod-przedmioty-dekoracyjne-148442"
+  },
+  "148768": {
+    "name": "Hammer",
+    "alias": "smartfony-i-telefony-komorkowe-hammer-148768"
+  },
+  "148923": {
+    "name": "Wyposa\u017cenie studia",
+    "alias": "wyposazenie-studia-148923"
+  },
+  "1510": {
+    "name": "Kuchnia",
+    "alias": "meble-kuchnia-1510",
+    "path": "Dom i Ogr\u00f3d > Meble > Kuchnia"
+  },
+  "1511": {
+    "name": "\u0141azienka i toaleta",
+    "alias": "meble-lazienka-i-toaleta-1511"
+  },
+  "1513": {
+    "name": "Pracownia",
+    "alias": "meble-pracownia-1513"
+  },
+  "1514": {
+    "name": "Przedpok\u00f3j",
+    "alias": "meble-przedpokoj-1514"
+  },
+  "1515": {
+    "name": "Salon",
+    "alias": "meble-salon-1515"
+  },
+  "1520": {
+    "name": "Budownictwo i Akcesoria",
+    "alias": "budownictwo-i-akcesoria-1520",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria"
+  },
+  "1521": {
+    "name": "Dachy",
+    "alias": "budownictwo-i-akcesoria-dachy-1521",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Dachy"
+  },
+  "1523": {
+    "name": "Elektryka i akcesoria",
+    "alias": "budownictwo-i-akcesoria-elektryka-i-akcesoria-1523",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Elektryka i akcesoria"
+  },
+  "1525": {
+    "name": "Kominki i akcesoria",
+    "alias": "budownictwo-i-akcesoria-kominki-i-akcesoria-1525"
+  },
+  "1527": {
+    "name": "\u015aciany i elewacje",
+    "alias": "budownictwo-i-akcesoria-sciany-i-elewacje-1527"
+  },
+  "1532": {
+    "name": "Ogr\u00f3d",
+    "alias": "ogrod-1532",
+    "path": "Dom i Ogr\u00f3d > Ogr\u00f3d"
+  },
+  "1534": {
+    "name": "Narz\u0119dzia ogrodnicze",
+    "alias": "ogrod-narzedzia-ogrodnicze-1534",
+    "path": "Dom i Ogr\u00f3d > Ogr\u00f3d > Narz\u0119dzia ogrodnicze"
+  },
+  "1536": {
+    "name": "Narz\u0119dzia",
+    "alias": "narzedzia-1536",
+    "path": "Dom i Ogr\u00f3d > Narz\u0119dzia"
+  },
+  "15821": {
+    "name": "Internet",
+    "alias": "internet-15821"
+  },
+  "1591": {
+    "name": "Ozdoby \u015bwi\u0105teczne i okoliczno\u015bciowe",
+    "alias": "wyposazenie-ozdoby-swiateczne-i-okolicznosciowe-1591"
+  },
+  "15957": {
+    "name": "Ogrodzenia i bramy",
+    "alias": "budownictwo-i-akcesoria-ogrodzenia-i-bramy-15957",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Ogrodzenia i bramy"
+  },
+  "15958": {
+    "name": "Drzwi",
+    "alias": "budownictwo-i-akcesoria-drzwi-15958",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Drzwi"
+  },
+  "15959": {
+    "name": "Okna i parapety",
+    "alias": "budownictwo-i-akcesoria-okna-i-parapety-15959"
+  },
+  "15960": {
+    "name": "Pod\u0142ogi",
+    "alias": "budownictwo-i-akcesoria-podlogi-15960",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Pod\u0142ogi"
+  },
+  "15961": {
+    "name": "Pozosta\u0142e",
+    "alias": "elektryka-i-akcesoria-pozostale-15961"
+  },
+  "15962": {
+    "name": "Kable i przewody",
+    "alias": "elektryka-i-akcesoria-kable-i-przewody-15962"
+  },
+  "15963": {
+    "name": "Dzwonki",
+    "alias": "elektryka-i-akcesoria-dzwonki-15963"
+  },
+  "15964": {
+    "name": "Alarmy",
+    "alias": "elektryka-i-akcesoria-alarmy-15964"
+  },
+  "16008": {
+    "name": "Sztuczne kwiaty i owoce",
+    "alias": "florystyka-sztuczne-kwiaty-i-owoce-16008"
+  },
+  "165": {
+    "name": "Smartfony i telefony kom\u00f3rkowe",
+    "alias": "smartfony-i-telefony-komorkowe-165",
+    "path": "Elektronika > Telefony i Akcesoria > Smartfony i telefony kom\u00f3rkowe"
+  },
+  "17272": {
+    "name": "Pok\u00f3j dzieci\u0119cy",
+    "alias": "pokoj-dzieciecy-17272"
+  },
+  "17285": {
+    "name": "Zdrowie i higiena",
+    "alias": "zdrowie-i-higiena-17285"
+  },
+  "19352": {
+    "name": "Rysiki",
+    "alias": "akcesoria-gsm-rysiki-19352"
+  },
+  "19353": {
+    "name": "Pude\u0142ka",
+    "alias": "akcesoria-gsm-pudelka-19353"
+  },
+  "19354": {
+    "name": "\u0141adowarki",
+    "alias": "akcesoria-gsm-ladowarki-19354"
+  },
+  "19416": {
+    "name": "Do k\u0105pieli",
+    "alias": "zabawki-do-kapieli-19416"
+  },
+  "19417": {
+    "name": "Pozosta\u0142e",
+    "alias": "edukacyjne-pozostale-19417"
+  },
+  "19423": {
+    "name": "Uk\u0142adanki",
+    "alias": "edukacyjne-ukladanki-19423"
+  },
+  "19477": {
+    "name": "Bujaki, skoczki",
+    "alias": "zabawki-bujaki-skoczki-19477"
+  },
+  "2": {
+    "name": "Komputery",
+    "alias": "komputery",
+    "path": "Elektronika > Komputery"
+  },
+  "2000": {
+    "name": "TOP-2000",
+    "alias": "artykuly-szkolne-artykuly-papiernicze-50675?marka=TOP-2000"
+  },
+  "20134": {
+    "name": "Sprz\u0119t audio przeno\u015bny",
+    "alias": "sprzet-audio-przenosny-20134"
+  },
+  "20266": {
+    "name": "Szafki kuchenne",
+    "alias": "kuchnia-szafki-kuchenne-20266"
+  },
+  "20585": {
+    "name": "Filmy",
+    "alias": "filmy"
+  },
+  "240": {
+    "name": "Urz\u0105dzenia stacjonarne",
+    "alias": "urzadzenia-stacjonarne-240"
+  },
+  "249002": {
+    "name": "Poduszki",
+    "alias": "meble-ogrodowe-poduszki-249002"
+  },
+  "249462": {
+    "name": "Xiaomi",
+    "alias": "smartfony-i-telefony-komorkowe-xiaomi-249462"
+  },
+  "250568": {
+    "name": "Asus",
+    "alias": "smartfony-i-telefony-komorkowe-asus-250568"
+  },
+  "250722": {
+    "name": "Smartwatche i akcesoria",
+    "alias": "smartwatche-i-akcesoria-250722"
+  },
+  "251004": {
+    "name": "Fronty",
+    "alias": "akcesoria-fronty-251004",
+    "path": "Dom i Ogr\u00f3d > Meble > Akcesoria > Fronty"
+  },
+  "251005": {
+    "name": "Granulat",
+    "alias": "akcesoria-granulat-251005"
+  },
+  "251006": {
+    "name": "Podk\u0142adki i filc",
+    "alias": "akcesoria-podkladki-i-filc-251006"
+  },
+  "251007": {
+    "name": "Okleiny i naklejki",
+    "alias": "akcesoria-okleiny-i-naklejki-251007"
+  },
+  "251008": {
+    "name": "Sortowanie \u015bmieci",
+    "alias": "akcesoria-sortowanie-smieci-251008"
+  },
+  "251009": {
+    "name": "Maty i organizery do szuflad i szafek",
+    "alias": "akcesoria-maty-i-organizery-do-szuflad-i-szafek-251009"
+  },
+  "251021": {
+    "name": "Pok\u00f3j dzieci\u0119cy",
+    "alias": "meble-pokoj-dzieciecy-251021"
+  },
+  "251022": {
+    "name": "Pok\u00f3j m\u0142odzie\u017cowy",
+    "alias": "meble-pokoj-mlodziezowy-251022"
+  },
+  "251023": {
+    "name": "Piwnica/gara\u017c",
+    "alias": "meble-piwnica-garaz-251023"
+  },
+  "251242": {
+    "name": "Inteligentny dom",
+    "alias": "wyposazenie-inteligentny-dom-251242"
+  },
+  "252023": {
+    "name": "Powerbanki",
+    "alias": "powerbanki-252023"
+  },
+  "252042": {
+    "name": "M\u0142oty wyburzeniowe",
+    "alias": "narzedzia-mloty-wyburzeniowe-252042"
+  },
+  "252043": {
+    "name": "Wiertarki",
+    "alias": "narzedzia-wiertarki-252043"
+  },
+  "253022": {
+    "name": "Cat Phones",
+    "alias": "smartfony-i-telefony-komorkowe-cat-phones-253022"
+  },
+  "253478": {
+    "name": "Honor",
+    "alias": "smartfony-i-telefony-komorkowe-honor-253478"
+  },
+  "253698": {
+    "name": "M\u0142ynki do odpad\u00f3w",
+    "alias": "kuchnia-mlynki-do-odpadow-253698"
+  },
+  "253702": {
+    "name": "Przyciski sp\u0142ukuj\u0105ce",
+    "alias": "lazienka-i-toaleta-przyciski-splukujace-253702"
+  },
+  "253703": {
+    "name": "Stela\u017ce podtynkowe",
+    "alias": "lazienka-i-toaleta-stelaze-podtynkowe-253703"
+  },
+  "253753": {
+    "name": "Audiobooki - mp3",
+    "alias": "audiobooki-mp3-253753"
+  },
+  "253981": {
+    "name": "DooGee",
+    "alias": "smartfony-i-telefony-komorkowe-doogee-253981"
+  },
+  "254018": {
+    "name": "Odstraszacze owad\u00f3w",
+    "alias": "ogrod-odstraszacze-owadow-254018"
+  },
+  "254019": {
+    "name": "Wianki",
+    "alias": "florystyka-wianki-254019"
+  },
+  "254141": {
+    "name": "Markizy, os\u0142ony, maty",
+    "alias": "ogrod-markizy-oslony-maty-254141"
+  },
+  "254439": {
+    "name": "Pralko-suszarki",
+    "alias": "agd-do-zabudowy-pralko-suszarki-254439"
+  },
+  "254478": {
+    "name": "Kompozycje kwiatowe",
+    "alias": "florystyka-kompozycje-kwiatowe-254478"
+  },
+  "254498": {
+    "name": "Mikrokomputery",
+    "alias": "mikrokomputery-254498"
+  },
+  "254840": {
+    "name": "Sprz\u0119t i akcesoria budowlane",
+    "alias": "budownictwo-i-akcesoria-sprzet-i-akcesoria-budowlane-254840"
+  },
+  "254844": {
+    "name": "Wiertnice",
+    "alias": "narzedzia-wiertnice-254844"
+  },
+  "255485": {
+    "name": "Pozosta\u0142e",
+    "alias": "fotografia-pozostale-255485"
+  },
+  "255486": {
+    "name": "Fotobudki",
+    "alias": "fotografia-fotobudki-255486"
+  },
+  "255487": {
+    "name": "Przedmioty na sesje",
+    "alias": "fotografia-przedmioty-na-sesje-255487"
+  },
+  "255504": {
+    "name": "Wentylatory domowe",
+    "alias": "wyposazenie-wentylatory-domowe-255504"
+  },
+  "255632": {
+    "name": "Elementy monta\u017cowe",
+    "alias": "dachy-elementy-montazowe-255632",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Dachy > Elementy monta\u017cowe"
+  },
+  "255633": {
+    "name": "Farby i uszczelniacze do dach\u00f3w",
+    "alias": "dachy-farby-i-uszczelniacze-do-dachow-255633"
+  },
+  "255634": {
+    "name": "Klamki",
+    "alias": "drzwi-klamki-255634"
+  },
+  "255635": {
+    "name": "Zamki",
+    "alias": "drzwi-zamki-255635"
+  },
+  "255648": {
+    "name": "O\u015bcie\u017cnice",
+    "alias": "drzwi-oscieznice-255648"
+  },
+  "256021": {
+    "name": "Puszki elektryczne",
+    "alias": "elektryka-i-akcesoria-puszki-elektryczne-256021"
+  },
+  "256107": {
+    "name": "No\u017cyce do blachy",
+    "alias": "narzedzia-nozyce-do-blachy-256107"
+  },
+  "256108": {
+    "name": "Furtki",
+    "alias": "ogrodzenia-i-bramy-furtki-256108"
+  },
+  "256172": {
+    "name": "Akcesoria",
+    "alias": "podlogi-akcesoria-256172"
+  },
+  "256173": {
+    "name": "Chemia do pod\u0142\u00f3g",
+    "alias": "podlogi-chemia-do-podlog-256173",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Pod\u0142ogi > Chemia do pod\u0142\u00f3g"
+  },
+  "256179": {
+    "name": "Listwy przypod\u0142ogowe",
+    "alias": "podlogi-listwy-przypodlogowe-256179"
+  },
+  "256503": {
+    "name": "Daszki nad drzwi",
+    "alias": "drzwi-daszki-nad-drzwi-256503"
+  },
+  "256522": {
+    "name": "Ch\u0142odziarki do wina",
+    "alias": "agd-do-zabudowy-chlodziarki-do-wina-256522",
+    "path": "Elektronika > RTV i AGD > AGD do zabudowy > Ch\u0142odziarki do wina"
+  },
+  "256542": {
+    "name": "Girlandy \u015bwietlne",
+    "alias": "oswietlenie-girlandy-swietlne-256542"
+  },
+  "256603": {
+    "name": "Akcesoria do gier towarzyskich",
+    "alias": "gry-akcesoria-do-gier-towarzyskich-256603"
+  },
+  "256618": {
+    "name": "Karciane tradycyjne",
+    "alias": "karciane-karciane-tradycyjne-256618"
+  },
+  "256862": {
+    "name": "Nintendo Switch",
+    "alias": "nintendo-switch-256862"
+  },
+  "256908": {
+    "name": "Przecinarki do glazury",
+    "alias": "narzedzia-przecinarki-do-glazury-256908"
+  },
+  "256909": {
+    "name": "Radia budowlane",
+    "alias": "narzedzia-radia-budowlane-256909"
+  },
+  "256910": {
+    "name": "Pistolety malarskie",
+    "alias": "narzedzia-pistolety-malarskie-256910"
+  },
+  "256911": {
+    "name": "Pistolety do kleju",
+    "alias": "narzedzia-pistolety-do-kleju-256911"
+  },
+  "257007": {
+    "name": "Oprawy o\u015bwietleniowe",
+    "alias": "oswietlenie-oprawy-oswietleniowe-257007",
+    "path": "Dom i Ogr\u00f3d > O\u015bwietlenie > Oprawy o\u015bwietleniowe"
+  },
+  "257179": {
+    "name": "Maxcom",
+    "alias": "smartfony-i-telefony-komorkowe-maxcom-257179"
+  },
+  "257183": {
+    "name": "Mieszarki",
+    "alias": "narzedzia-mieszarki-257183"
+  },
+  "257184": {
+    "name": "Ostrza\u0142ki",
+    "alias": "narzedzia-ostrzalki-257184"
+  },
+  "257185": {
+    "name": "Pistolety do pianki",
+    "alias": "narzedzia-pistolety-do-pianki-257185"
+  },
+  "257186": {
+    "name": "Pistolety do silikonu",
+    "alias": "narzedzia-pistolety-do-silikonu-257186"
+  },
+  "257187": {
+    "name": "Wci\u0105garki",
+    "alias": "narzedzia-wciagarki-257187"
+  },
+  "257191": {
+    "name": "\u015aciski",
+    "alias": "narzedzia-sciski-257191"
+  },
+  "257200": {
+    "name": "Odkurzacze pior\u0105ce",
+    "alias": "narzedzia-odkurzacze-piorace-257200"
+  },
+  "257260": {
+    "name": "Nap\u0119dy optyczne i no\u015bniki",
+    "alias": "napedy-optyczne-i-nosniki-257260"
+  },
+  "257347": {
+    "name": "Adaptery, przej\u015bci\u00f3wki",
+    "alias": "akcesoria-gsm-adaptery-przejsciowki-257347"
+  },
+  "257754": {
+    "name": "Sto\u0142y i stoliki",
+    "alias": "meble-ogrodowe-stoly-i-stoliki-257754"
+  },
+  "257755": {
+    "name": "Krzes\u0142a",
+    "alias": "meble-ogrodowe-krzesla-257755"
+  },
+  "257756": {
+    "name": "Komplety mebli",
+    "alias": "meble-ogrodowe-komplety-mebli-257756"
+  },
+  "257757": {
+    "name": "Fotele wisz\u0105ce",
+    "alias": "meble-ogrodowe-fotele-wiszace-257757"
+  },
+  "257758": {
+    "name": "Parasole grzewcze",
+    "alias": "meble-ogrodowe-parasole-grzewcze-257758"
+  },
+  "257759": {
+    "name": "Skrzynie ogrodowe",
+    "alias": "meble-ogrodowe-skrzynie-ogrodowe-257759"
+  },
+  "257781": {
+    "name": "OnePlus",
+    "alias": "smartfony-i-telefony-komorkowe-oneplus-257781"
+  },
+  "257797": {
+    "name": "Smoczki uspokajaj\u0105ce i gryzaki",
+    "alias": "akcesoria-dla-mamy-i-dziecka-smoczki-uspokajajace-i-gryzaki-257797",
+    "path": "Dziecko > Akcesoria dla mamy i dziecka > Smoczki uspokajaj\u0105ce i gryzaki"
+  },
+  "257798": {
+    "name": "Smoczki",
+    "alias": "smoczki-uspokajajace-i-gryzaki-smoczki-257798"
+  },
+  "257799": {
+    "name": "Gryzaki",
+    "alias": "smoczki-uspokajajace-i-gryzaki-gryzaki-257799"
+  },
+  "257800": {
+    "name": "Zawieszki",
+    "alias": "smoczki-uspokajajace-i-gryzaki-zawieszki-257800"
+  },
+  "257801": {
+    "name": "Pojemniki na smoczki",
+    "alias": "smoczki-uspokajajace-i-gryzaki-pojemniki-na-smoczki-257801"
+  },
+  "257818": {
+    "name": "Karty pami\u0119ci",
+    "alias": "karty-pamieci-257818"
+  },
+  "257900": {
+    "name": "Kody i do\u0142adowania",
+    "alias": "kody-i-doladowania"
+  },
+  "257934": {
+    "name": "Akcesoria dla mamy",
+    "alias": "akcesoria-dla-mamy-i-dziecka-akcesoria-dla-mamy-257934",
+    "path": "Dziecko > Akcesoria dla mamy i dziecka > Akcesoria dla mamy"
+  },
+  "257935": {
+    "name": "Podk\u0142ady higieniczne",
+    "alias": "akcesoria-dla-mamy-podklady-higieniczne-257935"
+  },
+  "257936": {
+    "name": "Adaptery do pas\u00f3w",
+    "alias": "akcesoria-dla-mamy-adaptery-do-pasow-257936"
+  },
+  "257937": {
+    "name": "Poduszki do spania i karmienia",
+    "alias": "akcesoria-dla-mamy-poduszki-do-spania-i-karmienia-257937"
+  },
+  "257938": {
+    "name": "Biustonosze do karmienia",
+    "alias": "akcesoria-dla-mamy-biustonosze-do-karmienia-257938",
+    "path": "Dziecko > Akcesoria dla mamy i dziecka > Akcesoria dla mamy > Biustonosze do karmienia"
+  },
+  "257939": {
+    "name": "Testy ci\u0105\u017cowe",
+    "alias": "akcesoria-dla-mamy-testy-ciazowe-257939"
+  },
+  "257940": {
+    "name": "Koszule dla karmi\u0105cych",
+    "alias": "akcesoria-dla-mamy-koszule-dla-karmiacych-257940"
+  },
+  "257941": {
+    "name": "Kremy dla mamy",
+    "alias": "akcesoria-dla-mamy-kremy-dla-mamy-257941",
+    "path": "Dziecko > Akcesoria dla mamy i dziecka > Akcesoria dla mamy > Kremy dla mamy"
+  },
+  "257942": {
+    "name": "Wk\u0142adki laktacyjne i muszle",
+    "alias": "akcesoria-dla-mamy-wkladki-laktacyjne-i-muszle-257942"
+  },
+  "257944": {
+    "name": "Pozosta\u0142e",
+    "alias": "akcesoria-dla-mamy-pozostale-257944"
+  },
+  "257945": {
+    "name": "Os\u0142onki na piersi",
+    "alias": "akcesoria-dla-mamy-oslonki-na-piersi-257945",
+    "path": "Dziecko > Akcesoria dla mamy i dziecka > Akcesoria dla mamy > Os\u0142onki na piersi"
+  },
+  "257946": {
+    "name": "Pasy ci\u0105\u017cowe",
+    "alias": "akcesoria-dla-mamy-pasy-ciazowe-257946"
+  },
+  "257985": {
+    "name": "Blackview",
+    "alias": "smartfony-i-telefony-komorkowe-blackview-257985"
+  },
+  "257986": {
+    "name": "Ulefone",
+    "alias": "smartfony-i-telefony-komorkowe-ulefone-257986"
+  },
+  "258006": {
+    "name": "Majtki poporodowe",
+    "alias": "akcesoria-dla-mamy-majtki-poporodowe-258006"
+  },
+  "258269": {
+    "name": "Obiektywy",
+    "alias": "obiektywy-258269"
+  },
+  "258273": {
+    "name": "Samozamykacze",
+    "alias": "drzwi-samozamykacze-258273"
+  },
+  "258274": {
+    "name": "Tapicerka drzwiowa",
+    "alias": "drzwi-tapicerka-drzwiowa-258274"
+  },
+  "258275": {
+    "name": "Wizjery",
+    "alias": "drzwi-wizjery-258275"
+  },
+  "258276": {
+    "name": "Zawiasy",
+    "alias": "drzwi-zawiasy-258276"
+  },
+  "258277": {
+    "name": "Odbojniki",
+    "alias": "drzwi-odbojniki-258277"
+  },
+  "258280": {
+    "name": "Zamra\u017carki",
+    "alias": "agd-do-zabudowy-zamrazarki-258280"
+  },
+  "258281": {
+    "name": "Uszczelki",
+    "alias": "drzwi-uszczelki-258281"
+  },
+  "258295": {
+    "name": "Ramki",
+    "alias": "elektryka-i-akcesoria-ramki-258295"
+  },
+  "258336": {
+    "name": "Cubot",
+    "alias": "smartfony-i-telefony-komorkowe-cubot-258336"
+  },
+  "258345": {
+    "name": "Opaski zaciskowe",
+    "alias": "elektryka-i-akcesoria-opaski-zaciskowe-258345"
+  },
+  "258346": {
+    "name": "Podk\u0142ady pod panele",
+    "alias": "podlogi-podklady-pod-panele-258346"
+  },
+  "258400": {
+    "name": "Drut kolczasty i naci\u0105gowy",
+    "alias": "ogrodzenia-i-bramy-drut-kolczasty-i-naciagowy-258400"
+  },
+  "258665": {
+    "name": "Aparaty natychmiastowe",
+    "alias": "aparaty-natychmiastowe-258665"
+  },
+  "258666": {
+    "name": "Odbitki",
+    "alias": "odbitki-258666"
+  },
+  "258712": {
+    "name": "Doniczki i os\u0142onki",
+    "alias": "florystyka-doniczki-i-oslonki-258712"
+  },
+  "258714": {
+    "name": "Kominki wentylacyjne",
+    "alias": "dachy-kominki-wentylacyjne-258714"
+  },
+  "258821": {
+    "name": "Urz\u0105dzenia czyszcz\u0105ce",
+    "alias": "narzedzia-urzadzenia-czyszczace-258821"
+  },
+  "258849": {
+    "name": "Tornistry",
+    "alias": "artykuly-szkolne-tornistry-258849"
+  },
+  "258850": {
+    "name": "Worki",
+    "alias": "artykuly-szkolne-worki-258850",
+    "path": "Dziecko > Artyku\u0142y szkolne > Worki"
+  },
+  "258851": {
+    "name": "Nerki dla dzieci",
+    "alias": "artykuly-szkolne-nerki-dla-dzieci-258851"
+  },
+  "258852": {
+    "name": "Walizki dla dzieci",
+    "alias": "artykuly-szkolne-walizki-dla-dzieci-258852"
+  },
+  "258853": {
+    "name": "Torebki dzieci\u0119ce",
+    "alias": "artykuly-szkolne-torebki-dzieciece-258853"
+  },
+  "258860": {
+    "name": "Drabiny",
+    "alias": "prace-na-wysokosci-drabiny-258860",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Prace na wysoko\u015bci > Drabiny"
+  },
+  "258861": {
+    "name": "Stopnie i drabiny domowe",
+    "alias": "prace-na-wysokosci-stopnie-i-drabiny-domowe-258861"
+  },
+  "258862": {
+    "name": "Rusztowania",
+    "alias": "prace-na-wysokosci-rusztowania-258862"
+  },
+  "259410": {
+    "name": "Kryptowaluty",
+    "alias": "kryptowaluty-259410"
+  },
+  "259422": {
+    "name": "Mikrofony i s\u0142uchawki",
+    "alias": "mikrofony-i-sluchawki-259422"
+  },
+  "259434": {
+    "name": "G\u0142o\u015bniki",
+    "alias": "glosniki-259434"
+  },
+  "259497": {
+    "name": "Antystresowe",
+    "alias": "zabawki-antystresowe-259497"
+  },
+  "25952": {
+    "name": "Obuwie",
+    "alias": "obuwie-25952"
+  },
+  "260017": {
+    "name": "Monitory komputerowe",
+    "alias": "monitory-komputerowe-260017"
+  },
+  "260018": {
+    "name": "Urz\u0105dzenia VR",
+    "alias": "urzadzenia-vr-260018"
+  },
+  "260335": {
+    "name": "Kosiarki akumulatorowe",
+    "alias": "kosiarki-kosiarki-akumulatorowe-260335"
+  },
+  "260379": {
+    "name": "Ksi\u0105\u017cki dla m\u0142odzie\u017cy",
+    "alias": "ksiazki-ksiazki-dla-mlodziezy-260379"
+  },
+  "260394": {
+    "name": "Nianie elektroniczne i monitory oddechu",
+    "alias": "akcesoria-dla-mamy-i-dziecka-nianie-elektroniczne-i-monitory-oddechu-260394",
+    "path": "Dziecko > Akcesoria dla mamy i dziecka > Nianie elektroniczne i monitory oddechu"
+  },
+  "260413": {
+    "name": "Dozowniki",
+    "alias": "kuchnia-dozowniki-260413"
+  },
+  "260414": {
+    "name": "Zestawy podtynkowe WC",
+    "alias": "lazienka-i-toaleta-zestawy-podtynkowe-wc-260414"
+  },
+  "260548": {
+    "name": "Systemy do drzwi przesuwnych",
+    "alias": "drzwi-systemy-do-drzwi-przesuwnych-260548"
+  },
+  "260562": {
+    "name": "Watomierze",
+    "alias": "elektryka-i-akcesoria-watomierze-260562"
+  },
+  "260565": {
+    "name": "Uchwyty i haki na drabiny",
+    "alias": "prace-na-wysokosci-uchwyty-i-haki-na-drabiny-260565"
+  },
+  "260566": {
+    "name": "Narz\u0119dzia dla elektryka",
+    "alias": "elektryka-i-akcesoria-narzedzia-dla-elektryka-260566"
+  },
+  "260585": {
+    "name": "Oppo",
+    "alias": "smartfony-i-telefony-komorkowe-oppo-260585"
+  },
+  "260625": {
+    "name": "Akcesoria",
+    "alias": "agd-do-zabudowy-akcesoria-260625"
+  },
+  "260673": {
+    "name": "Blaty kuchenne",
+    "alias": "kuchnia-blaty-kuchenne-260673"
+  },
+  "260696": {
+    "name": "Roboty kosz\u0105ce",
+    "alias": "kosiarki-roboty-koszace-260696"
+  },
+  "260776": {
+    "name": "O\u015bwietlenie inteligentne",
+    "alias": "oswietlenie-oswietlenie-inteligentne-260776"
+  },
+  "260921": {
+    "name": "Ok\u0142adki",
+    "alias": "artykuly-papiernicze-okladki-260921"
+  },
+  "260922": {
+    "name": "Papiery",
+    "alias": "artykuly-papiernicze-papiery-260922"
+  },
+  "260959": {
+    "name": "Bibu\u0142y",
+    "alias": "artykuly-papiernicze-bibuly-260959"
+  },
+  "260960": {
+    "name": "Dziurkacze, zszywacze",
+    "alias": "artykuly-papiernicze-dziurkacze-zszywacze-260960"
+  },
+  "261197": {
+    "name": "Biografie, wspomnienia",
+    "alias": "ksiazki-biografie-wspomnienia-261197"
+  },
+  "261209": {
+    "name": "Fantasy, science fiction, horror",
+    "alias": "ksiazki-fantasy-science-fiction-horror-261209"
+  },
+  "261210": {
+    "name": "Krymina\u0142, sensacja, thriller",
+    "alias": "ksiazki-kryminal-sensacja-thriller-261210"
+  },
+  "261211": {
+    "name": "Google",
+    "alias": "smartfony-i-telefony-komorkowe-google-261211"
+  },
+  "261249": {
+    "name": "Reporta\u017c, literatura faktu",
+    "alias": "ksiazki-reportaz-literatura-faktu-261249"
+  },
+  "261250": {
+    "name": "Literatura obyczajowa, erotyczna",
+    "alias": "ksiazki-literatura-obyczajowa-erotyczna-261250"
+  },
+  "261335": {
+    "name": "Portugalski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-portugalski-261335"
+  },
+  "261338": {
+    "name": "\u017bywica epoksydowa",
+    "alias": "podlogi-zywica-epoksydowa-261338"
+  },
+  "261571": {
+    "name": "Instrumenty muzyczne",
+    "alias": "edukacyjne-instrumenty-muzyczne-261571"
+  },
+  "261595": {
+    "name": "Barki ogrodowe",
+    "alias": "meble-ogrodowe-barki-ogrodowe-261595"
+  },
+  "261596": {
+    "name": "Pokrowce ogrodowe",
+    "alias": "meble-ogrodowe-pokrowce-ogrodowe-261596"
+  },
+  "261597": {
+    "name": "Suszarki ogrodowe",
+    "alias": "meble-ogrodowe-suszarki-ogrodowe-261597"
+  },
+  "261598": {
+    "name": "Szafy i rega\u0142y ogrodowe",
+    "alias": "meble-ogrodowe-szafy-i-regaly-ogrodowe-261598"
+  },
+  "261599": {
+    "name": "Cz\u0119\u015bci i dodatki",
+    "alias": "meble-ogrodowe-czesci-i-dodatki-261599"
+  },
+  "261820": {
+    "name": "Tabliczki na drzwi",
+    "alias": "drzwi-tabliczki-na-drzwi-261820"
+  },
+  "261823": {
+    "name": "Podp\u00f3rki",
+    "alias": "drzwi-podporki-261823"
+  },
+  "261829": {
+    "name": "K\u0142\u00f3dki",
+    "alias": "drzwi-klodki-261829",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Drzwi > K\u0142\u00f3dki"
+  },
+  "26789": {
+    "name": "Przyrz\u0105dy miernicze",
+    "alias": "narzedzia-przyrzady-miernicze-26789",
+    "path": "Dom i Ogr\u00f3d > Narz\u0119dzia > Przyrz\u0105dy miernicze"
+  },
+  "26847": {
+    "name": "Miary",
+    "alias": "przyrzady-miernicze-miary-26847"
+  },
+  "26848": {
+    "name": "Poziomice",
+    "alias": "przyrzady-miernicze-poziomice-26848"
+  },
+  "26849": {
+    "name": "Pozosta\u0142e",
+    "alias": "przyrzady-miernicze-pozostale-26849"
+  },
+  "269": {
+    "name": "Pozosta\u0142e",
+    "alias": "narzedzia-pozostale-269"
+  },
+  "28496": {
+    "name": "Kalendarze, notesy, planery",
+    "alias": "kalendarze-notesy-planery-28496"
+  },
+  "300457": {
+    "name": "Las w s\u0142oiku",
+    "alias": "florystyka-las-w-sloiku-300457"
+  },
+  "300881": {
+    "name": "Bilety",
+    "alias": "bilety-300881"
+  },
+  "300893": {
+    "name": "Zestawy elektronarz\u0119dzi",
+    "alias": "narzedzia-zestawy-elektronarzedzi-300893"
+  },
+  "301034": {
+    "name": "Halogeny i na\u015bwietlacze",
+    "alias": "oswietlenie-halogeny-i-naswietlacze-301034"
+  },
+  "301130": {
+    "name": "Wyj\u0105tkowe chwile",
+    "alias": "wyjatkowe-chwile-301130"
+  },
+  "301142": {
+    "name": "Birety",
+    "alias": "artykuly-szkolne-birety-301142"
+  },
+  "302402": {
+    "name": "Peszle",
+    "alias": "elektryka-i-akcesoria-peszle-302402"
+  },
+  "302414": {
+    "name": "Szybkoz\u0142\u0105czki",
+    "alias": "elektryka-i-akcesoria-szybkozlaczki-302414"
+  },
+  "302701": {
+    "name": "Sto\u0142y i krzes\u0142a zestawy",
+    "alias": "kuchnia-stoly-i-krzesla-zestawy-302701"
+  },
+  "302713": {
+    "name": "Pokr\u0119t\u0142a i g\u0142owice",
+    "alias": "lazienka-i-toaleta-pokretla-i-glowice-302713"
+  },
+  "303957": {
+    "name": "Poziomice laserowe",
+    "alias": "przyrzady-miernicze-poziomice-laserowe-303957",
+    "path": "Dom i Ogr\u00f3d > Narz\u0119dzia > Przyrz\u0105dy miernicze > Poziomice laserowe"
+  },
+  "304805": {
+    "name": "Deski pod\u0142ogowe",
+    "alias": "podlogi-deski-podlogowe-304805"
+  },
+  "304853": {
+    "name": "Panele pod\u0142ogowe",
+    "alias": "podlogi-panele-podlogowe-304853",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Pod\u0142ogi > Panele pod\u0142ogowe"
+  },
+  "304865": {
+    "name": "Panele laminowane",
+    "alias": "panele-podlogowe-panele-laminowane-304865"
+  },
+  "304877": {
+    "name": "Panele winylowe",
+    "alias": "panele-podlogowe-panele-winylowe-304877",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Pod\u0142ogi > Panele pod\u0142ogowe > Panele winylowe"
+  },
+  "305061": {
+    "name": "O\u015bwietlenie zewn\u0119trzne",
+    "alias": "oswietlenie-oswietlenie-zewnetrzne-305061"
+  },
+  "305301": {
+    "name": "CD-playery dla DJ-\u00f3w",
+    "alias": "sprzet-estradowy-studyjny-i-dj-ski-cd-playery-dla-dj-ow-305301"
+  },
+  "305349": {
+    "name": "P\u0142otki \u015bniegowe",
+    "alias": "dachy-plotki-sniegowe-305349"
+  },
+  "305361": {
+    "name": "Szczud\u0142a budowlane",
+    "alias": "prace-na-wysokosci-szczudla-budowlane-305361"
+  },
+  "305373": {
+    "name": "Rozdrabniacze i pompy do WC",
+    "alias": "lazienka-i-toaleta-rozdrabniacze-i-pompy-do-wc-305373"
+  },
+  "306069": {
+    "name": "Spawarki",
+    "alias": "narzedzia-spawarki-306069"
+  },
+  "306177": {
+    "name": "Organizacja i przechowywanie narz\u0119dzi",
+    "alias": "narzedzia-organizacja-i-przechowywanie-narzedzi-306177"
+  },
+  "306453": {
+    "name": "Gad\u017cety",
+    "alias": "gadzety-306453"
+  },
+  "306537": {
+    "name": "Narz\u0119dzia hydrauliczne",
+    "alias": "narzedzia-narzedzia-hydrauliczne-306537"
+  },
+  "306849": {
+    "name": "Kleje do drewna",
+    "alias": "podlogi-kleje-do-drewna-306849"
+  },
+  "307093": {
+    "name": "realme",
+    "alias": "smartfony-i-telefony-komorkowe-realme-307093"
+  },
+  "308365": {
+    "name": "Szlifierki",
+    "alias": "narzedzia-szlifierki-308365"
+  },
+  "308617": {
+    "name": "Silikony sanitarne",
+    "alias": "lazienka-i-toaleta-silikony-sanitarne-308617"
+  },
+  "308641": {
+    "name": "Mech dekoracyjny",
+    "alias": "florystyka-mech-dekoracyjny-308641"
+  },
+  "309589": {
+    "name": "Biegowe i sportowe",
+    "alias": "wozki-biegowe-i-sportowe-309589"
+  },
+  "310073": {
+    "name": "Z\u0142ote numery",
+    "alias": "telefony-i-akcesoria-zlote-numery-310073"
+  },
+  "310217": {
+    "name": "Listwy przyblatowe",
+    "alias": "akcesoria-listwy-przyblatowe-310217"
+  },
+  "310229": {
+    "name": "Pantografy do szafy",
+    "alias": "akcesoria-pantografy-do-szafy-310229"
+  },
+  "310361": {
+    "name": "Zabezpieczenia przeciwpo\u017carowe",
+    "alias": "budownictwo-i-akcesoria-zabezpieczenia-przeciwpozarowe-310361"
+  },
+  "310645": {
+    "name": "Tradycyjne",
+    "alias": "gry-tradycyjne-310645"
+  },
+  "310801": {
+    "name": "G\u0105bki mikrofonowe",
+    "alias": "mikrofony-i-akcesoria-gabki-mikrofonowe-310801"
+  },
+  "310813": {
+    "name": "Filtry mikrofonowe",
+    "alias": "mikrofony-i-akcesoria-filtry-mikrofonowe-310813"
+  },
+  "311009": {
+    "name": "Pozosta\u0142e",
+    "alias": "telefony-i-akcesoria-pozostale-311009"
+  },
+  "312089": {
+    "name": "Poker",
+    "alias": "karciane-poker-312089"
+  },
+  "312101": {
+    "name": "Talie tradycyjne",
+    "alias": "karciane-talie-tradycyjne-312101"
+  },
+  "312113": {
+    "name": "Tarot",
+    "alias": "karciane-tarot-312113"
+  },
+  "312125": {
+    "name": "Kolekcjonerskie",
+    "alias": "karciane-kolekcjonerskie-312125",
+    "path": "Kultura i rozrywka > Gry > Karciane > Kolekcjonerskie"
+  },
+  "312233": {
+    "name": "Inne systemy",
+    "alias": "kolekcjonerskie-inne-systemy-312233"
+  },
+  "312425": {
+    "name": "Zabawki elektroniczne",
+    "alias": "zabawki-zabawki-elektroniczne-312425"
+  },
+  "312577": {
+    "name": "Zestawy do\u015bwiadczalne",
+    "alias": "edukacyjne-zestawy-doswiadczalne-312577"
+  },
+  "312637": {
+    "name": "Tablice",
+    "alias": "edukacyjne-tablice-312637"
+  },
+  "313637": {
+    "name": "Kosiarki r\u0119czne",
+    "alias": "kosiarki-kosiarki-reczne-313637"
+  },
+  "314853": {
+    "name": "Ko\u0142ki meblowe",
+    "alias": "akcesoria-kolki-meblowe-314853"
+  },
+  "315": {
+    "name": "Pozosta\u0142e",
+    "alias": "ogrod-pozostale-315"
+  },
+  "315057": {
+    "name": "Akcesoria",
+    "alias": "ogrodzenia-i-bramy-akcesoria-315057"
+  },
+  "315201": {
+    "name": "Akcesoria",
+    "alias": "dachy-akcesoria-315201"
+  },
+  "315479": {
+    "name": "Microsoft Xbox Series X / S",
+    "alias": "konsole-i-automaty-microsoft-xbox-series-x-s-315479"
+  },
+  "315536": {
+    "name": "Laktatory i akcesoria",
+    "alias": "akcesoria-dla-mamy-i-dziecka-laktatory-i-akcesoria-315536"
+  },
+  "315566": {
+    "name": "Sony PlayStation 5 (PS5)",
+    "alias": "konsole-i-automaty-sony-playstation-5-ps5-315566"
+  },
+  "315899": {
+    "name": "Pozosta\u0142e",
+    "alias": "komputery-pozostale-315899"
+  },
+  "316067": {
+    "name": "Akcesoria",
+    "alias": "elektryka-i-akcesoria-akcesoria-316067"
+  },
+  "316094": {
+    "name": "Wtyczki",
+    "alias": "elektryka-i-akcesoria-wtyczki-316094"
+  },
+  "316142": {
+    "name": "Akcesoria pszczelarskie",
+    "alias": "ogrod-akcesoria-pszczelarskie-316142"
+  },
+  "316213": {
+    "name": "Dr\u0105\u017cki meblowe",
+    "alias": "akcesoria-drazki-meblowe-316213"
+  },
+  "316216": {
+    "name": "Pianki i g\u0105bki",
+    "alias": "akcesoria-pianki-i-gabki-316216"
+  },
+  "316267": {
+    "name": "Gara\u017ce",
+    "alias": "budownictwo-i-akcesoria-garaze-316267"
+  },
+  "316444": {
+    "name": "Uchwyty do drzwi",
+    "alias": "drzwi-uchwyty-do-drzwi-316444"
+  },
+  "316447": {
+    "name": "Cyfry i litery na drzwi",
+    "alias": "drzwi-cyfry-i-litery-na-drzwi-316447"
+  },
+  "316450": {
+    "name": "Tuleje wentylacyjne",
+    "alias": "drzwi-tuleje-wentylacyjne-316450"
+  },
+  "316453": {
+    "name": "Listwy",
+    "alias": "drzwi-listwy-316453"
+  },
+  "316558": {
+    "name": "Karty i maty do zdj\u0119\u0107",
+    "alias": "akcesoria-dla-mamy-i-dziecka-karty-i-maty-do-zdjec-316558"
+  },
+  "316600": {
+    "name": "Kukie\u0142ki i Pacynki",
+    "alias": "edukacyjne-kukielki-i-pacynki-316600"
+  },
+  "316766": {
+    "name": "Pisuary",
+    "alias": "lazienka-i-toaleta-pisuary-316766"
+  },
+  "316769": {
+    "name": "P\u0142ytki pod\u0142ogowe",
+    "alias": "podlogi-plytki-podlogowe-316769"
+  },
+  "316790": {
+    "name": "Deski WC i mocowania",
+    "alias": "lazienka-i-toaleta-deski-wc-i-mocowania-316790"
+  },
+  "316799": {
+    "name": "Ochraniacze meblowe",
+    "alias": "akcesoria-ochraniacze-meblowe-316799"
+  },
+  "316802": {
+    "name": "Systemy przesuwne",
+    "alias": "akcesoria-systemy-przesuwne-316802"
+  },
+  "316805": {
+    "name": "Zamki meblowe",
+    "alias": "akcesoria-zamki-meblowe-316805"
+  },
+  "316808": {
+    "name": "Komandorki",
+    "alias": "akcesoria-komandorki-316808"
+  },
+  "316811": {
+    "name": "Pasy do przenoszenia mebli",
+    "alias": "akcesoria-pasy-do-przenoszenia-mebli-316811"
+  },
+  "316814": {
+    "name": "Przepusty kablowe",
+    "alias": "akcesoria-przepusty-kablowe-316814"
+  },
+  "316817": {
+    "name": "Konfirmaty meblowe",
+    "alias": "akcesoria-konfirmaty-meblowe-316817"
+  },
+  "317246": {
+    "name": "Zabawki konstrukcyjne",
+    "alias": "edukacyjne-zabawki-konstrukcyjne-317246"
+  },
+  "317486": {
+    "name": "Oukitel",
+    "alias": "smartfony-i-telefony-komorkowe-oukitel-317486"
+  },
+  "317679": {
+    "name": "Vivo",
+    "alias": "smartfony-i-telefony-komorkowe-vivo-317679"
+  },
+  "318184": {
+    "name": "Traktorki",
+    "alias": "kosiarki-traktorki-318184"
+  },
+  "318407": {
+    "name": "Cz\u0119\u015bci i akcesoria do kosiarek",
+    "alias": "kosiarki-czesci-i-akcesoria-do-kosiarek-318407"
+  },
+  "318507": {
+    "name": "Cz\u0119\u015bci i akcesoria",
+    "alias": "narzedzia-ogrodnicze-czesci-i-akcesoria-318507"
+  },
+  "318588": {
+    "name": "Akcesoria",
+    "alias": "oswietlenie-akcesoria-318588"
+  },
+  "318819": {
+    "name": "\u0141\u00f3\u017cka ogrodowe",
+    "alias": "meble-ogrodowe-lozka-ogrodowe-318819"
+  },
+  "318831": {
+    "name": "Kana\u0142y kablowe",
+    "alias": "elektryka-i-akcesoria-kanaly-kablowe-318831"
+  },
+  "318840": {
+    "name": "Wieszaki",
+    "alias": "akcesoria-wieszaki-318840"
+  },
+  "318843": {
+    "name": "Wsporniki do p\u00f3\u0142ek",
+    "alias": "akcesoria-wsporniki-do-polek-318843"
+  },
+  "318846": {
+    "name": "Uchwyty do szk\u0142a",
+    "alias": "akcesoria-uchwyty-do-szkla-318846"
+  },
+  "318849": {
+    "name": "Mufy",
+    "alias": "akcesoria-mufy-318849"
+  },
+  "318852": {
+    "name": "Za\u015blepki do mebli",
+    "alias": "akcesoria-zaslepki-do-mebli-318852"
+  },
+  "319033": {
+    "name": "Gwo\u017adziarki i gwo\u017adzie",
+    "alias": "narzedzia-gwozdziarki-i-gwozdzie-319033"
+  },
+  "319045": {
+    "name": "Karciane dla najm\u0142odszych",
+    "alias": "karciane-karciane-dla-najmlodszych-319045"
+  },
+  "319051": {
+    "name": "No\u017cyki i ostrza",
+    "alias": "narzedzia-nozyki-i-ostrza-319051"
+  },
+  "319060": {
+    "name": "Zabawki zr\u0119czno\u015bciowe",
+    "alias": "zabawki-zabawki-zrecznosciowe-319060"
+  },
+  "319063": {
+    "name": "S\u0142owne i liczbowe",
+    "alias": "edukacyjne-slowne-i-liczbowe-319063"
+  },
+  "319249": {
+    "name": "Komunikacja dachowa",
+    "alias": "dachy-komunikacja-dachowa-319249"
+  },
+  "319274": {
+    "name": "Listwy progowe",
+    "alias": "podlogi-listwy-progowe-319274"
+  },
+  "319376": {
+    "name": "Wyspy kuchenne",
+    "alias": "kuchnia-wyspy-kuchenne-319376"
+  },
+  "319676": {
+    "name": "Panasonic",
+    "alias": "smartfony-i-telefony-komorkowe-panasonic-319676"
+  },
+  "319697": {
+    "name": "Projekty wn\u0119trz",
+    "alias": "wyposazenie-projekty-wnetrz-319697"
+  },
+  "319706": {
+    "name": "Zabawki terapeutyczne",
+    "alias": "zabawki-zabawki-terapeutyczne-319706"
+  },
+  "319769": {
+    "name": "Lampy pier\u015bcieniowe",
+    "alias": "akcesoria-gsm-lampy-pierscieniowe-319769"
+  },
+  "319847": {
+    "name": "Zszywacze i zszywki",
+    "alias": "narzedzia-zszywacze-i-zszywki-319847"
+  },
+  "319856": {
+    "name": "Cz\u0119\u015bci do elektronarz\u0119dzi",
+    "alias": "narzedzia-czesci-do-elektronarzedzi-319856"
+  },
+  "319869": {
+    "name": "Zabawki na energi\u0119 s\u0142oneczn\u0105",
+    "alias": "edukacyjne-zabawki-na-energie-sloneczna-319869",
+    "path": "Dziecko > Zabawki > Edukacyjne > Zabawki na energi\u0119 s\u0142oneczn\u0105"
+  },
+  "319950": {
+    "name": "Kopu\u0142y dekoracyjne",
+    "alias": "florystyka-kopuly-dekoracyjne-319950"
+  },
+  "320128": {
+    "name": "Umys\u0142owe",
+    "alias": "edukacyjne-umyslowe-320128"
+  },
+  "320194": {
+    "name": "Agrow\u0142\u00f3kniny i akcesoria",
+    "alias": "ogrod-agrowlokniny-i-akcesoria-320194",
+    "path": "Dom i Ogr\u00f3d > Ogr\u00f3d > Agrow\u0142\u00f3kniny i akcesoria"
+  },
+  "320197": {
+    "name": "Szpilki i ko\u0142ki",
+    "alias": "agrowlokniny-i-akcesoria-szpilki-i-kolki-320197"
+  },
+  "320242": {
+    "name": "Poduszki na krzes\u0142a",
+    "alias": "akcesoria-poduszki-na-krzesla-320242"
+  },
+  "320425": {
+    "name": "Parasole ogrodowe i akcesoria",
+    "alias": "meble-ogrodowe-parasole-ogrodowe-i-akcesoria-320425"
+  },
+  "320798": {
+    "name": "Zakr\u0119tarki i klucze udarowe",
+    "alias": "narzedzia-zakretarki-i-klucze-udarowe-320798"
+  },
+  "320807": {
+    "name": "Polerki",
+    "alias": "narzedzia-polerki-320807"
+  },
+  "320813": {
+    "name": "Pod\u0142okietniki",
+    "alias": "akcesoria-podlokietniki-320813"
+  },
+  "320834": {
+    "name": "Z\u0142\u0105cza meblowe",
+    "alias": "akcesoria-zlacza-meblowe-320834"
+  },
+  "320858": {
+    "name": "Narz\u0119dzia wielofunkcyjne",
+    "alias": "narzedzia-narzedzia-wielofunkcyjne-320858"
+  },
+  "320900": {
+    "name": "Gad\u017cety elektroniczne",
+    "alias": "rtv-i-agd-gadzety-elektroniczne-320900"
+  },
+  "320933": {
+    "name": "W\u00f3zki kuchenne",
+    "alias": "kuchnia-wozki-kuchenne-320933"
+  },
+  "321059": {
+    "name": "Wyrywacze do chwast\u00f3w",
+    "alias": "narzedzia-ogrodnicze-wyrywacze-do-chwastow-321059"
+  },
+  "321062": {
+    "name": "Walce",
+    "alias": "narzedzia-ogrodnicze-walce-321062"
+  },
+  "321068": {
+    "name": "Korea\u0144ski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-koreanski-321068"
+  },
+  "321092": {
+    "name": "Sznur traserski",
+    "alias": "przyrzady-miernicze-sznur-traserski-321092"
+  },
+  "321125": {
+    "name": "Wzorniki, szablony",
+    "alias": "przyrzady-miernicze-wzorniki-szablony-321125"
+  },
+  "321275": {
+    "name": "Kruger&amp;Matz",
+    "alias": "smartfony-i-telefony-komorkowe-kruger-matz-321275"
+  },
+  "321338": {
+    "name": "Turecki",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-turecki-321338"
+  },
+  "321477": {
+    "name": "TCL",
+    "alias": "smartfony-i-telefony-komorkowe-tcl-321477"
+  },
+  "321974": {
+    "name": "Kolumny i zestawy prysznicowe",
+    "alias": "lazienka-i-toaleta-kolumny-i-zestawy-prysznicowe-321974"
+  },
+  "322029": {
+    "name": "Odgrywanie r\u00f3l",
+    "alias": "edukacyjne-odgrywanie-rol-322029"
+  },
+  "322030": {
+    "name": "Figurki",
+    "alias": "zabawki-figurki-322030"
+  },
+  "322058": {
+    "name": "Kompakty WC",
+    "alias": "lazienka-i-toaleta-kompakty-wc-322058",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > \u0141azienka i toaleta > Kompakty WC"
+  },
+  "322072": {
+    "name": "Infinix",
+    "alias": "smartfony-i-telefony-komorkowe-infinix-322072"
+  },
+  "322104": {
+    "name": "Nothing",
+    "alias": "smartfony-i-telefony-komorkowe-nothing-322104"
+  },
+  "322178": {
+    "name": "Suszarki do ubra\u0144",
+    "alias": "agd-do-zabudowy-suszarki-do-ubran-322178"
+  },
+  "322238": {
+    "name": "HOTWAV",
+    "alias": "smartfony-i-telefony-komorkowe-hotwav-322238"
+  },
+  "322322": {
+    "name": "Palniki gazowe",
+    "alias": "narzedzia-palniki-gazowe-322322"
+  },
+  "322395": {
+    "name": "Elementy kute",
+    "alias": "ogrodzenia-i-bramy-elementy-kute-322395"
+  },
+  "322506": {
+    "name": "Wylewki do baterii",
+    "alias": "kuchnia-wylewki-do-baterii-322506"
+  },
+  "322508": {
+    "name": "Zlewy gospodarcze",
+    "alias": "kuchnia-zlewy-gospodarcze-322508"
+  },
+  "322572": {
+    "name": "Zabawki ogrodowe",
+    "alias": "ogrod-zabawki-ogrodowe-322572"
+  },
+  "322677": {
+    "name": "Dyplomy",
+    "alias": "artykuly-szkolne-dyplomy-322677"
+  },
+  "322679": {
+    "name": "Tecno",
+    "alias": "smartfony-i-telefony-komorkowe-tecno-322679"
+  },
+  "322799": {
+    "name": "Angielski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-angielski-322799",
+    "path": "Kultura i rozrywka > Ksi\u0105\u017cki > Ksi\u0105\u017cki do nauki j\u0119zyka obcego > Angielski"
+  },
+  "322800": {
+    "name": "Niemiecki",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-niemiecki-322800"
+  },
+  "322801": {
+    "name": "Francuski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-francuski-322801"
+  },
+  "322802": {
+    "name": "Hiszpa\u0144ski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-hiszpanski-322802"
+  },
+  "322803": {
+    "name": "Polski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-polski-322803"
+  },
+  "322804": {
+    "name": "Rosyjski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-rosyjski-322804"
+  },
+  "322805": {
+    "name": "W\u0142oski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-wloski-322805"
+  },
+  "322902": {
+    "name": "POCO",
+    "alias": "smartfony-i-telefony-komorkowe-poco-322902"
+  },
+  "322908": {
+    "name": "Wyprawki",
+    "alias": "artykuly-szkolne-wyprawki-322908"
+  },
+  "322921": {
+    "name": "Mierniki i testery",
+    "alias": "przyrzady-miernicze-mierniki-i-testery-322921"
+  },
+  "322962": {
+    "name": "Bramy gara\u017cowe",
+    "alias": "budownictwo-i-akcesoria-bramy-garazowe-322962"
+  },
+  "323044": {
+    "name": "Cz\u0119\u015bci zamienne do konsol",
+    "alias": "konsole-i-automaty-czesci-zamienne-do-konsol-323044"
+  },
+  "323046": {
+    "name": "Gry towarzyskie",
+    "alias": "zabawki-gry-towarzyskie-323046"
+  },
+  "323136": {
+    "name": "Meble \u0142azienkowe",
+    "alias": "lazienka-i-toaleta-meble-lazienkowe-323136"
+  },
+  "323185": {
+    "name": "Akcesoria \u0142azienkowe",
+    "alias": "lazienka-i-toaleta-akcesoria-lazienkowe-323185"
+  },
+  "323218": {
+    "name": "Rozdzielnice",
+    "alias": "zabezpieczenia-i-rozdzielnice-rozdzielnice-323218",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Elektryka i akcesoria > Zabezpieczenia i rozdzielnice > Rozdzielnice"
+  },
+  "323219": {
+    "name": "Obudowy",
+    "alias": "zabezpieczenia-i-rozdzielnice-obudowy-323219"
+  },
+  "323220": {
+    "name": "Roz\u0142\u0105czniki i prze\u0142\u0105czniki",
+    "alias": "zabezpieczenia-i-rozdzielnice-rozlaczniki-i-przelaczniki-323220"
+  },
+  "323221": {
+    "name": "Wy\u0142\u0105czniki",
+    "alias": "zabezpieczenia-i-rozdzielnice-wylaczniki-323221"
+  },
+  "323222": {
+    "name": "Przeka\u017aniki",
+    "alias": "zabezpieczenia-i-rozdzielnice-przekazniki-323222"
+  },
+  "323223": {
+    "name": "Styczniki",
+    "alias": "zabezpieczenia-i-rozdzielnice-styczniki-323223"
+  },
+  "323224": {
+    "name": "Elementy sterowania i sygnalizacji",
+    "alias": "zabezpieczenia-i-rozdzielnice-elementy-sterowania-i-sygnalizacji-323224"
+  },
+  "323225": {
+    "name": "Liczniki",
+    "alias": "zabezpieczenia-i-rozdzielnice-liczniki-323225"
+  },
+  "323226": {
+    "name": "Bezpieczniki",
+    "alias": "zabezpieczenia-i-rozdzielnice-bezpieczniki-323226"
+  },
+  "323227": {
+    "name": "Z\u0142\u0105czki szynowe",
+    "alias": "zabezpieczenia-i-rozdzielnice-zlaczki-szynowe-323227"
+  },
+  "323228": {
+    "name": "Ograniczniki przepi\u0119\u0107",
+    "alias": "zabezpieczenia-i-rozdzielnice-ograniczniki-przepiec-323228"
+  },
+  "323229": {
+    "name": "Automaty",
+    "alias": "zabezpieczenia-i-rozdzielnice-automaty-323229"
+  },
+  "323230": {
+    "name": "Transformatory",
+    "alias": "zabezpieczenia-i-rozdzielnice-transformatory-323230"
+  },
+  "323250": {
+    "name": "Nubia",
+    "alias": "smartfony-i-telefony-komorkowe-nubia-323250"
+  },
+  "323282": {
+    "name": "Disney Lorcana",
+    "alias": "kolekcjonerskie-disney-lorcana-323282",
+    "parent": "312125"
+  },
+  "323453": {
+    "name": "Cz\u0119\u015bci wymienne",
+    "alias": "prace-na-wysokosci-czesci-wymienne-323453"
+  },
+  "323456": {
+    "name": "Przej\u015bcia dachowe",
+    "alias": "dachy-przejscia-dachowe-323456"
+  },
+  "323457": {
+    "name": "Skraplacze",
+    "alias": "dachy-skraplacze-323457"
+  },
+  "323458": {
+    "name": "Wywietrzniki",
+    "alias": "dachy-wywietrzniki-323458"
+  },
+  "323463": {
+    "name": "Akcesoria",
+    "alias": "przyrzady-miernicze-akcesoria-323463"
+  },
+  "323595": {
+    "name": "Odwodnienia liniowe",
+    "alias": "budownictwo-i-akcesoria-odwodnienia-liniowe-323595"
+  },
+  "323605": {
+    "name": "K\u0105towniki",
+    "alias": "elementy-montazowe-katowniki-323605"
+  },
+  "323606": {
+    "name": "Wkr\u0119ty",
+    "alias": "elementy-montazowe-wkrety-323606"
+  },
+  "323607": {
+    "name": "Wieszaki belki",
+    "alias": "elementy-montazowe-wieszaki-belki-323607"
+  },
+  "323608": {
+    "name": "\u0141\u0105czniki",
+    "alias": "elementy-montazowe-laczniki-323608"
+  },
+  "323817": {
+    "name": "Young adult",
+    "alias": "ksiazki-young-adult-323817"
+  },
+  "323947": {
+    "name": "Konsole przeno\u015bne",
+    "alias": "konsole-i-automaty-konsole-przenosne-323947"
+  },
+  "324010": {
+    "name": "S\u0142upki ogrodzeniowe",
+    "alias": "ogrodzenia-i-bramy-slupki-ogrodzeniowe-324010"
+  },
+  "324136": {
+    "name": "Dekoracje \u015bcienne",
+    "alias": "wyposazenie-dekoracje-scienne-324136"
+  },
+  "324139": {
+    "name": "Florystyka",
+    "alias": "wyposazenie-florystyka-324139",
+    "path": "Dom i Ogr\u00f3d > Wyposa\u017cenie > Florystyka"
+  },
+  "324141": {
+    "name": "G\u0105bki florystyczne",
+    "alias": "florystyka-gabki-florystyczne-324141"
+  },
+  "324142": {
+    "name": "Przechowywanie",
+    "alias": "wyposazenie-przechowywanie-324142"
+  },
+  "324145": {
+    "name": "Pojemniki na \u017cywno\u015b\u0107",
+    "alias": "wyposazenie-pojemniki-na-zywnosc-324145"
+  },
+  "324274": {
+    "name": "Wazony",
+    "alias": "florystyka-wazony-324274"
+  },
+  "324281": {
+    "name": "Star Wars Unlimited",
+    "alias": "kolekcjonerskie-star-wars-unlimited-324281"
+  },
+  "324318": {
+    "name": "Nintendo Switch 2",
+    "alias": "konsole-i-automaty-nintendo-switch-2-324318"
+  },
+  "324420": {
+    "name": "Gry komputerowe PC",
+    "alias": "gry-gry-komputerowe-pc-324420"
+  },
+  "324431": {
+    "name": "\u015awiece i zapachy do domu",
+    "alias": "wyposazenie-swiece-i-zapachy-do-domu-324431"
+  },
+  "324449": {
+    "name": "Tekstylia",
+    "alias": "wyposazenie-tekstylia-324449"
+  },
+  "324662": {
+    "name": "O\u015bwietlenie wewn\u0119trzne",
+    "alias": "oswietlenie-oswietlenie-wewnetrzne-324662"
+  },
+  "324851": {
+    "name": "Ograniczniki mocy",
+    "alias": "zabezpieczenia-i-rozdzielnice-ograniczniki-mocy-324851"
+  },
+  "324852": {
+    "name": "Ksi\u0105\u017cki ogrodnicze",
+    "alias": "ogrod-ksiazki-ogrodnicze-324852"
+  },
+  "324866": {
+    "name": "\u017bywica poliuretanowa",
+    "alias": "podlogi-zywica-poliuretanowa-324866"
+  },
+  "324881": {
+    "name": "Przyssawki do glazury",
+    "alias": "narzedzia-przyssawki-do-glazury-324881"
+  },
+  "324969": {
+    "name": "K\u0105tomierze",
+    "alias": "przyrzady-miernicze-katomierze-324969"
+  },
+  "324970": {
+    "name": "Cyrkle",
+    "alias": "przyrzady-miernicze-cyrkle-324970"
+  },
+  "324971": {
+    "name": "Macki pomiarowe",
+    "alias": "przyrzady-miernicze-macki-pomiarowe-324971"
+  },
+  "325014": {
+    "name": "Ta\u015bmy miernicze",
+    "alias": "przyrzady-miernicze-tasmy-miernicze-325014"
+  },
+  "325015": {
+    "name": "Ko\u0142a pomiarowe",
+    "alias": "przyrzady-miernicze-kola-pomiarowe-325015"
+  },
+  "325021": {
+    "name": "Mapy, atlasy",
+    "alias": "mapy-atlasy-325021"
+  },
+  "325059": {
+    "name": "Puzzle",
+    "alias": "puzzle-325059"
+  },
+  "325106": {
+    "name": "Roboty AI",
+    "alias": "roboty-ai-325106",
+    "path": "Elektronika > Roboty AI"
+  },
+  "325146": {
+    "name": "Redmi",
+    "alias": "smartfony-i-telefony-komorkowe-redmi-325146"
+  },
+  "348": {
+    "name": "Akcesoria GSM",
+    "alias": "akcesoria-gsm-348",
+    "path": "Elektronika > Telefony i Akcesoria > Akcesoria GSM"
+  },
+  "351": {
+    "name": "Kable",
+    "alias": "akcesoria-gsm-kable-351"
+  },
+  "352": {
+    "name": "Baterie",
+    "alias": "akcesoria-gsm-baterie-352"
+  },
+  "353": {
+    "name": "Etui i pokrowce",
+    "alias": "akcesoria-gsm-etui-i-pokrowce-353",
+    "path": "Elektronika > Telefony i Akcesoria > Akcesoria GSM > Etui i pokrowce"
+  },
+  "354": {
+    "name": "Zestawy g\u0142o\u015bnom\u00f3wi\u0105ce",
+    "alias": "akcesoria-gsm-zestawy-glosnomowiace-354"
+  },
+  "4": {
+    "name": "Telefony i Akcesoria",
+    "alias": "telefony-i-akcesoria",
+    "path": "Elektronika > Telefony i Akcesoria"
+  },
+  "4226": {
+    "name": "Podzespo\u0142y komputerowe",
+    "alias": "podzespoly-komputerowe-4226"
+  },
+  "435": {
+    "name": "Samsung",
+    "alias": "smartfony-i-telefony-komorkowe-samsung-435"
+  },
+  "439": {
+    "name": "Pozosta\u0142e",
+    "alias": "akcesoria-gsm-pozostale-439"
+  },
+  "441": {
+    "name": "Pre-paid",
+    "alias": "pre-paid-441"
+  },
+  "4413": {
+    "name": "Urz\u0105dzenia sieciowe",
+    "alias": "urzadzenia-sieciowe-4413"
+  },
+  "446": {
+    "name": "Radiokomunikacja",
+    "alias": "radiokomunikacja-446"
+  },
+  "4475": {
+    "name": "Dyski i pami\u0119ci przeno\u015bne",
+    "alias": "dyski-i-pamieci-przenosne-4475"
+  },
+  "455": {
+    "name": "Zestawy s\u0142uchawkowe",
+    "alias": "akcesoria-gsm-zestawy-sluchawkowe-455"
+  },
+  "4551": {
+    "name": "Listwy zasilaj\u0105ce i UPS",
+    "alias": "listwy-zasilajace-i-ups-4551"
+  },
+  "4564": {
+    "name": "Urz\u0105dzenia wskazuj\u0105ce",
+    "alias": "urzadzenia-wskazujace-4564"
+  },
+  "45715": {
+    "name": "Przedmioty cyfrowe",
+    "alias": "gry-przedmioty-cyfrowe-45715"
+  },
+  "4578": {
+    "name": "Drukarki i skanery",
+    "alias": "drukarki-i-skanery-4578"
+  },
+  "46098": {
+    "name": "Schody",
+    "alias": "budownictwo-i-akcesoria-schody-46098"
+  },
+  "46099": {
+    "name": "Klimatyzacja i wentylacja",
+    "alias": "budownictwo-i-akcesoria-klimatyzacja-i-wentylacja-46099"
+  },
+  "46100": {
+    "name": "Drzwi wewn\u0119trzne",
+    "alias": "drzwi-drzwi-wewnetrzne-46100"
+  },
+  "46101": {
+    "name": "Drzwi zewn\u0119trzne",
+    "alias": "drzwi-drzwi-zewnetrzne-46101"
+  },
+  "46106": {
+    "name": "Domofony i wideodomofony",
+    "alias": "elektryka-i-akcesoria-domofony-i-wideodomofony-46106"
+  },
+  "46107": {
+    "name": "Zabezpieczenia i rozdzielnice",
+    "alias": "elektryka-i-akcesoria-zabezpieczenia-i-rozdzielnice-46107",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Elektryka i akcesoria > Zabezpieczenia i rozdzielnice"
+  },
+  "46109": {
+    "name": "Wy\u0142\u0105czniki i \u015bciemniacze",
+    "alias": "elektryka-i-akcesoria-wylaczniki-i-sciemniacze-46109"
+  },
+  "46119": {
+    "name": "Pokrycia dachowe",
+    "alias": "dachy-pokrycia-dachowe-46119"
+  },
+  "46120": {
+    "name": "Folie i izolacja",
+    "alias": "dachy-folie-i-izolacja-46120"
+  },
+  "46121": {
+    "name": "Kuchnia",
+    "alias": "budownictwo-i-akcesoria-kuchnia-46121",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Kuchnia"
+  },
+  "46122": {
+    "name": "\u0141azienka i toaleta",
+    "alias": "budownictwo-i-akcesoria-lazienka-i-toaleta-46122",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > \u0141azienka i toaleta"
+  },
+  "46124": {
+    "name": "Hydraulika i akcesoria",
+    "alias": "budownictwo-i-akcesoria-hydraulika-i-akcesoria-46124"
+  },
+  "46125": {
+    "name": "Baterie kuchenne",
+    "alias": "kuchnia-baterie-kuchenne-46125"
+  },
+  "46126": {
+    "name": "Zlewozmywaki",
+    "alias": "kuchnia-zlewozmywaki-46126",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Kuchnia > Zlewozmywaki"
+  },
+  "46128": {
+    "name": "Baterie \u0142azienkowe",
+    "alias": "lazienka-i-toaleta-baterie-lazienkowe-46128"
+  },
+  "46129": {
+    "name": "Kabiny i brodziki",
+    "alias": "lazienka-i-toaleta-kabiny-i-brodziki-46129"
+  },
+  "46130": {
+    "name": "Umywalki",
+    "alias": "lazienka-i-toaleta-umywalki-46130"
+  },
+  "46132": {
+    "name": "Wanny i akcesoria",
+    "alias": "lazienka-i-toaleta-wanny-i-akcesoria-46132"
+  },
+  "46144": {
+    "name": "Bramy",
+    "alias": "ogrodzenia-i-bramy-bramy-46144"
+  },
+  "46146": {
+    "name": "Nap\u0119dy",
+    "alias": "ogrodzenia-i-bramy-napedy-46146",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Ogrodzenia i bramy > Nap\u0119dy"
+  },
+  "46147": {
+    "name": "Skrzynki na listy",
+    "alias": "ogrodzenia-i-bramy-skrzynki-na-listy-46147"
+  },
+  "46148": {
+    "name": "Pozosta\u0142e",
+    "alias": "ogrodzenia-i-bramy-pozostale-46148"
+  },
+  "46162": {
+    "name": "Parkiety",
+    "alias": "podlogi-parkiety-46162"
+  },
+  "47492": {
+    "name": "Nawadnianie",
+    "alias": "ogrod-nawadnianie-47492"
+  },
+  "47493": {
+    "name": "Grillowanie",
+    "alias": "ogrod-grillowanie-47493"
+  },
+  "4801": {
+    "name": "Klawiatury",
+    "alias": "akcesoria-gsm-klawiatury-4801"
+  },
+  "4802": {
+    "name": "Multimedia",
+    "alias": "akcesoria-gsm-multimedia-4802"
+  },
+  "486": {
+    "name": "Komputery stacjonarne",
+    "alias": "komputery-stacjonarne-486",
+    "path": "Elektronika > Komputery > Komputery stacjonarne"
+  },
+  "48978": {
+    "name": "Apple",
+    "alias": "smartfony-i-telefony-komorkowe-apple-48978"
+  },
+  "491": {
+    "name": "Laptopy",
+    "alias": "laptopy-491"
+  },
+  "4937": {
+    "name": "Alcatel",
+    "alias": "smartfony-i-telefony-komorkowe-alcatel-4937"
+  },
+  "497": {
+    "name": "Akcesoria (Laptop, PC)",
+    "alias": "akcesoria-laptop-pc-497"
+  },
+  "4978": {
+    "name": "Nokia",
+    "alias": "smartfony-i-telefony-komorkowe-nokia-4978"
+  },
+  "49844": {
+    "name": "Baseny i akcesoria",
+    "alias": "ogrod-baseny-i-akcesoria-49844"
+  },
+  "5": {
+    "name": "Dom i Ogr\u00f3d",
+    "alias": "/dzial/dom-i-ogrod",
+    "path": "Dom i Ogr\u00f3d"
+  },
+  "50673": {
+    "name": "Artyku\u0142y szkolne",
+    "alias": "artykuly-szkolne-50673",
+    "path": "Dziecko > Artyku\u0142y szkolne"
+  },
+  "50674": {
+    "name": "Pozosta\u0142e",
+    "alias": "artykuly-szkolne-pozostale-50674"
+  },
+  "50675": {
+    "name": "Artyku\u0142y papiernicze",
+    "alias": "artykuly-szkolne-artykuly-papiernicze-50675",
+    "path": "Dziecko > Artyku\u0142y szkolne > Artyku\u0142y papiernicze"
+  },
+  "50676": {
+    "name": "Artyku\u0142y plastyczne",
+    "alias": "artykuly-szkolne-artykuly-plastyczne-50676"
+  },
+  "50677": {
+    "name": "Przybory do pisania",
+    "alias": "artykuly-szkolne-przybory-do-pisania-50677"
+  },
+  "50678": {
+    "name": "Plecaki szkolne",
+    "alias": "artykuly-szkolne-plecaki-szkolne-50678",
+    "path": "Dziecko > Artyku\u0142y szkolne > Plecaki szkolne"
+  },
+  "50679": {
+    "name": "Torby szkolne",
+    "alias": "artykuly-szkolne-torby-szkolne-50679"
+  },
+  "50680": {
+    "name": "Pozosta\u0142e",
+    "alias": "artykuly-papiernicze-pozostale-50680"
+  },
+  "50681": {
+    "name": "Bloki",
+    "alias": "artykuly-papiernicze-bloki-50681"
+  },
+  "50682": {
+    "name": "Notesy, pami\u0119tniki",
+    "alias": "artykuly-papiernicze-notesy-pamietniki-50682"
+  },
+  "50684": {
+    "name": "Teczki",
+    "alias": "artykuly-papiernicze-teczki-50684"
+  },
+  "50685": {
+    "name": "Zeszyty",
+    "alias": "artykuly-papiernicze-zeszyty-50685"
+  },
+  "522": {
+    "name": "Meble",
+    "alias": "meble-522",
+    "path": "Dom i Ogr\u00f3d > Meble"
+  },
+  "527": {
+    "name": "Pozosta\u0142e",
+    "alias": "meble-pozostale-527"
+  },
+  "5315": {
+    "name": "O\u015bwietlenie",
+    "alias": "ogrod-oswietlenie-5315"
+  },
+  "5317": {
+    "name": "O\u015bwietlenie",
+    "alias": "oswietlenie-5317",
+    "path": "Dom i Ogr\u00f3d > O\u015bwietlenie"
+  },
+  "5328": {
+    "name": "Przybory kuchenne",
+    "alias": "wyposazenie-przybory-kuchenne-5328"
+  },
+  "53970": {
+    "name": "Karty X-SIM/Turbosim",
+    "alias": "akcesoria-gsm-karty-x-sim-turbosim-53970"
+  },
+  "54051": {
+    "name": "Akcesoria \u0142azienkowe",
+    "alias": "wyposazenie-akcesoria-lazienkowe-54051"
+  },
+  "568": {
+    "name": "Sypialnia",
+    "alias": "meble-sypialnia-568"
+  },
+  "5893": {
+    "name": "Ebooki",
+    "alias": "ebooki-5893"
+  },
+  "6048": {
+    "name": "Bitewne",
+    "alias": "gry-bitewne-6048"
+  },
+  "6049": {
+    "name": "Karciane",
+    "alias": "gry-karciane-6049",
+    "path": "Kultura i rozrywka > Gry > Karciane"
+  },
+  "6050": {
+    "name": "Fabularne (RPG)",
+    "alias": "gry-fabularne-rpg-6050"
+  },
+  "6051": {
+    "name": "Planszowe",
+    "alias": "gry-planszowe-6051"
+  },
+  "6060": {
+    "name": "Akcesoria",
+    "alias": "karciane-akcesoria-6060"
+  },
+  "6066": {
+    "name": "Magic: The Gathering",
+    "alias": "kolekcjonerskie-magic-the-gathering-6066",
+    "path": "Kultura i rozrywka > Gry > Karciane > Kolekcjonerskie > Magic: The Gathering"
+  },
+  "6067": {
+    "name": "Pokemon",
+    "alias": "kolekcjonerskie-pokemon-6067"
+  },
+  "6070": {
+    "name": "Pozosta\u0142e",
+    "alias": "karciane-pozostale-6070"
+  },
+  "63489": {
+    "name": "Piloty",
+    "alias": "piloty-63489"
+  },
+  "66781": {
+    "name": "Ksi\u0105\u017cki dla dzieci",
+    "alias": "ksiazki-ksiazki-dla-dzieci-66781"
+  },
+  "66794": {
+    "name": "Ksi\u0105\u017cki do nauki j\u0119zyka obcego",
+    "alias": "ksiazki-ksiazki-do-nauki-jezyka-obcego-66794",
+    "path": "Kultura i rozrywka > Ksi\u0105\u017cki > Ksi\u0105\u017cki do nauki j\u0119zyka obcego"
+  },
+  "66796": {
+    "name": "J\u0119zyki klasyczne",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-jezyki-klasyczne-66796"
+  },
+  "66813": {
+    "name": "Audiobooki - CD",
+    "alias": "audiobooki-cd-66813"
+  },
+  "66820": {
+    "name": "Podr\u0119czniki szkolne",
+    "alias": "podreczniki-szkolne-66820"
+  },
+  "66887": {
+    "name": "S\u0142uchawki",
+    "alias": "sluchawki-66887"
+  },
+  "67093": {
+    "name": "GPS i akcesoria",
+    "alias": "gps-i-akcesoria-67093"
+  },
+  "67128": {
+    "name": "Sprz\u0119t satelitarny",
+    "alias": "sprzet-satelitarny-67128"
+  },
+  "67193": {
+    "name": "Elektronika",
+    "alias": "elektronika-67193"
+  },
+  "67413": {
+    "name": "AGD wolnostoj\u0105ce",
+    "alias": "agd-wolnostojace-67413"
+  },
+  "67414": {
+    "name": "AGD drobne",
+    "alias": "agd-drobne-67414"
+  },
+  "67524": {
+    "name": "AGD do zabudowy",
+    "alias": "agd-do-zabudowy-67524",
+    "path": "Elektronika > RTV i AGD > AGD do zabudowy"
+  },
+  "67525": {
+    "name": "Ekspresy do kawy",
+    "alias": "agd-do-zabudowy-ekspresy-do-kawy-67525",
+    "path": "Elektronika > RTV i AGD > AGD do zabudowy > Ekspresy do kawy"
+  },
+  "67526": {
+    "name": "Kuchenki mikrofalowe",
+    "alias": "agd-do-zabudowy-kuchenki-mikrofalowe-67526"
+  },
+  "67528": {
+    "name": "Lod\u00f3wki",
+    "alias": "agd-do-zabudowy-lodowki-67528"
+  },
+  "67529": {
+    "name": "Okapy",
+    "alias": "agd-do-zabudowy-okapy-67529"
+  },
+  "67530": {
+    "name": "Piekarniki",
+    "alias": "agd-do-zabudowy-piekarniki-67530"
+  },
+  "67531": {
+    "name": "P\u0142yty grzewcze",
+    "alias": "agd-do-zabudowy-plyty-grzewcze-67531"
+  },
+  "67532": {
+    "name": "Zmywarki",
+    "alias": "agd-do-zabudowy-zmywarki-67532"
+  },
+  "67534": {
+    "name": "Pozosta\u0142e",
+    "alias": "agd-do-zabudowy-pozostale-67534"
+  },
+  "68": {
+    "name": "Oprogramowanie",
+    "alias": "oprogramowanie-68"
+  },
+  "68626": {
+    "name": "Odkurzacze centralne",
+    "alias": "budownictwo-i-akcesoria-odkurzacze-centralne-68626"
+  },
+  "68627": {
+    "name": "Prace na wysoko\u015bci",
+    "alias": "budownictwo-i-akcesoria-prace-na-wysokosci-68627",
+    "path": "Dom i Ogr\u00f3d > Budownictwo i Akcesoria > Prace na wysoko\u015bci"
+  },
+  "68632": {
+    "name": "Akcesoria",
+    "alias": "meble-akcesoria-68632",
+    "path": "Dom i Ogr\u00f3d > Meble > Akcesoria"
+  },
+  "7": {
+    "name": "Ksi\u0105\u017cki",
+    "alias": "ksiazki-7",
+    "path": "Kultura i rozrywka > Ksi\u0105\u017cki"
+  },
+  "70568": {
+    "name": "myPhone",
+    "alias": "smartfony-i-telefony-komorkowe-myphone-70568"
+  },
+  "709": {
+    "name": "Sprz\u0119t car audio",
+    "alias": "sprzet-car-audio-709"
+  },
+  "717": {
+    "name": "TV i Video",
+    "alias": "tv-i-video-717"
+  },
+  "73133": {
+    "name": "Zestawy AGD do zabudowy",
+    "alias": "agd-do-zabudowy-zestawy-agd-do-zabudowy-73133"
+  },
+  "76253": {
+    "name": "Czytniki ebook\u00f3w",
+    "alias": "czytniki-ebookow-76253"
+  },
+  "76254": {
+    "name": "Zasilanie",
+    "alias": "zasilanie-76254"
+  },
+  "76255": {
+    "name": "Pralki",
+    "alias": "agd-do-zabudowy-pralki-76255"
+  },
+  "776": {
+    "name": "Ro\u015bliny",
+    "alias": "ogrod-rosliny-776"
+  },
+  "77733": {
+    "name": "Architektura ogrodowa",
+    "alias": "ogrod-architektura-ogrodowa-77733"
+  },
+  "77801": {
+    "name": "Cz\u0119\u015bci do laptop\u00f3w",
+    "alias": "czesci-do-laptopow-77801"
+  },
+  "77926": {
+    "name": "Stare komputery",
+    "alias": "komputery-stare-komputery-77926"
+  },
+  "79153": {
+    "name": "Literatura pi\u0119kna",
+    "alias": "ksiazki-literatura-piekna-79153"
+  },
+  "79193": {
+    "name": "Poradniki i albumy",
+    "alias": "ksiazki-poradniki-i-albumy-79193"
+  },
+  "79205": {
+    "name": "Kuchnia, diety",
+    "alias": "ksiazki-kuchnia-diety-79205"
+  },
+  "79216": {
+    "name": "Sport, forma fizyczna",
+    "alias": "ksiazki-sport-forma-fizyczna-79216"
+  },
+  "79413": {
+    "name": "Komiksy",
+    "alias": "komiksy-79413"
+  },
+  "79420": {
+    "name": "Przewodniki, ksi\u0105\u017cki podr\u00f3\u017cnicze",
+    "alias": "ksiazki-przewodniki-ksiazki-podroznicze-79420"
+  },
+  "79455": {
+    "name": "Ksi\u0105\u017cki naukowe i popularnonaukowe",
+    "alias": "ksiazki-ksiazki-naukowe-i-popularnonaukowe-79455"
+  },
+  "79466": {
+    "name": "Historia, archeologia",
+    "alias": "ksiazki-historia-archeologia-79466"
+  },
+  "79468": {
+    "name": "Informatyka, internet",
+    "alias": "ksiazki-informatyka-internet-79468"
+  },
+  "79472": {
+    "name": "Prawo, administracja",
+    "alias": "ksiazki-prawo-administracja-79472"
+  },
+  "79475": {
+    "name": "Religioznawstwo, nauki teologiczne",
+    "alias": "ksiazki-religioznawstwo-nauki-teologiczne-79475"
+  },
+  "82256": {
+    "name": "Meble ogrodowe",
+    "alias": "ogrod-meble-ogrodowe-82256",
+    "path": "Dom i Ogr\u00f3d > Ogr\u00f3d > Meble ogrodowe"
+  },
+  "82257": {
+    "name": "Hamaki",
+    "alias": "meble-ogrodowe-hamaki-82257",
+    "path": "Dom i Ogr\u00f3d > Ogr\u00f3d > Meble ogrodowe > Hamaki"
+  },
+  "82258": {
+    "name": "Hu\u015btawki",
+    "alias": "meble-ogrodowe-hustawki-82258"
+  },
+  "82259": {
+    "name": "Le\u017caki i le\u017canki",
+    "alias": "meble-ogrodowe-lezaki-i-lezanki-82259"
+  },
+  "82260": {
+    "name": "\u0141awy i \u0142awki",
+    "alias": "meble-ogrodowe-lawy-i-lawki-82260"
+  },
+  "82262": {
+    "name": "Sto\u0142y i krzes\u0142a",
+    "alias": "meble-ogrodowe-stoly-i-krzesla-82262"
+  },
+  "82263": {
+    "name": "Pozosta\u0142e",
+    "alias": "meble-ogrodowe-pozostale-82263"
+  },
+  "82326": {
+    "name": "Gry na konsole",
+    "alias": "gry-na-konsole-82326"
+  },
+  "82593": {
+    "name": "W\u00f3zki",
+    "alias": "wozki-82593",
+    "path": "Dziecko > W\u00f3zki"
+  },
+  "82594": {
+    "name": "Foteliki samochodowe",
+    "alias": "foteliki-samochodowe-82594"
+  },
+  "82595": {
+    "name": "Akcesoria dla mamy i dziecka",
+    "alias": "akcesoria-dla-mamy-i-dziecka-82595",
+    "path": "Dziecko > Akcesoria dla mamy i dziecka"
+  },
+  "82596": {
+    "name": "Le\u017caczki i hu\u015btawki",
+    "alias": "akcesoria-dla-mamy-i-dziecka-lezaczki-i-hustawki-82596"
+  },
+  "82598": {
+    "name": "Noside\u0142ka i chusty",
+    "alias": "akcesoria-dla-mamy-i-dziecka-nosidelka-i-chusty-82598"
+  },
+  "82601": {
+    "name": "Bezpiecze\u0144stwo",
+    "alias": "akcesoria-dla-mamy-i-dziecka-bezpieczenstwo-82601"
+  },
+  "82602": {
+    "name": "Pozosta\u0142e",
+    "alias": "akcesoria-dla-mamy-i-dziecka-pozostale-82602"
+  },
+  "82610": {
+    "name": "Wielofunkcyjne",
+    "alias": "wozki-wielofunkcyjne-82610"
+  },
+  "82611": {
+    "name": "Spacerowe",
+    "alias": "wozki-spacerowe-82611"
+  },
+  "82612": {
+    "name": "Bli\u017aniacze",
+    "alias": "wozki-blizniacze-82612"
+  },
+  "82613": {
+    "name": "G\u0142\u0119bokie",
+    "alias": "wozki-glebokie-82613"
+  },
+  "82614": {
+    "name": "Akcesoria",
+    "alias": "wozki-akcesoria-82614"
+  },
+  "84735": {
+    "name": "Pi\u00f3rniki",
+    "alias": "artykuly-szkolne-piorniki-84735"
+  },
+  "84736": {
+    "name": "Pomoce naukowe",
+    "alias": "artykuly-szkolne-pomoce-naukowe-84736"
+  },
+  "84737": {
+    "name": "\u015aniadani\u00f3wki i bidony",
+    "alias": "artykuly-szkolne-sniadaniowki-i-bidony-84737",
+    "path": "Dziecko > Artyku\u0142y szkolne > \u015aniadani\u00f3wki i bidony"
+  },
+  "84742": {
+    "name": "Naklejki, tatua\u017ce",
+    "alias": "artykuly-papiernicze-naklejki-tatuaze-84742"
+  },
+  "84743": {
+    "name": "Kolorowanki",
+    "alias": "artykuly-papiernicze-kolorowanki-84743"
+  },
+  "84744": {
+    "name": "Karteczki",
+    "alias": "artykuly-papiernicze-karteczki-84744"
+  },
+  "85154": {
+    "name": "Podk\u0142adki na biurko",
+    "alias": "artykuly-papiernicze-podkladki-na-biurko-85154"
+  },
+  "85155": {
+    "name": "Plany lekcji",
+    "alias": "artykuly-papiernicze-plany-lekcji-85155"
+  },
+  "85193": {
+    "name": "Pozosta\u0142e",
+    "alias": "narzedzia-ogrodnicze-pozostale-85193"
+  },
+  "85194": {
+    "name": "Glebogryzarki",
+    "alias": "narzedzia-ogrodnicze-glebogryzarki-85194"
+  },
+  "85195": {
+    "name": "Grabie",
+    "alias": "narzedzia-ogrodnicze-grabie-85195"
+  },
+  "85196": {
+    "name": "Kosiarki",
+    "alias": "narzedzia-ogrodnicze-kosiarki-85196",
+    "path": "Dom i Ogr\u00f3d > Ogr\u00f3d > Narz\u0119dzia ogrodnicze > Kosiarki"
+  },
+  "85197": {
+    "name": "Kosy i podkaszarki",
+    "alias": "narzedzia-ogrodnicze-kosy-i-podkaszarki-85197"
+  },
+  "85198": {
+    "name": "\u0141opaty i wid\u0142y",
+    "alias": "narzedzia-ogrodnicze-lopaty-i-widly-85198"
+  },
+  "85199": {
+    "name": "Motyki i kultywatory",
+    "alias": "narzedzia-ogrodnicze-motyki-i-kultywatory-85199"
+  },
+  "85202": {
+    "name": "Odkurzacze i dmuchawy",
+    "alias": "narzedzia-ogrodnicze-odkurzacze-i-dmuchawy-85202"
+  },
+  "85203": {
+    "name": "Od\u015bnie\u017carki",
+    "alias": "narzedzia-ogrodnicze-odsniezarki-85203"
+  },
+  "85204": {
+    "name": "Opryskiwacze",
+    "alias": "narzedzia-ogrodnicze-opryskiwacze-85204"
+  },
+  "85206": {
+    "name": "Rozdrabniacze",
+    "alias": "narzedzia-ogrodnicze-rozdrabniacze-85206"
+  },
+  "85207": {
+    "name": "Siekiery",
+    "alias": "narzedzia-ogrodnicze-siekiery-85207"
+  },
+  "85208": {
+    "name": "Siewniki",
+    "alias": "narzedzia-ogrodnicze-siewniki-85208"
+  },
+  "85210": {
+    "name": "Wertykulatory i aeratory",
+    "alias": "narzedzia-ogrodnicze-wertykulatory-i-aeratory-85210"
+  },
+  "85211": {
+    "name": "Zestawy narz\u0119dzi",
+    "alias": "narzedzia-ogrodnicze-zestawy-narzedzi-85211"
+  },
+  "85212": {
+    "name": "Kosiarki elektryczne",
+    "alias": "kosiarki-kosiarki-elektryczne-85212"
+  },
+  "85213": {
+    "name": "Kosiarki spalinowe",
+    "alias": "kosiarki-kosiarki-spalinowe-85213",
+    "path": "Dom i Ogr\u00f3d > Ogr\u00f3d > Narz\u0119dzia ogrodnicze > Kosiarki > Kosiarki spalinowe"
+  },
+  "8539": {
+    "name": "Atrapy i telefony demonstracyjne",
+    "alias": "akcesoria-gsm-atrapy-i-telefony-demonstracyjne-8539"
+  },
+  "86273": {
+    "name": "Zabawki ogrodowe",
+    "alias": "zabawki-ogrodowe-86273"
+  },
+  "86352": {
+    "name": "Samochody i pojazdy",
+    "alias": "zabawki-samochody-i-pojazdy-86352"
+  },
+  "86386": {
+    "name": "Rowery i pojazdy",
+    "alias": "rowery-i-pojazdy-86386"
+  },
+  "8785": {
+    "name": "Kamery",
+    "alias": "kamery-8785"
+  },
+  "88293": {
+    "name": "Okazje, przyj\u0119cia",
+    "alias": "okazje-przyjecia-88293"
+  },
+  "8845": {
+    "name": "Fotografia",
+    "alias": "fotografia",
+    "path": "Elektronika > Fotografia"
+  },
+  "8847": {
+    "name": "Akcesoria",
+    "alias": "fotografia-akcesoria-8847"
+  },
+  "8848": {
+    "name": "Karty pami\u0119ci",
+    "alias": "karty-pamieci-8848"
+  },
+  "89253": {
+    "name": "Tablety",
+    "alias": "tablety-89253"
+  },
+  "9": {
+    "name": "Gry",
+    "alias": "gry",
+    "path": "Kultura i rozrywka > Gry"
+  },
+  "9016": {
+    "name": "Wystr\u00f3j okien",
+    "alias": "wyposazenie-wystroj-okien-9016"
+  },
+  "9018": {
+    "name": "Dywany i wyk\u0142adziny",
+    "alias": "wyposazenie-dywany-i-wykladziny-9018"
+  },
+  "9060": {
+    "name": "Serwery i akcesoria",
+    "alias": "serwery-i-akcesoria-9060"
+  },
+  "91256": {
+    "name": "Japo\u0144ski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-japonski-91256"
+  },
+  "91257": {
+    "name": "Chi\u0144ski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-chinski-91257"
+  },
+  "91258": {
+    "name": "Arabski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-arabski-91258"
+  },
+  "91260": {
+    "name": "Szwedzki",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-szwedzki-91260"
+  },
+  "91261": {
+    "name": "Norweski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-norweski-91261"
+  },
+  "91262": {
+    "name": "Du\u0144ski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-dunski-91262"
+  },
+  "93144": {
+    "name": "W\u0119gierski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-wegierski-93144"
+  },
+  "93145": {
+    "name": "Ukrai\u0144ski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-ukrainski-93145"
+  },
+  "93146": {
+    "name": "S\u0142owacki",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-slowacki-93146"
+  },
+  "93147": {
+    "name": "Rumu\u0144ski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-rumunski-93147"
+  },
+  "93148": {
+    "name": "Niderlandzki",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-niderlandzki-93148"
+  },
+  "93149": {
+    "name": "Litewski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-litewski-93149"
+  },
+  "93150": {
+    "name": "Grecki",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-grecki-93150"
+  },
+  "93151": {
+    "name": "Czeski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-czeski-93151"
+  },
+  "93152": {
+    "name": "Chorwacki",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-chorwacki-93152"
+  },
+  "93153": {
+    "name": "Bu\u0142garski",
+    "alias": "ksiazki-do-nauki-jezyka-obcego-bulgarski-93153"
+  },
+  "9317": {
+    "name": "Dekoracje domu",
+    "alias": "wyposazenie-dekoracje-domu-9317"
+  },
+  "9324": {
+    "name": "Yu-Gi-Oh!",
+    "alias": "kolekcjonerskie-yu-gi-oh-9324"
+  },
+  "93564": {
+    "name": "Militarne",
+    "alias": "zabawki-militarne-93564"
+  },
+  "93678": {
+    "name": "AGD",
+    "alias": "zabawki-agd-93678"
+  },
+  "93679": {
+    "name": "Majsterkowanie",
+    "alias": "zabawki-majsterkowanie-93679"
+  },
+  "93704": {
+    "name": "Pomoce dydaktyczne",
+    "alias": "edukacyjne-pomoce-dydaktyczne-93704"
+  },
+  "95593": {
+    "name": "Maty antypo\u015blizgowe",
+    "alias": "akcesoria-gsm-maty-antyposlizgowe-95593"
+  },
+  "95594": {
+    "name": "Podstawki",
+    "alias": "akcesoria-gsm-podstawki-95594"
+  },
+  "95595": {
+    "name": "Uchwyty",
+    "alias": "akcesoria-gsm-uchwyty-95595"
+  },
+  "99333": {
+    "name": "Karmienie dziecka",
+    "alias": "karmienie-dziecka-99333"
+  },
+  "99485": {
+    "name": "Plecaki przedszkolne",
+    "alias": "artykuly-szkolne-plecaki-przedszkolne-99485"
+  },
+  "99487": {
+    "name": "Portfele",
+    "alias": "artykuly-szkolne-portfele-99487"
+  },
+  "99563": {
+    "name": "No\u017ce ogrodnicze",
+    "alias": "narzedzia-ogrodnicze-noze-ogrodnicze-99563"
+  },
+  "99565": {
+    "name": "Taczki i w\u00f3zki ogrodnicze",
+    "alias": "narzedzia-ogrodnicze-taczki-i-wozki-ogrodnicze-99565"
+  },
+  "99704": {
+    "name": "R\u0119kawice i odzie\u017c ochronna",
+    "alias": "narzedzia-ogrodnicze-rekawice-i-odziez-ochronna-99704"
+  },
+  "99705": {
+    "name": "Miot\u0142y i szczotki",
+    "alias": "narzedzia-ogrodnicze-miotly-i-szczotki-99705"
+  },
+  "99706": {
+    "name": "\u0141opatki, motyczki, pikowniki",
+    "alias": "narzedzia-ogrodnicze-lopatki-motyczki-pikowniki-99706"
+  }
+}
