@@ -271,7 +271,7 @@
   },
   {
     "source_code": "111890",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 6
   },
   {
@@ -446,7 +446,7 @@
   },
   {
     "source_code": "Elektronika > Fotografia > Akcesoria > Papiery i folie fotograficzne",
-    "target_category_id": 301,
+    "target_category_id": 290,
     "company_id": 9
   },
   {
@@ -511,7 +511,7 @@
   },
   {
     "source_code": "Kuchnia / Czajniki tradycyjne",
-    "target_category_id": 40,
+    "target_category_id": 205,
     "company_id": 5
   },
   {
@@ -911,7 +911,7 @@
   },
   {
     "source_code": "Kuchnia / Noże kuchenne / Ostrzenie / Ostrzałki / Ostrzałki, Elektryczne",
-    "target_category_id": 61,
+    "target_category_id": 235,
     "company_id": 5
   },
   {
@@ -1006,12 +1006,12 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gry > Karciane > Kolekcjonerskie > Pokemon",
-    "target_category_id": 185,
+    "target_category_id": 27,
     "company_id": 14
   },
   {
     "source_code": "Elektronika > RTV i AGD > AGD wolnostojące > Okapy",
-    "target_category_id": 34,
+    "target_category_id": 203,
     "company_id": 9
   },
   {
@@ -1056,7 +1056,7 @@
   },
   {
     "source_code": "Odkurzacze pionowe bezprzewodowe",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 10
   },
   {
@@ -1116,7 +1116,7 @@
   },
   {
     "source_code": "VisionLite",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 10
   },
   {
@@ -1126,7 +1126,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Instrumenty > Instrumenty perkusyjne > Perkusje > Talerze",
-    "target_category_id": 66,
+    "target_category_id": 86,
     "company_id": 14
   },
   {
@@ -1266,7 +1266,7 @@
   },
   {
     "source_code": "Kuchnia / Ostrzenie / Ostrzałki ręczne",
-    "target_category_id": 61,
+    "target_category_id": 235,
     "company_id": 5
   },
   {
@@ -1326,7 +1326,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do kuchni\\Maszynki do mielenia",
-    "target_category_id": 75,
+    "target_category_id": 205,
     "company_id": 11
   },
   {
@@ -1421,7 +1421,7 @@
   },
   {
     "source_code": "316724",
-    "target_category_id": 235,
+    "target_category_id": 270,
     "company_id": 6
   },
   {
@@ -1441,7 +1441,7 @@
   },
   {
     "source_code": "Dziecko > Zabawki > Lalki i akcesoria > Lalki > Lalki modowe",
-    "target_category_id": 205,
+    "target_category_id": 31,
     "company_id": 12
   },
   {
@@ -1461,7 +1461,7 @@
   },
   {
     "source_code": "Szklanki",
-    "target_category_id": 66,
+    "target_category_id": 65,
     "company_id": 18
   },
   {
@@ -1656,7 +1656,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gry > Karciane > Kolekcjonerskie > Yu-Gi-Oh!",
-    "target_category_id": 185,
+    "target_category_id": 27,
     "company_id": 2
   },
   {
@@ -1671,7 +1671,7 @@
   },
   {
     "source_code": "541",
-    "target_category_id": 11,
+    "target_category_id": 141,
     "company_id": 6
   },
   {
@@ -1741,7 +1741,7 @@
   },
   {
     "source_code": "256078",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 6
   },
   {
@@ -1766,7 +1766,7 @@
   },
   {
     "source_code": "110884",
-    "target_category_id": 40,
+    "target_category_id": 205,
     "company_id": 6
   },
   {
@@ -1891,12 +1891,12 @@
   },
   {
     "source_code": "Elektronika > Sprzęt estradowy, studyjny i DJ-ski > Gramofony dla DJ-ów > Gramofony",
-    "target_category_id": 11,
+    "target_category_id": 141,
     "company_id": 9
   },
   {
     "source_code": "Karty graficzne",
-    "target_category_id": 301,
+    "target_category_id": 161,
     "company_id": 18
   },
   {
@@ -1931,7 +1931,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > Sprzęt satelitarny > Akcesoria > Karty, moduły CA",
-    "target_category_id": 301,
+    "target_category_id": 161,
     "company_id": 9
   },
   {
@@ -1941,7 +1941,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > AGD do zabudowy > Okapy",
-    "target_category_id": 34,
+    "target_category_id": 203,
     "company_id": 9
   },
   {
@@ -1956,7 +1956,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Książki > Przewodniki, książki podróżnicze",
-    "target_category_id": 157,
+    "target_category_id": 141,
     "company_id": 14
   },
   {
@@ -1966,7 +1966,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gry > Karciane > Tarot",
-    "target_category_id": 185,
+    "target_category_id": 27,
     "company_id": 14
   },
   {
@@ -2016,7 +2016,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gry > Karciane > Kolekcjonerskie > Disney Lorcana",
-    "target_category_id": 185,
+    "target_category_id": 27,
     "company_id": 14
   },
   {
@@ -2176,7 +2176,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > Sprzęt audio dla domu > Gramofony > Gramofony",
-    "target_category_id": 11,
+    "target_category_id": 141,
     "company_id": 9
   },
   {
@@ -2196,7 +2196,7 @@
   },
   {
     "source_code": "Dziecko > Zabawki > Klocki > LEGO > Zestawy > Pozostałe serie > Toy Story",
-    "target_category_id": 206,
+    "target_category_id": 27,
     "company_id": 12
   },
   {
@@ -2261,7 +2261,7 @@
   },
   {
     "source_code": "Zestawy kolumn",
-    "target_category_id": 10,
+    "target_category_id": 141,
     "company_id": 18
   },
   {
@@ -2336,7 +2336,7 @@
   },
   {
     "source_code": "Głośniki Bluetooth",
-    "target_category_id": 10,
+    "target_category_id": 141,
     "company_id": 18
   },
   {
@@ -2366,7 +2366,7 @@
   },
   {
     "source_code": "Kuchnia / Noże kuchenne / Ostrzenie / Ostrzałki / Ostrzałki do noży",
-    "target_category_id": 61,
+    "target_category_id": 235,
     "company_id": 5
   },
   {
@@ -2411,7 +2411,7 @@
   },
   {
     "source_code": "Czujniki",
-    "target_category_id": 40,
+    "target_category_id": 205,
     "company_id": 18
   },
   {
@@ -2491,7 +2491,7 @@
   },
   {
     "source_code": "Elektronika > Komputery > Głośniki",
-    "target_category_id": 10,
+    "target_category_id": 141,
     "company_id": 9
   },
   {
@@ -2646,7 +2646,7 @@
   },
   {
     "source_code": "316121",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 6
   },
   {
@@ -2691,7 +2691,7 @@
   },
   {
     "source_code": "Kuchnia / Noże kuchenne / Akcesoria / Ochraniacze na ostrza - z tworzywa",
-    "target_category_id": 61,
+    "target_category_id": 235,
     "company_id": 5
   },
   {
@@ -2706,7 +2706,7 @@
   },
   {
     "source_code": "110881",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 6
   },
   {
@@ -2841,7 +2841,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do kuchni\\Czajniki elektryczne",
-    "target_category_id": 40,
+    "target_category_id": 205,
     "company_id": 11
   },
   {
@@ -2926,7 +2926,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do domu\\Odkurzacze i akcesoria\\Odkurzacze",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 16
   },
   {
@@ -3101,7 +3101,7 @@
   },
   {
     "source_code": "Summer Sale",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 10
   },
   {
@@ -3136,7 +3136,7 @@
   },
   {
     "source_code": "Młynki do odpadów",
-    "target_category_id": 75,
+    "target_category_id": 205,
     "company_id": 18
   },
   {
@@ -3146,7 +3146,7 @@
   },
   {
     "source_code": "RoboJet Washer 2",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 10
   },
   {
@@ -3161,12 +3161,12 @@
   },
   {
     "source_code": "258227",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 6
   },
   {
     "source_code": "Okapy kuchenne",
-    "target_category_id": 34,
+    "target_category_id": 203,
     "company_id": 18
   },
   {
@@ -3201,7 +3201,7 @@
   },
   {
     "source_code": "Filtry do okapów",
-    "target_category_id": 34,
+    "target_category_id": 203,
     "company_id": 18
   },
   {
@@ -3256,7 +3256,7 @@
   },
   {
     "source_code": "Kuchnie",
-    "target_category_id": 27,
+    "target_category_id": 276,
     "company_id": 18
   },
   {
@@ -3336,7 +3336,7 @@
   },
   {
     "source_code": "Strona główna",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 10
   },
   {
@@ -3371,7 +3371,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do domu\\Odkurzacze i akcesoria",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 16
   },
   {
@@ -3396,7 +3396,7 @@
   },
   {
     "source_code": "Elektronika > Komputery > Części do laptopów > Karty graficzne",
-    "target_category_id": 301,
+    "target_category_id": 161,
     "company_id": 9
   },
   {
@@ -3646,7 +3646,7 @@
   },
   {
     "source_code": "258352",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 6
   },
   {
@@ -3721,7 +3721,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gry > Karciane > Pozostałe",
-    "target_category_id": 185,
+    "target_category_id": 27,
     "company_id": 2
   },
   {
@@ -3741,7 +3741,7 @@
   },
   {
     "source_code": "Elektronika > Komputery > Części do laptopów > Głośniki",
-    "target_category_id": 10,
+    "target_category_id": 141,
     "company_id": 9
   },
   {
@@ -3871,7 +3871,7 @@
   },
   {
     "source_code": "RoboJet Speed 2 Pro",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 10
   },
   {
@@ -3886,7 +3886,7 @@
   },
   {
     "source_code": "Wnętrze / Zastawy stołowe / Porcelana / Zestawy obiadowe",
-    "target_category_id": 66,
+    "target_category_id": 65,
     "company_id": 5
   },
   {
@@ -3961,7 +3961,7 @@
   },
   {
     "source_code": "Kuchnia / Porclana kuchenna / Talerze",
-    "target_category_id": 66,
+    "target_category_id": 65,
     "company_id": 5
   },
   {
@@ -4106,7 +4106,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > AGD drobne > Do kuchni > Młynki elektryczne",
-    "target_category_id": 75,
+    "target_category_id": 205,
     "company_id": 9
   },
   {
@@ -4131,7 +4131,7 @@
   },
   {
     "source_code": "RoboJet WR2",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 10
   },
   {
@@ -4231,7 +4231,7 @@
   },
   {
     "source_code": "105334",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 6
   },
   {
@@ -4271,7 +4271,7 @@
   },
   {
     "source_code": "AGD duże / Kuchenki gazowe i elektryczne",
-    "target_category_id": 27,
+    "target_category_id": 268,
     "company_id": 5
   },
   {
@@ -4371,7 +4371,7 @@
   },
   {
     "source_code": "Zabawki / Lalki",
-    "target_category_id": 205,
+    "target_category_id": 31,
     "company_id": 13
   },
   {
@@ -4426,7 +4426,7 @@
   },
   {
     "source_code": "Dziecko > Zabawki > Lalki i akcesoria > Lalki > Lalki klasyczne",
-    "target_category_id": 205,
+    "target_category_id": 31,
     "company_id": 12
   },
   {
@@ -4451,7 +4451,7 @@
   },
   {
     "source_code": "Sprzęt RTV\\Audio\\Gramofony",
-    "target_category_id": 11,
+    "target_category_id": 141,
     "company_id": 11
   },
   {
@@ -4496,7 +4496,7 @@
   },
   {
     "source_code": "Artykuły biurowe &gt; Artykuły różne &gt; Etykiety i przekładki indeksujące &gt; Taśmy do etykietowania",
-    "target_category_id": 290,
+    "target_category_id": 281,
     "company_id": 17
   },
   {
@@ -4636,7 +4636,7 @@
   },
   {
     "source_code": "Dziecko > Zabawki > Lalki i akcesoria > Lalki > Minilalki",
-    "target_category_id": 205,
+    "target_category_id": 31,
     "company_id": 12
   },
   {
@@ -4791,7 +4791,7 @@
   },
   {
     "source_code": "Wnętrze / Sprzątanie domu / Do prasowania",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 5
   },
   {
@@ -4811,7 +4811,7 @@
   },
   {
     "source_code": "Elektronika > Komputery > Akcesoria (Laptop, PC) > Karty i rejestratory video > Karty video",
-    "target_category_id": 301,
+    "target_category_id": 161,
     "company_id": 9
   },
   {
@@ -4851,7 +4851,7 @@
   },
   {
     "source_code": "111891",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 6
   },
   {
@@ -5016,7 +5016,7 @@
   },
   {
     "source_code": "Kuchnia / Noże kuchenne / Ostrzenie / Ostrzałki / Ostrzałki kółkowe",
-    "target_category_id": 61,
+    "target_category_id": 235,
     "company_id": 5
   },
   {
@@ -5036,7 +5036,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gry > Karciane > Kolekcjonerskie > Inne systemy",
-    "target_category_id": 185,
+    "target_category_id": 27,
     "company_id": 14
   },
   {
@@ -5111,7 +5111,7 @@
   },
   {
     "source_code": "Wnętrze / Sprzątanie domu",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 5
   },
   {
@@ -5191,7 +5191,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gry > Karciane > Poker",
-    "target_category_id": 185,
+    "target_category_id": 27,
     "company_id": 14
   },
   {
@@ -5201,7 +5201,7 @@
   },
   {
     "source_code": "Kuchnia / Noże kuchenne / Ostrzenie / Ostrzałki",
-    "target_category_id": 61,
+    "target_category_id": 235,
     "company_id": 5
   },
   {
@@ -5216,7 +5216,7 @@
   },
   {
     "source_code": "Książki / Podróże i turystyka",
-    "target_category_id": 157,
+    "target_category_id": 141,
     "company_id": 13
   },
   {
@@ -5251,7 +5251,7 @@
   },
   {
     "source_code": "Gry planszowe i karciane / Gry karciane i karty",
-    "target_category_id": 185,
+    "target_category_id": 27,
     "company_id": 13
   },
   {
@@ -5276,7 +5276,7 @@
   },
   {
     "source_code": "Kuchnia / HoReCa / Masarnia / Strzał w klatkę piersiową - duży nóż",
-    "target_category_id": 61,
+    "target_category_id": 235,
     "company_id": 5
   },
   {
@@ -5346,7 +5346,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > TV i Video > Telewizja przemysłowa > Karty DVR",
-    "target_category_id": 301,
+    "target_category_id": 161,
     "company_id": 9
   },
   {
@@ -5456,7 +5456,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > Sprzęt audio przenośny > Głośniki przenośne",
-    "target_category_id": 10,
+    "target_category_id": 141,
     "company_id": 9
   },
   {
@@ -5566,7 +5566,7 @@
   },
   {
     "source_code": "Głośniki do komputera",
-    "target_category_id": 10,
+    "target_category_id": 141,
     "company_id": 18
   },
   {
@@ -5591,7 +5591,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\AGD wolnostojące\\Płyty wolnostojące",
-    "target_category_id": 27,
+    "target_category_id": 268,
     "company_id": 11
   },
   {
@@ -5721,12 +5721,12 @@
   },
   {
     "source_code": "Elektronika > Komputery > Podzespoły komputerowe > Karty graficzne",
-    "target_category_id": 301,
+    "target_category_id": 161,
     "company_id": 9
   },
   {
     "source_code": "Wyposażenie do okapów",
-    "target_category_id": 34,
+    "target_category_id": 203,
     "company_id": 18
   },
   {
@@ -5971,12 +5971,12 @@
   },
   {
     "source_code": "RoboJet Speed Up Easy",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 10
   },
   {
     "source_code": "Elektronika > Telefony i Akcesoria > Radiokomunikacja > Sprzęt CB > Akcesoria i części > Głośniki",
-    "target_category_id": 10,
+    "target_category_id": 141,
     "company_id": 9
   },
   {
@@ -5996,7 +5996,7 @@
   },
   {
     "source_code": "AGD duże / Minikuchnie i szafki",
-    "target_category_id": 27,
+    "target_category_id": 276,
     "company_id": 5
   },
   {
@@ -6181,7 +6181,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gry > Karciane > Kolekcjonerskie > Magic: The Gathering",
-    "target_category_id": 185,
+    "target_category_id": 27,
     "company_id": 2
   },
   {
@@ -6191,7 +6191,7 @@
   },
   {
     "source_code": "Dziecko > Zabawki > Lalki i akcesoria > Lalki > Lalki z bajek",
-    "target_category_id": 205,
+    "target_category_id": 31,
     "company_id": 12
   },
   {
@@ -6411,7 +6411,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > AGD wolnostojące > Kuchnie wolnostojące",
-    "target_category_id": 27,
+    "target_category_id": 268,
     "company_id": 9
   },
   {
@@ -6516,7 +6516,7 @@
   },
   {
     "source_code": "Wnętrze / Hachiman / Wiadra",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 5
   },
   {
@@ -6586,7 +6586,7 @@
   },
   {
     "source_code": "110944",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 6
   },
   {
@@ -6901,7 +6901,7 @@
   },
   {
     "source_code": "316172",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 6
   },
   {
@@ -7006,7 +7006,7 @@
   },
   {
     "source_code": "Dziecko > Zabawki > Lalki i akcesoria > Lalki > Lalki kolekcjonerskie",
-    "target_category_id": 205,
+    "target_category_id": 31,
     "company_id": 12
   },
   {
@@ -7046,7 +7046,7 @@
   },
   {
     "source_code": "316282",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 6
   },
   {
@@ -7166,12 +7166,12 @@
   },
   {
     "source_code": "110184",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 6
   },
   {
     "source_code": "Kultura i rozrywka > Gry > Karciane > Karciane tradycyjne",
-    "target_category_id": 185,
+    "target_category_id": 27,
     "company_id": 2
   },
   {
@@ -7231,7 +7231,7 @@
   },
   {
     "source_code": "Elektronika > Telefony i Akcesoria > Akcesoria GSM > Multimedia > Głośniki zewnętrzne",
-    "target_category_id": 10,
+    "target_category_id": 141,
     "company_id": 9
   },
   {
@@ -7276,7 +7276,7 @@
   },
   {
     "source_code": "Sprzęt RTV\\Telewizory\\Telewizory LED",
-    "target_category_id": 3,
+    "target_category_id": 289,
     "company_id": 11
   },
   {
@@ -7351,7 +7351,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gry > Karciane > Talie tradycyjne",
-    "target_category_id": 185,
+    "target_category_id": 27,
     "company_id": 14
   },
   {
@@ -7361,7 +7361,7 @@
   },
   {
     "source_code": "Kolumny głośnikowe",
-    "target_category_id": 10,
+    "target_category_id": 141,
     "company_id": 18
   },
   {
@@ -7406,7 +7406,7 @@
   },
   {
     "source_code": "VisionMax",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 10
   },
   {
@@ -7486,7 +7486,7 @@
   },
   {
     "source_code": "Biuro i firma\\Utrzymanie czystości\\Urządzenia sprzątające",
-    "target_category_id": 107,
+    "target_category_id": 270,
     "company_id": 11
   },
   {
@@ -7546,7 +7546,7 @@
   },
   {
     "source_code": "Elektronika > Sprzęt estradowy, studyjny i DJ-ski > Nagłośnienie > Głośniki",
-    "target_category_id": 10,
+    "target_category_id": 141,
     "company_id": 9
   },
   {
@@ -7776,7 +7776,7 @@
   },
   {
     "source_code": "110926",
-    "target_category_id": 40,
+    "target_category_id": 205,
     "company_id": 6
   },
   {
@@ -7816,7 +7816,7 @@
   },
   {
     "source_code": "Muzyka / Jazz, Blues",
-    "target_category_id": 176,
+    "target_category_id": 141,
     "company_id": 13
   },
   {
@@ -7911,7 +7911,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gry > Karciane > Kolekcjonerskie > Star Wars Unlimited",
-    "target_category_id": 185,
+    "target_category_id": 27,
     "company_id": 2
   },
   {
@@ -8346,7 +8346,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gry > Karciane > Kolekcjonerskie",
-    "target_category_id": 185,
+    "target_category_id": 27,
     "company_id": 5
   },
   {
@@ -8386,7 +8386,7 @@
   },
   {
     "source_code": "Sprzęt audio dla domu",
-    "target_category_id": 10,
+    "target_category_id": 141,
     "company_id": 5
   },
   {
@@ -8416,7 +8416,7 @@
   },
   {
     "source_code": "Zestawy głośnomówiące",
-    "target_category_id": 10,
+    "target_category_id": 141,
     "company_id": 5
   },
   {
@@ -8451,7 +8451,7 @@
   },
   {
     "source_code": "TV i Video",
-    "target_category_id": 3,
+    "target_category_id": 289,
     "company_id": 5
   },
   {
@@ -8541,7 +8541,7 @@
   },
   {
     "source_code": "Multimedia",
-    "target_category_id": 10,
+    "target_category_id": 141,
     "company_id": 5
   },
   {
@@ -8791,7 +8791,7 @@
   },
   {
     "source_code": "Filmy",
-    "target_category_id": 205,
+    "target_category_id": 288,
     "company_id": 5
   },
   {
@@ -10011,7 +10011,7 @@
   },
   {
     "source_code": "Miksery audio",
-    "target_category_id": 10,
+    "target_category_id": 141,
     "company_id": 5
   },
   {
