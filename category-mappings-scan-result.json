@@ -51,7 +51,7 @@
   },
   {
     "source_code": "Podręczniki szkolne / Przedmioty zawodowe",
-    "target_category_id": 170,
+    "target_category_id": 212,
     "company_id": 13
   },
   {
@@ -216,7 +216,7 @@
   },
   {
     "source_code": "Książki / Literatura faktu, reportaż",
-    "target_category_id": 141,
+    "target_category_id": 140,
     "company_id": 13
   },
   {
@@ -711,7 +711,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gadżety > Ręczniki",
-    "target_category_id": 425,
+    "target_category_id": 218,
     "company_id": 14
   },
   {
@@ -731,12 +731,12 @@
   },
   {
     "source_code": "Wnętrze / Zastawy stołowe / Porcelana / Filiżanki i spodki",
-    "target_category_id": 170,
+    "target_category_id": 60,
     "company_id": 5
   },
   {
     "source_code": "Sprzęt AGD\\AGD wolnostojące\\Lodówki",
-    "target_category_id": 268,
+    "target_category_id": 24,
     "company_id": 16
   },
   {
@@ -961,12 +961,12 @@
   },
   {
     "source_code": "Ładowarki do telefonów",
-    "target_category_id": 334,
+    "target_category_id": 17,
     "company_id": 18
   },
   {
     "source_code": "Kultura i rozrywka > Instrumenty > Gitary i akcesoria > Części i akcesoria > Korbki",
-    "target_category_id": 124,
+    "target_category_id": 423,
     "company_id": 14
   },
   {
@@ -1036,7 +1036,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Instrumenty > Gitary i akcesoria > Mandoliny, banjo",
-    "target_category_id": 343,
+    "target_category_id": 426,
     "company_id": 14
   },
   {
@@ -2276,7 +2276,7 @@
   },
   {
     "source_code": "Książki / Książki dla młodzieży",
-    "target_category_id": 212,
+    "target_category_id": 147,
     "company_id": 13
   },
   {
@@ -3241,7 +3241,7 @@
   },
   {
     "source_code": "Książki / Literatura obcojęzyczna",
-    "target_category_id": 212,
+    "target_category_id": 147,
     "company_id": 13
   },
   {
@@ -3446,7 +3446,7 @@
   },
   {
     "source_code": "Książki / Kultura i sztuka",
-    "target_category_id": 212,
+    "target_category_id": 149,
     "company_id": 13
   },
   {
@@ -3546,7 +3546,7 @@
   },
   {
     "source_code": "Książki / Kryminał, sensacja, thriller",
-    "target_category_id": 212,
+    "target_category_id": 146,
     "company_id": 13
   },
   {
@@ -3626,7 +3626,7 @@
   },
   {
     "source_code": "Książki / Fantastyka",
-    "target_category_id": 212,
+    "target_category_id": 143,
     "company_id": 13
   },
   {
@@ -3916,7 +3916,7 @@
   },
   {
     "source_code": "Książki / Kuchnia i diety",
-    "target_category_id": 212,
+    "target_category_id": 148,
     "company_id": 13
   },
   {
@@ -3951,7 +3951,7 @@
   },
   {
     "source_code": "Książki / Biznes",
-    "target_category_id": 212,
+    "target_category_id": 154,
     "company_id": 13
   },
   {
@@ -4296,7 +4296,7 @@
   },
   {
     "source_code": "Książki / Nauka języków",
-    "target_category_id": 212,
+    "target_category_id": 147,
     "company_id": 13
   },
   {
@@ -4731,7 +4731,7 @@
   },
   {
     "source_code": "Książki / Nauki ścisłe, medycyna",
-    "target_category_id": 212,
+    "target_category_id": 140,
     "company_id": 13
   },
   {
@@ -5006,7 +5006,7 @@
   },
   {
     "source_code": "Książki / Literatura piękna",
-    "target_category_id": 212,
+    "target_category_id": 158,
     "company_id": 13
   },
   {
@@ -5216,7 +5216,7 @@
   },
   {
     "source_code": "Książki / Podróże i turystyka",
-    "target_category_id": 212,
+    "target_category_id": 147,
     "company_id": 13
   },
   {
@@ -5266,7 +5266,7 @@
   },
   {
     "source_code": "Książki / Sport",
-    "target_category_id": 212,
+    "target_category_id": 147,
     "company_id": 13
   },
   {
@@ -5491,7 +5491,7 @@
   },
   {
     "source_code": "Książki / Podręczniki akademickie",
-    "target_category_id": 212,
+    "target_category_id": 140,
     "company_id": 13
   },
   {
@@ -5511,7 +5511,7 @@
   },
   {
     "source_code": "Książki / Religia",
-    "target_category_id": 212,
+    "target_category_id": 159,
     "company_id": 13
   },
   {
@@ -5531,7 +5531,7 @@
   },
   {
     "source_code": "Książki / Lektury i pomoce szkolne",
-    "target_category_id": 212,
+    "target_category_id": 140,
     "company_id": 13
   },
   {
@@ -5951,7 +5951,7 @@
   },
   {
     "source_code": "Książki / Prawo",
-    "target_category_id": 212,
+    "target_category_id": 154,
     "company_id": 13
   },
   {
@@ -6101,7 +6101,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Czasopisma > Popularnonaukowe",
-    "target_category_id": 179,
+    "target_category_id": 149,
     "company_id": 14
   },
   {
@@ -6161,7 +6161,7 @@
   },
   {
     "source_code": "Książki / Popularnonaukowe",
-    "target_category_id": 212,
+    "target_category_id": 140,
     "company_id": 13
   },
   {
@@ -6636,7 +6636,7 @@
   },
   {
     "source_code": "Książki / Ezoteryka i parapsychologia",
-    "target_category_id": 212,
+    "target_category_id": 159,
     "company_id": 13
   },
   {
@@ -6886,7 +6886,7 @@
   },
   {
     "source_code": "Książki / Literatura obyczajowa",
-    "target_category_id": 212,
+    "target_category_id": 147,
     "company_id": 13
   },
   {
@@ -7251,7 +7251,7 @@
   },
   {
     "source_code": "Książki / Poezja i dramat",
-    "target_category_id": 212,
+    "target_category_id": 158,
     "company_id": 13
   },
   {
@@ -7856,7 +7856,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Lodówki retro",
-    "target_category_id": 268,
+    "target_category_id": 24,
     "company_id": 5
   },
   {
@@ -7921,7 +7921,7 @@
   },
   {
     "source_code": "Książki / Historia",
-    "target_category_id": 212,
+    "target_category_id": 144,
     "company_id": 13
   },
   {
@@ -8026,7 +8026,7 @@
   },
   {
     "source_code": "Książki / Nauki humanistyczne",
-    "target_category_id": 212,
+    "target_category_id": 159,
     "company_id": 13
   }
 ]
