@@ -591,7 +591,7 @@
   },
   {
     "source_code": "Armatura / Łazienka / Instalacje / Grzałki elektryczne",
-    "target_category_id": 323,
+    "target_category_id": 352,
     "company_id": 5
   },
   {
@@ -811,7 +811,7 @@
   },
   {
     "source_code": "Elektronika > Telefony i Akcesoria > Urządzenia stacjonarne > Urządzenia VOIP > Bramki",
-    "target_category_id": 300,
+    "target_category_id": 314,
     "company_id": 9
   },
   {
@@ -1041,7 +1041,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > Kamery > Nośniki",
-    "target_category_id": 10,
+    "target_category_id": 74,
     "company_id": 9
   },
   {
@@ -1106,7 +1106,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > Elektronika > Narzędzia > Akcesoria > Podstawki pod lutownicę",
-    "target_category_id": 319,
+    "target_category_id": 74,
     "company_id": 9
   },
   {
@@ -1221,7 +1221,7 @@
   },
   {
     "source_code": "Akcesoria do stacji zasilania",
-    "target_category_id": 17,
+    "target_category_id": 74,
     "company_id": 18
   },
   {
@@ -1646,7 +1646,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > AGD drobne > Do domu > Grzejniki elektryczne",
-    "target_category_id": 323,
+    "target_category_id": 352,
     "company_id": 9
   },
   {
@@ -2201,7 +2201,7 @@
   },
   {
     "source_code": "Elektronika > Komputery > Dyski i pamięci przenośne > Obudowy i kieszenie > Ramki i sanki",
-    "target_category_id": 300,
+    "target_category_id": 332,
     "company_id": 9
   },
   {
@@ -2351,7 +2351,7 @@
   },
   {
     "source_code": "Wnętrze / Bielizna stołowa i pościelowa / Ściereczki kuchenne",
-    "target_category_id": 44,
+    "target_category_id": 405,
     "company_id": 5
   },
   {
@@ -3066,7 +3066,7 @@
   },
   {
     "source_code": "Elektronika > Telefony i Akcesoria > Akcesoria GSM > Akcesoria i części serwisowe > Części zamienne > Głośniczki",
-    "target_category_id": 10,
+    "target_category_id": 316,
     "company_id": 9
   },
   {
@@ -3291,7 +3291,7 @@
   },
   {
     "source_code": "Elektronika > Komputery > Serwery i akcesoria > Akcesoria > Ramki i kieszenie",
-    "target_category_id": 300,
+    "target_category_id": 332,
     "company_id": 9
   },
   {
@@ -3556,7 +3556,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > Elektronika > Kable, przewody > Głośnikowe",
-    "target_category_id": 10,
+    "target_category_id": 318,
     "company_id": 9
   },
   {
@@ -4311,7 +4311,7 @@
   },
   {
     "source_code": "Zasilacze do laptopów",
-    "target_category_id": 17,
+    "target_category_id": 303,
     "company_id": 18
   },
   {
@@ -4486,7 +4486,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > TV i Video > Magnetowidy i taśmy > Nośniki",
-    "target_category_id": 10,
+    "target_category_id": 74,
     "company_id": 9
   },
   {
@@ -4936,7 +4936,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > Sprzęt audio dla domu > Magnetofony i nośniki > Nośniki",
-    "target_category_id": 10,
+    "target_category_id": 74,
     "company_id": 9
   },
   {
@@ -5271,7 +5271,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > Elektronika > Wtyki, gniazda, przejściówki > Gniazda i wtyki > Głośnikowe",
-    "target_category_id": 10,
+    "target_category_id": 318,
     "company_id": 9
   },
   {
@@ -5541,7 +5541,7 @@
   },
   {
     "source_code": "Elektronika > Komputery > Akcesoria (Laptop, PC) > Stoliki pod laptopa",
-    "target_category_id": 319,
+    "target_category_id": 332,
     "company_id": 9
   },
   {
