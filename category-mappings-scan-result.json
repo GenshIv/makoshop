@@ -116,7 +116,7 @@
   },
   {
     "source_code": "Outdoor / Palenie / Zapalniczki / Zapalniczki do fajek",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
@@ -216,7 +216,7 @@
   },
   {
     "source_code": "Książki / Literatura faktu, reportaż",
-    "target_category_id": 140,
+    "target_category_id": 142,
     "company_id": 13
   },
   {
@@ -281,7 +281,7 @@
   },
   {
     "source_code": "Outdoor / Palenie / Zapalniczki / Zapalniczka",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
@@ -366,7 +366,7 @@
   },
   {
     "source_code": "Outdoor / Palenie / Fajka / Fajki",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
@@ -521,7 +521,7 @@
   },
   {
     "source_code": "Artykuły biurowe &gt; Sprzęt biurowy &gt; Rejestratory czasu pracy",
-    "target_category_id": 284,
+    "target_category_id": 285,
     "company_id": 17
   },
   {
@@ -626,7 +626,7 @@
   },
   {
     "source_code": "Outdoor / Palenie / Zapalniczki",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
@@ -671,12 +671,12 @@
   },
   {
     "source_code": "Książki / Poradniki",
-    "target_category_id": 140,
+    "target_category_id": 153,
     "company_id": 13
   },
   {
     "source_code": "Outdoor / Noże, maczety / Kiridashi",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -721,17 +721,17 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Trening taktyczny / Długopisy taktyczne",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
     "source_code": "Outdoor / Palenie / Zapalniczki / Zapalniczki stołowe",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
     "source_code": "Wnętrze / Zastawy stołowe / Porcelana / Filiżanki i spodki",
-    "target_category_id": 65,
+    "target_category_id": 392,
     "company_id": 5
   },
   {
@@ -821,7 +821,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo profesjonalne / Chłodziarki",
-    "target_category_id": 23,
+    "target_category_id": 25,
     "company_id": 5
   },
   {
@@ -861,7 +861,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Noże składane kieszonkowe",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -951,7 +951,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Ratunek",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -996,7 +996,7 @@
   },
   {
     "source_code": "Sprzęt RTV\\Video\\Sprzęt naziemny i satelitarny\\Anteny naziemne i satelitarne",
-    "target_category_id": 268,
+    "target_category_id": 6,
     "company_id": 11
   },
   {
@@ -1016,7 +1016,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Codzienny użytek",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -1086,7 +1086,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Zamrażarki Słupkowe",
-    "target_category_id": 23,
+    "target_category_id": 25,
     "company_id": 5
   },
   {
@@ -1271,7 +1271,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Adaptery",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
@@ -1306,7 +1306,7 @@
   },
   {
     "source_code": "Outdoor / Repliki historyczne",
-    "target_category_id": 211,
+    "target_category_id": 247,
     "company_id": 5
   },
   {
@@ -1531,7 +1531,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Rzeźbienie",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -1551,7 +1551,7 @@
   },
   {
     "source_code": "Outdoor / Ostrzenie / Pielęgnacja noży",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -1581,7 +1581,7 @@
   },
   {
     "source_code": "Outdoor / Palenie / Cygaro / Etui na cygara",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
@@ -1636,7 +1636,7 @@
   },
   {
     "source_code": "Outdoor / Ostrzenie / Akcesoria do ostrzenia",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -1661,7 +1661,7 @@
   },
   {
     "source_code": "Outdoor / Zwierzęta domowe / Smycz / Świecące obroże",
-    "target_category_id": 211,
+    "target_category_id": 104,
     "company_id": 5
   },
   {
@@ -1746,7 +1746,7 @@
   },
   {
     "source_code": "Artykuły biurowe &gt; Sprzęt biurowy &gt; Drukarki do etykiet",
-    "target_category_id": 284,
+    "target_category_id": 285,
     "company_id": 17
   },
   {
@@ -1841,7 +1841,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Latarki outdoor",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
@@ -1861,7 +1861,7 @@
   },
   {
     "source_code": "Outdoor / Kemping / Przygotowanie jedzenia / Naczynia polowe",
-    "target_category_id": 211,
+    "target_category_id": 234,
     "company_id": 5
   },
   {
@@ -1911,7 +1911,7 @@
   },
   {
     "source_code": "Outdoor / Sprzęt do survivalu i bushcraftu",
-    "target_category_id": 211,
+    "target_category_id": 247,
     "company_id": 5
   },
   {
@@ -1926,7 +1926,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Oświetlenie awaryjne",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
@@ -2046,12 +2046,12 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Noże survival",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
     "source_code": "Outdoor / Noże, maczety / Myślistwo / Noże myśliwskie / Polowanie / Noże funkcyjne / Do skórowania",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -2081,7 +2081,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Oświetlenie domu",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
@@ -2181,7 +2181,7 @@
   },
   {
     "source_code": "Outdoor / Kemping / Plecaki i torby / Torebki",
-    "target_category_id": 211,
+    "target_category_id": 234,
     "company_id": 5
   },
   {
@@ -2216,7 +2216,7 @@
   },
   {
     "source_code": "Outdoor / Odzież / Okulary taktyczne",
-    "target_category_id": 211,
+    "target_category_id": 115,
     "company_id": 5
   },
   {
@@ -2461,7 +2461,7 @@
   },
   {
     "source_code": "Outdoor / Kemping / Przygotowanie jedzenia / Termosy, butelki, bidony i lunch boxy",
-    "target_category_id": 211,
+    "target_category_id": 234,
     "company_id": 5
   },
   {
@@ -2486,7 +2486,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Latarki rysikowe",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
@@ -2591,7 +2591,7 @@
   },
   {
     "source_code": "Sprzęt RTV\\Sprzęt car audio video\\Akcesoria car audio video",
-    "target_category_id": 268,
+    "target_category_id": 318,
     "company_id": 11
   },
   {
@@ -2626,7 +2626,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Myślistwo / Noże myśliwskie",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -2656,7 +2656,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Urządzenia do pielęgnacji ciała\\Suszarki do włosów",
-    "target_category_id": 23,
+    "target_category_id": 29,
     "company_id": 16
   },
   {
@@ -2721,7 +2721,7 @@
   },
   {
     "source_code": "Sprzęt RTV\\Audio\\Słuchawki",
-    "target_category_id": 268,
+    "target_category_id": 9,
     "company_id": 11
   },
   {
@@ -2781,7 +2781,7 @@
   },
   {
     "source_code": "Sprzęt RTV\\Audio\\Odtwarzacze CD",
-    "target_category_id": 268,
+    "target_category_id": 12,
     "company_id": 11
   },
   {
@@ -2806,7 +2806,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Latarki myśliwskie",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
@@ -2871,7 +2871,7 @@
   },
   {
     "source_code": "Outdoor / Kemping / Przygotowanie jedzenia / Kuchenka polowa",
-    "target_category_id": 211,
+    "target_category_id": 234,
     "company_id": 5
   },
   {
@@ -2886,7 +2886,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Filetowanie",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -3051,7 +3051,7 @@
   },
   {
     "source_code": "Outdoor / Kemping / Plecaki i torby / Torby",
-    "target_category_id": 211,
+    "target_category_id": 234,
     "company_id": 5
   },
   {
@@ -3091,7 +3091,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Światła sygnalizacyjne",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
@@ -3156,7 +3156,7 @@
   },
   {
     "source_code": "Outdoor / Palenie / Fajka / Akcesoria do fajek",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
@@ -3186,7 +3186,7 @@
   },
   {
     "source_code": "Outdoor / Palenie / Zapalniczki / Zapalniczki do cygar",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
@@ -3216,7 +3216,7 @@
   },
   {
     "source_code": "AGD duże / Pralnictwo / Suszarki wolnostojące",
-    "target_category_id": 23,
+    "target_category_id": 29,
     "company_id": 5
   },
   {
@@ -3236,7 +3236,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo profesjonalne / Winiarki",
-    "target_category_id": 23,
+    "target_category_id": 26,
     "company_id": 5
   },
   {
@@ -3281,7 +3281,7 @@
   },
   {
     "source_code": "Outdoor / Sprzęt do survivalu i bushcraftu / Krzesiwo",
-    "target_category_id": 211,
+    "target_category_id": 247,
     "company_id": 5
   },
   {
@@ -3326,7 +3326,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Zamrażarki szufladowe",
-    "target_category_id": 23,
+    "target_category_id": 25,
     "company_id": 5
   },
   {
@@ -3481,7 +3481,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Latarki do broni",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
@@ -3601,7 +3601,7 @@
   },
   {
     "source_code": "Outdoor / Palenie / Fajka / Torebka na fajkę",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
@@ -3691,7 +3691,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Maczety",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -3821,7 +3821,7 @@
   },
   {
     "source_code": "Outdoor / Odzież / Zegarki",
-    "target_category_id": 211,
+    "target_category_id": 109,
     "company_id": 5
   },
   {
@@ -3861,7 +3861,7 @@
   },
   {
     "source_code": "Outdoor / Ostrzenie",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -3886,12 +3886,12 @@
   },
   {
     "source_code": "Wnętrze / Zastawy stołowe / Porcelana / Zestawy obiadowe",
-    "target_category_id": 65,
+    "target_category_id": 66,
     "company_id": 5
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Zamrażarki skrzyniowe",
-    "target_category_id": 23,
+    "target_category_id": 25,
     "company_id": 5
   },
   {
@@ -3936,7 +3936,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Myślistwo / Zestawy myśliwskie, piły ręczne / Zestawy myśliwskie",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -4021,7 +4021,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Scyzoryk",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -4121,12 +4121,12 @@
   },
   {
     "source_code": "Outdoor / Żywność/woda / Racje żywnościowe",
-    "target_category_id": 211,
+    "target_category_id": 247,
     "company_id": 5
   },
   {
     "source_code": "Outdoor / Noże, maczety / Taktyczne / Ratownictwo",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -4271,7 +4271,7 @@
   },
   {
     "source_code": "AGD duże / Kuchenki gazowe i elektryczne",
-    "target_category_id": 23,
+    "target_category_id": 27,
     "company_id": 5
   },
   {
@@ -4396,7 +4396,7 @@
   },
   {
     "source_code": "Outdoor / Odzież / Rękawice",
-    "target_category_id": 211,
+    "target_category_id": 137,
     "company_id": 5
   },
   {
@@ -4451,7 +4451,7 @@
   },
   {
     "source_code": "Sprzęt RTV\\Audio\\Gramofony",
-    "target_category_id": 268,
+    "target_category_id": 11,
     "company_id": 11
   },
   {
@@ -4496,7 +4496,7 @@
   },
   {
     "source_code": "Artykuły biurowe &gt; Artykuły różne &gt; Etykiety i przekładki indeksujące &gt; Taśmy do etykietowania",
-    "target_category_id": 284,
+    "target_category_id": 290,
     "company_id": 17
   },
   {
@@ -4506,7 +4506,7 @@
   },
   {
     "source_code": "Elektronika > Komputery > Podzespoły komputerowe > Karty muzyczne",
-    "target_category_id": 309,
+    "target_category_id": 310,
     "company_id": 9
   },
   {
@@ -4516,12 +4516,12 @@
   },
   {
     "source_code": "Tablety graficzne",
-    "target_category_id": 309,
+    "target_category_id": 311,
     "company_id": 18
   },
   {
     "source_code": "Outdoor / Narzędzia / Saperki, szpadle, łopaty",
-    "target_category_id": 211,
+    "target_category_id": 252,
     "company_id": 5
   },
   {
@@ -4591,12 +4591,12 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Karambit",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
     "source_code": "Outdoor / Kemping / Przygotowanie jedzenia / Niezbędniki i sztućce turystyczne",
-    "target_category_id": 211,
+    "target_category_id": 234,
     "company_id": 5
   },
   {
@@ -4606,7 +4606,7 @@
   },
   {
     "source_code": "Outdoor / Żywność/woda / Piersiówki / manierki",
-    "target_category_id": 211,
+    "target_category_id": 247,
     "company_id": 5
   },
   {
@@ -4656,7 +4656,7 @@
   },
   {
     "source_code": "Outdoor / Narzędzia / Etui",
-    "target_category_id": 211,
+    "target_category_id": 252,
     "company_id": 5
   },
   {
@@ -4676,7 +4676,7 @@
   },
   {
     "source_code": "Outdoor / Palenie / Fajka / Torebka na tytoń do fajki",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
@@ -4731,7 +4731,7 @@
   },
   {
     "source_code": "Książki / Nauki ścisłe, medycyna",
-    "target_category_id": 140,
+    "target_category_id": 160,
     "company_id": 13
   },
   {
@@ -4771,7 +4771,7 @@
   },
   {
     "source_code": "Outdoor / Narzędzia / Siekiery",
-    "target_category_id": 211,
+    "target_category_id": 252,
     "company_id": 5
   },
   {
@@ -4806,7 +4806,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Mini latarki i breloki",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
@@ -4831,7 +4831,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Do zbierania grzybów",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -4841,7 +4841,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / SBS",
-    "target_category_id": 23,
+    "target_category_id": 24,
     "company_id": 5
   },
   {
@@ -4861,7 +4861,7 @@
   },
   {
     "source_code": "Outdoor / Noże świata",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -5066,7 +5066,7 @@
   },
   {
     "source_code": "Outdoor / Kemping / Przygotowanie jedzenia / Duże termosy",
-    "target_category_id": 211,
+    "target_category_id": 234,
     "company_id": 5
   },
   {
@@ -5101,7 +5101,7 @@
   },
   {
     "source_code": "Outdoor / Palenie / Fajka / Do czyszczenia fajek",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
@@ -5221,7 +5221,7 @@
   },
   {
     "source_code": "Outdoor / Palenie / Fajka / Filtr do fajki",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
@@ -5311,7 +5311,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Latarnie",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
@@ -5411,7 +5411,7 @@
   },
   {
     "source_code": "Outdoor / Nożyce / Nożyce krawieckie",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -5491,7 +5491,7 @@
   },
   {
     "source_code": "Książki / Podręczniki akademickie",
-    "target_category_id": 140,
+    "target_category_id": 425,
     "company_id": 13
   },
   {
@@ -5531,7 +5531,7 @@
   },
   {
     "source_code": "Książki / Lektury i pomoce szkolne",
-    "target_category_id": 140,
+    "target_category_id": 147,
     "company_id": 13
   },
   {
@@ -5601,7 +5601,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Noże stałe",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -5666,7 +5666,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Latarki ręczne",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
@@ -5791,7 +5791,7 @@
   },
   {
     "source_code": "Outdoor / Kemping / Pojemniki",
-    "target_category_id": 211,
+    "target_category_id": 234,
     "company_id": 5
   },
   {
@@ -5871,7 +5871,7 @@
   },
   {
     "source_code": "Outdoor / Kemping / Przygotowanie jedzenia / Kubki i Butelki",
-    "target_category_id": 211,
+    "target_category_id": 234,
     "company_id": 5
   },
   {
@@ -5896,7 +5896,7 @@
   },
   {
     "source_code": "Outdoor / Zwierzęta domowe / Bezpieczeństwo i widoczność / Świecące naszyjniki",
-    "target_category_id": 211,
+    "target_category_id": 104,
     "company_id": 5
   },
   {
@@ -5926,7 +5926,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Taktyczne / Ratownictwo / Taktyczne i Wojskowe",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -5996,7 +5996,7 @@
   },
   {
     "source_code": "AGD duże / Minikuchnie i szafki",
-    "target_category_id": 23,
+    "target_category_id": 27,
     "company_id": 5
   },
   {
@@ -6016,7 +6016,7 @@
   },
   {
     "source_code": "Outdoor / Narzędzia / Piły ręczne",
-    "target_category_id": 211,
+    "target_category_id": 252,
     "company_id": 5
   },
   {
@@ -6161,7 +6161,7 @@
   },
   {
     "source_code": "Książki / Popularnonaukowe",
-    "target_category_id": 140,
+    "target_category_id": 155,
     "company_id": 13
   },
   {
@@ -6206,7 +6206,7 @@
   },
   {
     "source_code": "Wnętrze / Zastawy stołowe / Zestawy",
-    "target_category_id": 65,
+    "target_category_id": 67,
     "company_id": 5
   },
   {
@@ -6311,12 +6311,12 @@
   },
   {
     "source_code": "Outdoor / Narzędzia / Systemy mocowania",
-    "target_category_id": 211,
+    "target_category_id": 252,
     "company_id": 5
   },
   {
     "source_code": "Sprzęt RTV\\Sprzęt przenośny\\Głośniki przenośne i stacje dokujące",
-    "target_category_id": 268,
+    "target_category_id": 10,
     "company_id": 11
   },
   {
@@ -6356,7 +6356,7 @@
   },
   {
     "source_code": "Sprzęt RTV\\Audio\\Radiobudziki",
-    "target_category_id": 268,
+    "target_category_id": 13,
     "company_id": 11
   },
   {
@@ -6371,7 +6371,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo profesjonalne / Zamrażarki skrzyniowe",
-    "target_category_id": 23,
+    "target_category_id": 25,
     "company_id": 5
   },
   {
@@ -6401,7 +6401,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Trening taktyczny",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -6576,7 +6576,7 @@
   },
   {
     "source_code": "Outdoor / Ostrzenie / Ostrzałki elektryczne",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -6631,7 +6631,7 @@
   },
   {
     "source_code": "Outdoor / Żywność/woda / Filtrowanie wody",
-    "target_category_id": 211,
+    "target_category_id": 247,
     "company_id": 5
   },
   {
@@ -6666,7 +6666,7 @@
   },
   {
     "source_code": "Outdoor / Palenie / Cygaro / Obcinarka do cygar",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
@@ -6686,7 +6686,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Taktyczne / Ratownictwo / Noże taktyczne",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -6706,7 +6706,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Baterie i ładowarki",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
@@ -6866,7 +6866,7 @@
   },
   {
     "source_code": "Artykuły biurowe &gt; Sortowanie i utrzymanie porządku &gt; Kasety na pieniądze",
-    "target_category_id": 284,
+    "target_category_id": 285,
     "company_id": 17
   },
   {
@@ -6911,7 +6911,7 @@
   },
   {
     "source_code": "Outdoor / Palenie / Popielnice",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
@@ -6966,7 +6966,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Żarówki",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
@@ -7001,7 +7001,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo profesjonalne / Zamrażarki słupkowe",
-    "target_category_id": 23,
+    "target_category_id": 25,
     "company_id": 5
   },
   {
@@ -7071,7 +7071,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Winiarki",
-    "target_category_id": 23,
+    "target_category_id": 26,
     "company_id": 5
   },
   {
@@ -7131,12 +7131,12 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Latarki czołowe",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
     "source_code": "Outdoor / Kemping / Plecaki i torby / Worki, torby i saszetki wodoszczelne",
-    "target_category_id": 211,
+    "target_category_id": 234,
     "company_id": 5
   },
   {
@@ -7226,7 +7226,7 @@
   },
   {
     "source_code": "AGD duże / Pralnictwo",
-    "target_category_id": 23,
+    "target_category_id": 28,
     "company_id": 5
   },
   {
@@ -7276,7 +7276,7 @@
   },
   {
     "source_code": "Sprzęt RTV\\Telewizory\\Telewizory LED",
-    "target_category_id": 268,
+    "target_category_id": 3,
     "company_id": 11
   },
   {
@@ -7311,7 +7311,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Winiarki / Akcesoria i prezenty",
-    "target_category_id": 23,
+    "target_category_id": 26,
     "company_id": 5
   },
   {
@@ -7386,7 +7386,7 @@
   },
   {
     "source_code": "Outdoor / Kemping / Przygotowanie jedzenia / Lodówki pasywne",
-    "target_category_id": 211,
+    "target_category_id": 234,
     "company_id": 5
   },
   {
@@ -7516,7 +7516,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Ckłodziarki podblatowe",
-    "target_category_id": 23,
+    "target_category_id": 24,
     "company_id": 5
   },
   {
@@ -7606,7 +7606,7 @@
   },
   {
     "source_code": "Elektronika > Komputery > Monitory komputerowe > Części i akcesoria > Części",
-    "target_category_id": 309,
+    "target_category_id": 310,
     "company_id": 9
   },
   {
@@ -7641,7 +7641,7 @@
   },
   {
     "source_code": "Outdoor / Nożyce",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -7661,17 +7661,17 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Chłodziarki wolnostojące",
-    "target_category_id": 23,
+    "target_category_id": 24,
     "company_id": 5
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Reflektory przenośne",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
     "source_code": "Outdoor / Zwierzęta domowe / Zabawki dla psa",
-    "target_category_id": 211,
+    "target_category_id": 104,
     "company_id": 5
   },
   {
@@ -7681,12 +7681,12 @@
   },
   {
     "source_code": "AGD duże / Zmywarki wolnostojące",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 5
   },
   {
     "source_code": "Outdoor / Multitoole",
-    "target_category_id": 211,
+    "target_category_id": 251,
     "company_id": 5
   },
   {
@@ -7751,7 +7751,7 @@
   },
   {
     "source_code": "Outdoor / Ostrzenie / Kamienie szlifierskie.",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -7766,7 +7766,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Filtry do latarek",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
@@ -7781,7 +7781,7 @@
   },
   {
     "source_code": "Outdoor / Palenie / Cygaro / Acesoria do cygar",
-    "target_category_id": 211,
+    "target_category_id": 257,
     "company_id": 5
   },
   {
@@ -7861,7 +7861,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Myślistwo / Noże myśliwskie / Polowanie",
-    "target_category_id": 211,
+    "target_category_id": 238,
     "company_id": 5
   },
   {
@@ -8021,7 +8021,7 @@
   },
   {
     "source_code": "Outdoor / Oświetlenie awaryjne i latarki / Oświetlenie robocze",
-    "target_category_id": 211,
+    "target_category_id": 243,
     "company_id": 5
   },
   {
