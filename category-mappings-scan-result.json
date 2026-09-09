@@ -731,7 +731,7 @@
   },
   {
     "source_code": "Wnętrze / Zastawy stołowe / Porcelana / Filiżanki i spodki",
-    "target_category_id": 60,
+    "target_category_id": 65,
     "company_id": 5
   },
   {
@@ -1336,7 +1336,7 @@
   },
   {
     "source_code": "Wnętrze / Zastawy stołowe / Podkładki",
-    "target_category_id": 170,
+    "target_category_id": 64,
     "company_id": 5
   },
   {
@@ -1521,7 +1521,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Instrumenty > Gitary i akcesoria > Części i akcesoria > Korpusy i gryfy",
-    "target_category_id": 184,
+    "target_category_id": 426,
     "company_id": 14
   },
   {
@@ -2366,7 +2366,7 @@
   },
   {
     "source_code": "Kuchnia / Noże kuchenne / Ostrzenie / Ostrzałki / Ostrzałki do noży",
-    "target_category_id": 60,
+    "target_category_id": 61,
     "company_id": 5
   },
   {
@@ -3191,7 +3191,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gry > Gry na konsole",
-    "target_category_id": 184,
+    "target_category_id": 347,
     "company_id": 2
   },
   {
@@ -3466,7 +3466,7 @@
   },
   {
     "source_code": "Kuchnia / Noże kuchenne / Nożyce kuchenne",
-    "target_category_id": 60,
+    "target_category_id": 400,
     "company_id": 5
   },
   {
@@ -3886,7 +3886,7 @@
   },
   {
     "source_code": "Wnętrze / Zastawy stołowe / Porcelana / Zestawy obiadowe",
-    "target_category_id": 60,
+    "target_category_id": 65,
     "company_id": 5
   },
   {
@@ -6206,7 +6206,7 @@
   },
   {
     "source_code": "Wnętrze / Zastawy stołowe / Zestawy",
-    "target_category_id": 60,
+    "target_category_id": 65,
     "company_id": 5
   },
   {
@@ -7536,7 +7536,7 @@
   },
   {
     "source_code": "Wnętrze / Zastawy stołowe / Wyroby szklane / Cukiernice",
-    "target_category_id": 269,
+    "target_category_id": 401,
     "company_id": 5
   },
   {
