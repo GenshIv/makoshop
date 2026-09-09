@@ -1256,7 +1256,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do kuchni\\Frytownice",
-    "target_category_id": 268,
+    "target_category_id": 351,
     "company_id": 16
   },
   {
@@ -1291,7 +1291,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Urządzenia do pielęgnacji ciała\\Depilatory i golarki damskie",
-    "target_category_id": 268,
+    "target_category_id": 352,
     "company_id": 11
   },
   {
@@ -1326,7 +1326,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do kuchni\\Maszynki do mielenia",
-    "target_category_id": 268,
+    "target_category_id": 75,
     "company_id": 11
   },
   {
@@ -1341,7 +1341,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Urządzenia do pielęgnacji ciała\\Suszarko-lokówki",
-    "target_category_id": 268,
+    "target_category_id": 352,
     "company_id": 16
   },
   {
@@ -1811,7 +1811,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do kuchni\\Wagi kuchenne",
-    "target_category_id": 268,
+    "target_category_id": 46,
     "company_id": 11
   },
   {
@@ -1901,7 +1901,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Urządzenia do pielęgnacji ciała\\Prostownice i karbownice",
-    "target_category_id": 268,
+    "target_category_id": 352,
     "company_id": 16
   },
   {
@@ -2151,7 +2151,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do kuchni",
-    "target_category_id": 268,
+    "target_category_id": 39,
     "company_id": 11
   },
   {
@@ -2736,7 +2736,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\AGD wolnostojące",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 11
   },
   {
@@ -2751,7 +2751,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do kuchni\\Parowary i kombiwary",
-    "target_category_id": 268,
+    "target_category_id": 351,
     "company_id": 11
   },
   {
@@ -2951,7 +2951,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Urządzenia do pielęgnacji ciała\\Trymery",
-    "target_category_id": 268,
+    "target_category_id": 352,
     "company_id": 16
   },
   {
@@ -3371,7 +3371,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do domu\\Odkurzacze i akcesoria",
-    "target_category_id": 268,
+    "target_category_id": 107,
     "company_id": 16
   },
   {
@@ -3511,7 +3511,7 @@
   },
   {
     "source_code": "AGD duże / Pralnictwo / Łączniki",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -4841,7 +4841,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / SBS",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -4876,7 +4876,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do kuchni\\Krajalnice",
-    "target_category_id": 268,
+    "target_category_id": 351,
     "company_id": 16
   },
   {
@@ -5226,7 +5226,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do domu\\Żelazka",
-    "target_category_id": 268,
+    "target_category_id": 48,
     "company_id": 16
   },
   {
@@ -5321,7 +5321,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do kuchni\\Tostery",
-    "target_category_id": 268,
+    "target_category_id": 45,
     "company_id": 16
   },
   {
@@ -5881,7 +5881,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do kuchni\\Kuchenki mikrofalowe",
-    "target_category_id": 268,
+    "target_category_id": 42,
     "company_id": 16
   },
   {
@@ -5946,7 +5946,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do domu\\Wentylatory przenośne",
-    "target_category_id": 268,
+    "target_category_id": 411,
     "company_id": 16
   },
   {
@@ -7156,7 +7156,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -7516,7 +7516,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Ckłodziarki podblatowe",
-    "target_category_id": 268,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
