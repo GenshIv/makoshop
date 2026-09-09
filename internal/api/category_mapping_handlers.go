@@ -13,19 +13,40 @@ import (
 // Admin endpoints for managing category mapping rules and scanning price files.
 
 // HandleCategoryMappingsList handles GET /admin/category-mappings (admin).
+// Supports ?source= filter to find mappings for a specific source code.
 func (h *Handlers) HandleCategoryMappingsList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
-	mappings, err := h.categoryMappingRepo.List()
-	if err != nil {
-		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
-		return
+
+	sourceFilter := r.URL.Query().Get("source")
+	var mappings []model.CategoryMapping
+	var err error
+
+	if sourceFilter != "" {
+		// Filter by source code
+		mapping, err := h.categoryMappingRepo.FindBySourceCode(sourceFilter, nil)
+		if err != nil {
+			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+			return
+		}
+		if mapping != nil {
+			mappings = []model.CategoryMapping{*mapping}
+		} else {
+			mappings = []model.CategoryMapping{}
+		}
+	} else {
+		mappings, err = h.categoryMappingRepo.List()
+		if err != nil {
+			httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+			return
+		}
+		if mappings == nil {
+			mappings = []model.CategoryMapping{}
+		}
 	}
-	if mappings == nil {
-		mappings = []model.CategoryMapping{}
-	}
+
 	httpres.WriteJSON(w, http.StatusOK, mappings)
 }
 
@@ -79,6 +100,10 @@ func (h *Handlers) HandleCategoryMappingUpdate(w http.ResponseWriter, r *http.Re
 	if !httpres.ReadJSON(w, r, &body) {
 		return
 	}
+	if body.SourceCode == "" || body.TargetCategoryID == 0 {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "source_code and target_category_id required")
+		return
+	}
 	if err := h.categoryMappingRepo.Update(id, func(m *model.CategoryMapping) {
 		m.SourceCode = body.SourceCode
 		m.TargetCategoryID = body.TargetCategoryID
@@ -130,6 +155,7 @@ func (h *Handlers) HandleCategoryMappingsScan(w http.ResponseWriter, r *http.Req
 }
 
 // HandleCategoryMappingsExport handles GET /admin/category-mappings/export (admin).
+// Exports in import-compatible format (source_code + target_category_id only).
 func (h *Handlers) HandleCategoryMappingsExport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
@@ -140,30 +166,91 @@ func (h *Handlers) HandleCategoryMappingsExport(w http.ResponseWriter, r *http.R
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
+
+	// Export only source_code and target_category_id for clean import
+	export := make([]map[string]interface{}, 0, len(mappings))
+	for _, m := range mappings {
+		export = append(export, map[string]interface{}{
+			"source_code":        m.SourceCode,
+			"target_category_id": m.TargetCategoryID,
+		})
+	}
+
 	w.Header().Set("Content-Disposition", `attachment; filename="category-mappings.json"`)
-	httpres.WriteJSON(w, http.StatusOK, mappings)
+	httpres.WriteJSON(w, http.StatusOK, export)
 }
 
 // HandleCategoryMappingsImport handles POST /admin/category-mappings/import (admin).
+// Accepts both standard mapping format and scan result format (top_category_id).
 func (h *Handlers) HandleCategoryMappingsImport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 		return
 	}
-	var mappings []model.CategoryMapping
-	if !httpres.ReadJSON(w, r, &mappings) {
+
+	// Read raw JSON to handle both formats
+	var raw []map[string]interface{}
+	if !httpres.ReadJSON(w, r, &raw) {
 		return
 	}
+
+	// Load existing mappings to avoid duplicates
+	existing, err := h.categoryMappingRepo.List()
+	if err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+	existingCodes := make(map[string]bool)
+	for _, m := range existing {
+		existingCodes[m.SourceCode] = true
+	}
+
 	imported := 0
-	for _, m := range mappings {
-		m.ID = 0 // always create new
-		if err := h.categoryMappingRepo.Create(&m); err != nil {
-			fmt.Printf("[IMPORT-MAPPINGS] WARN: create mapping %s: %v\n", m.SourceCode, err)
+	skipped := 0
+	var errors []string
+	for _, item := range raw {
+		sourceCode, _ := item["source_code"].(string)
+		if sourceCode == "" {
+			errors = append(errors, "missing source_code")
+			continue
+		}
+
+		// Handle both target_category_id and top_category_id (scan format)
+		var targetID int64
+		if v, ok := item["target_category_id"]; ok {
+			targetID = int64(v.(float64))
+		} else if v, ok := item["top_category_id"]; ok {
+			targetID = int64(v.(float64))
+		}
+		if targetID == 0 {
+			errors = append(errors, fmt.Sprintf("missing target_category_id for %s", sourceCode))
+			continue
+		}
+
+		if existingCodes[sourceCode] {
+			skipped++
+			continue
+		}
+
+		mapping := &model.CategoryMapping{
+			SourceCode:       sourceCode,
+			TargetCategoryID: targetID,
+		}
+		if err := h.categoryMappingRepo.Create(mapping); err != nil {
+			errors = append(errors, fmt.Sprintf("create %s: %v", sourceCode, err))
 			continue
 		}
 		imported++
 	}
-	httpres.WriteJSON(w, http.StatusOK, map[string]int{"imported": imported})
+
+	result := map[string]interface{}{
+		"imported": imported,
+		"skipped":  skipped,
+	}
+	if len(errors) > 0 {
+		result["errors"] = errors
+	}
+	httpres.WriteJSON(w, http.StatusOK, result)
 }
 
 // HandleCategoryMappingsApplyScan handles POST /admin/category-mappings/apply-scan (admin).
@@ -190,4 +277,28 @@ func (h *Handlers) HandleCategoryMappingsApplyScan(w http.ResponseWriter, r *htt
 		applied++
 	}
 	httpres.WriteJSON(w, http.StatusOK, map[string]int{"applied": applied})
+}
+
+// HandleCategoryMappingsClearAll handles DELETE /admin/category-mappings/clear-all (admin).
+// Deletes all category mappings.
+func (h *Handlers) HandleCategoryMappingsClearAll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	mappings, err := h.categoryMappingRepo.List()
+	if err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	deleted := 0
+	for _, m := range mappings {
+		if err := h.categoryMappingRepo.Delete(m.ID); err == nil {
+			deleted++
+		}
+	}
+
+	httpres.WriteJSON(w, http.StatusOK, map[string]int{"deleted": deleted})
 }

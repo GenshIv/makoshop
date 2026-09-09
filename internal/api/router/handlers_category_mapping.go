@@ -52,3 +52,8 @@ func (d *Deps) adminCategoryMappingsExport(w http.ResponseWriter, r *http.Reques
 func (d *Deps) adminCategoryMappingsImport(w http.ResponseWriter, r *http.Request) {
 	d.Handlers.HandleCategoryMappingsImport(w, r)
 }
+
+// DELETE /admin/category-mappings/clear-all (admin)
+func (d *Deps) adminCategoryMappingsClearAll(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleCategoryMappingsClearAll(w, r)
+}

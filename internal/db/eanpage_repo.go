@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -677,32 +676,10 @@ func (r *EANPageRepo) autoCatalogize(p *model.Product) (int64, error) {
 // batch turns auto-catalogization from O(pages x categories) index reads into
 // in-memory scoring.
 func (r *EANPageRepo) catalogTokenSets() map[int64]map[uint64]struct{} {
-	if r.CategoryRepo == nil || r.Store == nil {
-		return nil
-	}
-	categories, err := r.CategoryRepo.ListAll()
-	if err != nil {
-		return nil
-	}
-	sets := make(map[int64]map[uint64]struct{}, len(categories))
-	for _, cat := range categories {
-		if !cat.IsActive {
-			continue
-		}
-		data, err := r.Store.DB().TurboRawRead(turboKeyCatTokens + strconv.FormatInt(cat.ID, 10))
-		if err != nil || len(data) == 0 {
-			continue
-		}
-		kt := makodb.TurboUnsafeReadTokens(data)
-		set := make(map[uint64]struct{}, len(kt))
-		for _, t := range kt {
-			set[t[0]] = struct{}{}
-		}
-		if len(set) > 0 {
-			sets[cat.ID] = set
-		}
-	}
-	return sets
+	// TEMPORARY: Disable auto-catalogization entirely. All products without
+	// explicit category mappings will go to category 0 (uncategorized).
+	// Only explicit mappings determine category placement.
+	return make(map[int64]map[uint64]struct{})
 }
 
 // CatalogTokenSets is the exported batch helper: loads the catalogizer token

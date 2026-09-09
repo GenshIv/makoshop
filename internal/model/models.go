@@ -153,6 +153,7 @@ type PriceSourceConfig struct {
 	HTMLAttrRules      []HTMLAttrRule           `json:"html_attr_rules,omitempty"`      // rules to extract attributes from HTML description
 	FieldMap           map[string]FieldMapEntry `json:"field_map,omitempty"`            // feed field code -> attribute name (Allegro "attr_<id>" etc.)
 	DisablePagination  bool                     `json:"disable_pagination,omitempty"`   // if true, download as single file instead of walking pages
+	DownloadPriceFile  *bool                    `json:"download_price_file,omitempty"`  // if false, skip download and use local file; nil means default (download)
 }
 
 // Normalize canonicalizes the Format field so import dispatch is deterministic:

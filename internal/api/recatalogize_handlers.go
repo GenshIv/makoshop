@@ -397,11 +397,7 @@ func (h *Handlers) runRecatalogize() error {
 			return err
 		}
 	}
-	// Rebuild keywords from all products on each EAN page (merge logic)
-	h.importProgress.SetStep(StepProducts)
-	if err := h.eanPageRepo.UpdateAllKeywordsFromProducts(h.productRepo); err != nil {
-		return fmt.Errorf("update keywords from products: %w", err)
-	}
+	// Keywords rebuild skipped — catalogizer is disabled, keywords not needed.
 
 	if h.turboSearch != nil {
 		if err := h.turboSearch.BuildSortIndexes(); err != nil {

@@ -494,9 +494,17 @@ type jsonImageFileItem struct {
 //   - Phase 5:   rebuild category trees (in transaction)
 //   - Commit, then post-commit: rebuild trees, EAN page sort indexes,
 //     delivery method attributes
-func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownload bool, explicitFile string) JSONImportResult {
+func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNoDownload bool, explicitFile string) JSONImportResult {
 	cfg := company.PriceSource
 	applyPriceSourceDefaults(&cfg)
+
+	// Determine whether to download: global flag takes priority, then company setting
+	noDownload := globalNoDownload
+	if !globalNoDownload && cfg.DownloadPriceFile != nil {
+		noDownload = !*cfg.DownloadPriceFile // false means don't download
+	}
+	fmt.Printf("[IMPORT-JSON] %s: download decision - global=%t, company_setting=%v, final_no_download=%t\n",
+		company.Name, globalNoDownload, cfg.DownloadPriceFile, noDownload)
 
 	// Always use settings.currency as the primary currency source
 	currency := company.Settings.Currency
@@ -977,6 +985,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 		// Apply explicit category mappings before auto-catalogization.
 		// Products with matching ShopCategory get their CategoryID set directly.
 		mappedCount := 0
+		var cpcMappings []*db.CompanyProductCategory
 		for _, p := range allProducts {
 			if p.CategoryID != 0 || p.ShopCategory == "" {
 				continue
@@ -989,10 +998,24 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 			if mapping != nil {
 				p.CategoryID = mapping.TargetCategoryID
 				mappedCount++
+				// Record in company-product-category reference table
+				cpcMappings = append(cpcMappings, &db.CompanyProductCategory{
+					CompanyID:        p.CompanyID,
+					ProductEAN:       db.EANPageKeyForProduct(p),
+					TargetCategoryID: mapping.TargetCategoryID,
+				})
 			}
 		}
 		if mappedCount > 0 {
 			fmt.Printf("[IMPORT-JSON] Applied explicit category mappings to %d products\n", mappedCount)
+			// Batch-save company-product-category reference mappings
+			if len(cpcMappings) > 0 && h.companyProductCategoryRepo != nil {
+				if err := h.companyProductCategoryRepo.BatchUpsertTx(txn, cpcMappings); err != nil {
+					fmt.Printf("[IMPORT-JSON] WARN: save CPC mappings: %v\n", err)
+				} else {
+					fmt.Printf("[IMPORT-JSON] Saved %d company-product-category references\n", len(cpcMappings))
+				}
+			}
 		}
 
 		delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
@@ -1070,13 +1093,22 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, noDownlo
 	// GUARDED: a parse that produced zero products (bad download, broken feed)
 	// must NOT wipe the whole company — cleanup only runs on a successful
 	// non-empty parse, same as the nokaut path.
-	if len(allParsedProducts) > 0 {
+	// THRESHOLD: cleanup only runs for companies with >100k products to avoid
+	// excessive deletion on small imports where stale products are less impactful.
+	if len(allParsedProducts) > 0 && priceDoc != nil && len(priceDoc.Prices) > 100_000 {
 		h.importProgress.SetStep(StepCleanup)
-		fmt.Printf("[IMPORT-JSON] Phase 1.6: Cleaning up stale products for company %d...\n", company.ID)
+		fmt.Printf("[IMPORT-JSON] Phase 1.6: Cleaning up stale products for company %d (has %d products)...\n", company.ID, len(priceDoc.Prices))
 		deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, identityNormalize, priceDoc)
 		result.ProductsDeleted = deleted
 		h.importProgress.SetDeleted(deleted)
 		fmt.Printf("[IMPORT-JSON] Phase 1.6: deleted %d stale products\n", deleted)
+	} else if len(allParsedProducts) > 0 {
+		fmt.Printf("[IMPORT-JSON] Skipping cleanup for company %d (has %d products, threshold is 100k)\n", company.ID, func() int {
+			if priceDoc != nil {
+				return len(priceDoc.Prices)
+			}
+			return 0
+		}())
 	}
 
 	delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())

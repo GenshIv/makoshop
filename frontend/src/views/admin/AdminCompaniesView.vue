@@ -374,6 +374,7 @@ const emptyPriceForm = () => ({
   price_source: {
     format: 'nokaut',
     disable_pagination: false,
+    download_price_file: true,
     ean_field: 'EAN',
     previous_price_field: 'PreviousPrice',
     image_field: 'ImageOriginalUrl',
@@ -610,6 +611,7 @@ const emptyUnifiedSettingsForm = () => ({
     currency: '',
     format: 'nokaut',
     disable_pagination: false,
+    download_price_file: true,
     ean_field: 'EAN',
     previous_price_field: 'PreviousPrice',
     image_field: 'ImageOriginalUrl',
@@ -1017,11 +1019,6 @@ onBeforeUnmount(stopProgressPolling);
           {{ t('admin.select_companies_to_import') || 'Select companies to import' }}
         </div>
         <div class="flex items-center gap-2">
-          <label class="inline-flex items-center gap-1.5 text-xs text-ink-3 cursor-pointer">
-            <input v-model="batchNoDownload" type="checkbox" class="accent-purple-600" />
-            {{ t('admin.json_no_download') || 'Use local file (no download)' }}
-          </label>
-          <span class="text-ink-3">·</span>
           <button @click="toggleAllImportCompanies(true)" class="text-xs text-purple-600 hover:underline">
             {{ t('admin.select_all') || 'Select all' }}
           </button>
@@ -1306,6 +1303,11 @@ onBeforeUnmount(stopProgressPolling);
                   {{ t('admin.allegro_single_file') || 'Single file (no pagination)' }}
                 </label>
                 <p v-if="isAllegroFormat(priceForm)" class="text-[10px] text-ink-3 mt-0.5">{{ t('admin.allegro_single_file_hint') || 'Download the whole feed into ONE file (no item cap) and import it as a single file' }}</p>
+                <label class="inline-flex items-center gap-1.5 text-xs text-ink-3 cursor-pointer mt-1">
+                  <input v-model="priceForm.price_source.download_price_file" type="checkbox" class="accent-purple-600" />
+                  {{ t('admin.download_price_file') || 'Download price file' }}
+                </label>
+                <p class="text-[10px] text-ink-3 mt-0.5">{{ t('admin.download_price_file_hint') || 'When unchecked, use local file without downloading' }}</p>
               </div>
               <div>
                 <label class="text-xs text-ink-3 block">{{ t('admin.field_ean') || 'EAN Field' }}</label>
@@ -1476,6 +1478,11 @@ onBeforeUnmount(stopProgressPolling);
                   {{ t('admin.allegro_single_file') || 'Single file (no pagination)' }}
                 </label>
                 <p v-if="isAllegroFormat(unifiedSettingsForm)" class="text-[10px] text-ink-3 mt-0.5">{{ t('admin.allegro_single_file_hint') || 'Download the whole feed into ONE file (no item cap) and import it as a single file' }}</p>
+                <label class="inline-flex items-center gap-1.5 text-xs text-ink-3 cursor-pointer mt-1">
+                  <input v-model="unifiedSettingsForm.price_source.download_price_file" type="checkbox" class="accent-purple-600" />
+                  {{ t('admin.download_price_file') || 'Download price file' }}
+                </label>
+                <p class="text-[10px] text-ink-3 mt-0.5">{{ t('admin.download_price_file_hint') || 'When unchecked, use local file without downloading' }}</p>
               </div>
               <div>
                 <label class="text-xs text-ink-3 block mb-1">{{ t('admin.currency') || 'Currency' }}</label>
@@ -1572,14 +1579,6 @@ onBeforeUnmount(stopProgressPolling);
               <input v-model="fieldMapNewCode" type="text" class="flex-1 px-2 py-1 text-xs rounded-md border border-line bg-surface" placeholder="attr_12345" @keyup.enter="addFieldMapEntry" />
               <button @click="addFieldMapEntry" class="text-xs text-purple-700 hover:underline">+ Add code</button>
             </div>
-          </div>
-
-          <!-- No download checkbox -->
-          <div>
-            <label class="inline-flex items-center gap-2 text-xs text-ink-3 cursor-pointer">
-              <input v-model="unifiedNoDownload" type="checkbox" />
-              {{ t('admin.json_no_download') || 'Use local file (no download)' }}
-            </label>
           </div>
 
         </div>

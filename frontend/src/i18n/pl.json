@@ -716,6 +716,8 @@
     "import_source": "Źródło importu",
     "field_format": "Format",
     "format_hint": "Sposób parsowania pliku cen tej firmy. Ładowane z bazy i zapisywane wyłącznie dla tej firmy.",
+    "download_price_file": "Pobierz plik cen",
+    "download_price_file_hint": "Gdy odznaczone, użyj lokalnego pliku bez pobierania",
     "companies_imported": "Zaimportowano",
     "edit_company": "Edytuj firmę",
     "name_translations": "Tłumaczenia nazwy",
@@ -942,7 +944,10 @@
       "export_scan": "Eksport skanu",
       "export_scan_success": "Wyniki skanu wyeksportowane",
       "import_success": "Zaimportowano {count} mapowań",
-      "import_error": "Błąd importu mapowań"
+      "import_error": "Błąd importu mapowań",
+      "clear_all": "Wyczyść Wszystko",
+      "cleared": "Wszystkie mapowania wyczyszczone",
+      "clear_error": "Błąd czyszczenia mapowań"
     }
   },
   "privacy": {

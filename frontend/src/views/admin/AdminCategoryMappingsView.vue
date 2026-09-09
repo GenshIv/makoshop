@@ -44,12 +44,12 @@ const loadMappings = async () => {
 
 const loadCategories = async () => {
   try {
-    const res = await api.get('/admin/categories');
+    const res = await api.get('/admin/categories?tree=1');
     // Flatten tree to list for dropdown
     const flatten = (nodes) => {
       let result = [];
       for (const node of nodes) {
-        result.push({ id: node.id, name: node.name_ru || node.name });
+        result.push({ id: node.id, name: node.name_ru || node.name_en || node.slug });
         if (node.children && node.children.length > 0) {
           result = result.concat(flatten(node.children));
         }
@@ -173,12 +173,31 @@ const importMappings = async (event) => {
   if (!file) return;
   try {
     const text = await file.text();
-    const data = JSON.parse(text);
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      toast.error(`Invalid JSON: ${parseErr.message}`);
+      event.target.value = '';
+      return;
+    }
+    if (!Array.isArray(data)) {
+      toast.error('Expected JSON array of mappings');
+      event.target.value = '';
+      return;
+    }
     const res = await api.post('/admin/category-mappings/import', data);
     toast.success(t('admin.category_mappings.import_success', { count: res.data.imported }));
     loadMappings();
   } catch (e) {
-    toast.error(e.response?.data?.message || t('admin.category_mappings.import_error'));
+    console.error('Import mappings error:', e);
+    if (e.response?.data?.message) {
+      toast.error(e.response.data.message);
+    } else if (e.message) {
+      toast.error(`Import failed: ${e.message}`);
+    } else {
+      toast.error(t('admin.category_mappings.import_error'));
+    }
   }
   event.target.value = '';
 };
@@ -201,6 +220,16 @@ const applyAllSuggestions = async () => {
     loadMappings();
   } catch (e) {
     toast.error(e.response?.data?.message || t('admin.category_mappings.apply_all_error'));
+  }
+};
+
+const clearAllMappings = async () => {
+  try {
+    await api.delete('/admin/category-mappings/clear-all');
+    toast.success(t('admin.category_mappings.cleared'));
+    loadMappings();
+  } catch (e) {
+    toast.error(e.response?.data?.message || t('admin.category_mappings.clear_error'));
   }
 };
 
@@ -307,6 +336,12 @@ onMounted(async () => {
             📥 {{ t('admin.category_mappings.import') }}
             <input type="file" accept=".json" @change="importMappings" class="hidden" />
           </label>
+          <button
+            @click="clearAllMappings"
+            class="px-3 py-2 border border-red-500 text-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-sm"
+          >
+            🗑 {{ t('admin.category_mappings.clear_all') }}
+          </button>
           <button
             @click="openNew"
             class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"

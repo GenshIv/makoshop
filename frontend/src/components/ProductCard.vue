@@ -114,6 +114,13 @@ const catFilterId = ref('');
 const catFilterName = ref('');
 const catFilterParent = ref('');
 
+// Category mapping modal state
+const mappingModal = ref(null);
+const mappingTargetCat = ref('');
+const mappingLoading = ref(false);
+const mappingSaved = ref(false);
+const mappingSavedMessage = ref('');
+
 const filteredCategories = computed(() => {
   let result = categories.value;
   if (catFilterId.value) {
@@ -151,6 +158,12 @@ const fetchCategories = async () => {
 
 const getCategoryBySlug = (slug) => {
   return categories.value.find(c => c.slug === slug.trim());
+};
+
+const getCategoryName = (id) => {
+  const cat = categories.value.find(c => c.id === id);
+  if (cat) return cat.name_en || cat.name_ru || cat.slug;
+  return `Category #${id}`;
 };
 
 const trainCatalogizer = async () => {
@@ -241,6 +254,65 @@ const handleAddTokenEnter = (catId) => {
   addTokenToCategory(catId, addTokenInputs.value[catId] || '');
   addTokenInputs.value[catId] = '';
 };
+
+// Category mapping functions
+const openMappingModal = async () => {
+  // Load categories if not already loaded
+  if (categories.value.length === 0) {
+    await fetchCategories();
+  }
+  
+  mappingLoading.value = true;
+  try {
+    // Check if there's already a mapping for this EAN
+    const res = await api.get(`/admin/products/${encodeURIComponent(props.product.ean)}/category-mapping`);
+    const data = res.data;
+    
+    mappingModal.value = {
+      hasMapping: data.has_mapping,
+      targetCategoryID: data.target_category_id || null
+    };
+    
+    if (mappingModal.value.targetCategoryID) {
+      mappingTargetCat.value = String(mappingModal.value.targetCategoryID);
+    }
+  } catch (e) {
+    console.error('Failed to check mapping:', e);
+    mappingModal.value = { hasMapping: false, targetCategoryID: null };
+  } finally {
+    mappingLoading.value = false;
+    mappingSaved.value = false;
+  }
+};
+
+const saveMapping = async () => {
+  if (!mappingTargetCat.value) return;
+  
+  mappingLoading.value = true;
+  try {
+    const targetId = parseInt(mappingTargetCat.value);
+    
+    // Backend finds all products with this EAN, collects their company categories,
+    // and creates/updates mapping rules for each
+    const res = await api.post(`/admin/products/${encodeURIComponent(props.product.ean)}/assign-category`, {
+      target_category_id: targetId
+    });
+    
+    mappingSaved.value = true;
+    mappingSavedMessage.value = `Mapped ${res.data.mappings_created} company category(ies) to this target.`;
+  } catch (e) {
+    console.error('Failed to save mapping:', e);
+  } finally {
+    mappingLoading.value = false;
+  }
+};
+
+const closeMappingModal = () => {
+  mappingModal.value = null;
+  mappingTargetCat.value = '';
+  mappingSaved.value = false;
+  mappingSavedMessage.value = '';
+};
 </script>
 
 <template>
@@ -270,6 +342,16 @@ const handleAddTokenEnter = (catId) => {
     >
       {{ product.product_count }}
     </span>
+
+    <!-- Admin category mapping button -->
+    <button
+      v-if="isAdmin"
+      class="absolute top-2 right-10 z-20 bg-blue-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs hover:bg-blue-700 transition-colors shadow-sm"
+      @click.stop="openMappingModal"
+      title="Link to category"
+    >
+      🔗
+    </button>
 
     <!-- Admin catalogize button -->
     <button
@@ -410,6 +492,16 @@ const handleAddTokenEnter = (catId) => {
           {{ t('catalog.ad') }}
         </span>
       </div>
+
+      <!-- Admin category mapping button -->
+      <button
+        v-if="isAdmin"
+        class="absolute top-2 right-10 z-20 bg-blue-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs hover:bg-blue-700 transition-colors shadow-sm"
+        @click.stop="openMappingModal"
+        title="Link to category"
+      >
+        🔗
+      </button>
 
       <!-- Admin catalogize button -->
       <button
@@ -654,6 +746,67 @@ const handleAddTokenEnter = (catId) => {
           class="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700"
         >
           {{ t('common.close') || 'Close' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category Mapping Modal -->
+  <div
+    v-if="mappingModal"
+    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+    @click.self="closeMappingModal"
+  >
+    <div role="dialog" aria-modal="true" class="bg-surface rounded-lg shadow-xl p-6 w-full max-w-lg">
+      <h2 class="text-xl font-bold mb-4 text-blue-700">
+        Link to Category
+      </h2>
+
+      <div class="mb-4 bg-surface-2 rounded-lg p-3">
+        <div class="text-sm font-medium text-ink-2 mb-1">Product</div>
+        <div class="text-sm">{{ props.product.title || props.product.name }}</div>
+      </div>
+
+      <div v-if="mappingModal.hasMapping" class="mb-4 bg-green-50 border border-green-200 rounded-lg p-3">
+        <div class="text-sm font-medium text-green-800 mb-1">Currently Mapped To</div>
+        <div class="text-sm">{{ getCategoryName(mappingModal.currentMapping.target_category_id) }}</div>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-ink-2 mb-2">Target Category</label>
+        <select
+          v-model="mappingTargetCat"
+          class="w-full px-3 py-2 border border-line rounded-lg bg-surface text-ink"
+          :disabled="mappingLoading"
+        >
+          <option value="">Select category...</option>
+          <option
+            v-for="cat in categories"
+            :key="cat.id"
+            :value="cat.id"
+          >
+            {{ cat.name_en || cat.name_ru || cat.slug }} (ID: {{ cat.id }})
+          </option>
+        </select>
+      </div>
+
+      <div v-if="mappingSaved" class="mb-4 text-sm text-green-600 font-medium">
+        ✓ Mapping saved! Products from this company category will be placed here on next import.
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button
+          @click="closeMappingModal"
+          class="px-4 py-2 text-sm bg-surface-2 text-ink rounded-lg hover:bg-surface-3"
+        >
+          Close
+        </button>
+        <button
+          @click="saveMapping"
+          :disabled="!mappingTargetCat || mappingLoading"
+          class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {{ mappingLoading ? 'Saving...' : (mappingModal.currentMapping ? 'Update Mapping' : 'Create Mapping') }}
         </button>
       </div>
     </div>

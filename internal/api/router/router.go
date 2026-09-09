@@ -296,6 +296,9 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.Handle("/admin/seo/export", d.JWT.RequireRole(http.HandlerFunc(d.adminSeoExport), model.RoleAdmin))
 	mux.Handle("/admin/seo/import", d.JWT.RequireRole(http.HandlerFunc(d.adminSeoImport), model.RoleAdmin))
 
+	// Lenovo PSREF import (admin)
+	// mux.HandleFunc("/admin/import-lenovo", d.adminImportLenovo)
+
 	// Category mappings (admin)
 	mux.Handle("/admin/category-mappings", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappings), model.RoleAdmin))
 	mux.Handle("/admin/category-mappings/", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMapping), model.RoleAdmin))
@@ -303,6 +306,10 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.Handle("/admin/category-mappings/apply-scan", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappingsApplyScan), model.RoleAdmin))
 	mux.Handle("/admin/category-mappings/export", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappingsExport), model.RoleAdmin))
 	mux.Handle("/admin/category-mappings/import", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappingsImport), model.RoleAdmin))
+	mux.Handle("/admin/category-mappings/clear-all", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappingsClearAll), model.RoleAdmin))
+
+	// Product category assignment (admin) - creates/updates mapping from product
+	mux.HandleFunc("/admin/products/", d.adminProductCategory)
 
 	// Companies (public read, admin write)
 	mux.HandleFunc("/companies", d.companies)

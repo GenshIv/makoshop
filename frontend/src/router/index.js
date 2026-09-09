@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { useAuthStore } from '../stores/auth';
 
 // All views are lazy-loaded so Vite can split them into separate chunks.
 const routes = [
@@ -60,12 +61,34 @@ const router = createRouter({
   },
 });
 
-router.beforeEach((to, from) => {
+let authResolved = false;
+
+router.beforeEach(async (to, from) => {
+  const auth = useAuthStore();
   const token = sessionStorage.getItem('jwt');
 
-  if (to.meta.requiresAuth && !token) {
+  // If we have a token but haven't validated it yet, validate now
+  if (token && !auth.user?.role) {
+    try {
+      await auth.fetchMe();
+    } catch (e) {
+      // fetchMe already calls logout on failure
+    }
+  }
+
+  if (to.meta.requiresAuth && !auth.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } };
   }
+
+  if (to.meta.requiresRole && auth.user?.role !== to.meta.requiresRole) {
+    // Role mismatch — redirect to appropriate dashboard
+    if (auth.user?.role === 'seller') {
+      return { name: 'seller-dashboard' };
+    }
+    return { name: 'home' };
+  }
+
+  return true;
 });
 
 export default router;

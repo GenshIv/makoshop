@@ -727,6 +727,8 @@
     "import_source": "Import Source",
     "field_format": "Format",
     "format_hint": "How this company's price file is parsed. Loaded from and saved to this company only.",
+    "download_price_file": "Download price file",
+    "download_price_file_hint": "When unchecked, use local file without downloading",
     "edit_company": "Edit Company",
     "name_translations": "Name Translations",
     "images": "Images",
@@ -952,7 +954,10 @@
       "export_scan": "Export Scan",
       "export_scan_success": "Scan results exported",
       "import_success": "Imported {count} mappings",
-      "import_error": "Failed to import mappings"
+      "import_error": "Failed to import mappings",
+      "clear_all": "Clear All",
+      "cleared": "All mappings cleared",
+      "clear_error": "Failed to clear mappings"
     }
   },
   "privacy": {

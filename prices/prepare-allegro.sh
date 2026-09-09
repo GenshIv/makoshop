@@ -14,3 +14,5 @@ wget "https://api.tradedoubler.com/1.0/productsUnlimited.json;fid=119271?token=7
 
 wget "https://api.tradedoubler.com/1.0/productsUnlimited.json;fid=256284?token=7106C8A139B74AE993279927854EC07093899840" -O allegro___bestseller_elektronika.json
 
+#rtv_euro
+wget "https://api.tradedoubler.com/1.0/productsUnlimited.json;fid=21618?token=7106C8A139B74AE993279927854EC07093899840" -O rtv_euro_agd.json

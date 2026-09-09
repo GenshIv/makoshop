@@ -556,13 +556,24 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 	// Runs before indexing so the vendor index still reflects pre-import state.
 	// GUARDED: a parse that produced zero products (bad download, broken feed)
 	// must NOT wipe the whole company — same rule as the json path.
-	h.importProgress.SetStep(StepCleanup)
+	// THRESHOLD: cleanup only runs for companies with >100k products to avoid
+	// excessive deletion on small imports where stale products are less impactful.
 	if h.productRepo != nil && len(allParsedProducts) > 0 {
-		fmt.Printf("[IMPORT-NOKAUT] Phase 1.6: Cleaning up stale products for company %d...\n", company.ID)
-		deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, pricesrc.NormalizeName, priceDoc)
-		result.ProductsDeleted = deleted
-		h.importProgress.SetDeleted(deleted)
-		fmt.Printf("[IMPORT-NOKAUT] Phase 1.6: deleted %d stale products\n", deleted)
+		if priceDoc != nil && len(priceDoc.Prices) > 100_000 {
+			h.importProgress.SetStep(StepCleanup)
+			fmt.Printf("[IMPORT-NOKAUT] Phase 1.6: Cleaning up stale products for company %d (has %d products)...\n", company.ID, len(priceDoc.Prices))
+			deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, pricesrc.NormalizeName, priceDoc)
+			result.ProductsDeleted = deleted
+			h.importProgress.SetDeleted(deleted)
+			fmt.Printf("[IMPORT-NOKAUT] Phase 1.6: deleted %d stale products\n", deleted)
+		} else {
+			fmt.Printf("[IMPORT-NOKAUT] Skipping cleanup for company %d (has %d products, threshold is 100k)\n", company.ID, func() int {
+				if priceDoc != nil {
+					return len(priceDoc.Prices)
+				}
+				return 0
+			}())
+		}
 	}
 
 	// ============================================
