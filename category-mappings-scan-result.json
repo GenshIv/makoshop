@@ -1601,7 +1601,7 @@
   },
   {
     "source_code": "Sprzęt AGD/Małe AGD do domu/Wentylatory przenośne",
-    "target_category_id": 268,
+    "target_category_id": 411,
     "company_id": 8
   },
   {
@@ -2571,7 +2571,7 @@
   },
   {
     "source_code": "Sprzęt AGD/Małe AGD do domu/Domowe uzdatniacze powietrza",
-    "target_category_id": 268,
+    "target_category_id": 51,
     "company_id": 8
   },
   {
@@ -3266,7 +3266,7 @@
   },
   {
     "source_code": "Baterie kuchenne",
-    "target_category_id": 400,
+    "target_category_id": 73,
     "company_id": 6
   },
   {
@@ -3401,7 +3401,7 @@
   },
   {
     "source_code": "Sprzęt AGD/Małe AGD do domu/Stacje pogody i mierniki ozdobne",
-    "target_category_id": 268,
+    "target_category_id": 293,
     "company_id": 8
   },
   {
@@ -3466,7 +3466,7 @@
   },
   {
     "source_code": "Kuchnia / Noże kuchenne / Nożyce kuchenne",
-    "target_category_id": 400,
+    "target_category_id": 56,
     "company_id": 5
   },
   {
@@ -7451,7 +7451,7 @@
   },
   {
     "source_code": "Sprzęt &gt; Narzędzia &gt; Narzędzia pomiarowe i czujniki &gt; Wagi",
-    "target_category_id": 268,
+    "target_category_id": 46,
     "company_id": 17
   },
   {
