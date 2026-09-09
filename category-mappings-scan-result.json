@@ -51,7 +51,7 @@
   },
   {
     "source_code": "Podręczniki szkolne / Przedmioty zawodowe",
-    "target_category_id": 212,
+    "target_category_id": 425,
     "company_id": 13
   },
   {
@@ -456,7 +456,7 @@
   },
   {
     "source_code": "Książki / Komiksy",
-    "target_category_id": 212,
+    "target_category_id": 145,
     "company_id": 13
   },
   {
@@ -521,7 +521,7 @@
   },
   {
     "source_code": "Artykuły biurowe &gt; Sprzęt biurowy &gt; Rejestratory czasu pracy",
-    "target_category_id": 268,
+    "target_category_id": 284,
     "company_id": 17
   },
   {
@@ -561,7 +561,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > TV i Video > Odtwarzacze DVD",
-    "target_category_id": 343,
+    "target_category_id": 12,
     "company_id": 9
   },
   {
@@ -576,7 +576,7 @@
   },
   {
     "source_code": "Odtwarzacze DVD",
-    "target_category_id": 343,
+    "target_category_id": 12,
     "company_id": 18
   },
   {
@@ -671,7 +671,7 @@
   },
   {
     "source_code": "Książki / Poradniki",
-    "target_category_id": 212,
+    "target_category_id": 140,
     "company_id": 13
   },
   {
@@ -1746,7 +1746,7 @@
   },
   {
     "source_code": "Artykuły biurowe &gt; Sprzęt biurowy &gt; Drukarki do etykiet",
-    "target_category_id": 268,
+    "target_category_id": 284,
     "company_id": 17
   },
   {
@@ -1816,7 +1816,7 @@
   },
   {
     "source_code": "Moda / Zegarki / Zegarki młodzieżowe",
-    "target_category_id": 137,
+    "target_category_id": 121,
     "company_id": 5
   },
   {
@@ -2451,7 +2451,7 @@
   },
   {
     "source_code": "Dziecko > Obuwie > Dodatki do obuwia > Wkładki do butów",
-    "target_category_id": 137,
+    "target_category_id": 109,
     "company_id": 12
   },
   {
@@ -3241,7 +3241,7 @@
   },
   {
     "source_code": "Książki / Literatura obcojęzyczna",
-    "target_category_id": 156,
+    "target_category_id": 161,
     "company_id": 13
   },
   {
@@ -3526,7 +3526,7 @@
   },
   {
     "source_code": "Dziecko > Artykuły szkolne > Torebki dziecięce",
-    "target_category_id": 212,
+    "target_category_id": 124,
     "company_id": 12
   },
   {
@@ -3926,7 +3926,7 @@
   },
   {
     "source_code": "Sprzęt &gt; Zamki i klucze &gt; Systemy kart wejściowych",
-    "target_category_id": 268,
+    "target_category_id": 295,
     "company_id": 17
   },
   {
@@ -4496,7 +4496,7 @@
   },
   {
     "source_code": "Artykuły biurowe &gt; Artykuły różne &gt; Etykiety i przekładki indeksujące &gt; Taśmy do etykietowania",
-    "target_category_id": 268,
+    "target_category_id": 284,
     "company_id": 17
   },
   {
@@ -4566,7 +4566,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > TV i Video > Odtwarzacze DVD przenośne",
-    "target_category_id": 343,
+    "target_category_id": 12,
     "company_id": 9
   },
   {
@@ -6336,7 +6336,7 @@
   },
   {
     "source_code": "Dziecko > Artykuły szkolne > Walizki dla dzieci",
-    "target_category_id": 212,
+    "target_category_id": 124,
     "company_id": 12
   },
   {
@@ -6866,7 +6866,7 @@
   },
   {
     "source_code": "Artykuły biurowe &gt; Sortowanie i utrzymanie porządku &gt; Kasety na pieniądze",
-    "target_category_id": 268,
+    "target_category_id": 284,
     "company_id": 17
   },
   {
@@ -7121,7 +7121,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > TV i Video > Odtwarzacze Blu-ray",
-    "target_category_id": 343,
+    "target_category_id": 12,
     "company_id": 9
   },
   {
@@ -7326,7 +7326,7 @@
   },
   {
     "source_code": "Dziecko > Zdrowie i higiena > Pielęgnacja dziecka > Dezodoranty i wody zapachowe dla dzieci",
-    "target_category_id": 212,
+    "target_category_id": 128,
     "company_id": 12
   },
   {
@@ -7376,7 +7376,7 @@
   },
   {
     "source_code": "Dziecko > Artykuły szkolne > Artykuły plastyczne > Fartuszki dla dzieci",
-    "target_category_id": 212,
+    "target_category_id": 405,
     "company_id": 12
   },
   {
@@ -7736,7 +7736,7 @@
   },
   {
     "source_code": "Dziecko > Artykuły szkolne > Nerki dla dzieci",
-    "target_category_id": 212,
+    "target_category_id": 229,
     "company_id": 12
   },
   {
