@@ -984,26 +984,30 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNo
 
 		// Apply explicit category mappings before auto-catalogization.
 		// Products with matching ShopCategory get their CategoryID set directly.
+		// Always re-apply mapping (even if product already has a category) so
+		// that mapping changes take effect on re-import.
 		mappedCount := 0
 		var cpcMappings []*db.CompanyProductCategory
 		for _, p := range allProducts {
-			if p.CategoryID != 0 || p.ShopCategory == "" {
-				continue
-			}
-			mapping, err := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
-			if err != nil {
-				fmt.Printf("[IMPORT-JSON] WARN: lookup category mapping: %v\n", err)
-				continue
+			var mapping *model.CategoryMapping
+			if p.ShopCategory != "" {
+				m, err := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
+				if err != nil {
+					fmt.Printf("[IMPORT-JSON] WARN: lookup category mapping: %v\n", err)
+				} else {
+					mapping = m
+				}
 			}
 			if mapping != nil {
 				p.CategoryID = mapping.TargetCategoryID
 				mappedCount++
-				// Record in company-product-category reference table
 				cpcMappings = append(cpcMappings, &db.CompanyProductCategory{
 					CompanyID:        p.CompanyID,
 					ProductEAN:       db.EANPageKeyForProduct(p),
 					TargetCategoryID: mapping.TargetCategoryID,
 				})
+			} else {
+				p.CategoryID = 0
 			}
 		}
 		if mappedCount > 0 {

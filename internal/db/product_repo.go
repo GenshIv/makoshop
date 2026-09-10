@@ -650,6 +650,10 @@ func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*mode
 					existing.Images = p.Images
 					changed = true
 				}
+				if p.CategoryID == 0 || existing.CategoryID != existing.CategoryID {
+					existing.Status = p.Status
+					changed = true
+				}
 				if p.Status != "" {
 					existing.Status = p.Status
 					changed = true

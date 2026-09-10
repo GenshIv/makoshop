@@ -90,7 +90,7 @@ func NewHandlers(store *db.Store) *Handlers {
 
 	eanPageRepo := db.NewEANPageRepo(store)
 	eanPageRepo.SetCategoryRepo(categoryRepo)
-	eanPageRepo.EnableCatalogizeNew(true) // auto-catalogize new EAN pages during import
+	eanPageRepo.EnableCatalogizeNew(false) // catalogizer disabled — use explicit category mappings only
 	turboSearch.SetEANPageRepo(eanPageRepo)
 
 	// Attach EANPageRepo to CategoryRepo for filtering public tree

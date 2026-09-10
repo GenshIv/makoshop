@@ -250,8 +250,7 @@ func (r *EANPageRepo) GetByEAN(ean string) (*model.EANPage, error) {
 	if err != nil || len(data) == 0 {
 		return nil, fmt.Errorf("ean page with ean %q not found", ean)
 	}
-	var id string
-	_, _ = fmt.Sscanf(string(data), "%s", &id)
+	id := strings.TrimSpace(string(data))
 	return r.Get(id)
 }
 
@@ -537,11 +536,10 @@ func (r *EANPageRepo) updateEANPageFromProduct(s *model.EANPage, product *model.
 		s.Content = product.Description
 	}
 
-	// Update category if not set and catalogizer is enabled
-	if s.CategoryID == 0 && r.CatalogizeNew && r.CategoryRepo != nil {
-		if catID, err := r.autoCatalogize(product); err == nil && catID > 0 {
-			s.CategoryID = catID
-		}
+	// Update category if product has explicit CategoryID (from mapping)
+	if product.CategoryID != 0 && product.CategoryID != s.CategoryID {
+		s.CategoryID = product.CategoryID
+		s.SeoURL = r.ComputeSeoURL(s.Slug, s.CategoryID, nil)
 	}
 
 	// Ensure SeoURL is set
@@ -1499,7 +1497,7 @@ func (r *EANPageRepo) BatchUpsertFromProductsTx(txn *Transaction, products []*mo
 				}
 			}
 
-			if s.SeoURL == "" || s.CategoryID != p.CategoryID {
+			if s.CategoryID != p.CategoryID {
 				s.CategoryID = p.CategoryID
 				s.SeoURL = r.ComputeSeoURL(s.Slug, s.CategoryID, treePathCache)
 			}

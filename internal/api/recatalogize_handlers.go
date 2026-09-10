@@ -187,10 +187,12 @@ func (h *Handlers) runRecatalogize() error {
 		return fmt.Errorf("get all products: %w", err)
 	}
 	type group struct {
-		count      int
-		minPrice   float64
-		currency   string
-		companyIDs map[int64]struct{}
+		count            int
+		minPrice         float64
+		currency         string
+		companyIDs       map[int64]struct{}
+		shopCategory     string // For category mapping lookup
+		mappedCategoryID int64  // Target category from explicit mapping
 	}
 	groups := make(map[string]*group, len(allProducts))
 	for i := range allProducts {
@@ -209,6 +211,36 @@ func (h *Handlers) runRecatalogize() error {
 		if p.Price > 0 && (g.minPrice == 0 || p.Price < g.minPrice) {
 			g.minPrice = p.Price
 			g.currency = p.Currency
+		}
+		// Track shop category for mapping lookup
+		if p.ShopCategory != "" && g.shopCategory == "" {
+			g.shopCategory = p.ShopCategory
+		}
+	}
+
+	// Apply explicit category mappings to groups before processing pages.
+	// This ensures recatalogize respects mapping changes.
+	for key, g := range groups {
+		if g.shopCategory == "" || g.mappedCategoryID != 0 {
+			continue
+		}
+		// Try company-specific mapping first, then global
+		var targetCat int64
+		for cid := range g.companyIDs {
+			mapping, err := h.categoryMappingRepo.FindBySourceCode(g.shopCategory, &cid)
+			if err == nil && mapping != nil {
+				targetCat = mapping.TargetCategoryID
+				break
+			}
+		}
+		if targetCat == 0 {
+			mapping, err := h.categoryMappingRepo.FindBySourceCode(g.shopCategory, nil)
+			if err == nil && mapping != nil {
+				targetCat = mapping.TargetCategoryID
+			}
+		}
+		if targetCat != 0 {
+			groups[key].mappedCategoryID = targetCat
 		}
 	}
 	fmt.Printf("[RECATALOGIZE] %d products in %d page groups\n", len(allProducts), len(groups))
@@ -275,15 +307,6 @@ func (h *Handlers) runRecatalogize() error {
 	updated, unchanged := 0, 0
 	treePathCache := make(map[int64][]string)
 
-	// Catalogizer token sets loaded ONCE for the whole pass: scoring a page
-	// is in-memory instead of re-reading every category's token index per
-	// page (which is O(pages x categories) index reads).
-	var catSets map[int64]map[uint64]struct{}
-	if h.catalogizer != nil {
-		catSets = h.eanPageRepo.CatalogTokenSets()
-		fmt.Printf("[RECATALOGIZE] catalog token sets loaded: %d categories\n", len(catSets))
-	}
-
 	for i := range allPages {
 		sp := &allPages[i]
 		g, ok := groups[sp.EAN]
@@ -312,17 +335,16 @@ func (h *Handlers) runRecatalogize() error {
 			}
 			pageChanged = true
 		}
-		// Category: catalogizer top match overwrites on disagreement.
-		if len(catSets) > 0 {
-			text := sp.Keywords
-			if text == "" {
-				text = sp.Title
-			}
-			if bestCat := db.BestCategoryByText(text, catSets); bestCat != 0 && bestCat != sp.CategoryID {
-				sp.CategoryID = bestCat
-				sp.SeoURL = h.eanPageRepo.ComputeSeoURL(sp.Slug, sp.CategoryID, treePathCache)
-				pageChanged = true
-			}
+		// Category: use explicit mapping only (catalogizer disabled).
+		// If no mapping exists, clear the category (CategoryID = 0).
+		targetCat := int64(0)
+		if g != nil && g.mappedCategoryID != 0 {
+			targetCat = g.mappedCategoryID
+		}
+		if targetCat != sp.CategoryID {
+			sp.CategoryID = targetCat
+			sp.SeoURL = h.eanPageRepo.ComputeSeoURL(sp.Slug, sp.CategoryID, treePathCache)
+			pageChanged = true
 		}
 		// Delivery: attribute must match the importing companies' settings
 		// (empty set for pages without products — attribute cleared).
@@ -356,17 +378,24 @@ func (h *Handlers) runRecatalogize() error {
 	h.eanPageRepo.LoadCatalogizerCache()
 	if len(missingProducts) > 0 {
 		// Apply explicit category mappings before creating missing pages.
+		// Use pre-computed group mappings if available, otherwise look up individually.
 		for _, p := range missingProducts {
 			if p.CategoryID != 0 || p.ShopCategory == "" {
 				continue
 			}
-			mapping, err := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
-			if err != nil {
-				fmt.Printf("[RECATALOGIZE] WARN: lookup category mapping: %v\n", err)
-				continue
-			}
-			if mapping != nil {
-				p.CategoryID = mapping.TargetCategoryID
+			key := db.EANPageKeyForProduct(p)
+			g := groups[key]
+			if g != nil && g.mappedCategoryID != 0 {
+				p.CategoryID = g.mappedCategoryID
+			} else {
+				mapping, err := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
+				if err != nil {
+					fmt.Printf("[RECATALOGIZE] WARN: lookup category mapping: %v\n", err)
+					continue
+				}
+				if mapping != nil {
+					p.CategoryID = mapping.TargetCategoryID
+				}
 			}
 		}
 		_, createdPages := h.eanPageRepo.BatchUpsertFromProductsTx(txn, missingProducts, nil)
