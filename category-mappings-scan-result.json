@@ -676,7 +676,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Kiridashi",
-    "target_category_id": 238,
+    "target_category_id": 241,
     "company_id": 5
   },
   {
@@ -736,7 +736,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\AGD wolnostojące\\Lodówki",
-    "target_category_id": 24,
+    "target_category_id": 423,
     "company_id": 16
   },
   {
@@ -911,7 +911,7 @@
   },
   {
     "source_code": "Kuchnia / Noże kuchenne / Ostrzenie / Ostrzałki / Ostrzałki, Elektryczne",
-    "target_category_id": 235,
+    "target_category_id": 61,
     "company_id": 5
   },
   {
@@ -951,7 +951,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Ratunek",
-    "target_category_id": 238,
+    "target_category_id": 241,
     "company_id": 5
   },
   {
@@ -1016,7 +1016,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Codzienny użytek",
-    "target_category_id": 238,
+    "target_category_id": 241,
     "company_id": 5
   },
   {
@@ -1266,7 +1266,7 @@
   },
   {
     "source_code": "Kuchnia / Ostrzenie / Ostrzałki ręczne",
-    "target_category_id": 235,
+    "target_category_id": 61,
     "company_id": 5
   },
   {
@@ -1306,7 +1306,7 @@
   },
   {
     "source_code": "Outdoor / Repliki historyczne",
-    "target_category_id": 247,
+    "target_category_id": 248,
     "company_id": 5
   },
   {
@@ -1441,7 +1441,7 @@
   },
   {
     "source_code": "Dziecko > Zabawki > Lalki i akcesoria > Lalki > Lalki modowe",
-    "target_category_id": 31,
+    "target_category_id": 205,
     "company_id": 12
   },
   {
@@ -1461,7 +1461,7 @@
   },
   {
     "source_code": "Szklanki",
-    "target_category_id": 65,
+    "target_category_id": 392,
     "company_id": 18
   },
   {
@@ -1531,7 +1531,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Rzeźbienie",
-    "target_category_id": 238,
+    "target_category_id": 241,
     "company_id": 5
   },
   {
@@ -1551,7 +1551,7 @@
   },
   {
     "source_code": "Outdoor / Ostrzenie / Pielęgnacja noży",
-    "target_category_id": 238,
+    "target_category_id": 61,
     "company_id": 5
   },
   {
@@ -1636,7 +1636,7 @@
   },
   {
     "source_code": "Outdoor / Ostrzenie / Akcesoria do ostrzenia",
-    "target_category_id": 238,
+    "target_category_id": 61,
     "company_id": 5
   },
   {
@@ -1761,7 +1761,7 @@
   },
   {
     "source_code": "Ostrzałki",
-    "target_category_id": 56,
+    "target_category_id": 61,
     "company_id": 6
   },
   {
@@ -1911,7 +1911,7 @@
   },
   {
     "source_code": "Outdoor / Sprzęt do survivalu i bushcraftu",
-    "target_category_id": 247,
+    "target_category_id": 248,
     "company_id": 5
   },
   {
@@ -1971,7 +1971,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Chłodziarki do piwa",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 5
   },
   {
@@ -2046,7 +2046,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Noże survival",
-    "target_category_id": 238,
+    "target_category_id": 241,
     "company_id": 5
   },
   {
@@ -2151,7 +2151,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Małe AGD do kuchni",
-    "target_category_id": 39,
+    "target_category_id": 363,
     "company_id": 11
   },
   {
@@ -2216,7 +2216,7 @@
   },
   {
     "source_code": "Outdoor / Odzież / Okulary taktyczne",
-    "target_category_id": 115,
+    "target_category_id": 116,
     "company_id": 5
   },
   {
@@ -2366,7 +2366,7 @@
   },
   {
     "source_code": "Kuchnia / Noże kuchenne / Ostrzenie / Ostrzałki / Ostrzałki do noży",
-    "target_category_id": 235,
+    "target_category_id": 61,
     "company_id": 5
   },
   {
@@ -2451,7 +2451,7 @@
   },
   {
     "source_code": "Dziecko > Obuwie > Dodatki do obuwia > Wkładki do butów",
-    "target_category_id": 109,
+    "target_category_id": 124,
     "company_id": 12
   },
   {
@@ -2736,7 +2736,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\AGD wolnostojące",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 11
   },
   {
@@ -2886,7 +2886,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Filetowanie",
-    "target_category_id": 238,
+    "target_category_id": 241,
     "company_id": 5
   },
   {
@@ -3046,7 +3046,7 @@
   },
   {
     "source_code": "Sprzęt AGD\\Akcesoria i zestawy AGD\\Akcesoria i części do AGD",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 11
   },
   {
@@ -3221,7 +3221,7 @@
   },
   {
     "source_code": "Sprzęt AGD",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 11
   },
   {
@@ -3281,7 +3281,7 @@
   },
   {
     "source_code": "Outdoor / Sprzęt do survivalu i bushcraftu / Krzesiwo",
-    "target_category_id": 247,
+    "target_category_id": 248,
     "company_id": 5
   },
   {
@@ -3356,7 +3356,7 @@
   },
   {
     "source_code": "AGD duże / Akcesoria AGD",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 5
   },
   {
@@ -3461,7 +3461,7 @@
   },
   {
     "source_code": "Karty sieciowe USB",
-    "target_category_id": 309,
+    "target_category_id": 314,
     "company_id": 18
   },
   {
@@ -3511,7 +3511,7 @@
   },
   {
     "source_code": "AGD duże / Pralnictwo / Łączniki",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 5
   },
   {
@@ -3541,7 +3541,7 @@
   },
   {
     "source_code": "Sprzęt AGD/Akcesoria i zestawy AGD/Akcesoria i części do AGD",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 8
   },
   {
@@ -3691,7 +3691,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Maczety",
-    "target_category_id": 238,
+    "target_category_id": 241,
     "company_id": 5
   },
   {
@@ -3706,12 +3706,12 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Chłodziarko-zamrażarki",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 5
   },
   {
     "source_code": "AGD duże / Akcesoria AGD / Akcesoria do AGD",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 5
   },
   {
@@ -3756,7 +3756,7 @@
   },
   {
     "source_code": "Karty sieciowe PCI",
-    "target_category_id": 309,
+    "target_category_id": 314,
     "company_id": 18
   },
   {
@@ -3821,7 +3821,7 @@
   },
   {
     "source_code": "Outdoor / Odzież / Zegarki",
-    "target_category_id": 109,
+    "target_category_id": 124,
     "company_id": 5
   },
   {
@@ -3861,7 +3861,7 @@
   },
   {
     "source_code": "Outdoor / Ostrzenie",
-    "target_category_id": 238,
+    "target_category_id": 61,
     "company_id": 5
   },
   {
@@ -3886,7 +3886,7 @@
   },
   {
     "source_code": "Wnętrze / Zastawy stołowe / Porcelana / Zestawy obiadowe",
-    "target_category_id": 65,
+    "target_category_id": 361,
     "company_id": 5
   },
   {
@@ -3936,7 +3936,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Myślistwo / Zestawy myśliwskie, piły ręczne / Zestawy myśliwskie",
-    "target_category_id": 238,
+    "target_category_id": 241,
     "company_id": 5
   },
   {
@@ -3961,7 +3961,7 @@
   },
   {
     "source_code": "Kuchnia / Porclana kuchenna / Talerze",
-    "target_category_id": 65,
+    "target_category_id": 66,
     "company_id": 5
   },
   {
@@ -4121,12 +4121,12 @@
   },
   {
     "source_code": "Outdoor / Żywność/woda / Racje żywnościowe",
-    "target_category_id": 247,
+    "target_category_id": 249,
     "company_id": 5
   },
   {
     "source_code": "Outdoor / Noże, maczety / Taktyczne / Ratownictwo",
-    "target_category_id": 238,
+    "target_category_id": 239,
     "company_id": 5
   },
   {
@@ -4341,7 +4341,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo profesjonalne / Stoły chłodnicze",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 5
   },
   {
@@ -4371,7 +4371,7 @@
   },
   {
     "source_code": "Zabawki / Lalki",
-    "target_category_id": 31,
+    "target_category_id": 205,
     "company_id": 13
   },
   {
@@ -4426,7 +4426,7 @@
   },
   {
     "source_code": "Dziecko > Zabawki > Lalki i akcesoria > Lalki > Lalki klasyczne",
-    "target_category_id": 31,
+    "target_category_id": 205,
     "company_id": 12
   },
   {
@@ -4496,7 +4496,7 @@
   },
   {
     "source_code": "Artykuły biurowe &gt; Artykuły różne &gt; Etykiety i przekładki indeksujące &gt; Taśmy do etykietowania",
-    "target_category_id": 281,
+    "target_category_id": 356,
     "company_id": 17
   },
   {
@@ -4591,7 +4591,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Karambit",
-    "target_category_id": 238,
+    "target_category_id": 241,
     "company_id": 5
   },
   {
@@ -4606,7 +4606,7 @@
   },
   {
     "source_code": "Outdoor / Żywność/woda / Piersiówki / manierki",
-    "target_category_id": 247,
+    "target_category_id": 249,
     "company_id": 5
   },
   {
@@ -4636,7 +4636,7 @@
   },
   {
     "source_code": "Dziecko > Zabawki > Lalki i akcesoria > Lalki > Minilalki",
-    "target_category_id": 31,
+    "target_category_id": 205,
     "company_id": 12
   },
   {
@@ -4766,7 +4766,7 @@
   },
   {
     "source_code": "Ostrzałki do noży",
-    "target_category_id": 56,
+    "target_category_id": 61,
     "company_id": 6
   },
   {
@@ -4831,7 +4831,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Do zbierania grzybów",
-    "target_category_id": 238,
+    "target_category_id": 241,
     "company_id": 5
   },
   {
@@ -4841,7 +4841,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / SBS",
-    "target_category_id": 24,
+    "target_category_id": 423,
     "company_id": 5
   },
   {
@@ -4861,7 +4861,7 @@
   },
   {
     "source_code": "Outdoor / Noże świata",
-    "target_category_id": 238,
+    "target_category_id": 241,
     "company_id": 5
   },
   {
@@ -4906,7 +4906,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo profesjonalne / Chłodziarki do piwa/napojów",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 5
   },
   {
@@ -5016,7 +5016,7 @@
   },
   {
     "source_code": "Kuchnia / Noże kuchenne / Ostrzenie / Ostrzałki / Ostrzałki kółkowe",
-    "target_category_id": 235,
+    "target_category_id": 61,
     "company_id": 5
   },
   {
@@ -5201,7 +5201,7 @@
   },
   {
     "source_code": "Kuchnia / Noże kuchenne / Ostrzenie / Ostrzałki",
-    "target_category_id": 235,
+    "target_category_id": 61,
     "company_id": 5
   },
   {
@@ -5266,7 +5266,7 @@
   },
   {
     "source_code": "Książki / Sport",
-    "target_category_id": 253,
+    "target_category_id": 256,
     "company_id": 13
   },
   {
@@ -5411,7 +5411,7 @@
   },
   {
     "source_code": "Outdoor / Nożyce / Nożyce krawieckie",
-    "target_category_id": 238,
+    "target_category_id": 241,
     "company_id": 5
   },
   {
@@ -5601,7 +5601,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Noże stałe",
-    "target_category_id": 238,
+    "target_category_id": 241,
     "company_id": 5
   },
   {
@@ -5611,7 +5611,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Akcesoria do chłodnictwa",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 5
   },
   {
@@ -5926,7 +5926,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Taktyczne / Ratownictwo / Taktyczne i Wojskowe",
-    "target_category_id": 238,
+    "target_category_id": 239,
     "company_id": 5
   },
   {
@@ -5961,7 +5961,7 @@
   },
   {
     "source_code": "AGD duże / Usługi",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 5
   },
   {
@@ -6011,7 +6011,7 @@
   },
   {
     "source_code": "Elektronika > Komputery > Urządzenia sieciowe > Karty sieciowe Wi-Fi",
-    "target_category_id": 309,
+    "target_category_id": 314,
     "company_id": 9
   },
   {
@@ -6191,7 +6191,7 @@
   },
   {
     "source_code": "Dziecko > Zabawki > Lalki i akcesoria > Lalki > Lalki z bajek",
-    "target_category_id": 31,
+    "target_category_id": 205,
     "company_id": 12
   },
   {
@@ -6526,7 +6526,7 @@
   },
   {
     "source_code": "AGD duże / Akcesoria AGD / Akcesoria do okapów kuchennych",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 5
   },
   {
@@ -6576,7 +6576,7 @@
   },
   {
     "source_code": "Outdoor / Ostrzenie / Ostrzałki elektryczne",
-    "target_category_id": 238,
+    "target_category_id": 61,
     "company_id": 5
   },
   {
@@ -6631,7 +6631,7 @@
   },
   {
     "source_code": "Outdoor / Żywność/woda / Filtrowanie wody",
-    "target_category_id": 247,
+    "target_category_id": 249,
     "company_id": 5
   },
   {
@@ -6686,7 +6686,7 @@
   },
   {
     "source_code": "Outdoor / Noże, maczety / Taktyczne / Ratownictwo / Noże taktyczne",
-    "target_category_id": 238,
+    "target_category_id": 239,
     "company_id": 5
   },
   {
@@ -7006,7 +7006,7 @@
   },
   {
     "source_code": "Dziecko > Zabawki > Lalki i akcesoria > Lalki > Lalki kolekcjonerskie",
-    "target_category_id": 31,
+    "target_category_id": 205,
     "company_id": 12
   },
   {
@@ -7156,7 +7156,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące",
-    "target_category_id": 23,
+    "target_category_id": 30,
     "company_id": 5
   },
   {
@@ -7426,7 +7426,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gadżety > Pozostała odzież",
-    "target_category_id": 109,
+    "target_category_id": 124,
     "company_id": 14
   },
   {
@@ -7516,7 +7516,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Ckłodziarki podblatowe",
-    "target_category_id": 24,
+    "target_category_id": 423,
     "company_id": 5
   },
   {
@@ -7581,7 +7581,7 @@
   },
   {
     "source_code": "Elektronika > Komputery > Urządzenia wskazujące > Tablety graficzne",
-    "target_category_id": 309,
+    "target_category_id": 346,
     "company_id": 9
   },
   {
@@ -7631,7 +7631,7 @@
   },
   {
     "source_code": "Elektronika > Komputery > Urządzenia sieciowe > Karty sieciowe",
-    "target_category_id": 309,
+    "target_category_id": 314,
     "company_id": 9
   },
   {
@@ -7641,7 +7641,7 @@
   },
   {
     "source_code": "Outdoor / Nożyce",
-    "target_category_id": 238,
+    "target_category_id": 241,
     "company_id": 5
   },
   {
@@ -7661,7 +7661,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Chłodziarki wolnostojące",
-    "target_category_id": 24,
+    "target_category_id": 423,
     "company_id": 5
   },
   {
@@ -7751,7 +7751,7 @@
   },
   {
     "source_code": "Outdoor / Ostrzenie / Kamienie szlifierskie.",
-    "target_category_id": 238,
+    "target_category_id": 61,
     "company_id": 5
   },
   {
@@ -7856,7 +7856,7 @@
   },
   {
     "source_code": "AGD duże / Chłodnictwo wolnostojące / Lodówki retro",
-    "target_category_id": 24,
+    "target_category_id": 423,
     "company_id": 5
   },
   {
@@ -8031,47 +8031,47 @@
   },
   {
     "source_code": "Elektronika > Komputery",
-    "target_category_id": 19,
+    "target_category_id": 390,
     "company_id": 5
   },
   {
     "source_code": "Elektronika > Telefony i Akcesoria",
-    "target_category_id": 15,
+    "target_category_id": 333,
     "company_id": 5
   },
   {
     "source_code": "Dom i Ogród",
-    "target_category_id": 52,
+    "target_category_id": 356,
     "company_id": 5
   },
   {
     "source_code": "Kultura i rozrywka > Książki",
-    "target_category_id": 140,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Kultura i rozrywka > Gry",
-    "target_category_id": 196,
+    "target_category_id": 198,
     "company_id": 5
   },
   {
     "source_code": "Dom i Ogród > Wyposażenie",
-    "target_category_id": 89,
+    "target_category_id": 90,
     "company_id": 5
   },
   {
     "source_code": "Elektronika > Telefony i Akcesoria > Akcesoria GSM",
-    "target_category_id": 15,
+    "target_category_id": 333,
     "company_id": 5
   },
   {
     "source_code": "Dom i Ogród > Meble",
-    "target_category_id": 85,
+    "target_category_id": 88,
     "company_id": 5
   },
   {
     "source_code": "Dom i Ogród > Meble > Kuchnia",
-    "target_category_id": 53,
+    "target_category_id": 358,
     "company_id": 5
   },
   {
@@ -8106,12 +8106,12 @@
   },
   {
     "source_code": "Dom i Ogród > Ogród",
-    "target_category_id": 94,
+    "target_category_id": 96,
     "company_id": 5
   },
   {
     "source_code": "Dom i Ogród > Ogród > Narzędzia ogrodnicze",
-    "target_category_id": 100,
+    "target_category_id": 325,
     "company_id": 5
   },
   {
@@ -8126,7 +8126,7 @@
   },
   {
     "source_code": "Kultura i rozrywka > Gry > Karciane",
-    "target_category_id": 183,
+    "target_category_id": 366,
     "company_id": 5
   },
   {
@@ -8136,12 +8136,12 @@
   },
   {
     "source_code": "Dziecko",
-    "target_category_id": 133,
+    "target_category_id": 354,
     "company_id": 5
   },
   {
     "source_code": "Dziecko > Zabawki",
-    "target_category_id": 201,
+    "target_category_id": 203,
     "company_id": 5
   },
   {
@@ -8156,12 +8156,12 @@
   },
   {
     "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Kuchnia",
-    "target_category_id": 53,
+    "target_category_id": 358,
     "company_id": 5
   },
   {
     "source_code": "Dom i Ogród > Budownictwo i Akcesoria > Łazienka i toaleta",
-    "target_category_id": 70,
+    "target_category_id": 397,
     "company_id": 5
   },
   {
@@ -8186,7 +8186,7 @@
   },
   {
     "source_code": "Elektronika > RTV i AGD > AGD do zabudowy",
-    "target_category_id": 31,
+    "target_category_id": 386,
     "company_id": 5
   },
   {
@@ -8211,12 +8211,12 @@
   },
   {
     "source_code": "Dziecko > Wózki",
-    "target_category_id": 133,
+    "target_category_id": 354,
     "company_id": 5
   },
   {
     "source_code": "Dziecko > Akcesoria dla mamy i dziecka",
-    "target_category_id": 133,
+    "target_category_id": 135,
     "company_id": 5
   },
   {
@@ -8236,12 +8236,12 @@
   },
   {
     "source_code": "Dom i Ogród > Meble > Kuchnia > Zestawy mebli kuchennych",
-    "target_category_id": 53,
+    "target_category_id": 358,
     "company_id": 5
   },
   {
     "source_code": "Elektronika > Konsole i automaty",
-    "target_category_id": 196,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
@@ -8291,7 +8291,7 @@
   },
   {
     "source_code": "Dziecko > Akcesoria dla mamy i dziecka > Akcesoria dla mamy",
-    "target_category_id": 133,
+    "target_category_id": 135,
     "company_id": 5
   },
   {
@@ -8371,17 +8371,17 @@
   },
   {
     "source_code": "Dom i Ogród > Wyposażenie > Florystyka",
-    "target_category_id": 89,
+    "target_category_id": 90,
     "company_id": 5
   },
   {
     "source_code": "Elektronika > Roboty AI",
-    "target_category_id": 19,
+    "target_category_id": 378,
     "company_id": 5
   },
   {
     "source_code": "Muzyka",
-    "target_category_id": 8,
+    "target_category_id": 316,
     "company_id": 5
   },
   {
@@ -8401,7 +8401,7 @@
   },
   {
     "source_code": "Urządzenia stacjonarne",
-    "target_category_id": 19,
+    "target_category_id": 390,
     "company_id": 5
   },
   {
@@ -8441,7 +8441,7 @@
   },
   {
     "source_code": "Sypialnia",
-    "target_category_id": 15821,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
@@ -8476,52 +8476,52 @@
   },
   {
     "source_code": "Łazienka i toaleta",
-    "target_category_id": 1511,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Pracownia",
-    "target_category_id": 1513,
+    "target_category_id": 85,
     "company_id": 5
   },
   {
     "source_code": "Przedpokój",
-    "target_category_id": 1514,
+    "target_category_id": 85,
     "company_id": 5
   },
   {
     "source_code": "Salon",
-    "target_category_id": 1515,
+    "target_category_id": 85,
     "company_id": 5
   },
   {
     "source_code": "Kominki i akcesoria",
-    "target_category_id": 1525,
+    "target_category_id": 410,
     "company_id": 5
   },
   {
     "source_code": "Ściany i elewacje",
-    "target_category_id": 1527,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Ozdoby świąteczne i okolicznościowe",
-    "target_category_id": 1591,
+    "target_category_id": 418,
     "company_id": 5
   },
   {
     "source_code": "Podzespoły komputerowe",
-    "target_category_id": 19,
+    "target_category_id": 389,
     "company_id": 5
   },
   {
     "source_code": "Urządzenia sieciowe",
-    "target_category_id": 19,
+    "target_category_id": 314,
     "company_id": 5
   },
   {
     "source_code": "Dyski i pamięci przenośne",
-    "target_category_id": 19,
+    "target_category_id": 384,
     "company_id": 5
   },
   {
@@ -8531,12 +8531,12 @@
   },
   {
     "source_code": "Urządzenia wskazujące",
-    "target_category_id": 19,
+    "target_category_id": 346,
     "company_id": 5
   },
   {
     "source_code": "Drukarki i skanery",
-    "target_category_id": 19,
+    "target_category_id": 350,
     "company_id": 5
   },
   {
@@ -8551,12 +8551,12 @@
   },
   {
     "source_code": "Oświetlenie",
-    "target_category_id": 112719,
+    "target_category_id": 91,
     "company_id": 5
   },
   {
     "source_code": "Ebooki",
-    "target_category_id": 76253,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -8581,7 +8581,7 @@
   },
   {
     "source_code": "Atrapy i telefony demonstracyjne",
-    "target_category_id": 68626,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
@@ -8601,7 +8601,7 @@
   },
   {
     "source_code": "Serwery i akcesoria",
-    "target_category_id": 19,
+    "target_category_id": 314,
     "company_id": 5
   },
   {
@@ -8631,12 +8631,12 @@
   },
   {
     "source_code": "Plastyczne",
-    "target_category_id": 50676,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Dla niemowląt",
-    "target_category_id": 82601,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
@@ -8656,7 +8656,7 @@
   },
   {
     "source_code": "Puzzle",
-    "target_category_id": 325059,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
@@ -8671,7 +8671,7 @@
   },
   {
     "source_code": "Figurki na Boże Narodzenie i Święta",
-    "target_category_id": 11982,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
@@ -8691,22 +8691,22 @@
   },
   {
     "source_code": "Figurki na Walentynki",
-    "target_category_id": 11991,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Pozostałe - Ozdoby świąteczne",
-    "target_category_id": 11996,
+    "target_category_id": 418,
     "company_id": 5
   },
   {
     "source_code": "Figurki wielkanocne",
-    "target_category_id": 12365,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Smycze, breloki",
-    "target_category_id": 14508,
+    "target_category_id": 122,
     "company_id": 5
   },
   {
@@ -8716,7 +8716,7 @@
   },
   {
     "source_code": "Okna i parapety",
-    "target_category_id": 15959,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
@@ -8731,17 +8731,17 @@
   },
   {
     "source_code": "Alarmy",
-    "target_category_id": 15964,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Sztuczne kwiaty i owoce",
-    "target_category_id": 16008,
+    "target_category_id": 267,
     "company_id": 5
   },
   {
     "source_code": "Pokój dziecięcy",
-    "target_category_id": 251021,
+    "target_category_id": 108,
     "company_id": 5
   },
   {
@@ -8766,7 +8766,7 @@
   },
   {
     "source_code": "Do kąpieli",
-    "target_category_id": 19416,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
@@ -8776,7 +8776,7 @@
   },
   {
     "source_code": "Bujaki, skoczki",
-    "target_category_id": 82594,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
@@ -8791,7 +8791,7 @@
   },
   {
     "source_code": "Filmy",
-    "target_category_id": 288,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
@@ -8811,57 +8811,57 @@
   },
   {
     "source_code": "Kalendarze, notesy, planery",
-    "target_category_id": 50682,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Przedmioty cyfrowe",
-    "target_category_id": 19,
+    "target_category_id": 378,
     "company_id": 5
   },
   {
     "source_code": "Schody",
-    "target_category_id": 46098,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Klimatyzacja i wentylacja",
-    "target_category_id": 46099,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Drzwi wewnętrzne",
-    "target_category_id": 46100,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Drzwi zewnętrzne",
-    "target_category_id": 46101,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Domofony i wideodomofony",
-    "target_category_id": 46106,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Wyłączniki i ściemniacze",
-    "target_category_id": 46109,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Pokrycia dachowe",
-    "target_category_id": 46119,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Folie i izolacja",
-    "target_category_id": 46120,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Hydraulika i akcesoria",
-    "target_category_id": 46124,
+    "target_category_id": 409,
     "company_id": 5
   },
   {
@@ -8871,12 +8871,12 @@
   },
   {
     "source_code": "Kabiny i brodziki",
-    "target_category_id": 46129,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Wanny i akcesoria",
-    "target_category_id": 46132,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
@@ -8891,92 +8891,92 @@
   },
   {
     "source_code": "Parkiety",
-    "target_category_id": 46162,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Nawadnianie",
-    "target_category_id": 47492,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Grillowanie",
-    "target_category_id": 47493,
+    "target_category_id": 96,
     "company_id": 5
   },
   {
     "source_code": "Baseny i akcesoria",
-    "target_category_id": 49844,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Artykuły plastyczne",
-    "target_category_id": 50676,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Przybory do pisania",
-    "target_category_id": 50677,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Torby szkolne",
-    "target_category_id": 50679,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Bloki",
-    "target_category_id": 50681,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Notesy, pamiętniki",
-    "target_category_id": 50682,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Teczki",
-    "target_category_id": 50684,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Zeszyty",
-    "target_category_id": 50685,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Karty X-SIM/Turbosim",
-    "target_category_id": 53970,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Piloty",
-    "target_category_id": 63489,
+    "target_category_id": 18,
     "company_id": 5
   },
   {
     "source_code": "Książki dla dzieci",
-    "target_category_id": 66781,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Języki klasyczne",
-    "target_category_id": 66796,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Audiobooki - CD",
-    "target_category_id": 66813,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Podręczniki szkolne",
-    "target_category_id": 66820,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Słuchawki",
-    "target_category_id": 122386,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
@@ -8986,7 +8986,7 @@
   },
   {
     "source_code": "Sprzęt satelitarny",
-    "target_category_id": 67128,
+    "target_category_id": 316,
     "company_id": 5
   },
   {
@@ -8996,1017 +8996,1017 @@
   },
   {
     "source_code": "AGD wolnostojące",
-    "target_category_id": 67413,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
     "source_code": "AGD drobne",
-    "target_category_id": 67414,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
     "source_code": "Lodówki",
-    "target_category_id": 67528,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
     "source_code": "Okapy",
-    "target_category_id": 67529,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
     "source_code": "Piekarniki",
-    "target_category_id": 67530,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
     "source_code": "Płyty grzewcze",
-    "target_category_id": 67531,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
     "source_code": "Odkurzacze centralne",
-    "target_category_id": 68626,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
     "source_code": "Zestawy AGD do zabudowy",
-    "target_category_id": 73133,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
     "source_code": "Czytniki ebooków",
-    "target_category_id": 76253,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
     "source_code": "Zasilanie",
-    "target_category_id": 76254,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
     "source_code": "Architektura ogrodowa",
-    "target_category_id": 77733,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Części do laptopów",
-    "target_category_id": 77801,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Stare komputery",
-    "target_category_id": 77926,
+    "target_category_id": 349,
     "company_id": 5
   },
   {
     "source_code": "Literatura piękna",
-    "target_category_id": 79153,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Poradniki i albumy",
-    "target_category_id": 79193,
+    "target_category_id": 149,
     "company_id": 5
   },
   {
     "source_code": "Kuchnia, diety",
-    "target_category_id": 79205,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Sport, forma fizyczna",
-    "target_category_id": 79216,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Komiksy",
-    "target_category_id": 79413,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Przewodniki, książki podróżnicze",
-    "target_category_id": 79420,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Książki naukowe i popularnonaukowe",
-    "target_category_id": 79455,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Historia, archeologia",
-    "target_category_id": 79466,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Informatyka, internet",
-    "target_category_id": 79468,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Prawo, administracja",
-    "target_category_id": 79472,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Religioznawstwo, nauki teologiczne",
-    "target_category_id": 79475,
+    "target_category_id": 155,
     "company_id": 5
   },
   {
     "source_code": "Huśtawki",
-    "target_category_id": 82258,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Leżaki i leżanki",
-    "target_category_id": 82259,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Ławy i ławki",
-    "target_category_id": 82260,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Stoły i krzesła",
-    "target_category_id": 82262,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Gry na konsole",
-    "target_category_id": 82326,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Foteliki samochodowe",
-    "target_category_id": 82594,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Leżaczki i huśtawki",
-    "target_category_id": 82596,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Nosidełka i chusty",
-    "target_category_id": 82601,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Bezpieczeństwo",
-    "target_category_id": 82610,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wielofunkcyjne",
-    "target_category_id": 82611,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Spacerowe",
-    "target_category_id": 82612,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Bliźniacze",
-    "target_category_id": 82613,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Głębokie",
-    "target_category_id": 82614,
+    "target_category_id": 122,
     "company_id": 5
   },
   {
     "source_code": "Piórniki",
-    "target_category_id": 84735,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Pomoce naukowe",
-    "target_category_id": 84736,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Naklejki, tatuaże",
-    "target_category_id": 84742,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Kolorowanki",
-    "target_category_id": 84743,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Karteczki",
-    "target_category_id": 84744,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Podkładki na biurko",
-    "target_category_id": 85154,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Plany lekcji",
-    "target_category_id": 85155,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Glebogryzarki",
-    "target_category_id": 85194,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Grabie",
-    "target_category_id": 85195,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Łopaty i widły",
-    "target_category_id": 85198,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Motyki i kultywatory",
-    "target_category_id": 85199,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Odkurzacze i dmuchawy",
-    "target_category_id": 85202,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Odśnieżarki",
-    "target_category_id": 85203,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Opryskiwacze",
-    "target_category_id": 85204,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Rozdrabniacze",
-    "target_category_id": 85206,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Siekiery",
-    "target_category_id": 85207,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Siewniki",
-    "target_category_id": 85208,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wertykulatory i aeratory",
-    "target_category_id": 85210,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Zestawy narzędzi",
-    "target_category_id": 147666,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Zabawki ogrodowe",
-    "target_category_id": 322572,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Samochody i pojazdy",
-    "target_category_id": 86352,
+    "target_category_id": 2,
     "company_id": 5
   },
   {
     "source_code": "Rowery i pojazdy",
-    "target_category_id": 86386,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Okazje, przyjęcia",
-    "target_category_id": 88293,
+    "target_category_id": 418,
     "company_id": 5
   },
   {
     "source_code": "Tablety",
-    "target_category_id": 89253,
+    "target_category_id": 21,
     "company_id": 5
   },
   {
     "source_code": "Japoński",
-    "target_category_id": 93144,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Chiński",
-    "target_category_id": 93145,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Arabski",
-    "target_category_id": 93146,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Szwedzki",
-    "target_category_id": 93147,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Norweski",
-    "target_category_id": 93148,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Duński",
-    "target_category_id": 93149,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Węgierski",
-    "target_category_id": 93150,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Ukraiński",
-    "target_category_id": 93151,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Słowacki",
-    "target_category_id": 93152,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Rumuński",
-    "target_category_id": 93153,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Niderlandzki",
-    "target_category_id": 93154,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Litewski",
-    "target_category_id": 93155,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Grecki",
-    "target_category_id": 93156,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Czeski",
-    "target_category_id": 93157,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Chorwacki",
-    "target_category_id": 93158,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Bułgarski",
-    "target_category_id": 93159,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Militarne",
-    "target_category_id": 93564,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "AGD",
-    "target_category_id": 93678,
+    "target_category_id": 23,
     "company_id": 5
   },
   {
     "source_code": "Majsterkowanie",
-    "target_category_id": 93679,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Pomoce dydaktyczne",
-    "target_category_id": 93704,
+    "target_category_id": 209,
     "company_id": 5
   },
   {
     "source_code": "Maty antypoślizgowe",
-    "target_category_id": 95593,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Podstawki",
-    "target_category_id": 95594,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Uchwyty",
-    "target_category_id": 112724,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Karmienie dziecka",
-    "target_category_id": 99333,
+    "target_category_id": 134,
     "company_id": 5
   },
   {
     "source_code": "Plecaki przedszkolne",
-    "target_category_id": 99485,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Portfele",
-    "target_category_id": 99487,
+    "target_category_id": 108,
     "company_id": 5
   },
   {
     "source_code": "Noże ogrodnicze",
-    "target_category_id": 99563,
+    "target_category_id": 94,
     "company_id": 5
   },
   {
     "source_code": "Taczki i wózki ogrodnicze",
-    "target_category_id": 99565,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Rękawice i odzież ochronna",
-    "target_category_id": 99704,
+    "target_category_id": 108,
     "company_id": 5
   },
   {
     "source_code": "Miotły i szczotki",
-    "target_category_id": 99705,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Łopatki, motyczki, pikowniki",
-    "target_category_id": 99706,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Suszarki do rąk, łazienkowe",
-    "target_category_id": 105342,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Wykładziny PCV",
-    "target_category_id": 110187,
+    "target_category_id": 398,
     "company_id": 5
   },
   {
     "source_code": "Wykładziny dywanowe",
-    "target_category_id": 110188,
+    "target_category_id": 398,
     "company_id": 5
   },
   {
     "source_code": "Odzież ochronna i robocza",
-    "target_category_id": 110190,
+    "target_category_id": 108,
     "company_id": 5
   },
   {
     "source_code": "Dalmierze",
-    "target_category_id": 110192,
+    "target_category_id": 420,
     "company_id": 5
   },
   {
     "source_code": "Kątowniki",
-    "target_category_id": 323605,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wykrywacze",
-    "target_category_id": 110194,
+    "target_category_id": 420,
     "company_id": 5
   },
   {
     "source_code": "Sauny i akcesoria",
-    "target_category_id": 110195,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Aparaty analogowe",
-    "target_category_id": 110589,
+    "target_category_id": 345,
     "company_id": 5
   },
   {
     "source_code": "Aparaty cyfrowe",
-    "target_category_id": 110618,
+    "target_category_id": 345,
     "company_id": 5
   },
   {
     "source_code": "Zasilanie aparatów",
-    "target_category_id": 110672,
+    "target_category_id": 345,
     "company_id": 5
   },
   {
     "source_code": "Lampy błyskowe",
-    "target_category_id": 110696,
+    "target_category_id": 345,
     "company_id": 5
   },
   {
     "source_code": "Zastawa stołowa",
-    "target_category_id": 110879,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Pozostałe akcesoria zastawy stołowej",
-    "target_category_id": 110880,
+    "target_category_id": 122,
     "company_id": 5
   },
   {
     "source_code": "Kubki na herbatę, kawę",
-    "target_category_id": 110886,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Miski, miseczki do serwowania posiłków",
-    "target_category_id": 110887,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Sosjerki i dipówki",
-    "target_category_id": 110895,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Szklanki i kufle",
-    "target_category_id": 110896,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Noże stołowe, obiadowe",
-    "target_category_id": 110898,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Łyżki (obiadowe, do zup)",
-    "target_category_id": 110899,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Łyżeczki",
-    "target_category_id": 110900,
+    "target_category_id": 69,
     "company_id": 5
   },
   {
     "source_code": "Widelce obiadowe",
-    "target_category_id": 110901,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Zestawy sztućców obiadowych, komplety",
-    "target_category_id": 110902,
+    "target_category_id": 69,
     "company_id": 5
   },
   {
     "source_code": "Zastawa stołowa talerze",
-    "target_category_id": 110904,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Wazy do zupy",
-    "target_category_id": 110905,
+    "target_category_id": 69,
     "company_id": 5
   },
   {
     "source_code": "Kwietniki",
-    "target_category_id": 110907,
+    "target_category_id": 418,
     "company_id": 5
   },
   {
     "source_code": "Magnesy na lodówkę",
-    "target_category_id": 110908,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Ramki na zdjęcia",
-    "target_category_id": 110913,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Blachy, formy do pieczenia",
-    "target_category_id": 110916,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Otwieracze, korkociągi",
-    "target_category_id": 110918,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Trzepaczki kuchenne",
-    "target_category_id": 110919,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Łopatki, łyżki i szpatułki kuchenne",
-    "target_category_id": 110920,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Tłuczki kuchenne",
-    "target_category_id": 110921,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Obieraczki, drylownice",
-    "target_category_id": 110923,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Pozostałe akcesoria kuchenne",
-    "target_category_id": 110925,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Szybkowary, garnki ciśnieniowe",
-    "target_category_id": 110930,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Miski kuchenne, misy",
-    "target_category_id": 110932,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Maszynki kuchenne",
-    "target_category_id": 110933,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Solniczki i pieprzniczki",
-    "target_category_id": 110938,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Stolnice i wałki do ciasta",
-    "target_category_id": 110939,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Tace śniadaniowe i stoliki do łóżka",
-    "target_category_id": 110940,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Patelnie kuchenne",
-    "target_category_id": 110950,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Rynny i rury spustowe",
-    "target_category_id": 111853,
+    "target_category_id": 413,
     "company_id": 5
   },
   {
     "source_code": "Więźby i podbitki",
-    "target_category_id": 111854,
+    "target_category_id": 345,
     "company_id": 5
   },
   {
     "source_code": "Gniazda",
-    "target_category_id": 111855,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Węże i wężyki przyłączeniowe",
-    "target_category_id": 111858,
+    "target_category_id": 409,
     "company_id": 5
   },
   {
     "source_code": "Syfony do umywalek, zlewów i wanien",
-    "target_category_id": 111859,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Miski WC",
-    "target_category_id": 111863,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Zestawy",
-    "target_category_id": 111864,
+    "target_category_id": 397,
     "company_id": 5
   },
   {
     "source_code": "Ogrzewanie",
-    "target_category_id": 111865,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Elementy montażowe do ogrzewania domu",
-    "target_category_id": 111866,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Pompy i filtry do instalacji grzewczych, kotłowni",
-    "target_category_id": 111870,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wentylatory, wiatraki do systemów wentylacji",
-    "target_category_id": 111876,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Drewno kominkowe, opałowe i do palenia",
-    "target_category_id": 111882,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Przęsła",
-    "target_category_id": 111893,
+    "target_category_id": 412,
     "company_id": 5
   },
   {
     "source_code": "Siatka i panele ogrodzeniowe",
-    "target_category_id": 111894,
+    "target_category_id": 398,
     "company_id": 5
   },
   {
     "source_code": "Grunty do ścian, sufitów, betonu i posadzek",
-    "target_category_id": 111896,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Tynki, gładzie",
-    "target_category_id": 111897,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Fugi do płytek ceramicznych i gresowych",
-    "target_category_id": 111898,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Cargo i kosze",
-    "target_category_id": 112714,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Hamulce i ograniczniki",
-    "target_category_id": 112715,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Kółka",
-    "target_category_id": 112716,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Nogi i nóżki",
-    "target_category_id": 112717,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Ociekarki",
-    "target_category_id": 112718,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Oświetlenie",
-    "target_category_id": 112719,
+    "target_category_id": 91,
     "company_id": 5
   },
   {
     "source_code": "Podnośniki",
-    "target_category_id": 112720,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Prowadnice",
-    "target_category_id": 112721,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Szuflady",
-    "target_category_id": 112722,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Środki pielęgnujące i naprawcze",
-    "target_category_id": 112723,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Uchwyty",
-    "target_category_id": 112724,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Zawiasy",
-    "target_category_id": 258276,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Hokery",
-    "target_category_id": 112726,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Kredensy i witryny",
-    "target_category_id": 112727,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Krzesła",
-    "target_category_id": 257755,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Półki",
-    "target_category_id": 112729,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Stołki i taborety",
-    "target_category_id": 112730,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Stoły kuchenne",
-    "target_category_id": 112731,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Półki do przedpokoju",
-    "target_category_id": 112734,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Szafy do salonu, pokoju",
-    "target_category_id": 112736,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Mieszkania na sprzedaż",
-    "target_category_id": 112739,
+    "target_category_id": 85,
     "company_id": 5
   },
   {
     "source_code": "Domy na sprzedaż",
-    "target_category_id": 112740,
+    "target_category_id": 85,
     "company_id": 5
   },
   {
     "source_code": "Działki na sprzedaż",
-    "target_category_id": 112741,
+    "target_category_id": 85,
     "company_id": 5
   },
   {
     "source_code": "Lokale i obiekty użytkowe na sprzedaż",
-    "target_category_id": 112742,
+    "target_category_id": 85,
     "company_id": 5
   },
   {
     "source_code": "Magazyny i hale na sprzedaż",
-    "target_category_id": 112743,
+    "target_category_id": 85,
     "company_id": 5
   },
   {
     "source_code": "Garaże na sprzedaż",
-    "target_category_id": 112744,
+    "target_category_id": 136,
     "company_id": 5
   },
   {
     "source_code": "Zabawne gadżety",
-    "target_category_id": 121237,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Nożyce i sekatory",
-    "target_category_id": 121255,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Piły",
-    "target_category_id": 121256,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Liniały krawędziowe",
-    "target_category_id": 121502,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Suwmiarki",
-    "target_category_id": 121505,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Niwelatory",
-    "target_category_id": 121571,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Nintendo Game Boy Advance",
-    "target_category_id": 122234,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Nintendo Game Boy",
-    "target_category_id": 122237,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Microsoft Xbox",
-    "target_category_id": 122240,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Microsoft Xbox 360",
-    "target_category_id": 122240,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Nintendo 3DS i 2DS",
-    "target_category_id": 122255,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Nintendo 64",
-    "target_category_id": 122256,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Nintendo DS",
-    "target_category_id": 122257,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Nintendo GameCube",
-    "target_category_id": 122261,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Nintendo SNES i NES",
-    "target_category_id": 122264,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Nintendo Wii",
-    "target_category_id": 122267,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Sega Dreamcast",
-    "target_category_id": 122273,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Sega inne",
-    "target_category_id": 122274,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "&#x27;Gierki&#x27; elektroniczne",
-    "target_category_id": 6060,
+    "target_category_id": 122,
     "company_id": 5
   },
   {
     "source_code": "Pegasus",
-    "target_category_id": 122318,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Automaty do gier",
-    "target_category_id": 122319,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Gramofony dla DJ-ów",
-    "target_category_id": 122340,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Kable, przewody i wtyki",
-    "target_category_id": 122349,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Mikrofony bezprzewodowe",
-    "target_category_id": 122355,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Mikrofony przewodowe",
-    "target_category_id": 122360,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Statywy i uchwyty",
-    "target_category_id": 122368,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
@@ -10016,997 +10016,997 @@
   },
   {
     "source_code": "Nagłośnienie",
-    "target_category_id": 122374,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Sceny, estrady, podesty",
-    "target_category_id": 122385,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Słuchawki",
-    "target_category_id": 122386,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Światło i efekty",
-    "target_category_id": 122389,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Video dla studia",
-    "target_category_id": 122406,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Walizki i torby",
-    "target_category_id": 122407,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Urządzenia rejestrujące",
-    "target_category_id": 122412,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Instrumenty",
-    "target_category_id": 126183,
+    "target_category_id": 94,
     "company_id": 5
   },
   {
     "source_code": "Literatura i instrukcje",
-    "target_category_id": 124882,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Sprzęt optyczny",
-    "target_category_id": 124883,
+    "target_category_id": 345,
     "company_id": 5
   },
   {
     "source_code": "Szuflady do podgrzewania",
-    "target_category_id": 125348,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Chemia gospodarcza",
-    "target_category_id": 125349,
+    "target_category_id": 417,
     "company_id": 5
   },
   {
     "source_code": "Nintendo Wii U",
-    "target_category_id": 125422,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Kompostowniki",
-    "target_category_id": 126183,
+    "target_category_id": 94,
     "company_id": 5
   },
   {
     "source_code": "Odstraszacze zwierząt",
-    "target_category_id": 126184,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Szamba i oczyszczalnie",
-    "target_category_id": 126185,
+    "target_category_id": 94,
     "company_id": 5
   },
   {
     "source_code": "Agrowłókniny",
-    "target_category_id": 126186,
+    "target_category_id": 94,
     "company_id": 5
   },
   {
     "source_code": "Doniczki i pojemniki",
-    "target_category_id": 126187,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Nawozy i preparaty",
-    "target_category_id": 126188,
+    "target_category_id": 94,
     "company_id": 5
   },
   {
     "source_code": "Podłoża",
-    "target_category_id": 126189,
+    "target_category_id": 94,
     "company_id": 5
   },
   {
     "source_code": "Kostka brukowa i płyty tarasowe",
-    "target_category_id": 126193,
+    "target_category_id": 94,
     "company_id": 5
   },
   {
     "source_code": "Grzybnie i mikoryza",
-    "target_category_id": 126198,
+    "target_category_id": 94,
     "company_id": 5
   },
   {
     "source_code": "Pozostałe - Doniczki i pojemniki",
-    "target_category_id": 126201,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Szklarenki, mini szklarnie i miniszklarenki",
-    "target_category_id": 126204,
+    "target_category_id": 94,
     "company_id": 5
   },
   {
     "source_code": "Części",
-    "target_category_id": 127363,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Microsoft Xbox One",
-    "target_category_id": 147134,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Agregaty prądotwórcze",
-    "target_category_id": 147642,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Osprzęt do elektronarzędzi",
-    "target_category_id": 147643,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Bruzdownice",
-    "target_category_id": 147644,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Frezarki",
-    "target_category_id": 147645,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Klucze",
-    "target_category_id": 147647,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Lutownice",
-    "target_category_id": 147648,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Młotki, przecinaki i dłuta",
-    "target_category_id": 147649,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Młotowiertarki",
-    "target_category_id": 147650,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Młoty udarowe",
-    "target_category_id": 147651,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Myjki ciśnieniowe",
-    "target_category_id": 147652,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Odkurzacze przemysłowe",
-    "target_category_id": 147653,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Opalarki",
-    "target_category_id": 147654,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Piły i pilarki",
-    "target_category_id": 147655,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Sprężarki i kompresory",
-    "target_category_id": 147657,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Strugi",
-    "target_category_id": 147658,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Szczypce, nożyce, obcęgi",
-    "target_category_id": 147659,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wkrętaki",
-    "target_category_id": 147661,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wkrętarki",
-    "target_category_id": 147662,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wyrzynarki",
-    "target_category_id": 147663,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Zgrzewarki",
-    "target_category_id": 147664,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Zestawy narzędzi",
-    "target_category_id": 147666,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Oczka wodne",
-    "target_category_id": 148162,
+    "target_category_id": 94,
     "company_id": 5
   },
   {
     "source_code": "Przedmioty dekoracyjne",
-    "target_category_id": 148442,
+    "target_category_id": 418,
     "company_id": 5
   },
   {
     "source_code": "Wyposażenie studia",
-    "target_category_id": 148923,
+    "target_category_id": 316,
     "company_id": 5
   },
   {
     "source_code": "Poduszki",
-    "target_category_id": 249002,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Smartwatche i akcesoria",
-    "target_category_id": 250722,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Granulat",
-    "target_category_id": 251005,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Podkładki i filc",
-    "target_category_id": 251006,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Okleiny i naklejki",
-    "target_category_id": 251007,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Sortowanie śmieci",
-    "target_category_id": 251008,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Maty i organizery do szuflad i szafek",
-    "target_category_id": 251009,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Pokój dziecięcy",
-    "target_category_id": 251021,
+    "target_category_id": 108,
     "company_id": 5
   },
   {
     "source_code": "Pokój młodzieżowy",
-    "target_category_id": 251022,
+    "target_category_id": 108,
     "company_id": 5
   },
   {
     "source_code": "Piwnica/garaż",
-    "target_category_id": 251023,
+    "target_category_id": 136,
     "company_id": 5
   },
   {
     "source_code": "Inteligentny dom",
-    "target_category_id": 251242,
+    "target_category_id": 410,
     "company_id": 5
   },
   {
     "source_code": "Powerbanki",
-    "target_category_id": 252023,
+    "target_category_id": 16,
     "company_id": 5
   },
   {
     "source_code": "Młoty wyburzeniowe",
-    "target_category_id": 252042,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wiertarki",
-    "target_category_id": 252043,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Przyciski spłukujące",
-    "target_category_id": 253702,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Stelaże podtynkowe",
-    "target_category_id": 253703,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Audiobooki - mp3",
-    "target_category_id": 253753,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Odstraszacze owadów",
-    "target_category_id": 254018,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Wianki",
-    "target_category_id": 254019,
+    "target_category_id": 418,
     "company_id": 5
   },
   {
     "source_code": "Markizy, osłony, maty",
-    "target_category_id": 254141,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Kompozycje kwiatowe",
-    "target_category_id": 254478,
+    "target_category_id": 418,
     "company_id": 5
   },
   {
     "source_code": "Mikrokomputery",
-    "target_category_id": 254498,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Sprzęt i akcesoria budowlane",
-    "target_category_id": 254840,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Wiertnice",
-    "target_category_id": 254844,
+    "target_category_id": 306,
     "company_id": 5
   },
   {
     "source_code": "Fotobudki",
-    "target_category_id": 255486,
+    "target_category_id": 345,
     "company_id": 5
   },
   {
     "source_code": "Przedmioty na sesje",
-    "target_category_id": 255487,
+    "target_category_id": 345,
     "company_id": 5
   },
   {
     "source_code": "Wentylatory domowe",
-    "target_category_id": 255504,
+    "target_category_id": 50,
     "company_id": 5
   },
   {
     "source_code": "Farby i uszczelniacze do dachów",
-    "target_category_id": 255633,
+    "target_category_id": 413,
     "company_id": 5
   },
   {
     "source_code": "Klamki",
-    "target_category_id": 255634,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Zamki",
-    "target_category_id": 255635,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Ościeżnice",
-    "target_category_id": 255648,
+    "target_category_id": 86,
     "company_id": 5
   },
   {
     "source_code": "Puszki elektryczne",
-    "target_category_id": 256021,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Nożyce do blachy",
-    "target_category_id": 256107,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Furtki",
-    "target_category_id": 256108,
+    "target_category_id": 412,
     "company_id": 5
   },
   {
     "source_code": "Listwy przypodłogowe",
-    "target_category_id": 256179,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Daszki nad drzwi",
-    "target_category_id": 256503,
+    "target_category_id": 86,
     "company_id": 5
   },
   {
     "source_code": "Girlandy świetlne",
-    "target_category_id": 256542,
+    "target_category_id": 91,
     "company_id": 5
   },
   {
     "source_code": "Akcesoria do gier towarzyskich",
-    "target_category_id": 256603,
+    "target_category_id": 122,
     "company_id": 5
   },
   {
     "source_code": "Karciane tradycyjne",
-    "target_category_id": 256618,
+    "target_category_id": 185,
     "company_id": 5
   },
   {
     "source_code": "Nintendo Switch",
-    "target_category_id": 256862,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Przecinarki do glazury",
-    "target_category_id": 256908,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Radia budowlane",
-    "target_category_id": 256909,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Pistolety malarskie",
-    "target_category_id": 256910,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Pistolety do kleju",
-    "target_category_id": 256911,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Mieszarki",
-    "target_category_id": 257183,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Pistolety do pianki",
-    "target_category_id": 257185,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Pistolety do silikonu",
-    "target_category_id": 257186,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wciągarki",
-    "target_category_id": 257187,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Ściski",
-    "target_category_id": 257191,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Odkurzacze piorące",
-    "target_category_id": 257200,
+    "target_category_id": 351,
     "company_id": 5
   },
   {
     "source_code": "Napędy optyczne i nośniki",
-    "target_category_id": 257260,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Adaptery, przejściówki",
-    "target_category_id": 257347,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Stoły i stoliki",
-    "target_category_id": 257754,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Krzesła",
-    "target_category_id": 257755,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Komplety mebli",
-    "target_category_id": 257756,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Fotele wiszące",
-    "target_category_id": 257757,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Parasole grzewcze",
-    "target_category_id": 257758,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Skrzynie ogrodowe",
-    "target_category_id": 257759,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Smoczki",
-    "target_category_id": 257798,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Gryzaki",
-    "target_category_id": 257799,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Zawieszki",
-    "target_category_id": 257800,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Pojemniki na smoczki",
-    "target_category_id": 257801,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Kody i doładowania",
-    "target_category_id": 257900,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Podkłady higieniczne",
-    "target_category_id": 257935,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Adaptery do pasów",
-    "target_category_id": 257936,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Poduszki do spania i karmienia",
-    "target_category_id": 257937,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Testy ciążowe",
-    "target_category_id": 257939,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Koszule dla karmiących",
-    "target_category_id": 257940,
+    "target_category_id": 135,
     "company_id": 5
   },
   {
     "source_code": "Wkładki laktacyjne i muszle",
-    "target_category_id": 257942,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Pasy ciążowe",
-    "target_category_id": 257946,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Majtki poporodowe",
-    "target_category_id": 258006,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Obiektywy",
-    "target_category_id": 258269,
+    "target_category_id": 345,
     "company_id": 5
   },
   {
     "source_code": "Samozamykacze",
-    "target_category_id": 258273,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Tapicerka drzwiowa",
-    "target_category_id": 258274,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wizjery",
-    "target_category_id": 258275,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Zawiasy",
-    "target_category_id": 258276,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Odbojniki",
-    "target_category_id": 258277,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Uszczelki",
-    "target_category_id": 258281,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Ramki",
-    "target_category_id": 258295,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Opaski zaciskowe",
-    "target_category_id": 258345,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Podkłady pod panele",
-    "target_category_id": 258346,
+    "target_category_id": 398,
     "company_id": 5
   },
   {
     "source_code": "Drut kolczasty i naciągowy",
-    "target_category_id": 258400,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Aparaty natychmiastowe",
-    "target_category_id": 258665,
+    "target_category_id": 345,
     "company_id": 5
   },
   {
     "source_code": "Odbitki",
-    "target_category_id": 258666,
+    "target_category_id": 345,
     "company_id": 5
   },
   {
     "source_code": "Doniczki i osłonki",
-    "target_category_id": 258712,
+    "target_category_id": 418,
     "company_id": 5
   },
   {
     "source_code": "Kominki wentylacyjne",
-    "target_category_id": 258714,
+    "target_category_id": 413,
     "company_id": 5
   },
   {
     "source_code": "Urządzenia czyszczące",
-    "target_category_id": 258821,
+    "target_category_id": 351,
     "company_id": 5
   },
   {
     "source_code": "Tornistry",
-    "target_category_id": 258849,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Nerki dla dzieci",
-    "target_category_id": 258851,
+    "target_category_id": 108,
     "company_id": 5
   },
   {
     "source_code": "Walizki dla dzieci",
-    "target_category_id": 258852,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Torebki dziecięce",
-    "target_category_id": 258853,
+    "target_category_id": 108,
     "company_id": 5
   },
   {
     "source_code": "Stopnie i drabiny domowe",
-    "target_category_id": 258861,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Rusztowania",
-    "target_category_id": 258862,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Kryptowaluty",
-    "target_category_id": 259410,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Mikrofony i słuchawki",
-    "target_category_id": 259422,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Głośniki",
-    "target_category_id": 259434,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Antystresowe",
-    "target_category_id": 259497,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Monitory komputerowe",
-    "target_category_id": 260017,
+    "target_category_id": 390,
     "company_id": 5
   },
   {
     "source_code": "Urządzenia VR",
-    "target_category_id": 260018,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Książki dla młodzieży",
-    "target_category_id": 260379,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Zestawy podtynkowe WC",
-    "target_category_id": 260414,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Systemy do drzwi przesuwnych",
-    "target_category_id": 260548,
+    "target_category_id": 86,
     "company_id": 5
   },
   {
     "source_code": "Watomierze",
-    "target_category_id": 260562,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Uchwyty i haki na drabiny",
-    "target_category_id": 260565,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Narzędzia dla elektryka",
-    "target_category_id": 260566,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Blaty kuchenne",
-    "target_category_id": 260673,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Roboty koszące",
-    "target_category_id": 260696,
+    "target_category_id": 325,
     "company_id": 5
   },
   {
     "source_code": "Oświetlenie inteligentne",
-    "target_category_id": 260776,
+    "target_category_id": 91,
     "company_id": 5
   },
   {
     "source_code": "Okładki",
-    "target_category_id": 260921,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Papiery",
-    "target_category_id": 260922,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Bibuły",
-    "target_category_id": 260959,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Dziurkacze, zszywacze",
-    "target_category_id": 260960,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Biografie, wspomnienia",
-    "target_category_id": 261197,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Fantasy, science fiction, horror",
-    "target_category_id": 261209,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Kryminał, sensacja, thriller",
-    "target_category_id": 261210,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Reportaż, literatura faktu",
-    "target_category_id": 261249,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Literatura obyczajowa, erotyczna",
-    "target_category_id": 261250,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Portugalski",
-    "target_category_id": 261335,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Żywica epoksydowa",
-    "target_category_id": 261338,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Instrumenty muzyczne",
-    "target_category_id": 261571,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Barki ogrodowe",
-    "target_category_id": 261595,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Pokrowce ogrodowe",
-    "target_category_id": 261596,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Suszarki ogrodowe",
-    "target_category_id": 261597,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Szafy i regały ogrodowe",
-    "target_category_id": 261598,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Części i dodatki",
-    "target_category_id": 261599,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Tabliczki na drzwi",
-    "target_category_id": 261820,
+    "target_category_id": 86,
     "company_id": 5
   },
   {
     "source_code": "Podpórki",
-    "target_category_id": 261823,
+    "target_category_id": 86,
     "company_id": 5
   },
   {
     "source_code": "Las w słoiku",
-    "target_category_id": 300457,
+    "target_category_id": 418,
     "company_id": 5
   },
   {
     "source_code": "Bilety",
-    "target_category_id": 300881,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Zestawy elektronarzędzi",
-    "target_category_id": 300893,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Halogeny i naświetlacze",
-    "target_category_id": 301034,
+    "target_category_id": 91,
     "company_id": 5
   },
   {
     "source_code": "Wyjątkowe chwile",
-    "target_category_id": 301130,
+    "target_category_id": 418,
     "company_id": 5
   },
   {
     "source_code": "Birety",
-    "target_category_id": 301142,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Peszle",
-    "target_category_id": 302402,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Szybkozłączki",
-    "target_category_id": 302414,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Stoły i krzesła zestawy",
-    "target_category_id": 302701,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Pokrętła i głowice",
-    "target_category_id": 302713,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Deski podłogowe",
-    "target_category_id": 304805,
+    "target_category_id": 398,
     "company_id": 5
   },
   {
     "source_code": "Panele laminowane",
-    "target_category_id": 304865,
+    "target_category_id": 398,
     "company_id": 5
   },
   {
     "source_code": "Oświetlenie zewnętrzne",
-    "target_category_id": 305061,
+    "target_category_id": 91,
     "company_id": 5
   },
   {
     "source_code": "CD-playery dla DJ-ów",
-    "target_category_id": 305301,
+    "target_category_id": 8,
     "company_id": 5
   },
   {
     "source_code": "Płotki śniegowe",
-    "target_category_id": 305349,
+    "target_category_id": 412,
     "company_id": 5
   },
   {
     "source_code": "Szczudła budowlane",
-    "target_category_id": 305361,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Rozdrabniacze i pompy do WC",
-    "target_category_id": 305373,
+    "target_category_id": 409,
     "company_id": 5
   },
   {
     "source_code": "Spawarki",
-    "target_category_id": 306069,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Organizacja i przechowywanie narzędzi",
-    "target_category_id": 306177,
+    "target_category_id": 400,
     "company_id": 5
   },
   {
     "source_code": "Gadżety",
-    "target_category_id": 306453,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Narzędzia hydrauliczne",
-    "target_category_id": 306537,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Kleje do drewna",
-    "target_category_id": 306849,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
@@ -11016,767 +11016,767 @@
   },
   {
     "source_code": "Szlifierki",
-    "target_category_id": 308365,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Silikony sanitarne",
-    "target_category_id": 308617,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Mech dekoracyjny",
-    "target_category_id": 308641,
+    "target_category_id": 418,
     "company_id": 5
   },
   {
     "source_code": "Biegowe i sportowe",
-    "target_category_id": 309589,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Złote numery",
-    "target_category_id": 310073,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Listwy przyblatowe",
-    "target_category_id": 310217,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Pantografy do szafy",
-    "target_category_id": 310229,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Zabezpieczenia przeciwpożarowe",
-    "target_category_id": 310361,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Tradycyjne",
-    "target_category_id": 310645,
+    "target_category_id": 185,
     "company_id": 5
   },
   {
     "source_code": "Gąbki mikrofonowe",
-    "target_category_id": 310801,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Filtry mikrofonowe",
-    "target_category_id": 310813,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Poker",
-    "target_category_id": 312089,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Talie tradycyjne",
-    "target_category_id": 312101,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Tarot",
-    "target_category_id": 312113,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Inne systemy",
-    "target_category_id": 312233,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Zabawki elektroniczne",
-    "target_category_id": 312425,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Zestawy doświadczalne",
-    "target_category_id": 312577,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Tablice",
-    "target_category_id": 312637,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Kosiarki ręczne",
-    "target_category_id": 313637,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Kołki meblowe",
-    "target_category_id": 314853,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Microsoft Xbox Series X / S",
-    "target_category_id": 315479,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Laktatory i akcesoria",
-    "target_category_id": 315536,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Wtyczki",
-    "target_category_id": 316094,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Akcesoria pszczelarskie",
-    "target_category_id": 316142,
+    "target_category_id": 122,
     "company_id": 5
   },
   {
     "source_code": "Drążki meblowe",
-    "target_category_id": 316213,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Pianki i gąbki",
-    "target_category_id": 316216,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Garaże",
-    "target_category_id": 316267,
+    "target_category_id": 136,
     "company_id": 5
   },
   {
     "source_code": "Uchwyty do drzwi",
-    "target_category_id": 316444,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Cyfry i litery na drzwi",
-    "target_category_id": 316447,
+    "target_category_id": 86,
     "company_id": 5
   },
   {
     "source_code": "Tuleje wentylacyjne",
-    "target_category_id": 316450,
+    "target_category_id": 86,
     "company_id": 5
   },
   {
     "source_code": "Listwy",
-    "target_category_id": 316453,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Karty i maty do zdjęć",
-    "target_category_id": 316558,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Kukiełki i Pacynki",
-    "target_category_id": 316600,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Płytki podłogowe",
-    "target_category_id": 316769,
+    "target_category_id": 398,
     "company_id": 5
   },
   {
     "source_code": "Deski WC i mocowania",
-    "target_category_id": 316790,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Ochraniacze meblowe",
-    "target_category_id": 316799,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Systemy przesuwne",
-    "target_category_id": 316802,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Zamki meblowe",
-    "target_category_id": 316805,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Komandorki",
-    "target_category_id": 316808,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Pasy do przenoszenia mebli",
-    "target_category_id": 316811,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Przepusty kablowe",
-    "target_category_id": 316814,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Konfirmaty meblowe",
-    "target_category_id": 316817,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Zabawki konstrukcyjne",
-    "target_category_id": 317246,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Traktorki",
-    "target_category_id": 318184,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Części i akcesoria do kosiarek",
-    "target_category_id": 318407,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Części i akcesoria",
-    "target_category_id": 318507,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Łóżka ogrodowe",
-    "target_category_id": 318819,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Kanały kablowe",
-    "target_category_id": 318831,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wieszaki",
-    "target_category_id": 318840,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wsporniki do półek",
-    "target_category_id": 318843,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Uchwyty do szkła",
-    "target_category_id": 318846,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Mufy",
-    "target_category_id": 318849,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Zaślepki do mebli",
-    "target_category_id": 318852,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Gwoździarki i gwoździe",
-    "target_category_id": 319033,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Karciane dla najmłodszych",
-    "target_category_id": 319045,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Nożyki i ostrza",
-    "target_category_id": 319051,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Zabawki zręcznościowe",
-    "target_category_id": 319060,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Słowne i liczbowe",
-    "target_category_id": 319063,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Komunikacja dachowa",
-    "target_category_id": 319249,
+    "target_category_id": 413,
     "company_id": 5
   },
   {
     "source_code": "Listwy progowe",
-    "target_category_id": 319274,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wyspy kuchenne",
-    "target_category_id": 319376,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Projekty wnętrz",
-    "target_category_id": 319697,
+    "target_category_id": 90,
     "company_id": 5
   },
   {
     "source_code": "Zabawki terapeutyczne",
-    "target_category_id": 319706,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Lampy pierścieniowe",
-    "target_category_id": 319769,
+    "target_category_id": 91,
     "company_id": 5
   },
   {
     "source_code": "Zszywacze i zszywki",
-    "target_category_id": 319847,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Części do elektronarzędzi",
-    "target_category_id": 319856,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Kopuły dekoracyjne",
-    "target_category_id": 319950,
+    "target_category_id": 418,
     "company_id": 5
   },
   {
     "source_code": "Umysłowe",
-    "target_category_id": 320128,
+    "target_category_id": 209,
     "company_id": 5
   },
   {
     "source_code": "Szpilki i kołki",
-    "target_category_id": 320197,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Poduszki na krzesła",
-    "target_category_id": 320242,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Parasole ogrodowe i akcesoria",
-    "target_category_id": 320425,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Zakrętarki i klucze udarowe",
-    "target_category_id": 320798,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Polerki",
-    "target_category_id": 320807,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Podłokietniki",
-    "target_category_id": 320813,
+    "target_category_id": 88,
     "company_id": 5
   },
   {
     "source_code": "Złącza meblowe",
-    "target_category_id": 320834,
+    "target_category_id": 53,
     "company_id": 5
   },
   {
     "source_code": "Narzędzia wielofunkcyjne",
-    "target_category_id": 320858,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Gadżety elektroniczne",
-    "target_category_id": 320900,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wózki kuchenne",
-    "target_category_id": 320933,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Wyrywacze do chwastów",
-    "target_category_id": 321059,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Walce",
-    "target_category_id": 321062,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Koreański",
-    "target_category_id": 321068,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Sznur traserski",
-    "target_category_id": 321092,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wzorniki, szablony",
-    "target_category_id": 321125,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Turecki",
-    "target_category_id": 321338,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Kolumny i zestawy prysznicowe",
-    "target_category_id": 321974,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Odgrywanie ról",
-    "target_category_id": 322029,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Figurki",
-    "target_category_id": 322030,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Suszarki do ubrań",
-    "target_category_id": 322178,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Palniki gazowe",
-    "target_category_id": 322322,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Elementy kute",
-    "target_category_id": 322395,
+    "target_category_id": 412,
     "company_id": 5
   },
   {
     "source_code": "Wylewki do baterii",
-    "target_category_id": 322506,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Zlewy gospodarcze",
-    "target_category_id": 322508,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Zabawki ogrodowe",
-    "target_category_id": 322572,
+    "target_category_id": 200,
     "company_id": 5
   },
   {
     "source_code": "Dyplomy",
-    "target_category_id": 322677,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Niemiecki",
-    "target_category_id": 322800,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Francuski",
-    "target_category_id": 322801,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Hiszpański",
-    "target_category_id": 322802,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Polski",
-    "target_category_id": 322803,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Rosyjski",
-    "target_category_id": 322804,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Włoski",
-    "target_category_id": 322805,
+    "target_category_id": 159,
     "company_id": 5
   },
   {
     "source_code": "Wyprawki",
-    "target_category_id": 322908,
+    "target_category_id": 284,
     "company_id": 5
   },
   {
     "source_code": "Mierniki i testery",
-    "target_category_id": 322921,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Bramy garażowe",
-    "target_category_id": 322962,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Części zamienne do konsol",
-    "target_category_id": 323044,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Gry towarzyskie",
-    "target_category_id": 323046,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Meble łazienkowe",
-    "target_category_id": 323136,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Obudowy",
-    "target_category_id": 323219,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Rozłączniki i przełączniki",
-    "target_category_id": 323220,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wyłączniki",
-    "target_category_id": 323221,
+    "target_category_id": 77,
     "company_id": 5
   },
   {
     "source_code": "Przekaźniki",
-    "target_category_id": 323222,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Styczniki",
-    "target_category_id": 323223,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Elementy sterowania i sygnalizacji",
-    "target_category_id": 323224,
+    "target_category_id": 399,
     "company_id": 5
   },
   {
     "source_code": "Liczniki",
-    "target_category_id": 323225,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Bezpieczniki",
-    "target_category_id": 323226,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Złączki szynowe",
-    "target_category_id": 323227,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Ograniczniki przepięć",
-    "target_category_id": 323228,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Automaty",
-    "target_category_id": 323229,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Transformatory",
-    "target_category_id": 323230,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Disney Lorcana",
-    "target_category_id": 323282,
+    "target_category_id": 208,
     "company_id": 5
   },
   {
     "source_code": "Części wymienne",
-    "target_category_id": 323453,
+    "target_category_id": 232,
     "company_id": 5
   },
   {
     "source_code": "Przejścia dachowe",
-    "target_category_id": 323456,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Skraplacze",
-    "target_category_id": 323457,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wywietrzniki",
-    "target_category_id": 323458,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Odwodnienia liniowe",
-    "target_category_id": 323595,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Kątowniki",
-    "target_category_id": 323605,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wkręty",
-    "target_category_id": 323606,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wieszaki belki",
-    "target_category_id": 323607,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Łączniki",
-    "target_category_id": 323608,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Young adult",
-    "target_category_id": 323817,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Konsole przenośne",
-    "target_category_id": 323947,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Słupki ogrodzeniowe",
-    "target_category_id": 324010,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Dekoracje ścienne",
-    "target_category_id": 324136,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Gąbki florystyczne",
-    "target_category_id": 324141,
+    "target_category_id": 418,
     "company_id": 5
   },
   {
     "source_code": "Przechowywanie",
-    "target_category_id": 324142,
+    "target_category_id": 400,
     "company_id": 5
   },
   {
     "source_code": "Pojemniki na żywność",
-    "target_category_id": 324145,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Wazony",
-    "target_category_id": 324274,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Star Wars Unlimited",
-    "target_category_id": 324281,
+    "target_category_id": 208,
     "company_id": 5
   },
   {
     "source_code": "Nintendo Switch 2",
-    "target_category_id": 324318,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Gry komputerowe PC",
-    "target_category_id": 324420,
+    "target_category_id": 347,
     "company_id": 5
   },
   {
     "source_code": "Świece i zapachy do domu",
-    "target_category_id": 324431,
+    "target_category_id": 92,
     "company_id": 5
   },
   {
     "source_code": "Tekstylia",
-    "target_category_id": 324449,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Oświetlenie wewnętrzne",
-    "target_category_id": 324662,
+    "target_category_id": 91,
     "company_id": 5
   },
   {
     "source_code": "Ograniczniki mocy",
-    "target_category_id": 324851,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Książki ogrodnicze",
-    "target_category_id": 324866,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Żywica poliuretanowa",
-    "target_category_id": 324881,
+    "target_category_id": 345,
     "company_id": 5
   },
   {
     "source_code": "Przyssawki do glazury",
-    "target_category_id": 324881,
+    "target_category_id": 345,
     "company_id": 5
   },
   {
     "source_code": "Kątomierze",
-    "target_category_id": 324969,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Cyrkle",
-    "target_category_id": 324970,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Macki pomiarowe",
-    "target_category_id": 324971,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Taśmy miernicze",
-    "target_category_id": 325014,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Koła pomiarowe",
-    "target_category_id": 325015,
+    "target_category_id": 292,
     "company_id": 5
   },
   {
     "source_code": "Mapy, atlasy",
-    "target_category_id": 325021,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
     "source_code": "Puzzle",
-    "target_category_id": 325059,
+    "target_category_id": 139,
     "company_id": 5
   },
   {
