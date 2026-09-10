@@ -240,7 +240,7 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.Handle("/seller/reviews", d.JWT.RequireRole(http.HandlerFunc(d.sellerReviews)))
 
 	// Admin review endpoints
-	mux.Handle("/admin/reviews", d.JWT.RequireRole(http.HandlerFunc(d.adminReviews)))
+	mux.Handle("/admin/reviews", spaAwareHandler(d.JWT.RequireRole(http.HandlerFunc(d.adminReviews))))
 	mux.Handle("/admin/reviews/", d.JWT.RequireRole(http.HandlerFunc(d.adminReview)))
 	mux.Handle("/admin/reviews/stats", d.JWT.RequireRole(http.HandlerFunc(d.adminReviewsStats)))
 	mux.Handle("/admin/reviews/recalculate", d.JWT.RequireRole(http.HandlerFunc(d.adminReviewsRecalculate)))
@@ -260,7 +260,7 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 
 	// --- Admin comment endpoints ---
 
-	mux.Handle("/admin/comments", d.JWT.RequireRole(http.HandlerFunc(d.adminComments)))
+	mux.Handle("/admin/comments", spaAwareHandler(d.JWT.RequireRole(http.HandlerFunc(d.adminComments))))
 	mux.Handle("/admin/comments/", d.JWT.RequireRole(http.HandlerFunc(d.adminComment)))
 	mux.Handle("/admin/comments/stats", d.JWT.RequireRole(http.HandlerFunc(d.adminCommentsStats)))
 	mux.Handle("/admin/votes/stats", d.JWT.RequireRole(http.HandlerFunc(d.adminVotesStats)))
@@ -300,7 +300,7 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	// mux.HandleFunc("/admin/import-lenovo", d.adminImportLenovo)
 
 	// Category mappings (admin)
-	mux.Handle("/admin/category-mappings", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappings), model.RoleAdmin))
+	mux.Handle("/admin/category-mappings", spaAwareHandler(d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappings), model.RoleAdmin)))
 	mux.Handle("/admin/category-mappings/", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMapping), model.RoleAdmin))
 	mux.Handle("/admin/category-mappings/scan", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappingsScan), model.RoleAdmin))
 	mux.Handle("/admin/category-mappings/apply-scan", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappingsApplyScan), model.RoleAdmin))
@@ -341,7 +341,7 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 
 	// --- EANPage Admin ---
 
-	mux.Handle("/admin/eanpages", d.JWT.RequireRole(http.HandlerFunc(d.adminEANPages), model.RoleAdmin))
+	mux.Handle("/admin/eanpages", spaAwareHandler(d.JWT.RequireRole(http.HandlerFunc(d.adminEANPages), model.RoleAdmin)))
 	mux.Handle("/admin/eanpages/", d.JWT.RequireRole(http.HandlerFunc(d.adminEANPage), model.RoleAdmin))
 
 	// --- Products ---

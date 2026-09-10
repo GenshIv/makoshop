@@ -21,10 +21,11 @@ export const useAuthStore = defineStore('auth', {
         const response = await api.post('/auth/login', { email, password });
         const data = response.data;
         this.token = data.token;
-        // Don't store role in sessionStorage — fetch from backend when needed
+        // Store role in sessionStorage so it's available immediately on refresh
         this.user = {
           id: data.user_id,
           email: data.email,
+          role: data.role || null,
         };
         sessionStorage.setItem('jwt', this.token);
         sessionStorage.setItem('user', JSON.stringify(this.user));
@@ -40,10 +41,11 @@ export const useAuthStore = defineStore('auth', {
         const response = await api.post('/auth/register', data);
         const result = response.data;
         this.token = result.token;
-        // Don't store role in sessionStorage
+        // Store role in sessionStorage so it's available immediately on refresh
         this.user = {
           id: result.user_id,
           email: result.email,
+          role: result.role || null,
         };
         sessionStorage.setItem('jwt', this.token);
         sessionStorage.setItem('user', JSON.stringify(this.user));
@@ -60,7 +62,9 @@ export const useAuthStore = defineStore('auth', {
         this.user = response.data;
         sessionStorage.setItem('user', JSON.stringify(this.user));
       } catch (e) {
-        this.logout();
+        // Don't auto-logout here — let the router guard handle auth state.
+        // This avoids race conditions when multiple components call fetchMe.
+        console.warn('[auth] fetchMe failed:', e.message);
       }
     },
 

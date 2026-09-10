@@ -117,6 +117,7 @@ const fetchEANPages = async () => {
 const startEdit = (sp) => {
   editing.value = {
     id: sp.id,
+    ean: sp.ean,
     data: {
       title: sp.title || '',
       description: sp.description || '',
@@ -126,6 +127,7 @@ const startEdit = (sp) => {
       category_id: sp.category_id || 0,
       content: sp.content || '',
       images: sp.images || [],
+      attributes: (sp.attributes || []).map(a => ({ key: a.key, value: a.value })),
     },
   };
 };
@@ -134,10 +136,28 @@ const cancelEdit = () => {
   editing.value = null;
 };
 
+// Attribute management in edit form
+const addAttributeRow = () => {
+  if (!editing.value) return;
+  editing.value.data.attributes.push({ key: '', value: '' });
+};
+
+const removeAttributeRow = (index) => {
+  if (!editing.value) return;
+  editing.value.data.attributes.splice(index, 1);
+};
+
 const saveEdit = async () => {
   if (!editing.value) return;
   try {
-    await api.patch(`/admin/eanpages/${editing.value.ean}`, editing.value.data);
+    const payload = { ...editing.value.data };
+    // Only send attributes if there are any with non-empty keys
+    if (payload.attributes && payload.attributes.length > 0) {
+      payload.attributes = payload.attributes.filter(a => a.key && a.key.trim());
+    } else {
+      delete payload.attributes;
+    }
+    await api.patch(`/admin/eanpages/${editing.value.ean}`, payload);
     editing.value = null;
     await fetchEANPages();
   } catch (e) {
@@ -225,8 +245,6 @@ onMounted(() => {
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_id') || 'ID' }}</th>
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_scu') || 'EAN' }}</th>
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_title') || 'Title' }}</th>
-              <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_keywords') || 'Keywords' }}</th>
-              <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_slug') || 'Slug' }}</th>
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_products') || 'Products' }}</th>
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_active') || 'Active' }}</th>
               <th scope="col" class="px-4 py-2 text-left">{{ t('admin.eanpage_actions') || 'Actions' }}</th>
@@ -241,8 +259,6 @@ onMounted(() => {
               <td class="px-4 py-2">{{ sp.id }}</td>
               <td class="px-4 py-2 max-w-xs truncate" :title="sp.ean">{{ sp.ean }}</td>
               <td class="px-4 py-2 max-w-xs truncate" :title="sp.title">{{ sp.title }}</td>
-              <td class="px-4 py-2 max-w-xs truncate text-xs text-ink-2" :title="sp.keywords">{{ sp.keywords || '-' }}</td>
-              <td class="px-4 py-2 max-w-xs truncate" :title="sp.slug">{{ sp.slug }}</td>
               <td class="px-4 py-2">{{ sp.product_count || sp.product_ids?.length || 0 }}</td>
               <td class="px-4 py-2">
                 <span
@@ -273,7 +289,7 @@ onMounted(() => {
               </td>
             </tr>
             <tr v-if="eanpages.length === 0">
-              <td colspan="8" class="px-4 py-8 text-center text-ink-3">
+              <td colspan="6" class="px-4 py-8 text-center text-ink-3">
                 {{ t('admin.eanpage_no_results') || 'No EAN pages found' }}
               </td>
             </tr>
@@ -384,6 +400,55 @@ onMounted(() => {
                 {{ t('admin.eanpage_active') || 'Active' }}
               </span>
             </label>
+          </div>
+
+          <!-- Attributes -->
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-sm font-medium text-ink-2">
+                {{ t('admin.eanpage_attributes') || 'Attributes' }}
+              </label>
+              <button
+                @click="addAttributeRow"
+                type="button"
+                class="text-xs text-purple-600 hover:text-purple-800 font-medium"
+              >
+                + {{ t('admin.add_attr') || 'Add' }}
+              </button>
+            </div>
+            <p class="text-xs text-ink-3 mb-2">
+              {{ t('admin.eanpage_attributes_hint') || 'Key-value pairs for product attributes' }}
+            </p>
+            <div v-if="editing.data.attributes.length === 0" class="text-xs text-ink-3 italic py-2">
+              {{ t('admin.no_attributes') || 'No attributes set' }}
+            </div>
+            <div class="space-y-2">
+              <div
+                v-for="(attr, index) in editing.data.attributes"
+                :key="index"
+                class="flex gap-2 items-start"
+              >
+                <input
+                  v-model="attr.key"
+                  type="text"
+                  placeholder="Key"
+                  class="w-1/3 px-2 py-1.5 text-xs border border-line rounded focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+                <input
+                  v-model="attr.value"
+                  type="text"
+                  placeholder="Value"
+                  class="flex-1 px-2 py-1.5 text-xs border border-line rounded focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+                <button
+                  @click="removeAttributeRow(index)"
+                  type="button"
+                  class="px-2 py-1.5 text-xs text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
           </div>
 
           <div>

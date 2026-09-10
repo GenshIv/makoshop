@@ -62,6 +62,7 @@ const router = createRouter({
 });
 
 let authResolved = false;
+let authResolvingPromise = null;
 
 router.beforeEach(async (to, from) => {
   const auth = useAuthStore();
@@ -69,10 +70,17 @@ router.beforeEach(async (to, from) => {
 
   // If we have a token but haven't validated it yet, validate now
   if (token && !auth.user?.role) {
+    // Deduplicate concurrent fetchMe calls to avoid race conditions
+    if (!authResolvingPromise) {
+      authResolvingPromise = auth.fetchMe().finally(() => {
+        authResolvingPromise = null;
+      });
+    }
     try {
-      await auth.fetchMe();
+      await authResolvingPromise;
     } catch (e) {
-      // fetchMe already calls logout on failure
+      // fetchMe failed — token might be invalid, but don't auto-logout here.
+      // Let the role check below handle it (redirect to login if needed).
     }
   }
 
