@@ -399,6 +399,7 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.Handle("/admin/catalogizer/test", d.JWT.RequireRole(http.HandlerFunc(d.adminCatalogizerTest), model.RoleAdmin))
 	mux.Handle("/admin/catalogizer/coverage", d.JWT.RequireRole(http.HandlerFunc(d.adminCatalogizerCoverage), model.RoleAdmin))
 	mux.Handle("/admin/eanpages/rebuild-attr-code-indexes", d.JWT.RequireRole(http.HandlerFunc(d.adminEANPagesRebuildAttrCodeIndexes), model.RoleAdmin))
+	mux.Handle("/admin/categories/rebuild-attrs", d.JWT.RequireRole(http.HandlerFunc(d.adminCategoriesRebuildAttrs), model.RoleAdmin))
 	mux.Handle("/admin/catalogize", d.JWT.RequireRole(http.HandlerFunc(d.adminCatalogize), model.RoleAdmin))
 	mux.Handle("/admin/catalogize/product/", d.JWT.RequireRole(http.HandlerFunc(d.adminCatalogizeProduct), model.RoleAdmin))
 

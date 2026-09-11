@@ -298,6 +298,15 @@ func (h *Handlers) runGlobalRecalculation(affectedEANPages []string) error {
 		}
 		fmt.Printf("[IMPORT] Product sort indexes rebuilt in %v\n", time.Since(start))
 	}
+	// Rebuild attribute value indexes from EAN pages (removes stale filter values)
+	if h.attrDefRepo != nil && h.eanPageRepo != nil {
+		start := time.Now()
+		if err := h.attrDefRepo.RebuildAttrValuesFromEANPages(h.eanPageRepo, nil); err != nil {
+			fmt.Printf("[IMPORT] WARN: rebuild attr values from EAN pages failed: %v\n", err)
+		} else {
+			fmt.Printf("[IMPORT] Attribute value indexes rebuilt in %v\n", time.Since(start))
+		}
+	}
 	if h.categoryRepo != nil {
 		h.categoryRepo.RebuildTrees()
 	}

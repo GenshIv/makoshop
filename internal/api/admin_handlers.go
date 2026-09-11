@@ -485,6 +485,37 @@ func (h *Handlers) HandleAdminRebuildAttrCodeIndexes(w http.ResponseWriter, r *h
 	})
 }
 
+// HandleAdminRebuildAttrValuesFromEANPages rebuilds attribute value indexes from EAN pages.
+// POST /admin/categories/rebuild-attrs
+func (h *Handlers) HandleAdminRebuildAttrValuesFromEANPages(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	fmt.Println("[ADMIN] Rebuilding attribute value indexes from EAN pages...")
+	start := time.Now()
+
+	if err := h.attrDefRepo.RebuildAttrValuesFromEANPages(h.eanPageRepo, nil); err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	elapsed := time.Since(start)
+	fmt.Printf("[ADMIN] Attribute value indexes rebuilt in %v\n", elapsed)
+
+	// Invalidate cache so new filter values are picked up
+	if err := h.InvalidateAndReloadCatAttrs(); err != nil {
+		fmt.Printf("[ADMIN] WARN: cache reload failed after rebuild: %v\n", err)
+	}
+
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "completed",
+		"message": "attribute value indexes rebuilt from EAN pages",
+		"elapsed": elapsed.String(),
+	})
+}
+
 // HandleAdminDBWarmup warms up the database by loading all data into RAM.
 // POST /admin/db/warmup
 

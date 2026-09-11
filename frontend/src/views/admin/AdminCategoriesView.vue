@@ -21,6 +21,7 @@ const editingId = ref(null);
 const activeTab = ref('list'); // 'list' or 'tree'
 const sortField = ref('id'); // 'id', 'name', 'parent'
 const sortDirection = ref('asc'); // 'asc' or 'desc'
+const rebuilding = ref(false);
 
 const form = reactive({
   name_ru: '',
@@ -325,6 +326,18 @@ const goToAttributes = (cat) => {
   router.push(`/admin/categories/${cat.id}/attributes`);
 };
 
+const rebuildAttrs = async () => {
+  rebuilding.value = true;
+  try {
+    await api.post('/admin/categories/rebuild-attrs');
+    toast.success(t('admin.attrs_rebuilt'));
+  } catch (e) {
+    toast.error(e.response?.data?.message || t('admin.error'));
+  } finally {
+    rebuilding.value = false;
+  }
+};
+
 const handleKeydown = (e) => {
   if (e.key === 'Escape' && showForm.value) {
     resetForm();
@@ -351,6 +364,9 @@ watch(showForm, (val) => {
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold text-purple-700">{{ t('admin.categories_title') }}</h1>
       <div class="flex gap-2">
+        <button @click="rebuildAttrs" :disabled="rebuilding" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50">
+          {{ rebuilding ? t('admin.rebuilding_attrs') : t('admin.rebuild_attrs') }}
+        </button>
         <button @click="openNewCategoryForm" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
           {{ t('admin.add_category') }}
         </button>

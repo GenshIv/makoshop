@@ -885,6 +885,15 @@ func (d *Deps) adminEANPagesRebuildAttrCodeIndexes(w http.ResponseWriter, r *htt
 	d.Handlers.HandleAdminRebuildAttrCodeIndexes(w, r)
 }
 
+// POST /admin/categories/rebuild-attrs — rebuild attribute value indexes from EAN pages
+func (d *Deps) adminCategoriesRebuildAttrs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	d.Handlers.HandleAdminRebuildAttrValuesFromEANPages(w, r)
+}
+
 // POST /admin/catalogize — run auto-catalogization
 func (d *Deps) adminCatalogize(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
