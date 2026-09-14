@@ -426,6 +426,10 @@ onMounted(() => {
           <div class="font-medium">{{ t('admin.visits_stats') }}</div>
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.visits_stats_desc') }}</div>
         </router-link>
+        <router-link to="/admin/stats/detailed" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">{{ t('admin.detailed_stats') }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('admin.visits_stats_desc') }}</div>
+        </router-link>
         <router-link to="/admin/delivery-times" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
           <div class="font-medium">{{ t('admin.delivery_times_title') || 'Delivery Times' }}</div>
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.delivery_times_desc') || 'Manage delivery time options' }}</div>
@@ -457,6 +461,10 @@ onMounted(() => {
         <router-link to="/admin/category-mappings" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
           <div class="font-medium">🗂️ {{ t('admin.category_mappings.title') || 'Category Mappings' }}</div>
           <div class="text-sm text-ink-3 mt-1">{{ t('admin.category_mappings.desc') || 'Map source category codes to internal categories' }}</div>
+        </router-link>
+        <router-link to="/admin/search-aliases" class="bg-surface rounded-lg shadow-sm p-4 hover:shadow-md transition">
+          <div class="font-medium">🔗 {{ t('admin.search_aliases') || 'Search Aliases' }}</div>
+          <div class="text-sm text-ink-3 mt-1">{{ t('admin.search_alias_desc') || 'SEO landing pages for long-tail queries' }}</div>
         </router-link>
       </div>
     </div>

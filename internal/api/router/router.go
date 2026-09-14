@@ -324,6 +324,16 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.Handle("/admin/landings", d.JWT.RequireRole(http.HandlerFunc(d.adminLandings), model.RoleAdmin))
 	mux.Handle("/admin/landings/", d.JWT.RequireRole(http.HandlerFunc(d.adminLanding), model.RoleAdmin))
 
+	// Admin search aliases
+	mux.Handle("/admin/search-aliases", spaAwareHandler(d.JWT.RequireRole(http.HandlerFunc(d.adminSearchAliases), model.RoleAdmin)))
+	mux.Handle("/admin/search-aliases/", d.JWT.RequireRole(http.HandlerFunc(d.adminSearchAlias), model.RoleAdmin))
+
+	// Public search alias by slug (returns alias data only)
+	mux.HandleFunc("/search-aliases/", d.searchAliasBySlug)
+
+	// Search alias SSR page — renders HTML with SEO + initial data
+	mux.HandleFunc("/search/", d.searchAliasSSR)
+
 	// EANPage SEO pages
 	mux.HandleFunc("/shop", d.shop)
 	mux.HandleFunc("/shop/", d.shopSub)
@@ -388,6 +398,15 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.Handle("/admin/stats/visits/status", d.JWT.RequireRole(http.HandlerFunc(d.adminStatsVisitsStatus), model.RoleAdmin))
 	mux.Handle("/admin/stats/visits/useragents", d.JWT.RequireRole(http.HandlerFunc(d.adminStatsVisitsUserAgents), model.RoleAdmin))
 	mux.Handle("/admin/stats/visits/excluded-ips", d.JWT.RequireRole(http.HandlerFunc(d.adminStatsVisitsExcludedIPs), model.RoleAdmin))
+
+	// Detailed event analytics
+	mux.Handle("/admin/stats/events/by-page", d.JWT.RequireRole(http.HandlerFunc(d.adminStatsEventsByPage), model.RoleAdmin))
+	mux.Handle("/admin/stats/events/by-referer", d.JWT.RequireRole(http.HandlerFunc(d.adminStatsEventsByReferer), model.RoleAdmin))
+	mux.Handle("/admin/stats/events/by-ua", d.JWT.RequireRole(http.HandlerFunc(d.adminStatsEventsByUA), model.RoleAdmin))
+	mux.Handle("/admin/stats/events/by-ip", d.JWT.RequireRole(http.HandlerFunc(d.adminStatsEventsByIP), model.RoleAdmin))
+	mux.Handle("/admin/stats/events/by-time", d.JWT.RequireRole(http.HandlerFunc(d.adminStatsEventsByTime), model.RoleAdmin))
+	mux.Handle("/admin/stats/events/bot-counts", d.JWT.RequireRole(http.HandlerFunc(d.adminStatsBotCounts), model.RoleAdmin))
+	mux.Handle("/admin/stats/events/count", d.JWT.RequireRole(http.HandlerFunc(d.adminStatsEventCount), model.RoleAdmin))
 
 	// GET /admin/debug/turbo-key?key=... — read raw turbo key (TEMP)
 	mux.Handle("/admin/debug/turbo-key", d.JWT.RequireRole(http.HandlerFunc(d.adminDebugTurboKey), model.RoleAdmin))

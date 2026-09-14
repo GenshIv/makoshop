@@ -680,6 +680,34 @@ func (d *Deps) adminLanding(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// --- Admin search aliases ---
+
+// GET/POST /admin/search-aliases
+func (d *Deps) adminSearchAliases(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		d.Handlers.HandleSearchAliasesList(w, r)
+	case http.MethodPost:
+		d.Handlers.HandleSearchAliasCreate(w, r)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// GET/PATCH/DELETE /admin/search-aliases/{id}
+func (d *Deps) adminSearchAlias(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		d.Handlers.HandleSearchAliasGet(w, r)
+	case http.MethodPatch:
+		d.Handlers.HandleSearchAliasUpdate(w, r)
+	case http.MethodDelete:
+		d.Handlers.HandleSearchAliasDelete(w, r)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 // --- Admin AttrDef management ---
 
 // GET/POST /admin/attrdefs
@@ -821,6 +849,43 @@ func (d *Deps) adminStatsVisitsExcludedIPs(w http.ResponseWriter, r *http.Reques
 	default:
 		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
 	}
+}
+
+// Detailed event analytics endpoints
+
+// GET /admin/stats/events/by-page — visit counts by page
+func (d *Deps) adminStatsEventsByPage(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleStatsEventsByPage(w, r)
+}
+
+// GET /admin/stats/events/by-referer — visit counts by referer
+func (d *Deps) adminStatsEventsByReferer(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleStatsEventsByReferer(w, r)
+}
+
+// GET /admin/stats/events/by-ua — visit counts by user agent
+func (d *Deps) adminStatsEventsByUA(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleStatsEventsByUA(w, r)
+}
+
+// GET /admin/stats/events/by-ip — visit counts by IP
+func (d *Deps) adminStatsEventsByIP(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleStatsEventsByIP(w, r)
+}
+
+// GET /admin/stats/events/by-time — visit counts by hour of day
+func (d *Deps) adminStatsEventsByTime(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleStatsEventsByTime(w, r)
+}
+
+// GET /admin/stats/events/bot-counts — bot visit counts by name
+func (d *Deps) adminStatsBotCounts(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleStatsBotCounts(w, r)
+}
+
+// GET /admin/stats/events/count — total event count
+func (d *Deps) adminStatsEventCount(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleStatsEventCount(w, r)
 }
 
 // GET /admin/debug/turbo-key?key=... — read raw turbo key (TEMP)

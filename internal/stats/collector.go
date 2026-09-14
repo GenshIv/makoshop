@@ -18,23 +18,28 @@ type StatsCollector struct {
 	saveChan  chan struct{}
 
 	// For persistence
-	persistence *StatsPersistence
-	store       interface {
+	persistence      *StatsPersistence
+	eventPersistence *EventPersistence
+	store            interface {
 		TurboRawWrite(key string, value []byte) error
 		TurboRawRead(key string) ([]byte, error)
 	}
 
 	// Excluded IPs cache (loaded from config)
 	excludedIPs []string
+
+	// Detailed event tracking with dictionaries
+	eventStore *EventStore
 }
 
 // NewStatsCollector creates a new StatsCollector
 func NewStatsCollector(config StatsConfig, visitChanSize int) *StatsCollector {
 	return &StatsCollector{
-		config:    config,
-		data:      NewStatsData(),
-		VisitChan: make(chan VisitEvent, visitChanSize),
-		saveChan:  make(chan struct{}, 1),
+		config:     config,
+		data:       NewStatsData(),
+		VisitChan:  make(chan VisitEvent, visitChanSize),
+		saveChan:   make(chan struct{}, 1),
+		eventStore: NewEventStore(10000, 500, 5000), // 10k events, 500 UAs, 5k IPs
 	}
 }
 
@@ -44,12 +49,14 @@ func NewStatsCollectorWithPersistence(config StatsConfig, visitChanSize int, sto
 	TurboRawRead(key string) ([]byte, error)
 }) *StatsCollector {
 	collector := &StatsCollector{
-		config:      config,
-		data:        NewStatsData(),
-		VisitChan:   make(chan VisitEvent, visitChanSize),
-		saveChan:    make(chan struct{}, 1),
-		persistence: NewStatsPersistence(storeKey),
-		store:       store,
+		config:           config,
+		data:             NewStatsData(),
+		VisitChan:        make(chan VisitEvent, visitChanSize),
+		saveChan:         make(chan struct{}, 1),
+		persistence:      NewStatsPersistence(storeKey),
+		eventPersistence: NewEventPersistence(storeKey),
+		store:            store,
+		eventStore:       NewEventStore(10000, 500, 5000), // 10k events, 500 UAs, 5k IPs
 	}
 	return collector
 }
@@ -69,6 +76,41 @@ func (s *StatsCollector) Start() {
 			s.excludedIPs = s.data.ExcludedIPs
 		} else if err != nil {
 			fmt.Printf("WARN: failed to load stats: %v\n", err)
+		}
+
+		// Load persisted event data
+		if s.eventPersistence != nil {
+			if events, err := s.eventPersistence.LoadEvents(s.store); err == nil && len(events) > 0 {
+				s.eventStore.mu.Lock()
+				s.eventStore.events = events
+				s.eventStore.mu.Unlock()
+			}
+
+			if uaEntries, ipEntries, err := s.eventPersistence.LoadDictionaries(s.store); err == nil {
+				// Rebuild dictionaries from persisted entries
+				for _, entry := range uaEntries {
+					s.eventStore.uaDict.byID[entry.ID] = entry.Value
+					s.eventStore.uaDict.values[entry.Value] = entry.ID
+					if entry.ID >= s.eventStore.uaDict.nextID {
+						s.eventStore.uaDict.nextID = entry.ID + 1
+					}
+				}
+				for _, entry := range ipEntries {
+					s.eventStore.ipDict.byID[entry.ID] = entry.Value
+					s.eventStore.ipDict.values[entry.Value] = entry.ID
+					if entry.ID >= s.eventStore.ipDict.nextID {
+						s.eventStore.ipDict.nextID = entry.ID + 1
+					}
+				}
+			}
+
+			if botCounts, err := s.eventPersistence.LoadBotCounts(s.store); err == nil && len(botCounts) > 0 {
+				s.eventStore.mu.Lock()
+				for k, v := range botCounts {
+					s.eventStore.botCounts[k] = v
+				}
+				s.eventStore.mu.Unlock()
+			}
 		}
 	}
 
@@ -170,6 +212,17 @@ func (s *StatsCollector) recordVisit(event VisitEvent) {
 	if event.UserAgent != "" {
 		s.updateUserAgentStats(event.UserAgent, hour, event.IsBot)
 	}
+
+	// Store detailed event (with dictionary IDs)
+	detailedEvent := DetailedVisitEvent{
+		Timestamp: event.Timestamp,
+		Page:      event.Page,
+		Referer:   event.Referrer,
+		SourceID:  determineSourceID(event.Referrer),
+		IsBot:     event.IsBot,
+		BotName:   identifyBot(event.UserAgent),
+	}
+	s.eventStore.StoreEvent(detailedEvent, event.UserAgent, event.IP)
 
 	// Mark as dirty (needs saving)
 	s.dirty.Store(true)
@@ -383,6 +436,25 @@ func (s *StatsCollector) saveToDB() {
 		if err := s.persistence.SaveStatsData(s.data, s.store); err != nil {
 			fmt.Printf("WARN: failed to save stats: %v\n", err)
 		}
+
+		// Save event data
+		if s.eventPersistence != nil {
+			events := s.eventStore.GetEvents()
+			if err := s.eventPersistence.SaveEvents(events, s.store); err != nil {
+				fmt.Printf("WARN: failed to save events: %v\n", err)
+			}
+
+			uaEntries := s.eventStore.GetUAEntries()
+			ipEntries := s.eventStore.GetIPEntries()
+			if err := s.eventPersistence.SaveDictionaries(uaEntries, ipEntries, s.store); err != nil {
+				fmt.Printf("WARN: failed to save dictionaries: %v\n", err)
+			}
+
+			botCounts := s.eventStore.GetBotCounts()
+			if err := s.eventPersistence.SaveBotCounts(botCounts, s.store); err != nil {
+				fmt.Printf("WARN: failed to save bot counts: %v\n", err)
+			}
+		}
 	}
 }
 
@@ -404,6 +476,63 @@ func (s *StatsCollector) GetPaths() map[int64]*PathStats {
 // GetUserAgents returns user agent statistics
 func (s *StatsCollector) GetUserAgents() map[string]*UserAgentStats {
 	return s.data.GetUserAgents()
+}
+
+// Detailed event analytics methods
+
+// AggregateByPage returns visit counts grouped by page.
+func (s *StatsCollector) AggregateByPage() map[string]uint64 {
+	return s.eventStore.AggregateByPage()
+}
+
+// AggregateByReferer returns visit counts grouped by referer.
+func (s *StatsCollector) AggregateByReferer() map[string]uint64 {
+	return s.eventStore.AggregateByReferer()
+}
+
+// AggregateByUA returns visit counts grouped by user-agent ID.
+func (s *StatsCollector) AggregateByUA() map[uint32]uint64 {
+	return s.eventStore.AggregateByUA()
+}
+
+// AggregateByIP returns visit counts grouped by IP ID.
+func (s *StatsCollector) AggregateByIP() map[uint32]uint64 {
+	return s.eventStore.AggregateByIP()
+}
+
+// AggregateByTime returns visit counts by hour of day.
+func (s *StatsCollector) AggregateByTime() [24]uint64 {
+	return s.eventStore.AggregateByTime()
+}
+
+// GetBotCounts returns bot visit counts by name.
+func (s *StatsCollector) GetBotCounts() map[string]uint64 {
+	return s.eventStore.GetBotCounts()
+}
+
+// EventCount returns the number of stored events.
+func (s *StatsCollector) EventCount() int {
+	return s.eventStore.EventCount()
+}
+
+// GetUAEntries returns all user-agent dictionary entries.
+func (s *StatsCollector) GetUAEntries() []DictionaryEntry {
+	return s.eventStore.GetUAEntries()
+}
+
+// GetIPEntries returns all IP dictionary entries.
+func (s *StatsCollector) GetIPEntries() []DictionaryEntry {
+	return s.eventStore.GetIPEntries()
+}
+
+// GetUAByID resolves a user-agent ID to its string value.
+func (s *StatsCollector) GetUAByID(id uint32) string {
+	return s.eventStore.uaDict.GetByID(id)
+}
+
+// GetIPByID resolves an IP ID to its string value.
+func (s *StatsCollector) GetIPByID(id uint32) string {
+	return s.eventStore.ipDict.GetByID(id)
 }
 
 // extractDomain extracts domain from referrer URL
@@ -428,4 +557,56 @@ func extractDomain(referrer string) string {
 	}
 
 	return host
+}
+
+// determineSourceID classifies traffic source based on referrer.
+// 0=direct, 1=search, 2=social, 3=email, 4=paid, 5=other
+func determineSourceID(referrer string) uint16 {
+	if referrer == "" {
+		return 0 // Direct
+	}
+
+	domain := extractDomain(referrer)
+	domainLower := strings.ToLower(domain)
+
+	// Search engines
+	searchEngines := []string{"google", "bing", "yandex", "duckduckgo", "baidu"}
+	for _, engine := range searchEngines {
+		if strings.Contains(domainLower, engine) {
+			return 1 // Search
+		}
+	}
+
+	// Social media
+	socialPlatforms := []string{"facebook", "twitter", "instagram", "linkedin", "pinterest", "vk.com", "ok.ru"}
+	for _, platform := range socialPlatforms {
+		if strings.Contains(domainLower, platform) {
+			return 2 // Social
+		}
+	}
+
+	// Email
+	emailProviders := []string{"mail.", "@", "email."}
+	for _, provider := range emailProviders {
+		if strings.Contains(referrer, provider) {
+			return 3 // Email
+		}
+	}
+
+	return 5 // Other
+}
+
+// identifyBot returns the bot name if the user agent is a known bot.
+func identifyBot(userAgent string) string {
+	if userAgent == "" {
+		return ""
+	}
+
+	userAgentLower := strings.ToLower(userAgent)
+	for _, bot := range BotUserAgents {
+		if strings.Contains(userAgentLower, bot) {
+			return bot
+		}
+	}
+	return ""
 }

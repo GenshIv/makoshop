@@ -41,6 +41,7 @@ type Handlers struct {
 	promoLogRepo               *db.PromoLogRepo
 	brandingRepo               *db.BrandingRepo
 	seoRepo                    *db.SEORepo
+	searchAliasRepo            *db.SearchAliasRepo
 	catalogizer                *catalogizer.Catalogizer
 	categoryMappingRepo        *db.CategoryMappingRepo
 	companyProductCategoryRepo *db.CompanyProductCategoryRepo
@@ -150,6 +151,7 @@ func NewHandlers(store *db.Store) *Handlers {
 		promoLogRepo:               promoLogRepo,
 		brandingRepo:               db.NewBrandingRepo(store),
 		seoRepo:                    db.NewSEORepo(store),
+		searchAliasRepo:            db.NewSearchAliasRepo(store),
 		categoryMappingRepo:        db.NewCategoryMappingRepo(store),
 		companyProductCategoryRepo: db.NewCompanyProductCategoryRepo(store),
 		productRepo:                productRepo,

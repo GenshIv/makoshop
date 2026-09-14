@@ -12,6 +12,7 @@ import HomeHero from '../components/HomeHero.vue';
 import { useAnimation } from '../composables/useAnimation';
 import { useBranding } from '../composables/useBranding';
 import { useSettings } from '../composables/useSettings';
+import { useSeo } from '../composables/useSeo';
 import { useBrandingStore } from '../stores/branding';
 
 const { defaultCurrency } = useSettings();
@@ -444,6 +445,7 @@ const fetchProducts = async () => {
     }
     prevRoutePath.value = route.path;
 
+    // Use filters (synced from route.query or alias defaults) for API call
     const params = {
       ...buildQueryParams(),
       page: pagination.page,
@@ -454,6 +456,8 @@ const fetchProducts = async () => {
     let url = '/shop';
     if (route.path.startsWith('/shop/')) {
       url = route.path; // preserve category slugs from URL
+    } else if (route.path.startsWith('/search/')) {
+      url = route.path; // use /search/{slug} — backend resolves alias + user params
     }
 
     const response = await api.get(url, { params });
@@ -505,12 +509,9 @@ const fetchProducts = async () => {
     }
 
     let data = parseJSON(response.data);
-    console.log('[CatalogView] Fetched data:', data);
-    console.log('[CatalogView] data.ean_page:', data.ean_page);
 
     // If the response is an EANPage, store it and render EANPageView
     if (data.ean_page && typeof data.ean_page === 'object' && data.ean_page.ean) {
-      console.log('[CatalogView] Detected EANPage, setting eanPageData for path:', route.path);
       // Ensure category info is present in the data passed to EANPageView
       if (!data.category && (data.ean_page.category || currentCategory.value)) {
         data.category = data.ean_page.category || currentCategory.value;
@@ -539,7 +540,7 @@ const fetchProducts = async () => {
 
     // If we were on an EANPage but the API returned a regular catalog, reset EANPage
     if (isOnEANPage) {
-      console.log('[CatalogView] Resetting eanPageData (API returned catalog for path:', route.path, ')');
+      // console.log('[CatalogView] Resetting eanPageData (API returned catalog for path:', route.path, ')');
       eanPageData.value = null;
     }
 
@@ -864,35 +865,34 @@ const hasAttrsOrBrands = computed(() => {
   return visibleAttrs.value.length > 0 || visibleBrands.value.length > 0;
 });
 
-const applyFilters = () => {
-  console.log('[CatalogView] applyFilters called, current path:', route.path);
-  pagination.page = 1;
-  const query = { ...route.query };
-  delete query.page;
-  delete query.category_id;
-  if (filters.q) query.q = filters.q; else delete query.q;
-  if (filters.price_min) query.price_min = filters.price_min; else delete query.price_min;
-  if (filters.price_max) query.price_max = filters.price_max; else delete query.price_max;
-  if (filters.sort && filters.sort !== 'relevance') query.sort = filters.sort; else delete query.sort;
+let isApplyingFilters = false;
 
-  // Save attribute filters to URL query
+const applyFilters = () => {
+  // console.log('[CatalogView] applyFilters called, current path:', route.path, 'filters.sort:', filters.sort);
+  pagination.page = 1;
+
+  // Build query params from filters
+  const query = {};
+  if (filters.q) query.q = filters.q;
+  if (filters.price_min) query.price_min = filters.price_min;
+  if (filters.price_max) query.price_max = filters.price_max;
+  if (filters.sort && filters.sort !== 'relevance') {
+    query.sort = filters.sort;
+  }
+
   for (const [key, values] of Object.entries(attrFilters)) {
     if (values.length > 0) {
       query[`attr_${key}`] = values.join(',');
-    } else {
-      delete query[`attr_${key}`];
     }
   }
 
-  // Only replace route if query actually changed (prevents interfering with navigation)
-  const oldQueryStr = JSON.stringify(route.query);
-  const newQueryStr = JSON.stringify(query);
-  if (oldQueryStr !== newQueryStr) {
-    console.log('[CatalogView] applyFilters: query changed, replacing route');
-    router.replace({ path: route.path, query });
-  } else {
-    console.log('[CatalogView] applyFilters: query unchanged, skipping router.replace');
-  }
+  // console.log('[CatalogView] applyFilters query:', JSON.stringify(query));
+
+  // For /search/:slug routes, stay on the same path but update query params
+  isApplyingFilters = true;
+  router.replace({ path: route.path, query }).then(() => {
+    isApplyingFilters = false;
+  });
 };
 
 const resetFilters = () => {
@@ -959,6 +959,9 @@ const showHero = computed(() => {
 const syncFiltersFromRoute = () => {
   isSyncingFiltersFromRoute.value = true;
   const oldQ = filters.q;
+
+  // For /search/:slug routes, only use query params (user-provided overrides)
+  // Don't fall back to alias defaults - backend handles that
   filters.q = route.query.q || '';
   filters.price_min = route.query.price_min || '';
   filters.price_max = route.query.price_max || '';
@@ -978,7 +981,7 @@ const syncFiltersFromRoute = () => {
   }
 
   if (oldQ !== filters.q) {
-    console.log('[CatalogView] syncFiltersFromRoute: q changed from', oldQ, 'to', filters.q);
+    // console.log('[CatalogView] syncFiltersFromRoute: q changed from', oldQ, 'to', filters.q);
   }
 
   // Load attribute filters from URL (only when navigating)
@@ -997,9 +1000,54 @@ const syncFiltersFromRoute = () => {
   }, 0);
 };
 
+let resolvedSearchAlias = null;
+let isSettingAliasFilters = false;
+
+// SEO for search alias pages
+const seoTitle = ref(null);
+const seoDescription = ref(null);
+const seoImage = ref(null);
+
+useSeo({
+  title: computed(() => {
+    if (seoTitle.value) return seoTitle.value;
+    // Default to category title or catalog title
+    if (currentCategory.value) {
+      return catName(currentCategory.value);
+    }
+    return t('catalog.catalog_title');
+  }),
+  description: computed(() => {
+    if (seoDescription.value) return seoDescription.value;
+    // Default to category description or catalog description
+    if (currentCategory.value) {
+      return catDescription(currentCategory.value);
+    }
+    return t('catalog.root_description');
+  }),
+  image: computed(() => seoImage.value || null),
+});
+
 onMounted(async () => {
   syncFiltersFromRoute();
   updatePerPage();
+
+  // If on a /search/:slug route, load alias info for SEO/title but don't pre-fill filters
+  if (route.path.startsWith('/search/')) {
+    const slug = route.params.slug;
+    try {
+      const res = await api.get(`/search-aliases/${slug}`);
+      resolvedSearchAlias = res.data;
+      // Set SEO from search alias
+      seoTitle.value = res.data.seo_title || res.data.title || null;
+      seoDescription.value = res.data.seo_description || res.data.description || null;
+      seoImage.value = res.data.og_image || null;
+      // Don't set filters from alias - backend handles filtering
+      // Filters only come from URL params or user interaction
+    } catch (e) {
+      console.error('Failed to load search alias:', e);
+    }
+  }
 
   // Load root categories for horizontal bar
   await fetchRootCategories();
@@ -1037,6 +1085,40 @@ onMounted(async () => {
     pagination.total_pages = Math.ceil(pagination.total / perPage);
     categoryAttrs.value = data.category_attrs || [];
 
+    // Apply search alias params if provided (from SSR)
+    if (data.search_params_json) {
+      try {
+        const aliasParams = JSON.parse(data.search_params_json);
+        isSettingAliasFilters = true;
+        if (aliasParams.q) filters.q = aliasParams.q;
+        if (aliasParams.price_min != null) filters.price_min = String(aliasParams.price_min);
+        if (aliasParams.price_max != null) filters.price_max = String(aliasParams.price_max);
+        if (aliasParams.sort) filters.sort = aliasParams.sort;
+        
+        // Apply attribute filters from search params
+        if (aliasParams.attr_filters && typeof aliasParams.attr_filters === 'object') {
+          for (const [code, values] of Object.entries(aliasParams.attr_filters)) {
+            if (!attrFilters[code]) attrFilters[code] = [];
+            if (Array.isArray(values)) {
+              values.forEach(v => {
+                if (!attrFilters[code].includes(v)) attrFilters[code].push(v);
+              });
+            }
+          }
+        }
+        
+        searchAliasBaseParams = {
+          q: aliasParams.q || '',
+          price_min: String(aliasParams.price_min ?? ''),
+          price_max: String(aliasParams.price_max ?? ''),
+          sort: aliasParams.sort || 'relevance',
+        };
+        isSettingAliasFilters = false; // Reset immediately after setting filters
+      } catch (e) {
+        console.error('Failed to parse search_params_json:', e);
+      }
+    }
+
     // Build category path via API for proper localized names
     if (data.category_id || (data.ean_page && data.ean_page.category_id)) {
       const catId = data.category_id || data.ean_page.category_id;
@@ -1060,14 +1142,39 @@ onMounted(async () => {
 watch(
   () => [route.query, route.path],
   async () => {
-    console.log('[CatalogView] Route watch fired, path:', route.path, 'eanPageData:', !!eanPageData.value);
+    // console.log('[CatalogView] Route watch fired, path:', route.path, 'eanPageData:', !!eanPageData.value);
     // If we're in the middle of an inline EAN transition, skip everything —
     // including filter syncing, which could trigger a competing navigation.
     if (isInlineScuTransition.value) {
       return;
     }
 
-    syncFiltersFromRoute();
+    // Reset SEO when navigating away from search alias page
+    if (!route.path.startsWith('/search/')) {
+      seoTitle.value = null;
+      seoDescription.value = null;
+      seoImage.value = null;
+      resolvedSearchAlias = null;
+    } else {
+      // Load search alias SEO for new slug
+      const slug = route.params.slug;
+      if (slug) {
+        try {
+          const res = await api.get(`/search-aliases/${slug}`);
+          resolvedSearchAlias = res.data;
+          seoTitle.value = res.data.seo_title || res.data.title || null;
+          seoDescription.value = res.data.seo_description || res.data.description || null;
+          seoImage.value = res.data.og_image || null;
+        } catch (e) {
+          console.error('Failed to load search alias:', e);
+        }
+      }
+    }
+
+    // Skip syncFiltersFromRoute if we're applying filters (to avoid race condition)
+    if (!isApplyingFilters) {
+      syncFiltersFromRoute();
+    }
     buildPathFromUrl();
 
     // If we already have EANPage data for this path (from inline expansion), skip re-fetch
@@ -1082,11 +1189,11 @@ watch(
     // Reset EANPage data when navigating to a new path that's not in cache
     // This ensures we don't show stale EANPage data when clicking on a new product
     if (eanPageData.value && route.path && !eanPageCache.value.has(route.path)) {
-      console.log('[CatalogView] Route changed, resetting eanPageData for path:', route.path);
+      // console.log('[CatalogView] Route changed, resetting eanPageData for path:', route.path);
       eanPageData.value = null;
     }
 
-    console.log('[CatalogView] Calling fetchProducts for path:', route.path);
+    // console.log('[CatalogView] Calling fetchProducts for path:', route.path);
     fetchProducts();
   },
   { deep: true }
@@ -1096,6 +1203,7 @@ watch(
 watch(
   filters,
   () => {
+    if (isSyncingFiltersFromRoute.value) return; // Don't trigger applyFilters when syncing from route
     applyFilters();
   },
   { deep: true }
@@ -1106,7 +1214,7 @@ watch(
   attrFilters,
   () => {
     pagination.page = 1;
-    fetchProducts();
+    applyFilters();
   },
   { deep: true }
 );
@@ -1195,7 +1303,7 @@ const goToEANPage = async (product) => {
 
   // Fallback: regular navigation (animations off or no cached data)
   if (product.seo_url) {
-    console.log('[CatalogView] goToEANPage: navigating to seo_url:', product.seo_url);
+    // console.log('[CatalogView] goToEANPage: navigating to seo_url:', product.seo_url);
     router.push({ path: product.seo_url });
     return;
   }

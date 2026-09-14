@@ -253,6 +253,16 @@ func (d *Deps) landing(w http.ResponseWriter, r *http.Request) {
 // --- Company landing pages (public) ---
 
 // GET /company/{slug}
+// GET /search-aliases/{slug} — public search alias lookup by slug
+func (d *Deps) searchAliasBySlug(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleSearchAliasBySlug(w, r)
+}
+
+// GET /search/{slug} — SSR search alias page with SEO + initial data
+func (d *Deps) searchAliasSSR(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleSearchAliasSSR(w, r)
+}
+
 func (d *Deps) companyLanding(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

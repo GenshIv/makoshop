@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth';
 const routes = [
   // Public
   { path: '/', name: 'home', component: () => import('../views/HomeView.vue') },
+  { path: '/search/:slug', name: 'search-alias', component: () => import('../views/CatalogView.vue') },
   { path: '/shop', name: 'shop-catalog', component: () => import('../views/CatalogView.vue') },
   { path: '/shop/:pathMatch(.*)*', name: 'shop-catalog-path', component: () => import('../views/CatalogView.vue') },
   { path: '/company/:slug', name: 'company', component: () => import('../views/CompanyView.vue') },
@@ -39,6 +40,7 @@ const routes = [
   { path: '/admin/eanpages', name: 'admin-eanpages', component: () => import('../views/admin/AdminEANPageView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/catalogizer', name: 'admin-catalogizer', component: () => import('../views/admin/AdminCatalogizerView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/stats', name: 'admin-stats', component: () => import('../views/admin/AdminStatsView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
+  { path: '/admin/stats/detailed', name: 'admin-detailed-stats', component: () => import('../views/admin/AdminDetailedStatsView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/metrics', redirect: '/admin/stats' },
   { path: '/admin/analytics', name: 'admin-analytics', component: () => import('../views/admin/AdminAnalyticsView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/promo', name: 'admin-promo', component: () => import('../views/admin/AdminPromoView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
@@ -50,6 +52,7 @@ const routes = [
   { path: '/admin/branding', name: 'admin-branding', component: () => import('../views/admin/AdminBrandingView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/seo', name: 'admin-seo', component: () => import('../views/admin/AdminSEOView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
   { path: '/admin/category-mappings', name: 'admin-category-mappings', component: () => import('../views/admin/AdminCategoryMappingsView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
+  { path: '/admin/search-aliases', name: 'admin-search-aliases', component: () => import('../views/admin/AdminSearchAliasesView.vue'), meta: { requiresAuth: true, requiresRole: 'admin' } },
 ];
 
 const router = createRouter({

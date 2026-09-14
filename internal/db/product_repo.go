@@ -1202,20 +1202,21 @@ type (
 	}
 
 	EANListRespData struct {
-		Items         []silentjson.RawMessage `json:"items,omitempty"`
-		Total         int64                   `json:"total"`
-		Page          int                     `json:"page"`
-		Limit         int                     `json:"limit"`
-		CategoryAttrs []AttrItem              `json:"category_attrs,omitempty"`
-		CatID         int64                   `json:"category_id,omitempty"`
-		TreePath      []string                `json:"tree_path,omitempty"`
-		Category      model.Category          `json:"category,omitempty"`
-		Subcategories silentjson.RawMessage   `json:"subcategories,omitempty"` // precomputed JSON []byte, no struct->json
-		Facets        *Facets                 `json:"facets,omitempty"`
-		Products      []model.Product         `json:"products,omitempty"`
-		EANPage       *model.EANPage          `json:"ean_page,omitempty"`
-		TreePathFull  []CategoryTreeNode      `json:"tree_path_full,omitempty"`
-		SEOURL        string                  `json:"seo_url,omitempty"`
+		Items            []silentjson.RawMessage `json:"items,omitempty"`
+		Total            int64                   `json:"total"`
+		Page             int                     `json:"page"`
+		Limit            int                     `json:"limit"`
+		CategoryAttrs    []AttrItem              `json:"category_attrs,omitempty"`
+		CatID            int64                   `json:"category_id,omitempty"`
+		TreePath         []string                `json:"tree_path,omitempty"`
+		Category         model.Category          `json:"category,omitempty"`
+		Subcategories    silentjson.RawMessage   `json:"subcategories,omitempty"` // precomputed JSON []byte, no struct->json
+		Facets           *Facets                 `json:"facets,omitempty"`
+		Products         []model.Product         `json:"products,omitempty"`
+		EANPage          *model.EANPage          `json:"ean_page,omitempty"`
+		TreePathFull     []CategoryTreeNode      `json:"tree_path_full,omitempty"`
+		SEOURL           string                  `json:"seo_url,omitempty"`
+		SearchParamsJSON string                  `json:"search_params_json,omitempty"` // For search alias pages (JSON string)
 	}
 )
 

@@ -7,6 +7,7 @@ import (
 // VisitEvent represents a single visit event
 type VisitEvent struct {
 	IsBot      bool
+	Page       string
 	Referrer   string
 	CategoryID int64
 	Timestamp  uint32
@@ -89,6 +90,7 @@ type StatsConfig struct {
 	TrackFullReferrer bool
 	GoogleReferrers   []string // full referrer patterns to track
 	ExcludedIPs       []string // IP addresses to exclude from stats (e.g., admin IP)
+	CountablePaths    []string // Path prefixes to count (default: ["/", "/shop"])
 }
 
 // DefaultStatsConfig returns default configuration
@@ -100,6 +102,7 @@ func DefaultStatsConfig() StatsConfig {
 		TrackFullReferrer: false,
 		GoogleReferrers:   []string{"google.com", "google.ru", "google.co.uk"},
 		ExcludedIPs:       []string{},
+		CountablePaths:    []string{"/", "/shop"}, // Only count root and shop pages by default
 	}
 }
 

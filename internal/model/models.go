@@ -349,6 +349,30 @@ type LandingPage struct {
 	UpdatedAt   int64    `json:"updated_at"`
 }
 
+// SearchAlias — посадочная страница для редкочастотных запросов.
+// Алиас на поиск с предустановленными фильтрами. Пользователь видит обычную
+// страницу поиска, не зная что это фильтры. Путь: /search/{slug}
+
+type SearchAlias struct {
+	ID             int64               `json:"id"`
+	Slug           string              `json:"slug"`
+	Title          string              `json:"title"`
+	Description    string              `json:"description,omitempty"`
+	SEOTitle       string              `json:"seo_title,omitempty"`
+	SEODescription string              `json:"seo_description,omitempty"`
+	OGImage        string              `json:"og_image,omitempty"`
+	JSONLD         string              `json:"json_ld,omitempty"`
+	SearchQuery    string              `json:"search_query,omitempty"`
+	CategorySlug   string              `json:"category_slug,omitempty"`
+	PriceMin       *float64            `json:"price_min,omitempty"`
+	PriceMax       *float64            `json:"price_max,omitempty"`
+	AttrFilters    map[string][]string `json:"attr_filters,omitempty"`
+	SortOrder      string              `json:"sort_order,omitempty"`
+	IsActive       bool                `json:"is_active"`
+	CreatedAt      int64               `json:"created_at"`
+	UpdatedAt      int64               `json:"updated_at"`
+}
+
 // EANPage — SEO-страница для группы товаров с одинаковым EAN.
 // Основная сущность каталога: каталог и поиск работают по EANPage, не по товарам.
 // Путь: /shop/{category_tree}/{slug}

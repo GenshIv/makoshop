@@ -35,6 +35,7 @@ func KeyPromoLog(id int64) string      { return fmt.Sprintf("promo_log:%d", id) 
 func KeyLandingPage(id int64) string   { return fmt.Sprintf("landing:%d", id) }
 func KeyEANPage(id string) string      { return fmt.Sprintf("eanpage:%s", id) }
 func KeyBrandSet(id int64) string      { return fmt.Sprintf("brand_set:%d", id) }
+func KeySearchAlias(id int64) string   { return fmt.Sprintf("search_alias:%d", id) }
 
 // KeyBrandCatTheme is unique per (category, slot) pair — upsert semantics.
 func KeyBrandCatTheme(categoryID int64, slot model.BrandSlot) string {
@@ -402,4 +403,17 @@ func UnmarshalBrandCatTheme(data []byte) (*model.BrandCategoryTheme, error) {
 		return nil, err
 	}
 	return &t, nil
+}
+
+func MarshalSearchAlias(a model.SearchAlias) []byte {
+	b, _ := json.Marshal(a)
+	return b
+}
+
+func UnmarshalSearchAlias(data []byte) (*model.SearchAlias, error) {
+	var a model.SearchAlias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return nil, err
+	}
+	return &a, nil
 }
