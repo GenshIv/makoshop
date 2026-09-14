@@ -1000,7 +1000,7 @@ const syncFiltersFromRoute = () => {
   }, 0);
 };
 
-let resolvedSearchAlias = null;
+const resolvedSearchAlias = ref(null);
 let isSettingAliasFilters = false;
 
 // SEO for search alias pages
@@ -1037,7 +1037,7 @@ onMounted(async () => {
     const slug = route.params.slug;
     try {
       const res = await api.get(`/search-aliases/${slug}`);
-      resolvedSearchAlias = res.data;
+      resolvedSearchAlias.value = res.data;
       // Set SEO from search alias
       seoTitle.value = res.data.seo_title || res.data.title || null;
       seoDescription.value = res.data.seo_description || res.data.description || null;
@@ -1154,14 +1154,14 @@ watch(
       seoTitle.value = null;
       seoDescription.value = null;
       seoImage.value = null;
-      resolvedSearchAlias = null;
+      resolvedSearchAlias.value = null;
     } else {
       // Load search alias SEO for new slug
       const slug = route.params.slug;
       if (slug) {
         try {
           const res = await api.get(`/search-aliases/${slug}`);
-          resolvedSearchAlias = res.data;
+          resolvedSearchAlias.value = res.data;
           seoTitle.value = res.data.seo_title || res.data.title || null;
           seoDescription.value = res.data.seo_description || res.data.description || null;
           seoImage.value = res.data.og_image || null;
@@ -1544,13 +1544,13 @@ defineOptions({ name: 'CatalogView' });
                     {{ t('catalog.explore') }}
                   </span>
                   <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-ink leading-tight">
-                    {{ currentBrowseCategory ? catName(currentBrowseCategory) : t('catalog.all_products') }}
+                    {{ resolvedSearchAlias ? (resolvedSearchAlias.seo_title || resolvedSearchAlias.title) : (currentBrowseCategory ? catName(currentBrowseCategory) : t('catalog.all_products')) }}
                   </h2>
                   <p
-                    v-if="currentBrowseCategory && catDescription(currentBrowseCategory)"
+                    v-if="resolvedSearchAlias ? (resolvedSearchAlias.seo_description || resolvedSearchAlias.description) : (currentBrowseCategory && catDescription(currentBrowseCategory))"
                     class="mt-2 text-sm sm:text-base text-ink-2 leading-relaxed max-w-prose"
                   >
-                    {{ catDescription(currentBrowseCategory) }}
+                    {{ resolvedSearchAlias ? (resolvedSearchAlias.seo_description || resolvedSearchAlias.description) : catDescription(currentBrowseCategory) }}
                   </p>
                 </div>
                 <!-- Category image on the right -->
