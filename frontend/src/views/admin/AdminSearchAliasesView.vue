@@ -161,6 +161,57 @@ const deleteAlias = async (id) => {
   }
 };
 
+const exportAliases = async () => {
+  try {
+    const response = await api.get('/admin/search-aliases/export', {
+      responseType: 'blob',
+    });
+
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'search-aliases-export.json');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+
+    toast.success(t('admin.exported'));
+  } catch (e) {
+    console.error(e);
+    toast.error(t('admin.error'));
+  }
+};
+
+const importAliases = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    const response = await api.post('/admin/search-aliases/import', data);
+
+    toast.success(
+      t('admin.imported', {
+        imported: response.data.imported,
+        errors: response.data.errors,
+      })
+    );
+    fetchAliases();
+  } catch (e) {
+    console.error(e);
+    if (e instanceof SyntaxError) {
+      toast.error('Invalid JSON file');
+    } else {
+      toast.error(t('admin.error'));
+    }
+  } finally {
+    event.target.value = '';
+  }
+};
+
 onMounted(fetchAliases);
 </script>
 
@@ -168,12 +219,29 @@ onMounted(fetchAliases);
   <div class="max-w-app mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold text-purple-700">{{ t('admin.search_aliases') }}</h1>
-      <button
-        @click="openCreateForm"
-        class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-      >
-        {{ t('admin.create') }}
-      </button>
+      <div class="flex items-center gap-2">
+        <label class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors cursor-pointer">
+          {{ t('admin.import') }}
+          <input
+            type="file"
+            accept=".json"
+            @change="importAliases"
+            class="hidden"
+          />
+        </label>
+        <button
+          @click="exportAliases"
+          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          {{ t('admin.export') }}
+        </button>
+        <button
+          @click="openCreateForm"
+          class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+        >
+          {{ t('admin.create') }}
+        </button>
+      </div>
     </div>
 
     <!-- Loading -->

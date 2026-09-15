@@ -328,6 +328,10 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.Handle("/admin/search-aliases", spaAwareHandler(d.JWT.RequireRole(http.HandlerFunc(d.adminSearchAliases), model.RoleAdmin)))
 	mux.Handle("/admin/search-aliases/", d.JWT.RequireRole(http.HandlerFunc(d.adminSearchAlias), model.RoleAdmin))
 
+	// Admin: search aliases import/export
+	mux.Handle("/admin/search-aliases/export", d.JWT.RequireRole(http.HandlerFunc(d.Handlers.HandleSearchAliasesExport), model.RoleAdmin))
+	mux.Handle("/admin/search-aliases/import", d.JWT.RequireRole(http.HandlerFunc(d.Handlers.HandleSearchAliasesImport), model.RoleAdmin))
+
 	// Public search alias by slug (returns alias data only)
 	mux.HandleFunc("/search-aliases/", d.searchAliasBySlug)
 

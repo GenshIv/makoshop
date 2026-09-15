@@ -153,6 +153,16 @@ func (r *CategoryRepo) Create(c *model.Category) error {
 	r.rebuildFullTreeJSON()
 	r.invalidateAllParentTrees()
 
+	// Update in-memory treePaths cache for path resolution
+	if r.treePaths != nil {
+		path, err := r.computeTreePath(c.ID)
+		if err != nil {
+			fmt.Printf("WARN: failed to compute tree path for category %d: %v\n", c.ID, err)
+		} else {
+			r.updateTreePath(c.ID, path)
+		}
+	}
+
 	return nil
 }
 
@@ -188,6 +198,16 @@ func (r *CategoryRepo) Update(id int64, updater func(*model.Category)) error {
 	r.rebuildFullTreeJSON()
 	r.invalidateAllParentTrees()
 
+	// Update in-memory treePaths cache for path resolution
+	if r.treePaths != nil {
+		path, err := r.computeTreePath(cat.ID)
+		if err != nil {
+			fmt.Printf("WARN: failed to compute tree path for category %d: %v\n", cat.ID, err)
+		} else {
+			r.updateTreePath(cat.ID, path)
+		}
+	}
+
 	return nil
 }
 
@@ -208,6 +228,11 @@ func (r *CategoryRepo) Delete(id int64) error {
 	// Rebuild precomputed tree JSONs
 	r.rebuildFullTreeJSON()
 	r.invalidateAllParentTrees()
+
+	// Remove from in-memory treePaths cache for path resolution
+	if r.treePaths != nil {
+		r.removeTreePath(cat.ID)
+	}
 
 	return nil
 }

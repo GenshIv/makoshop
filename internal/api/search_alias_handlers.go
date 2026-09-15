@@ -170,3 +170,94 @@ func (h *Handlers) HandleSearchAliasBySlug(w http.ResponseWriter, r *http.Reques
 
 	httpres.WriteJSON(w, http.StatusOK, a)
 }
+
+// HandleSearchAliasesExport exports all search aliases as JSON (admin).
+// GET /admin/search-aliases/export
+func (h *Handlers) HandleSearchAliasesExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	aliases, err := h.searchAliasRepo.ListAll()
+	if err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	if aliases == nil {
+		aliases = []model.SearchAlias{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", `attachment; filename="search-aliases-export.json"`)
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"version": 1,
+		"items":   aliases,
+	})
+}
+
+// HandleSearchAliasesImport imports search aliases from JSON (admin).
+// POST /admin/search-aliases/import
+func (h *Handlers) HandleSearchAliasesImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	var payload struct {
+		Version int                 `json:"version"`
+		Items   []model.SearchAlias `json:"items"`
+	}
+
+	if !httpres.ReadJSON(w, r, &payload) {
+		return
+	}
+
+	imported := 0
+	skipped := 0
+	errors := 0
+
+	for _, a := range payload.Items {
+		// Check if alias with same slug already exists
+		existing, err := h.searchAliasRepo.GetBySlug(a.Slug)
+		if err == nil && existing != nil {
+			// Update existing
+			err = h.searchAliasRepo.Update(existing.ID, func(e *model.SearchAlias) {
+				e.Title = a.Title
+				e.Description = a.Description
+				e.SEOTitle = a.SEOTitle
+				e.SEODescription = a.SEODescription
+				e.OGImage = a.OGImage
+				e.JSONLD = a.JSONLD
+				e.SearchQuery = a.SearchQuery
+				e.CategorySlug = a.CategorySlug
+				e.PriceMin = a.PriceMin
+				e.PriceMax = a.PriceMax
+				e.AttrFilters = a.AttrFilters
+				e.SortOrder = a.SortOrder
+				e.IsActive = a.IsActive
+			})
+			if err != nil {
+				errors++
+			} else {
+				imported++
+			}
+		} else {
+			// Create new
+			err = h.searchAliasRepo.Create(&a)
+			if err != nil {
+				errors++
+			} else {
+				imported++
+			}
+		}
+	}
+
+	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"imported": imported,
+		"skipped":  skipped,
+		"errors":   errors,
+	})
+}
