@@ -90,6 +90,18 @@ const (
 	eanpageSortTypeCreatedAtDesc = "created_at_desc"
 )
 
+// EANPageMinCatalogPrice is the minimum min_price an EAN page must have to be
+// listed in catalog browsing (category pages, /shop root, home sections).
+// Pages below it (no offers, or offers with an unusable price) stay in ALL
+// indexes — reachable by direct URL and via search — but never enter catalog
+// listings: catalog pagination always reads the numSort price range starting
+// at the floor below.
+const EANPageMinCatalogPrice = 0.01
+
+// eanpageCatalogPriceFloorCents is the catalog min-price floor in numSort
+// units (cents).
+const eanpageCatalogPriceFloorCents = uint64(EANPageMinCatalogPrice * 100)
+
 // ---------- indexing ----------
 
 // IndexEANPage indexes a single EAN page into turbo indexes.
@@ -210,9 +222,10 @@ func (s *EANPageSearch) IndexEANPageBatchTx(txn *Transaction, pages []*model.EAN
 	for _, sp := range pages {
 		docID := KeyEANPage(sp.EAN)
 
-		// Category union index for all ancestors.
-		// Skip if no products: keep page findable via search but not in category listings.
-		if sp.CategoryID != 0 && sp.ProductCount > 0 {
+		// Category union index for all ancestors. Includes pages without
+		// offers: the union index only constrains search results (which may
+		// show them); catalog listings exclude them via the min-price floor.
+		if sp.CategoryID != 0 {
 			ancestors, err := s.getCategoryAncestors(sp.CategoryID)
 			if err != nil {
 				ancestors = []int64{sp.CategoryID}
@@ -349,9 +362,10 @@ func (s *EANPageSearch) IndexEANPageBatch(pages []*model.EANPage) error {
 	for _, sp := range pages {
 		docID := KeyEANPage(sp.EAN)
 
-		// Category union index for all ancestors.
-		// Skip if no products: keep page findable via search but not in category listings.
-		if sp.CategoryID != 0 && sp.ProductCount > 0 {
+		// Category union index for all ancestors. Includes pages without
+		// offers: the union index only constrains search results (which may
+		// show them); catalog listings exclude them via the min-price floor.
+		if sp.CategoryID != 0 {
 			ancestors, err := s.getCategoryAncestors(sp.CategoryID)
 			if err != nil {
 				ancestors = []int64{sp.CategoryID}
@@ -605,14 +619,18 @@ func (s *EANPageSearch) BuildSortIndexes() error {
 	catPricePairs := make(map[int64][]makodb.TurboNumSortPair)
 
 	for _, sp := range all {
-		// Skip EAN pages with no offers: keep them in text/search indexes
-		// (findable via search) but exclude from catalog sort indexes.
-		if sp.ProductCount == 0 {
-			continue
-		}
-
 		docIDKey := KeyEANPage(sp.EAN)
-		priceVal := uint64(sp.MinPrice * 100)
+
+		// Sort indexes hold EVERY page: search paginates through them and
+		// must find pages without usable offers too. Such pages (no offers,
+		// or min_price below EANPageMinCatalogPrice) get the numSort value 0:
+		// catalog listings paginate the numSort range starting at the price
+		// floor, so they never surface in the catalog.
+		price := sp.MinPrice
+		if sp.ProductCount == 0 || price < EANPageMinCatalogPrice {
+			price = 0
+		}
+		priceVal := uint64(price * 100)
 
 		scCreated := sp.CreatedAt
 		// Add to global (catID=0) index
@@ -731,6 +749,11 @@ type EANPageListParams struct {
 	Sort        string
 	Page        int
 	Limit       int
+	// IncludeNoOffer disables the permanent catalog min-price floor so pages
+	// without usable offers (min_price < EANPageMinCatalogPrice) are listed
+	// too. Search (Q / attr filters) bypasses the floor on its own; this flag
+	// is for consumers that must see the full set (admin listing).
+	IncludeNoOffer bool
 }
 
 type EANPageListResult struct {
@@ -773,34 +796,76 @@ func (s *EANPageSearch) ListWithTurbo(params EANPageListParams) (*EANPageListRes
 		sortType = eanpageSortTypeCreatedAtDesc
 	}
 	sortKey := eanpageSortKey(catID, sortType)
+	numSortKey := eanpageNumSortPriceKey(catID)
+
+	// Permanent catalog filter: plain catalog browsing (no text query, no
+	// attribute filters) hides pages whose min_price is below
+	// EANPageMinCatalogPrice — they have no usable offers. Implemented as a
+	// floor on the numSort price range, so such pages stay in every index and
+	// remain reachable via search and direct URLs.
+	catalogFloor := uint64(0)
+	if params.Q == "" && len(params.AttrFilters) == 0 && !params.IncludeNoOffer {
+		catalogFloor = eanpageCatalogPriceFloorCents
+	}
 
 	// Fast path: no additional filters — use sort index directly.
 	// Per-category sort index already contains only category docs.
 	if params.Q == "" && params.CompanyID == 0 &&
 		len(params.AttrFilters) == 0 && params.PriceMin == 0 && params.PriceMax == 0 {
-		res, err := s.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
-			Name:       sortKey,
-			Candidates: nil,
-			Page:       params.Page - 1,
-			PageSize:   params.Limit,
-			Desc:       false,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("turbo sort page with docs: %w", err)
-		}
-		items := make([]silentjson.RawMessage, 0, len(res.Docs))
-		for _, doc := range res.Docs {
-			if doc != nil && len(doc) > 0 {
-				items = append(items, doc)
+		if catalogFloor == 0 {
+			res, err := s.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
+				Name:       sortKey,
+				Candidates: nil,
+				Page:       params.Page - 1,
+				PageSize:   params.Limit,
+				Desc:       false,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("turbo sort page with docs: %w", err)
 			}
+			return eanPageListResultFromDocs(res, params), nil
 		}
 
-		return &EANPageListResult{
-			Items: items,
-			Total: int64(res.Total),
-			Page:  params.Page,
-			Limit: params.Limit,
-		}, nil
+		// Catalog browsing with the min-price floor: paginate the numSort
+		// price range instead of the raw sort index.
+		if sortType == eanpageSortTypeCreatedAtDesc {
+			// created_at order: restrict the sort index to pages at or above
+			// the floor via the numSort range as candidates.
+			floorRaw, err := s.db.TurboGetNumSortRangeRaw(numSortKey, catalogFloor, ^uint64(0))
+			if err != nil {
+				return nil, fmt.Errorf("turbo numSort floor: %w", err)
+			}
+			if floorRaw == nil || len(floorRaw) == 0 {
+				return &EANPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
+			}
+			res, err := s.db.TurboSortIndexPageRawWithDocsFromDB(
+				sortKey,
+				floorRaw,
+				params.Page-1,
+				params.Limit,
+				false,
+				"eanpage:",
+			)
+			if err != nil {
+				return nil, fmt.Errorf("turbo sort page with docs: %w", err)
+			}
+			return eanPageListResultFromDocs(res, params), nil
+		}
+
+		// price_asc / price_desc: the numSort range is already price-ordered.
+		res, err := s.db.TurboGetNumSortRangeWithDocs(makodb.TurboGetNumSortRangeWithDocsParams{
+			Name:      numSortKey,
+			MinValue:  catalogFloor,
+			MaxValue:  ^uint64(0),
+			Page:      params.Page - 1,
+			PageSize:  params.Limit,
+			Desc:      sortType == eanpageSortTypePriceDesc,
+			DocPrefix: "eanpage:",
+		})
+		if err != nil {
+			return nil, fmt.Errorf("turbo numSort range with docs: %w", err)
+		}
+		return eanPageListResultFromDocs(res, params), nil
 	}
 
 	// Fast path: price range + price sort — use numSort directly.
@@ -809,6 +874,9 @@ func (s *EANPageSearch) ListWithTurbo(params EANPageListParams) (*EANPageListRes
 		len(params.AttrFilters) == 0 && (params.PriceMin > 0 || params.PriceMax > 0) &&
 		sortType == eanpageSortTypePriceAsc {
 		minVal := uint64(params.PriceMin * 100)
+		if minVal < catalogFloor {
+			minVal = catalogFloor
+		}
 		maxVal := uint64(params.PriceMax * 100)
 		if params.PriceMax == 0 {
 			maxVal = ^uint64(0)
@@ -844,6 +912,9 @@ func (s *EANPageSearch) ListWithTurbo(params EANPageListParams) (*EANPageListRes
 		len(params.AttrFilters) == 0 && (params.PriceMin > 0 || params.PriceMax > 0) &&
 		sortType == eanpageSortTypePriceDesc {
 		minVal := uint64(params.PriceMin * 100)
+		if minVal < catalogFloor {
+			minVal = catalogFloor
+		}
 		maxVal := uint64(params.PriceMax * 100)
 		if params.PriceMax == 0 {
 			maxVal = ^uint64(0)
@@ -929,9 +1000,14 @@ func (s *EANPageSearch) ListWithTurbo(params EANPageListParams) (*EANPageListRes
 		}
 	}
 
-	// Price range filter via per-category numSort index
-	if params.PriceMin > 0 || params.PriceMax > 0 {
+	// Price range filter via per-category numSort index. In catalog mode the
+	// permanent min-price floor is applied here too — even when no explicit
+	// price range was requested (created_at sort, vendor filter).
+	if params.PriceMin > 0 || params.PriceMax > 0 || catalogFloor > 0 {
 		minVal := uint64(params.PriceMin * 100)
+		if minVal < catalogFloor {
+			minVal = catalogFloor
+		}
 		maxVal := uint64(params.PriceMax * 100)
 		if params.PriceMax == 0 {
 			maxVal = ^uint64(0)
@@ -1031,10 +1107,12 @@ func (s *EANPageSearch) ListWithTurbo(params EANPageListParams) (*EANPageListRes
 }
 
 // RandomByCategory returns up to `limit` random EAN pages of a category
-// (including its whole subtree — per-category sort indexes are built for
+// (including its whole subtree — per-category numSort indexes are built for
 // every ancestor) plus the total number of pages in the category (for the
 // UI badge). Cheap randomness: read a random window from the existing
-// eanpage_sort:{catID}:price_asc index instead of a dedicated random index.
+// eanpage_price:{catID} numSort range instead of a dedicated random index.
+// The range starts at the catalog min-price floor, so pages without usable
+// offers never surface on the home page.
 func (s *EANPageSearch) RandomByCategory(catID int64, limit int) ([]silentjson.RawMessage, int, error) {
 	if !s.enabled {
 		return nil, 0, fmt.Errorf("eanpage search is disabled")
@@ -1046,15 +1124,20 @@ func (s *EANPageSearch) RandomByCategory(catID int64, limit int) ([]silentjson.R
 		limit = 50
 	}
 
+	rangeParams := makodb.TurboGetNumSortRangeWithDocsParams{
+		Name:     eanpageNumSortPriceKey(catID),
+		MinValue: eanpageCatalogPriceFloorCents,
+		MaxValue: ^uint64(0),
+		PageSize: limit,
+	}
+
 	// First probe: page size 1 just to learn the total.
-	probe, err := s.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
-		Name: eanpageSortKey(catID, eanpageSortTypePriceAsc),
-		Page: 0,
-		// Minimal read: docs are fetched again in the random window below.
-		PageSize: 1,
-	})
+	probeParams := rangeParams
+	// Minimal read: docs are fetched again in the random window below.
+	probeParams.PageSize = 1
+	probe, err := s.db.TurboGetNumSortRangeWithDocs(probeParams)
 	if err != nil {
-		return nil, 0, fmt.Errorf("turbo sort probe: %w", err)
+		return nil, 0, fmt.Errorf("turbo numSort probe: %w", err)
 	}
 	total := int(probe.Total)
 	if total == 0 {
@@ -1063,15 +1146,13 @@ func (s *EANPageSearch) RandomByCategory(catID int64, limit int) ([]silentjson.R
 
 	// Random window: a page of `limit` docs starting at page*limit. Any page
 	// whose start is < total is valid; the turbo layer clips the final
-	// partial window to the end of the index, so every doc can appear.
+	// partial window to the end of the range, so every doc can appear.
 	pages := (total + limit - 1) / limit
-	res, err := s.db.TurboSortIndexPageWithDocsFromDB(makodb.TurboSortPageWithDocsParams{
-		Name:     eanpageSortKey(catID, eanpageSortTypePriceAsc),
-		Page:     rand.Intn(pages),
-		PageSize: limit,
-	})
+	windowParams := rangeParams
+	windowParams.Page = rand.Intn(pages)
+	res, err := s.db.TurboGetNumSortRangeWithDocs(windowParams)
 	if err != nil {
-		return nil, total, fmt.Errorf("turbo sort page with docs: %w", err)
+		return nil, total, fmt.Errorf("turbo numSort window: %w", err)
 	}
 
 	items := make([]silentjson.RawMessage, 0, len(res.Docs))
@@ -1083,6 +1164,23 @@ func (s *EANPageSearch) RandomByCategory(catID int64, limit int) ([]silentjson.R
 	// Shuffle so items within the window are not price-ordered.
 	rand.Shuffle(len(items), func(i, j int) { items[i], items[j] = items[j], items[i] })
 	return items, total, nil
+}
+
+// eanPageListResultFromDocs converts a turbo sort/numSort page result into an
+// EANPageListResult (empty docs dropped).
+func eanPageListResultFromDocs(res makodb.TurboSortPageWithDocsResult, params EANPageListParams) *EANPageListResult {
+	items := make([]silentjson.RawMessage, 0, len(res.Docs))
+	for _, doc := range res.Docs {
+		if doc != nil && len(doc) > 0 {
+			items = append(items, silentjson.RawMessage(doc))
+		}
+	}
+	return &EANPageListResult{
+		Items: items,
+		Total: int64(res.Total),
+		Page:  params.Page,
+		Limit: params.Limit,
+	}
 }
 
 // ---------- helpers ----------

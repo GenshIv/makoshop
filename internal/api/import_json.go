@@ -678,6 +678,11 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNo
 
 	var allParsedProducts []*model.Product
 	var allParsedNames []string
+	// zeroPriceOffers: offers whose price is below the catalog minimum. They
+	// are NOT imported as products; their data is kept to create EAN pages
+	// without offers (only when the page does not exist yet and the offer
+	// carries a usable description).
+	var zeroPriceOffers []*model.Product
 
 	h.importProgress.SetStep(StepParse)
 
@@ -693,10 +698,11 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNo
 			return result
 		}
 		result.Files = 1 // the feed is one logical source
-		parsed, names, skipped := parseTradedoublerProducts(tps, company.ID, company.Slug, company.Name, currency, attrDefCache, newAttrKeys, fieldMap, limit)
+		parsed, names, skipped, zeroPriced := parseTradedoublerProducts(tps, company.ID, company.Slug, company.Name, currency, attrDefCache, newAttrKeys, fieldMap, limit)
 		allParsedProducts = parsed
 		allParsedNames = names
 		result.ProductsSkipped = skipped
+		zeroPriceOffers = append(zeroPriceOffers, zeroPriced...)
 		result.OffersParsed = len(parsed)
 		for range parsed {
 			h.importProgress.AddParsed(1)
@@ -744,6 +750,11 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNo
 				if skip {
 					fileSkipped++
 					result.ProductsSkipped++
+					// Zero-price offer: the product is skipped, but keep the
+					// parsed data for the no-offer EAN page creation below.
+					if prod != nil {
+						zeroPriceOffers = append(zeroPriceOffers, prod)
+					}
 					continue
 				}
 				if prod != nil {
@@ -1060,6 +1071,34 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNo
 				return result
 			}
 		}
+
+		// Zero-price offers: no products were imported for them. Create the
+		// missing EAN pages without offers so the items stay present in the
+		// general index (search / direct URLs) while the catalog skips them.
+		if len(zeroPriceOffers) > 0 {
+			// Apply explicit category mappings first (same rule as priced offers).
+			for _, p := range zeroPriceOffers {
+				if p.ShopCategory == "" {
+					continue
+				}
+				mapping, mapErr := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
+				if mapErr == nil && mapping != nil {
+					p.CategoryID = mapping.TargetCategoryID
+				}
+			}
+			noOfferPages := h.eanPageRepo.EnsureEANPagesWithoutOffersTx(txn, zeroPriceOffers)
+			if len(noOfferPages) > 0 {
+				fmt.Printf("[IMPORT-JSON] Created %d EAN pages from zero-price offers\n", len(noOfferPages))
+				if h.eanPageSearch != nil {
+					if err := h.eanPageSearch.IndexEANPageBatchTx(txn, noOfferPages); err != nil {
+						fmt.Printf("[IMPORT-JSON] WARN: index no-offer EAN pages: %v\n", err)
+					}
+				}
+				for _, s := range noOfferPages {
+					result.AffectedEANPages = append(result.AffectedEANPages, s.EAN)
+				}
+			}
+		}
 		fmt.Printf("[IMPORT-JSON] Phase 2: EAN pages done in %v\n", time.Since(phase2Start))
 
 		delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
@@ -1189,10 +1228,6 @@ func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companyS
 		if lastPrice.Price.Currency != "" {
 			extractedCurrency = lastPrice.Price.Currency
 		}
-	}
-
-	if price <= 0 {
-		return nil, true, nil
 	}
 
 	// Parse coded feed fields (e.g. Allegro "attr_<id>") using the company's
@@ -1345,6 +1380,14 @@ func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companyS
 		// derive the direct product link for ProductURL.
 		p.PurchaseURL = strings.TrimSpace(jp.Offers[0].ProductURL)
 		p.ProductURL = extractDirectProductURL(jp.Offers[0].ProductURL)
+	}
+
+	// Offers below the catalog minimum are not imported as products. Return
+	// the parsed data with skip=true: the caller counts the offer as skipped
+	// and uses the product to create an EAN page without offers (when the
+	// page does not exist yet and the description is usable).
+	if price < db.EANPageMinCatalogPrice {
+		return p, true, nil
 	}
 
 	return p, false, nil

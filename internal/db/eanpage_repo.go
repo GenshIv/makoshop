@@ -1101,7 +1101,15 @@ func (r *EANPageRepo) RecalculateCountsAndMinPricesForPages(pageIDs []string, pr
 				sp.ProductCount = len(ids)
 				changed = true
 			}
-			if found && minPrice != sp.MinPrice {
+			if len(ids) == 0 {
+				// No linked offers left: the stored min price is stale. Reset
+				// it so the page cannot leak back into catalog listings with
+				// an old price.
+				if sp.MinPrice != 0 {
+					sp.MinPrice = 0
+					changed = true
+				}
+			} else if found && minPrice != sp.MinPrice {
 				sp.MinPrice = minPrice
 				changed = true
 			}
@@ -1625,6 +1633,121 @@ func (r *EANPageRepo) BatchUpsertFromProductsTx(txn *Transaction, products []*mo
 	fmt.Printf("[EANPAGE] upsert: done in %v (new %d, updated %d)\n",
 		time.Since(upsertStart), len(newPages), len(updatedPages))
 	return result, affected
+}
+
+// offerDescriptionUsable reports whether an offer's description is good
+// enough to build an EAN page without offers: non-empty after trimming and
+// not a bare number (feeds sometimes carry a category id there).
+func offerDescriptionUsable(desc string) bool {
+	d := strings.TrimSpace(desc)
+	if len(d) < 3 {
+		return false
+	}
+	for _, r := range d {
+		if r < '0' || r > '9' {
+			return true
+		}
+	}
+	return false
+}
+
+// EnsureEANPagesWithoutOffersTx creates EAN pages for offers that are NOT
+// imported as products because their price is below EANPageMinCatalogPrice.
+// A page is created only when it does not exist yet AND the offer carries a
+// usable description; it is created WITHOUT offers (ProductCount 0, MinPrice
+// 0), so catalog listings skip it while search and direct URLs keep working.
+// Existing pages are never modified. Returns the created pages so the caller
+// can index them within the same transaction.
+func (r *EANPageRepo) EnsureEANPagesWithoutOffersTx(txn *Transaction, products []*model.Product) []*model.EANPage {
+	if txn == nil || len(products) == 0 {
+		return nil
+	}
+
+	// Deduplicate by page key, dropping offers without usable data.
+	seen := make(map[string]struct{}, len(products))
+	candidates := make([]*model.Product, 0, len(products))
+	for _, p := range products {
+		if p == nil {
+			continue
+		}
+		pk := EANPageKeyForProduct(p)
+		if pk == "" || pk == "nm:" || strings.TrimSpace(p.Name) == "" {
+			continue
+		}
+		if !offerDescriptionUsable(p.Description) {
+			continue
+		}
+		if _, dup := seen[pk]; dup {
+			continue
+		}
+		seen[pk] = struct{}{}
+		candidates = append(candidates, p)
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	// Keep only offers whose page does not exist yet.
+	toCreate := make([]*model.Product, 0, len(candidates))
+	for _, p := range candidates {
+		if _, err := r.GetByEAN(EANPageKeyForProduct(p)); err != nil {
+			toCreate = append(toCreate, p)
+		}
+	}
+	if len(toCreate) == 0 {
+		return nil
+	}
+
+	// Auto-catalogize with the shared token sets (same input as priced offers).
+	catSets := r.catalogTokenSets()
+
+	created := make([]*model.EANPage, 0, len(toCreate))
+	var newListIDs []string
+	for _, p := range toCreate {
+		pk := EANPageKeyForProduct(p)
+		slug := toEANPageSlug(pk, p.Name)
+		s := &model.EANPage{
+			EAN:          pk,
+			Slug:         slug,
+			Title:        parseTitleFromProductName(p.Name),
+			Description:  p.Description,
+			Content:      p.Description,
+			Images:       limitStrings(deduplicateStrings(p.Images), maxEANPageImages),
+			CategoryID:   p.CategoryID,
+			Brand:        p.Brand,
+			BrandID:      p.BrandID,
+			IsActive:     true,
+			MinPrice:     0,
+			Currency:     p.Currency,
+			Attributes:   mergeAttributes(nil, p.Attributes),
+			ProductCount: 0,
+			SeoURL:       r.ComputeSeoURL(slug, p.CategoryID, nil),
+			Keywords:     extractKeywordsFromProduct(p),
+			CreatedAt:    time.Now().Unix(),
+			UpdatedAt:    time.Now().Unix(),
+		}
+		if s.CategoryID == 0 {
+			if catID := AutoCatalogizeWithSets(p, catSets); catID != 0 {
+				s.CategoryID = catID
+				s.SeoURL = r.ComputeSeoURL(s.Slug, catID, nil)
+			}
+		}
+		if err := r.CreateNoListIndexTx(txn, s); err != nil {
+			fmt.Printf("WARN: create no-offer eanpage for %s: %v\n", pk, err)
+			continue
+		}
+		created = append(created, s)
+		newListIDs = append(newListIDs, KeyEANPage(s.EAN))
+	}
+
+	if len(newListIDs) > 0 {
+		if _, err := txn.TurboPutBatchIndexString(TurboKeyEANPageList, newListIDs); err != nil {
+			fmt.Printf("WARN: batch add no-offer pages to eanpage_list: %v\n", err)
+		}
+	}
+
+	fmt.Printf("[EANPAGE] ensure no-offer pages: %d offers checked, %d pages created\n", len(products), len(created))
+	return created
 }
 
 // CreateNoListIndexTx creates an EAN page without adding to list index (transactional version).

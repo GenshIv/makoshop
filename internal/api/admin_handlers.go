@@ -190,11 +190,14 @@ func (h *Handlers) HandleAdminEANPageList(w http.ResponseWriter, r *http.Request
 		limit = 50
 	}
 
-	// Use EANPageSearch for listing with optional search
+	// Use EANPageSearch for listing with optional search.
+	// IncludeNoOffer: the admin listing must show pages without usable offers
+	// too (the catalog min-price floor is a storefront-only rule).
 	params := db.EANPageListParams{
-		Q:     q,
-		Page:  page,
-		Limit: limit,
+		Q:              q,
+		Page:           page,
+		Limit:          limit,
+		IncludeNoOffer: true,
 	}
 
 	result, err := h.eanPageSearch.ListWithTurbo(params)

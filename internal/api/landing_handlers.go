@@ -756,7 +756,8 @@ func (h *Handlers) writeEANPageResponse(w http.ResponseWriter, r *http.Request, 
 	h.enrichProductsWithCompanyNames(products)
 
 	// Show EAN page even if no products — frontend renders "not available"
-	// (catalog filtering is handled by BuildSortIndexes excluding product_count == 0)
+	// (catalog listings exclude such pages via the min-price floor applied
+	// in ListWithTurbo)
 
 	// Check if client disconnected after product lookup
 	select {

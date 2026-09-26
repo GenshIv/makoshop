@@ -486,7 +486,7 @@ func generateLenovoDescription(productName string, specs map[string]string, high
 	// Highlights
 	if len(highlights) > 0 {
 		sb.WriteString("\n\nWyróżniające się cechy tego modelu to: ")
-		for i, h := range highlights[:2] {
+		for i, h := range highlights[:min(2, len(highlights))] {
 			if i > 0 {
 				sb.WriteString("; ")
 			}

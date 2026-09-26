@@ -386,6 +386,11 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 	var allProducts []*model.Product
 	var allParsedProducts []*model.Product
 	var allParsedNames []string
+	// zeroPriceOffers: offers whose price is below the catalog minimum. They
+	// are NOT imported as products; their data is kept to create EAN pages
+	// without offers (only when the page does not exist yet and the offer
+	// carries a usable description).
+	var zeroPriceOffers []*model.Product
 
 	h.importProgress.SetStep(StepParse)
 	for _, file := range files {
@@ -421,6 +426,14 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 			if p == nil {
 				fileSkipped++
 				result.ProductsSkipped++
+				return nil
+			}
+			if p.Price < db.EANPageMinCatalogPrice {
+				// Zero-price offer: skipped as a product, kept for the
+				// no-offer EAN page creation below.
+				fileSkipped++
+				result.ProductsSkipped++
+				zeroPriceOffers = append(zeroPriceOffers, p)
 				return nil
 			}
 
@@ -657,6 +670,34 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 			return result
 		}
 	}
+
+	// Zero-price offers: no products were imported for them. Create the
+	// missing EAN pages without offers so the items stay present in the
+	// general index (search / direct URLs) while the catalog skips them.
+	if len(zeroPriceOffers) > 0 {
+		// Apply explicit category mappings first (same rule as priced offers).
+		for _, p := range zeroPriceOffers {
+			if p.ShopCategory == "" {
+				continue
+			}
+			mapping, mapErr := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
+			if mapErr == nil && mapping != nil {
+				p.CategoryID = mapping.TargetCategoryID
+			}
+		}
+		noOfferPages := h.eanPageRepo.EnsureEANPagesWithoutOffersTx(txn, zeroPriceOffers)
+		if len(noOfferPages) > 0 {
+			fmt.Printf("[IMPORT-NOKAUT] Created %d EAN pages from zero-price offers\n", len(noOfferPages))
+			if h.eanPageSearch != nil {
+				if err := h.eanPageSearch.IndexEANPageBatchTx(txn, noOfferPages); err != nil {
+					fmt.Printf("[IMPORT-NOKAUT] WARN: index no-offer EAN pages: %v\n", err)
+				}
+			}
+			for _, s := range noOfferPages {
+				result.AffectedEANPages = append(result.AffectedEANPages, s.EAN)
+			}
+		}
+	}
 	fmt.Printf("[IMPORT-NOKAUT] Phase 2: EAN pages done in %v\n", time.Since(phase2Start))
 
 	// NOTE: The global (company-independent) recalculations — EAN page product
@@ -728,9 +769,6 @@ func mapOfferToProduct(offer pricesrc.Offer, cfg model.PriceSourceConfig, compan
 	}
 
 	price := pricesrc.ParsePrice(offer.Price)
-	if price <= 0 {
-		return nil
-	}
 
 	// EAN: from configured property field
 	ean := pricesrc.ExtractEAN(offer.Props[cfg.EANField])

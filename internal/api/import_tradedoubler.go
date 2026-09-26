@@ -11,6 +11,7 @@ import (
 	"time"
 
 	attrsPkg "github.com/GenshIv/makoshop/internal/attrs"
+	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/makoshop/internal/pricesrc"
 )
@@ -314,27 +315,32 @@ func fetchJSON(client *http.Client, reqURL string, dst interface{}) error {
 
 // parseTradedoublerProducts converts Tradedoubler API products into
 // model.Product values, ready for the shared import phases. It returns the
-// products and the names (parallel slices) plus the count of skipped items.
+// products and the names (parallel slices), the count of skipped items, and
+// the zero-priced offers (not imported as products; the caller uses them to
+// create EAN pages without offers).
 func parseTradedoublerProducts(tps []TradedoublerProduct, companyID int64, companySlug, companyName, currency string,
-	attrDefCache map[string]*model.AttrDef, newAttrKeys map[string]struct{}, fieldMap map[string]model.FieldMapEntry, limit int) (products []*model.Product, names []string, skipped int) {
+	attrDefCache map[string]*model.AttrDef, newAttrKeys map[string]struct{}, fieldMap map[string]model.FieldMapEntry, limit int) (products []*model.Product, names []string, skipped int, zeroPriced []*model.Product) {
 
 	for _, tp := range tps {
 		if limit > 0 && len(products) >= limit {
 			break
 		}
 		p, skip := convertTradedoublerProduct(tp, companyID, companySlug, companyName, currency, attrDefCache, newAttrKeys, fieldMap)
-		if skip {
+		if p == nil {
 			skipped++
 			continue
 		}
-		if p == nil {
+		if skip {
+			// Zero-price offer: skipped as a product, kept for the no-offer
+			// EAN page creation.
 			skipped++
+			zeroPriced = append(zeroPriced, p)
 			continue
 		}
 		products = append(products, p)
 		names = append(names, p.Name)
 	}
-	return products, names, skipped
+	return products, names, skipped, zeroPriced
 }
 
 // convertTradedoublerProduct maps a single Tradedoubler product to a
@@ -371,9 +377,6 @@ func convertTradedoublerProduct(tp TradedoublerProduct, companyID int64, company
 				offerCurrency = last.Price.Currency
 			}
 		}
-	}
-	if price <= 0 {
-		return nil, true
 	}
 	cur := strings.TrimSpace(firstNonEmptyStr(tp.PriceCurrency, tp.Currency, offerCurrency, currency))
 	if cur == "" {
@@ -504,6 +507,14 @@ func convertTradedoublerProduct(tp TradedoublerProduct, companyID int64, company
 		SEO: model.ProductSEO{
 			Title: fmt.Sprintf("%s — MakoShop", fullName),
 		},
+	}
+
+	// Offers below the catalog minimum are not imported as products. Return
+	// the parsed data with skip=true: the caller counts the offer as skipped
+	// and uses the product to create an EAN page without offers (when the
+	// page does not exist yet and the description is usable).
+	if price < db.EANPageMinCatalogPrice {
+		return p, true
 	}
 	return p, false
 }

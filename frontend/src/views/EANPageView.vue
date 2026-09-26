@@ -474,6 +474,14 @@ const currentImageIndex = ref(0);
 const activeTab = ref(0); // index in modifications list
 const descSupplierIndex = ref(0); // index in suppliers for active tab
 
+// Own eanpage description long enough (>200 chars) to fully replace seller
+// descriptions: the general description block shows only it, seller
+// descriptions are hidden entirely.
+const ownLongDescription = computed(() => {
+  const desc = (page.value?.description || '').trim();
+  return desc.length > 200 ? desc : '';
+});
+
 // Strip company suffix from product name to get "pure" modification name.
 // Example: "Rastar BMW I8 1:24 Silver — Magazilla" → "Rastar BMW I8 1:24 Silver"
 const stripCompanyFromName = (name) => {
@@ -1153,8 +1161,8 @@ const clearAllFilters = () => {
         <div class="lg:col-span-7 space-y-4">
 
           <!-- Description -->
-          <div v-if="modifications.length > 0" class="bg-surface rounded-2xl shadow-sm border border-line">
-            <div class="border-b border-line">
+          <div v-if="ownLongDescription || modifications.length > 0" class="bg-surface rounded-2xl shadow-sm border border-line">
+            <div v-if="!ownLongDescription && modifications.length > 0" class="border-b border-line">
               <div class="flex gap-1 px-4 pt-2 overflow-x-auto">
                 <button
                   v-for="(mod, idx) in modifications"
@@ -1172,7 +1180,12 @@ const clearAllFilters = () => {
               </div>
             </div>
             <div class="p-4">
-              <template v-if="modifications[activeTab]">
+              <!-- Own description >200 chars: seller descriptions are not shown -->
+              <div v-if="ownLongDescription"
+                   class="text-sm text-ink-2 prose prose-sm max-w-none max-h-[600px] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-surface-2 [&::-webkit-scrollbar-thumb]:bg-line [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-orange-400">
+                <div class="whitespace-pre-line text-sm">{{ ownLongDescription }}</div>
+              </div>
+              <template v-else-if="modifications[activeTab]">
                 <div class="flex items-center justify-between mb-3">
                   <span class="inline-block px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded">
                     {{ getCompanyName(modifications[activeTab].suppliers[descSupplierIndex]) }}

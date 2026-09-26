@@ -776,10 +776,20 @@ func (r *CategoryRepo) filterCategoriesWithEANPages(cats []model.Category) []mod
 }
 
 // categoryHasVisiblePages reports whether the category subtree has at least
-// one EAN page listed in the catalog sort indexes.
+// one EAN page listed in the catalog: a page whose min price is at or above
+// the catalog floor (see EANPageMinCatalogPrice). Counted via the
+// per-category numSort price range — the plain sort-index stats are no longer
+// enough because the sort indexes also hold no-offer pages (kept there so
+// search can find them).
 func (r *CategoryRepo) categoryHasVisiblePages(catID int64) bool {
-	stats, err := r.store.DB().TurboSortIndexStats(eanpageSortKey(catID, eanpageSortTypePriceAsc))
-	return err == nil && stats != nil && stats.Count > 0
+	probe, err := r.store.DB().TurboGetNumSortRangeWithDocs(makodb.TurboGetNumSortRangeWithDocsParams{
+		Name:     eanpageNumSortPriceKey(catID),
+		MinValue: eanpageCatalogPriceFloorCents,
+		MaxValue: ^uint64(0),
+		Page:     0,
+		PageSize: 1,
+	})
+	return err == nil && probe.Total > 0
 }
 
 // rebuildAllAncestorsAndDescendants rebuilds ancestors and descendants caches for all categories.
