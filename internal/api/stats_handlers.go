@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 
 	"github.com/GenshIv/makoshop/internal/httpres"
 )
@@ -128,8 +129,25 @@ func (h *Handlers) HandleStatsEventsByPage(w http.ResponseWriter, r *http.Reques
 	}
 
 	aggregated := h.statsCollector.AggregateByPage()
+
+	// Convert map to sortable slice
+	type PageEntry struct {
+		Page  string `json:"page"`
+		Count uint64 `json:"count"`
+	}
+	var entries []PageEntry
+	for page, count := range aggregated {
+		entries = append(entries, PageEntry{Page: page, Count: count})
+	}
+
+	// Sort by count descending by default
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Count > entries[j].Count
+	})
+
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"by_page": aggregated,
+		"by_page": entries,
+		"total":   len(entries),
 	})
 }
 
@@ -140,8 +158,25 @@ func (h *Handlers) HandleStatsEventsByReferer(w http.ResponseWriter, r *http.Req
 	}
 
 	aggregated := h.statsCollector.AggregateByReferer()
+
+	// Convert map to sortable slice
+	type RefererEntry struct {
+		Referer string `json:"referer"`
+		Count   uint64 `json:"count"`
+	}
+	var entries []RefererEntry
+	for referer, count := range aggregated {
+		entries = append(entries, RefererEntry{Referer: referer, Count: count})
+	}
+
+	// Sort by count descending by default
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Count > entries[j].Count
+	})
+
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"by_referer": aggregated,
+		"by_referer": entries,
+		"total":      len(entries),
 	})
 }
 
@@ -165,8 +200,14 @@ func (h *Handlers) HandleStatsEventsByUA(w http.ResponseWriter, r *http.Request)
 		results = append(results, UAResult{UAID: uaID, UA: uaStr, Visits: visits})
 	}
 
+	// Sort by visits descending by default
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Visits > results[j].Visits
+	})
+
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"by_ua": results,
+		"total": len(results),
 	})
 }
 
@@ -190,8 +231,14 @@ func (h *Handlers) HandleStatsEventsByIP(w http.ResponseWriter, r *http.Request)
 		results = append(results, IPResult{IPID: ipID, IP: ipStr, Visits: visits})
 	}
 
+	// Sort by visits descending by default
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Visits > results[j].Visits
+	})
+
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"by_ip": results,
+		"total": len(results),
 	})
 }
 

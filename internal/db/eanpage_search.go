@@ -210,7 +210,9 @@ func (s *EANPageSearch) IndexEANPageBatchTx(txn *Transaction, pages []*model.EAN
 	for _, sp := range pages {
 		docID := KeyEANPage(sp.EAN)
 
-		if sp.CategoryID != 0 {
+		// Category union index for all ancestors.
+		// Skip if no products: keep page findable via search but not in category listings.
+		if sp.CategoryID != 0 && sp.ProductCount > 0 {
 			ancestors, err := s.getCategoryAncestors(sp.CategoryID)
 			if err != nil {
 				ancestors = []int64{sp.CategoryID}
@@ -348,7 +350,8 @@ func (s *EANPageSearch) IndexEANPageBatch(pages []*model.EANPage) error {
 		docID := KeyEANPage(sp.EAN)
 
 		// Category union index for all ancestors.
-		if sp.CategoryID != 0 {
+		// Skip if no products: keep page findable via search but not in category listings.
+		if sp.CategoryID != 0 && sp.ProductCount > 0 {
 			ancestors, err := s.getCategoryAncestors(sp.CategoryID)
 			if err != nil {
 				ancestors = []int64{sp.CategoryID}
@@ -959,6 +962,24 @@ func (s *EANPageSearch) ListWithTurbo(params EANPageListParams) (*EANPageListRes
 		}
 		// A price filter that matches nothing means an EMPTY result — never
 		// fall through with nil candidates (nil = "no filters" downstream).
+		if candidatesRaw == nil || len(candidatesRaw) == 0 {
+			return &EANPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
+		}
+	}
+
+	// Explicit category filter: intersect candidates with category union index.
+	// This ensures docs from other categories are excluded even if the sort
+	// index intersection has issues (workaround for position index bug).
+	if catID != 0 && candidatesRaw != nil && len(candidatesRaw) > 0 {
+		catBitmap, err := s.db.TurboRawRead(eanpageKeyCategoryUnion(catID))
+		if err != nil {
+			return nil, fmt.Errorf("get category union index: %w", err)
+		}
+		if catBitmap == nil || len(catBitmap) == 0 {
+			// Category has no pages — return empty result
+			return &EANPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
+		}
+		candidatesRaw = makodb.TurboBinaryIntersectRaw([][]byte{candidatesRaw, catBitmap})
 		if candidatesRaw == nil || len(candidatesRaw) == 0 {
 			return &EANPageListResult{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
 		}

@@ -297,7 +297,7 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.Handle("/admin/seo/import", d.JWT.RequireRole(http.HandlerFunc(d.adminSeoImport), model.RoleAdmin))
 
 	// Lenovo PSREF import (admin)
-	// mux.HandleFunc("/admin/import-lenovo", d.adminImportLenovo)
+	mux.Handle("/admin/import-lenovo", d.JWT.RequireRole(http.HandlerFunc(d.adminImportLenovo), model.RoleAdmin))
 
 	// Category mappings (admin)
 	mux.Handle("/admin/category-mappings", spaAwareHandler(d.JWT.RequireRole(http.HandlerFunc(d.adminCategoryMappings), model.RoleAdmin)))
@@ -355,8 +355,9 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 
 	// --- EANPage Admin ---
 
-	mux.Handle("/admin/eanpages", spaAwareHandler(d.JWT.RequireRole(http.HandlerFunc(d.adminEANPages), model.RoleAdmin)))
+	mux.Handle("/admin/eanpages", d.JWT.RequireRole(http.HandlerFunc(d.adminEANPageUpsert), model.RoleAdmin))
 	mux.Handle("/admin/eanpages/", d.JWT.RequireRole(http.HandlerFunc(d.adminEANPage), model.RoleAdmin))
+	mux.Handle("/admin/import-lenovo-eans", d.JWT.RequireRole(http.HandlerFunc(d.adminImportLenovoEans), model.RoleAdmin))
 
 	// --- Products ---
 
@@ -431,6 +432,7 @@ func registerRoutes(mux *http.ServeMux, d *Deps) {
 	mux.HandleFunc("/robots.txt", d.robotsTXT)
 	mux.HandleFunc("/sitemap.xml", d.sitemapIndex)
 	mux.HandleFunc("/sitemap-categories.xml", d.sitemapCategories)
+	mux.HandleFunc("/sitemap-search-aliases.xml", d.sitemapSearchAliases)
 
 	// Serve built frontend static assets (JS/CSS/images) from frontend/dist/.
 	// In production the Go server serves both the SPA and the API on the same

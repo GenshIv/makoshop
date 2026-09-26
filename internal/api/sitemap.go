@@ -96,6 +96,12 @@ func (h *Handlers) HandleSitemapIndex(w http.ResponseWriter, r *http.Request) {
 		LastMod: now,
 	})
 
+	// Search aliases sitemap
+	sitemaps = append(sitemaps, SitemapRef{
+		Loc:     baseURL + "/sitemap-search-aliases.xml",
+		LastMod: now,
+	})
+
 	// EANPage sitemaps
 	for i := 0; i < numSCUSitemaps; i++ {
 		sitemaps = append(sitemaps, SitemapRef{
@@ -280,6 +286,51 @@ func (h *Handlers) HandleSitemapEANPage(w http.ResponseWriter, r *http.Request) 
 			LastMod:    time.Unix(sp.UpdatedAt, 0).UTC().Format(time.RFC3339),
 			ChangeFreq: "daily",
 			Priority:   "0.8",
+		})
+	}
+
+	sitemap := Sitemap{
+		Xmlns: "http://www.sitemaps.org/schemas/sitemap/0.9",
+		URLs:  urls,
+	}
+
+	w.WriteHeader(http.StatusOK)
+	enc := xml.NewEncoder(w)
+	enc.Indent("", "  ")
+	if err := enc.Encode(sitemap); err != nil {
+		http.Error(w, "failed to encode sitemap: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+// ---------- sitemap-search-aliases.xml ----------
+
+// HandleSitemapSearchAliases serves search aliases sitemap
+func (h *Handlers) HandleSitemapSearchAliases(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+
+	aliases, err := h.searchAliasRepo.ListAll()
+	if err != nil {
+		http.Error(w, "failed to list search aliases: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	urls := make([]SitemapURL, 0, len(aliases))
+	for _, alias := range aliases {
+		if !alias.IsActive {
+			continue
+		}
+
+		urls = append(urls, SitemapURL{
+			Loc:        h.siteBaseURL() + "/search/" + alias.Slug,
+			LastMod:    time.Unix(alias.UpdatedAt, 0).UTC().Format(time.RFC3339),
+			ChangeFreq: "weekly",
+			Priority:   "0.6",
 		})
 	}
 

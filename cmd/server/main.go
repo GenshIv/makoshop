@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -79,6 +80,57 @@ func redirectToHTTPS(w http.ResponseWriter, r *http.Request) {
 	// Формируем новый URL с протоколом https
 	target := "https://" + r.Host + r.RequestURI
 	http.Redirect(w, r, target, http.StatusMovedPermanently)
+}
+
+// ipToHostRedirect checks if request comes from an IP address and redirects to
+// the configured hostname (from SiteURL). Returns true if redirect was performed.
+func ipToHostRedirect(siteURL string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if siteURL == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Parse expected host from SiteURL
+			expectedHost := parseHostFromURL(siteURL)
+			if expectedHost == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Get request host (strip port)
+			requestHost := r.Host
+			if idx := strings.LastIndex(requestHost, ":"); idx > 0 {
+				requestHost = requestHost[:idx]
+			}
+
+			// If request comes from IP address, redirect to hostname
+			if isIPAddress(requestHost) {
+				target := siteURL + r.RequestURI
+				http.Redirect(w, r, target, http.StatusMovedPermanently)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func parseHostFromURL(url string) string {
+	s := strings.TrimPrefix(url, "http://")
+	s = strings.TrimPrefix(s, "https://")
+	if idx := strings.Index(s, "/"); idx > 0 {
+		s = s[:idx]
+	}
+	if idx := strings.Index(s, "?"); idx > 0 {
+		s = s[:idx]
+	}
+	return s
+}
+
+func isIPAddress(s string) bool {
+	return net.ParseIP(s) != nil
 }
 
 func main() {
@@ -161,6 +213,9 @@ func main() {
 
 	handler := rt.Handler()
 
+	// Apply IP-to-host redirect middleware to the main handler (HTTPS listener)
+	handler = ipToHostRedirect(cfg.Server.SiteURL)(handler)
+
 	// Periodic cache rebuild every 15 minutes (background, fire-and-forget)
 	cacheTicker := time.NewTicker(15 * time.Minute)
 	go func() {
@@ -222,6 +277,9 @@ func main() {
 	if cfg.TLSEnabled() {
 		// Port 80 handler: HTTPS redirect by default.
 		var port80Handler http.Handler = httpsRedirectHandler(cfg.Server.Port)
+
+		// Apply IP-to-host redirect before HTTPS redirect on port 80
+		port80Handler = ipToHostRedirect(cfg.Server.SiteURL)(port80Handler)
 
 		if cfg.AutocertEnabled() {
 			// Automatic Let's Encrypt certificates via ACME.

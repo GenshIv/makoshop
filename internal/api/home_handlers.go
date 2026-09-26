@@ -2,14 +2,17 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/GenshIv/makoshop/internal/db"
 	"github.com/GenshIv/makoshop/internal/httpres"
+	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/silentjson/v2"
 )
 
@@ -91,6 +94,9 @@ func (h *Handlers) HandleHomeOffers(w http.ResponseWriter, r *http.Request) {
 		perSection = homeOffersPerSection
 	}
 
+	// Admin-managed search aliases to show on the home page
+	homeSearchAliasSlugs := h.loadHomeSearchAliasesSettings()
+
 	tree, err := h.categoryRepo.GetTree()
 	if err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
@@ -116,7 +122,7 @@ func (h *Handlers) HandleHomeOffers(w http.ResponseWriter, r *http.Request) {
 		roots = roots[:sectionsLimit]
 	}
 
-	payload, err := h.buildHomeOffers(roots, perSection)
+	payload, err := h.buildHomeOffers(roots, perSection, homeSearchAliasSlugs)
 	if err != nil {
 		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
@@ -149,11 +155,35 @@ func (h *Handlers) loadHomeOffersSettings() ([]int64, int) {
 	return ids, perSection
 }
 
+// loadHomeSearchAliasesSettings reads the admin-managed home search aliases
+// config from the global_settings doc. Returns an ordered list of slugs to
+// display on the home page (empty means no search alias sections).
+func (h *Handlers) loadHomeSearchAliasesSettings() []string {
+	val, err := h.Store().DocGet("global_settings")
+	if err != nil || len(val) == 0 {
+		return nil
+	}
+	var settings map[string]interface{}
+	if err := json.Unmarshal(val, &settings); err != nil {
+		return nil
+	}
+	raw, ok := settings["home_search_aliases"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	slugs, err := normalizeHomeSearchAliases(raw)
+	if err != nil {
+		return nil
+	}
+	return slugs
+}
+
 // buildHomeOffers assembles random sections for the given root categories.
 // Section order follows the input order (admin-configured or sort_order);
 // sections without EAN pages are dropped. Only the items inside a section
-// are randomized.
-func (h *Handlers) buildHomeOffers(roots []db.CategoryTreeNode, perSection int) ([]byte, error) {
+// are randomized. Search alias slugs, if provided, are built into sections
+// after the category sections.
+func (h *Handlers) buildHomeOffers(roots []db.CategoryTreeNode, perSection int, searchAliasSlugs []string) ([]byte, error) {
 	sections := make([]HomeOfferSection, 0, len(roots))
 	for _, node := range roots {
 		if h.eanPageSearch == nil {
@@ -177,6 +207,35 @@ func (h *Handlers) buildHomeOffers(roots []db.CategoryTreeNode, perSection int) 
 				NameEn:        node.NameEn,
 				ImageLightURL: node.ImageLightURL,
 				ImageDarkURL:  node.ImageDarkURL,
+			},
+			Items: items,
+			Total: total,
+		})
+	}
+
+	// Build sections from configured search aliases
+	for _, slug := range searchAliasSlugs {
+		alias, err := h.searchAliasRepo.GetBySlug(slug)
+		if err != nil || !alias.IsActive {
+			continue
+		}
+
+		items, total, err := h.buildSearchAliasSection(alias, perSection)
+		if err != nil || len(items) == 0 {
+			continue
+		}
+
+		sections = append(sections, HomeOfferSection{
+			Category: HomeOfferCategory{
+				ID:            0,
+				Slug:          slug,
+				URL:           "/search/" + slug,
+				NameRu:        alias.Title,
+				NameUa:        alias.Title,
+				NamePl:        alias.Title,
+				NameEn:        alias.Title,
+				ImageLightURL: alias.OGImage,
+				ImageDarkURL:  "",
 			},
 			Items: items,
 			Total: total,
@@ -207,6 +266,52 @@ func (h *Handlers) buildHomeOffers(roots []db.CategoryTreeNode, perSection int) 
 		GeneratedAt: time.Now().UnixMilli(),
 	}
 	return silentjson.Marshal(&resp, homeOffersRespReg, nil), nil
+}
+
+// buildSearchAliasSection executes a search alias query and returns the first
+// `limit` results as raw JSON items plus the total count.
+func (h *Handlers) buildSearchAliasSection(alias *model.SearchAlias, limit int) ([]silentjson.RawMessage, int, error) {
+	if h.eanPageSearch == nil {
+		return nil, 0, fmt.Errorf("eanpage search is not initialized")
+	}
+
+	// Resolve category slug to ID if provided
+	var catID int64
+	if alias.CategorySlug != "" {
+		parts := strings.Split(alias.CategorySlug, "/")
+		resolvedCatID, err := h.findCategoryByPath(parts)
+		if err == nil {
+			catID = resolvedCatID
+		}
+	}
+
+	params := db.EANPageListParams{
+		Q:          alias.SearchQuery,
+		CategoryID: catID,
+		Sort:       alias.SortOrder,
+		Page:       1,
+		Limit:      limit,
+	}
+
+	if alias.AttrFilters != nil {
+		params.AttrFilters = alias.AttrFilters
+	} else {
+		params.AttrFilters = make(map[string][]string)
+	}
+
+	if alias.PriceMin != nil {
+		params.PriceMin = *alias.PriceMin
+	}
+	if alias.PriceMax != nil {
+		params.PriceMax = *alias.PriceMax
+	}
+
+	result, err := h.eanPageSearch.ListWithTurbo(params)
+	if err != nil || result == nil {
+		return nil, 0, err
+	}
+
+	return result.Items, int(result.Total), nil
 }
 
 func writeHomeOffers(w http.ResponseWriter, headOnly bool, payload []byte) {

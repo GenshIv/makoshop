@@ -246,6 +246,111 @@ func (h *Handlers) HandleAdminEANPageGet(w http.ResponseWriter, r *http.Request)
 	httpres.WriteJSON(w, http.StatusOK, sp)
 }
 
+// HandleAdminEANPageUpsert creates or updates a EAN page by EAN.
+// POST /admin/eanpages
+// Body: { "ean": "...", "title": "...", "description": "...", ... }
+
+func (h *Handlers) HandleAdminEANPageUpsert(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpres.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "")
+		return
+	}
+
+	var req map[string]interface{}
+	if !httpres.ReadJSON(w, r, &req) {
+		return
+	}
+
+	ean, ok := req["ean"].(string)
+	if !ok || ean == "" {
+		httpres.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "ean is required")
+		return
+	}
+
+	// Build updater function from request fields
+	updater := func(sp *model.EANPage) {
+		if v, ok := req["title"]; ok {
+			if s, ok := v.(string); ok {
+				sp.Title = s
+			}
+		}
+		if v, ok := req["description"]; ok {
+			if s, ok := v.(string); ok {
+				sp.Description = s
+			}
+		}
+		if v, ok := req["content"]; ok {
+			if s, ok := v.(string); ok {
+				sp.Content = s
+			}
+		}
+		if v, ok := req["slug"]; ok {
+			if s, ok := v.(string); ok {
+				sp.Slug = s
+			}
+		}
+		if v, ok := req["is_active"]; ok {
+			if b, ok := v.(bool); ok {
+				sp.IsActive = b
+			}
+		}
+		if v, ok := req["category_id"]; ok {
+			if f, ok := v.(float64); ok {
+				sp.CategoryID = int64(f)
+			}
+		}
+		if v, ok := req["brand"]; ok {
+			if s, ok := v.(string); ok {
+				sp.Brand = s
+			}
+		}
+		if v, ok := req["images"]; ok {
+			if arr, ok := v.([]interface{}); ok {
+				imgs := make([]string, 0, len(arr))
+				for _, img := range arr {
+					if s, ok := img.(string); ok {
+						imgs = append(imgs, s)
+					}
+				}
+				sp.Images = imgs
+			}
+		}
+		if v, ok := req["attributes"]; ok {
+			if arr, ok := v.([]interface{}); ok {
+				attrs := make([]model.KeyValue, 0, len(arr))
+				for _, item := range arr {
+					if m, ok := item.(map[string]interface{}); ok {
+						key := ""
+						val := ""
+						if k, ok := m["key"]; ok {
+							if s, ok := k.(string); ok {
+								key = s
+							}
+						}
+						if vl, ok := m["value"]; ok {
+							if s, ok := vl.(string); ok {
+								val = s
+							}
+						}
+						if key != "" || val != "" {
+							attrs = append(attrs, model.KeyValue{Key: key, Value: val})
+						}
+					}
+				}
+				sp.Attributes = attrs
+			}
+		}
+	}
+
+	result, err := h.eanPageRepo.UpsertByEAN(ean, updater)
+	if err != nil {
+		httpres.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	httpres.WriteJSON(w, http.StatusOK, result)
+}
+
 // HandleAdminEANPageUpdate updates a EAN page.
 // PATCH /admin/eanpages/{id}
 // Body: any subset of EANPage fields

@@ -251,6 +251,15 @@ func (d *Deps) adminFieldMapDefault(w http.ResponseWriter, r *http.Request) {
 	d.AuthHandlers.HandleAdminFieldMapDefault(w, r)
 }
 
+// POST /admin/import-lenovo — import products from Lenovo PSREF API
+func (d *Deps) adminImportLenovo(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		d.Handlers.HandleLenovoImport(w, r)
+		return
+	}
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
+
 // POST /admin/import-unified — batch import: each company's price file is
 // parsed using the method stored in its PriceSource.Format (saved in DB).
 func (d *Deps) adminImportUnified(w http.ResponseWriter, r *http.Request) {
@@ -274,6 +283,29 @@ func (d *Deps) adminImportProgress(w http.ResponseWriter, r *http.Request) {
 func (d *Deps) adminProductsImport(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		d.Handlers.HandleAdminProductsImport(w, r)
+		return
+	}
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
+
+// POST /admin/eanpages — create or update EAN page by EAN (upsert)
+// GET /admin/eanpages — list all EAN pages
+func (d *Deps) adminEANPageUpsert(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		d.Handlers.HandleAdminEANPageUpsert(w, r)
+		return
+	}
+	if r.Method == http.MethodGet {
+		d.Handlers.HandleAdminEANPageList(w, r)
+		return
+	}
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
+
+// POST /admin/import-lenovo-eans — import/upsert EAN pages from Lenovo PSREF catalog
+func (d *Deps) adminImportLenovoEans(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		d.Handlers.HandleAdminImportLenovo(w, r)
 		return
 	}
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

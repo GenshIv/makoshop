@@ -29,6 +29,12 @@ const refererSearch = ref('');
 const uaSearch = ref('');
 const ipSearch = ref('');
 
+// Sort state: { field, dir } where dir is 'asc' or 'desc'
+const pageSort = ref({ field: 'count', dir: 'desc' });
+const refererSort = ref({ field: 'count', dir: 'desc' });
+const uaSort = ref({ field: 'visits', dir: 'desc' });
+const ipSort = ref({ field: 'visits', dir: 'desc' });
+
 // Pagination state
 const pageSize = 25;
 const pagePage = ref(1);
@@ -54,8 +60,9 @@ const loadData = async () => {
     ]);
 
     eventCount.value = countRes.data.event_count || 0;
-    byPage.value = pageRes.data.by_page || {};
-    byReferer.value = refererRes.data.by_referer || {};
+    // Backend now returns arrays for by_page and by_referer
+    byPage.value = pageRes.data.by_page || [];
+    byReferer.value = refererRes.data.by_referer || [];
     byUA.value = uaRes.data.by_ua || [];
     byIP.value = ipRes.data.by_ip || [];
     byTime.value = timeRes.data.by_hour || new Array(24).fill(0);
@@ -126,16 +133,30 @@ const renderCharts = async () => {
 const nf = new Intl.NumberFormat();
 const fmtNum = (n) => nf.format(n || 0);
 
-// Page table data
-const pageEntries = computed(() =>
-  Object.entries(byPage.value).map(([page, count]) => ({ page, count }))
-);
+// Page table data — backend now returns array directly
+const pageEntries = computed(() => byPage.value || []);
+
+const sortPages = (entries) => {
+  const { field, dir } = pageSort.value;
+  return [...entries].sort((a, b) => {
+    let cmp = 0;
+    if (field === 'page') {
+      cmp = a.page.localeCompare(b.page);
+    } else {
+      cmp = a.count - b.count;
+    }
+    return dir === 'asc' ? cmp : -cmp;
+  });
+};
 
 const filteredPages = computed(() => {
   const entries = pageEntries.value;
-  if (!pageSearch.value) return entries;
-  const search = pageSearch.value.toLowerCase();
-  return entries.filter((e) => e.page.toLowerCase().includes(search));
+  let result = entries;
+  if (pageSearch.value) {
+    const search = pageSearch.value.toLowerCase();
+    result = entries.filter((e) => e.page.toLowerCase().includes(search));
+  }
+  return sortPages(result);
 });
 
 const paginatedPages = computed(() => {
@@ -147,16 +168,30 @@ const totalPages = computed(() =>
   Math.ceil(filteredPages.value.length / pageSize)
 );
 
-// Referer table data
-const refererEntries = computed(() =>
-  Object.entries(byReferer.value).map(([referer, count]) => ({ referer, count }))
-);
+// Referer table data — backend now returns array directly
+const refererEntries = computed(() => byReferer.value || []);
+
+const sortReferers = (entries) => {
+  const { field, dir } = refererSort.value;
+  return [...entries].sort((a, b) => {
+    let cmp = 0;
+    if (field === 'referer') {
+      cmp = (a.referer || '').localeCompare(b.referer || '');
+    } else {
+      cmp = a.count - b.count;
+    }
+    return dir === 'asc' ? cmp : -cmp;
+  });
+};
 
 const filteredReferers = computed(() => {
   const entries = refererEntries.value;
-  if (!refererSearch.value) return entries;
-  const search = refererSearch.value.toLowerCase();
-  return entries.filter((e) => e.referer.toLowerCase().includes(search));
+  let result = entries;
+  if (refererSearch.value) {
+    const search = refererSearch.value.toLowerCase();
+    result = entries.filter((e) => (e.referer || '').toLowerCase().includes(search));
+  }
+  return sortReferers(result);
 });
 
 const paginatedReferers = computed(() => {
@@ -169,10 +204,26 @@ const totalRefererPages = computed(() =>
 );
 
 // UA table data
+const sortUAs = (entries) => {
+  const { field, dir } = uaSort.value;
+  return [...entries].sort((a, b) => {
+    let cmp = 0;
+    if (field === 'ua') {
+      cmp = (a.ua || '').localeCompare(b.ua || '');
+    } else {
+      cmp = a.visits - b.visits;
+    }
+    return dir === 'asc' ? cmp : -cmp;
+  });
+};
+
 const filteredUAs = computed(() => {
-  if (!uaSearch.value) return byUA.value;
-  const search = uaSearch.value.toLowerCase();
-  return byUA.value.filter((e) => e.ua.toLowerCase().includes(search));
+  let result = byUA.value;
+  if (uaSearch.value) {
+    const search = uaSearch.value.toLowerCase();
+    result = byUA.value.filter((e) => (e.ua || '').toLowerCase().includes(search));
+  }
+  return sortUAs(result);
 });
 
 const paginatedUAs = computed(() => {
@@ -185,10 +236,26 @@ const totalUAPages = computed(() =>
 );
 
 // IP table data
+const sortIPs = (entries) => {
+  const { field, dir } = ipSort.value;
+  return [...entries].sort((a, b) => {
+    let cmp = 0;
+    if (field === 'ip') {
+      cmp = (a.ip || '').localeCompare(b.ip || '');
+    } else {
+      cmp = a.visits - b.visits;
+    }
+    return dir === 'asc' ? cmp : -cmp;
+  });
+};
+
 const filteredIPs = computed(() => {
-  if (!ipSearch.value) return byIP.value;
-  const search = ipSearch.value.toLowerCase();
-  return byIP.value.filter((e) => e.ip.toLowerCase().includes(search));
+  let result = byIP.value;
+  if (ipSearch.value) {
+    const search = ipSearch.value.toLowerCase();
+    result = byIP.value.filter((e) => (e.ip || '').toLowerCase().includes(search));
+  }
+  return sortIPs(result);
 });
 
 const paginatedIPs = computed(() => {
@@ -206,6 +273,87 @@ const botEntries = computed(() =>
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count)
 );
+
+// Export helpers — generate CSV and trigger download
+const exportToCSV = (filename, headers, rows) => {
+  const csvContent = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
+const exportPages = () => {
+  const headers = ['page', 'visits'];
+  const rows = pageEntries.value.map((e) => [e.page, e.count]);
+  exportToCSV('pages-stats.csv', headers, rows);
+};
+
+const exportReferers = () => {
+  const headers = ['referer', 'visits'];
+  const rows = refererEntries.value.map((e) => [e.referer || '(direct)', e.count]);
+  exportToCSV('referers-stats.csv', headers, rows);
+};
+
+// Sort toggle helpers — separate functions for each table to avoid ref unwrapping issues
+const togglePageSort = (field) => {
+  if (pageSort.value.field === field) {
+    pageSort.value.dir = pageSort.value.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    pageSort.value = { field, dir: 'desc' };
+  }
+  pagePage.value = 1;
+};
+
+const toggleRefererSort = (field) => {
+  if (refererSort.value.field === field) {
+    refererSort.value.dir = refererSort.value.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    refererSort.value = { field, dir: 'desc' };
+  }
+  refererPage.value = 1;
+};
+
+const toggleUASort = (field) => {
+  if (uaSort.value.field === field) {
+    uaSort.value.dir = uaSort.value.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    uaSort.value = { field, dir: 'desc' };
+  }
+  uaPage.value = 1;
+};
+
+const toggleIPSort = (field) => {
+  if (ipSort.value.field === field) {
+    ipSort.value.dir = ipSort.value.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    ipSort.value = { field, dir: 'desc' };
+  }
+  ipPage.value = 1;
+};
+
+const pageSortIcon = (field) => {
+  if (pageSort.value.field !== field) return '';
+  return pageSort.value.dir === 'asc' ? ' ▲' : ' ▼';
+};
+
+const refererSortIcon = (field) => {
+  if (refererSort.value.field !== field) return '';
+  return refererSort.value.dir === 'asc' ? ' ▲' : ' ▼';
+};
+
+const uaSortIcon = (field) => {
+  if (uaSort.value.field !== field) return '';
+  return uaSort.value.dir === 'asc' ? ' ▲' : ' ▼';
+};
+
+const ipSortIcon = (field) => {
+  if (ipSort.value.field !== field) return '';
+  return ipSort.value.dir === 'asc' ? ' ▲' : ' ▼';
+};
 
 onMounted(() => {
   loadData();
@@ -279,12 +427,17 @@ onBeforeUnmount(() => {
             type="text"
             :placeholder="t('admin.detailed_stats_search')"
           />
+          <button @click="exportPages" class="export-btn">{{ t('admin.export_csv') || 'Export CSV' }}</button>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>{{ t('admin.detailed_stats_page') }}</th>
-              <th>{{ t('admin.detailed_stats_visits') }}</th>
+              <th class="sortable" @click="togglePageSort('page')">
+                {{ t('admin.detailed_stats_page') }}{{ pageSortIcon('page') }}
+              </th>
+              <th class="sortable" @click="togglePageSort('count')">
+                {{ t('admin.detailed_stats_visits') }}{{ pageSortIcon('count') }}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -312,12 +465,17 @@ onBeforeUnmount(() => {
             type="text"
             :placeholder="t('admin.detailed_stats_search')"
           />
+          <button @click="exportReferers" class="export-btn">{{ t('admin.export_csv') || 'Export CSV' }}</button>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>{{ t('admin.detailed_stats_referer') }}</th>
-              <th>{{ t('admin.detailed_stats_visits') }}</th>
+              <th class="sortable" @click="toggleRefererSort('referer')">
+                {{ t('admin.detailed_stats_referer') }}{{ refererSortIcon('referer') }}
+              </th>
+              <th class="sortable" @click="toggleRefererSort('count')">
+                {{ t('admin.detailed_stats_visits') }}{{ refererSortIcon('count') }}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -349,8 +507,12 @@ onBeforeUnmount(() => {
         <table class="data-table">
           <thead>
             <tr>
-              <th>{{ t('admin.detailed_stats_ua') }}</th>
-              <th>{{ t('admin.detailed_stats_visits') }}</th>
+              <th class="sortable" @click="toggleUASort('ua')">
+                {{ t('admin.detailed_stats_ua') }}{{ uaSortIcon('ua') }}
+              </th>
+              <th class="sortable" @click="toggleUASort('visits')">
+                {{ t('admin.detailed_stats_visits') }}{{ uaSortIcon('visits') }}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -382,8 +544,12 @@ onBeforeUnmount(() => {
         <table class="data-table">
           <thead>
             <tr>
-              <th>{{ t('admin.detailed_stats_ip') }}</th>
-              <th>{{ t('admin.detailed_stats_visits') }}</th>
+              <th class="sortable" @click="toggleIPSort('ip')">
+                {{ t('admin.detailed_stats_ip') }}{{ ipSortIcon('ip') }}
+              </th>
+              <th class="sortable" @click="toggleIPSort('visits')">
+                {{ t('admin.detailed_stats_visits') }}{{ ipSortIcon('visits') }}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -469,14 +635,30 @@ onBeforeUnmount(() => {
 }
 
 .search-bar {
+  display: flex;
+  gap: 8px;
   margin-bottom: 12px;
 }
 
 .search-bar input {
-  width: 100%;
+  flex: 1;
   padding: 8px 12px;
   border: 1px solid var(--border-color);
   border-radius: 4px;
+}
+
+.export-btn {
+  padding: 8px 16px;
+  background: var(--primary-color, #6366f1);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.export-btn:hover {
+  opacity: 0.9;
 }
 
 .data-table {
@@ -489,6 +671,15 @@ onBeforeUnmount(() => {
   padding: 8px 12px;
   text-align: left;
   border-bottom: 1px solid var(--border-color);
+}
+
+.data-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.data-table th.sortable:hover {
+  background: var(--hover-bg, rgba(0, 0, 0, 0.05));
 }
 
 .page-cell {

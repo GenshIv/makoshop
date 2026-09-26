@@ -189,9 +189,12 @@ func buildProductJSONLDBlocks(s *model.SEOSettings, baseURL string, ep *model.EA
 	if sku == "" {
 		sku = ep.EAN
 	}
-	if sku != "" {
-		p["sku"] = sku
+
+	// Omit mpn when it starts with "nm:" — Google flags these as invalid
+	// length for manufacturer part numbers.
+	if sku != "" && !strings.HasPrefix(sku, "nm:") {
 		p["mpn"] = sku
+		p["sku"] = sku
 	}
 
 	// Brand (global identifier #1).
@@ -200,14 +203,14 @@ func buildProductJSONLDBlocks(s *model.SEOSettings, baseURL string, ep *model.EA
 	}
 
 	// Global identifier #2: EAN as productID + GTIN.
-	if ep.EAN != "" {
+	if ep.EAN != "" && !strings.HasPrefix(ep.EAN, "nm:") {
 		p["productID"] = map[string]any{
 			"@type": "ProductIdentifier",
 			"name":  "EAN",
 			"value": ep.EAN,
 		}
 	}
-	if gtin := normalizeGTIN(ep.EAN); gtin != "" {
+	if gtin := normalizeGTIN(ep.EAN); gtin != "" && !strings.HasPrefix(gtin, "nm:") {
 		p["gtin"] = gtin
 		p["gtin13"] = gtin
 	}

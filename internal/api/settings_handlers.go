@@ -551,6 +551,36 @@ func normalizeHomeHero(raw map[string]interface{}) (map[string]map[string]string
 // homeOffersMaxSections caps the explicit category list length.
 const homeOffersMaxSectionsSetting = 16
 
+// normalizeHomeSearchAliases validates the home search aliases payload:
+// slugs — ordered list of search alias slugs to display on the home page
+// (empty means no search alias sections). Returns the validated slug list.
+func normalizeHomeSearchAliases(raw map[string]interface{}) ([]string, error) {
+	if raw == nil {
+		return nil, nil
+	}
+
+	var slugs []string
+	if rawList, ok := raw["slugs"].([]interface{}); ok {
+		seen := make(map[string]struct{}, len(rawList))
+		for _, v := range rawList {
+			slug, ok := v.(string)
+			if !ok || slug == "" {
+				continue
+			}
+			if _, dup := seen[slug]; dup {
+				continue
+			}
+			seen[slug] = struct{}{}
+			slugs = append(slugs, slug)
+			if len(slugs) > homeOffersMaxSectionsSetting {
+				return nil, fmt.Errorf("home_search_aliases.slugs: max %d aliases", homeOffersMaxSectionsSetting)
+			}
+		}
+	}
+
+	return slugs, nil
+}
+
 // normalizeHomeOffers validates the home offers payload:
 // category_ids — ordered list of root category ids (the order is the display
 // order of sections on the home page; empty means "all root categories in
@@ -606,6 +636,7 @@ func (h *Handlers) HandleGlobalSettingsGet(w http.ResponseWriter, r *http.Reques
 	gaMeasurementID := ""    // Google Analytics measurement ID (empty = GA disabled)
 	homeHero := map[string]map[string]string{}
 	homeOffers := map[string]interface{}{"category_ids": []int64{}, "per_section": 0}
+	homeSearchAliases := map[string]interface{}{"slugs": []string{}}
 	if val, err := h.Store().DocGet("global_settings"); err == nil && len(val) > 0 {
 		var settings map[string]interface{}
 		if err := json.Unmarshal(val, &settings); err == nil {
@@ -628,14 +659,23 @@ func (h *Handlers) HandleGlobalSettingsGet(w http.ResponseWriter, r *http.Reques
 					homeOffers = map[string]interface{}{"category_ids": ids, "per_section": perSection}
 				}
 			}
+			if raw, ok := settings["home_search_aliases"].(map[string]interface{}); ok {
+				if slugs, err := normalizeHomeSearchAliases(raw); err == nil {
+					if slugs == nil {
+						slugs = []string{}
+					}
+					homeSearchAliases = map[string]interface{}{"slugs": slugs}
+				}
+			}
 		}
 	}
 
 	httpres.WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"default_currency":  defaultCurrency,
-		"ga_measurement_id": gaMeasurementID,
-		"home_hero":         homeHero,
-		"home_offers":       homeOffers,
+		"default_currency":    defaultCurrency,
+		"ga_measurement_id":   gaMeasurementID,
+		"home_hero":           homeHero,
+		"home_offers":         homeOffers,
+		"home_search_aliases": homeSearchAliases,
 	})
 }
 
@@ -648,10 +688,11 @@ func (h *Handlers) HandleGlobalSettingsUpdate(w http.ResponseWriter, r *http.Req
 	}
 
 	var req struct {
-		DefaultCurrency string                 `json:"default_currency,omitempty"`
-		GaMeasurementID string                 `json:"ga_measurement_id"`
-		HomeHero        map[string]interface{} `json:"home_hero"`
-		HomeOffers      map[string]interface{} `json:"home_offers"`
+		DefaultCurrency   string                 `json:"default_currency,omitempty"`
+		GaMeasurementID   string                 `json:"ga_measurement_id"`
+		HomeHero          map[string]interface{} `json:"home_hero"`
+		HomeOffers        map[string]interface{} `json:"home_offers"`
+		HomeSearchAliases map[string]interface{} `json:"home_search_aliases"`
 	}
 	if !httpres.ReadJSON(w, r, &req) {
 		return
@@ -702,6 +743,22 @@ func (h *Handlers) HandleGlobalSettingsUpdate(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	// Home page search aliases: ordered slug list. When provided, the payload
+	// is replaced wholesale.
+	if req.HomeSearchAliases != nil {
+		slugs, err := normalizeHomeSearchAliases(req.HomeSearchAliases)
+		if err != nil {
+			httpres.WriteError(w, http.StatusBadRequest, "INVALID_PARAM", err.Error())
+			return
+		}
+		if slugs == nil {
+			slugs = []string{}
+		}
+		settings["home_search_aliases"] = map[string]interface{}{
+			"slugs": slugs,
+		}
+	}
+
 	// Save
 	data, err := json.Marshal(settings)
 	if err != nil {
@@ -735,6 +792,7 @@ func (h *Handlers) HandleAdminSettingsExport(w http.ResponseWriter, r *http.Requ
 	gaMeasurementID := ""
 	homeHero := map[string]map[string]string{}
 	homeOffers := map[string]interface{}{"category_ids": []int64{}, "per_section": 0}
+	homeSearchAliases := map[string]interface{}{"slugs": []string{}}
 
 	if val, err := h.Store().DocGet("global_settings"); err == nil && len(val) > 0 {
 		var settings map[string]interface{}
@@ -758,15 +816,24 @@ func (h *Handlers) HandleAdminSettingsExport(w http.ResponseWriter, r *http.Requ
 					homeOffers = map[string]interface{}{"category_ids": ids, "per_section": perSection}
 				}
 			}
+			if raw, ok := settings["home_search_aliases"].(map[string]interface{}); ok {
+				if slugs, err := normalizeHomeSearchAliases(raw); err == nil {
+					if slugs == nil {
+						slugs = []string{}
+					}
+					homeSearchAliases = map[string]interface{}{"slugs": slugs}
+				}
+			}
 		}
 	}
 
 	payload := map[string]interface{}{
-		"exported_at":       time.Now().UTC().Format(time.RFC3339),
-		"default_currency":  defaultCurrency,
-		"ga_measurement_id": gaMeasurementID,
-		"home_hero":         homeHero,
-		"home_offers":       homeOffers,
+		"exported_at":         time.Now().UTC().Format(time.RFC3339),
+		"default_currency":    defaultCurrency,
+		"ga_measurement_id":   gaMeasurementID,
+		"home_hero":           homeHero,
+		"home_offers":         homeOffers,
+		"home_search_aliases": homeSearchAliases,
 	}
 
 	httpres.WriteJSON(w, http.StatusOK, payload)
@@ -780,10 +847,11 @@ func (h *Handlers) HandleAdminSettingsImport(w http.ResponseWriter, r *http.Requ
 	}
 
 	var payload struct {
-		DefaultCurrency string                 `json:"default_currency"`
-		GaMeasurementID string                 `json:"ga_measurement_id"`
-		HomeHero        map[string]interface{} `json:"home_hero"`
-		HomeOffers      map[string]interface{} `json:"home_offers"`
+		DefaultCurrency   string                 `json:"default_currency"`
+		GaMeasurementID   string                 `json:"ga_measurement_id"`
+		HomeHero          map[string]interface{} `json:"home_hero"`
+		HomeOffers        map[string]interface{} `json:"home_offers"`
+		HomeSearchAliases map[string]interface{} `json:"home_search_aliases"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -826,6 +894,21 @@ func (h *Handlers) HandleAdminSettingsImport(w http.ResponseWriter, r *http.Requ
 		settings["home_offers"] = map[string]interface{}{
 			"category_ids": ids,
 			"per_section":  perSection,
+		}
+	}
+
+	// Home search aliases
+	if payload.HomeSearchAliases != nil {
+		slugs, err := normalizeHomeSearchAliases(payload.HomeSearchAliases)
+		if err != nil {
+			httpres.WriteError(w, http.StatusBadRequest, "INVALID_PARAM", err.Error())
+			return
+		}
+		if slugs == nil {
+			slugs = []string{}
+		}
+		settings["home_search_aliases"] = map[string]interface{}{
+			"slugs": slugs,
 		}
 	}
 

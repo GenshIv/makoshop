@@ -484,6 +484,11 @@ func (d *Deps) sitemapCategories(w http.ResponseWriter, r *http.Request) {
 	d.Handlers.HandleSitemapCategories(w, r)
 }
 
+// GET /sitemap-search-aliases.xml
+func (d *Deps) sitemapSearchAliases(w http.ResponseWriter, r *http.Request) {
+	d.Handlers.HandleSitemapSearchAliases(w, r)
+}
+
 // --- SPA fallback ---
 
 // / — SPA fallback: serve index.html for client-side routes, with SEO

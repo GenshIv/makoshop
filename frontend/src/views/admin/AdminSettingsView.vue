@@ -30,12 +30,14 @@ const normalizeHomeHero = (raw) => {
 };
 
 const emptyHomeOffers = () => ({ category_ids: [], per_section: 0 });
+const emptyHomeSearchAliases = () => ({ slugs: [] });
 
 const settings = ref({
   default_currency: 'PLN',
   ga_measurement_id: '',
   home_hero: emptyHomeHero(),
   home_offers: emptyHomeOffers(),
+  home_search_aliases: emptyHomeSearchAliases(),
 });
 const loading = ref(true);
 const saving = ref(false);
@@ -43,6 +45,10 @@ const saving = ref(false);
 // Root categories for the offers picker (order + selection).
 const rootCategories = ref([]);
 const catsLoading = ref(false);
+
+// Search aliases for the homepage picker.
+const searchAliases = ref([]);
+const aliasesLoading = ref(false);
 
 const catName = (cat) => cat.name_en || cat.name_ru || cat.name_ua || cat.name_pl || cat.slug;
 
@@ -56,6 +62,19 @@ const loadRootCategories = async () => {
     rootCategories.value = [];
   } finally {
     catsLoading.value = false;
+  }
+};
+
+const loadSearchAliases = async () => {
+  aliasesLoading.value = true;
+  try {
+    const res = await api.get('/admin/search-aliases');
+    searchAliases.value = Array.isArray(res.data?.items) ? res.data.items : [];
+  } catch (e) {
+    console.error('Failed to fetch search aliases:', e);
+    searchAliases.value = [];
+  } finally {
+    aliasesLoading.value = false;
   }
 };
 
@@ -92,6 +111,38 @@ const moveCategory = (row, dir) => {
   settings.value.home_offers.category_ids = ids;
 };
 
+// Search alias picker rows: selected aliases first, then the rest.
+const searchAliasRows = computed(() => {
+  const bySlug = new Map(searchAliases.value.map((a) => [a.slug, a]));
+  const selected = settings.value.home_search_aliases.slugs
+    .map((slug) => bySlug.get(slug))
+    .filter(Boolean)
+    .map((alias) => ({ alias, selected: true }));
+  const chosen = new Set(selected.map((r) => r.alias.slug));
+  const rest = searchAliases.value
+    .filter((a) => !chosen.has(a.slug))
+    .map((alias) => ({ alias, selected: false }));
+  return [...selected, ...rest];
+});
+
+const toggleSearchAlias = (row) => {
+  const slugs = settings.value.home_search_aliases.slugs;
+  if (row.selected) {
+    settings.value.home_search_aliases.slugs = slugs.filter((s) => s !== row.alias.slug);
+  } else {
+    slugs.push(row.alias.slug);
+  }
+};
+
+const moveSearchAlias = (row, dir) => {
+  const slugs = [...settings.value.home_search_aliases.slugs];
+  const idx = slugs.indexOf(row.alias.slug);
+  const target = idx + dir;
+  if (idx < 0 || target < 0 || target >= slugs.length) return;
+  [slugs[idx], slugs[target]] = [slugs[target], slugs[idx]];
+  settings.value.home_search_aliases.slugs = slugs;
+};
+
 const loadSettings = async () => {
   loading.value = true;
   try {
@@ -105,6 +156,11 @@ const loadSettings = async () => {
           ? res.data.home_offers.category_ids.map(Number).filter((n) => n > 0)
           : [],
         per_section: Number(res.data.home_offers?.per_section) || 0,
+      },
+      home_search_aliases: {
+        slugs: Array.isArray(res.data.home_search_aliases?.slugs)
+          ? res.data.home_search_aliases.slugs.filter((s) => typeof s === 'string' && s.length > 0)
+          : [],
       },
     };
   } catch (e) {
@@ -168,6 +224,7 @@ const onImportAllFile = async (e) => {
 onMounted(() => {
   loadSettings();
   loadRootCategories();
+  loadSearchAliases();
 });
 </script>
 
@@ -347,6 +404,76 @@ onMounted(() => {
             </div>
             <p class="text-xs text-ink-3 mt-1">
               {{ t('admin.home_offers_categories_hint') || 'Check categories for the home page; arrows set the display order. Unchecked categories are not shown.' }}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Home page search aliases -->
+      <div class="bg-surface rounded-xl shadow-sm border border-line p-5">
+        <h2 class="text-lg font-semibold text-ink-2 mb-1">
+          {{ t('admin.home_search_aliases_title') || 'Home page search sections' }}
+        </h2>
+        <p class="text-xs text-ink-3 mb-4">
+          {{ t('admin.home_search_aliases_hint') || 'Search alias pages (e.g. "phones under 1000 PLN") to show on the home page as product carousels.' }}
+        </p>
+        <div class="space-y-4">
+          <!-- Search alias selection + order -->
+          <div>
+            <label class="text-sm font-medium text-ink-2 block mb-1">
+              {{ t('admin.home_search_aliases_selection') || 'Search aliases and order' }}
+            </label>
+            <div v-if="aliasesLoading" class="text-xs text-ink-3">Loading search aliases...</div>
+            <div v-else-if="searchAliasRows.length === 0" class="text-xs text-ink-3">
+              {{ t('admin.home_search_aliases_none') || 'No search aliases created yet.' }}
+            </div>
+            <div v-else class="border border-line rounded-lg divide-y divide-line max-h-80 overflow-y-auto">
+              <div
+                v-for="row in searchAliasRows"
+                :key="row.alias.slug"
+                class="flex items-center gap-3 px-3 py-2"
+              >
+                <input
+                  type="checkbox"
+                  :checked="row.selected"
+                  class="w-4 h-4 accent-purple-600"
+                  @change="toggleSearchAlias(row)"
+                />
+                <span
+                  v-if="row.selected"
+                  class="w-6 h-6 flex items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-bold flex-shrink-0"
+                >
+                  {{ settings.home_search_aliases.slugs.indexOf(row.alias.slug) + 1 }}
+                </span>
+                <span class="flex-1 text-sm text-ink truncate">{{ row.alias.title }}</span>
+                <div class="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    type="button"
+                    :aria-label="t('admin.home_offers_move_up') || 'Move up'"
+                    :disabled="!row.selected || settings.home_search_aliases.slugs.indexOf(row.alias.slug) === 0"
+                    class="p-1 rounded border border-line text-ink-2 hover:bg-surface-2 disabled:opacity-30"
+                    @click="moveSearchAlias(row, -1)"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    :aria-label="t('admin.home_offers_move_down') || 'Move down'"
+                    :disabled="!row.selected || settings.home_search_aliases.slugs.indexOf(row.alias.slug) === settings.home_search_aliases.slugs.length - 1"
+                    class="p-1 rounded border border-line text-ink-2 hover:bg-surface-2 disabled:opacity-30"
+                    @click="moveSearchAlias(row, 1)"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p class="text-xs text-ink-3 mt-1">
+              {{ t('admin.home_search_aliases_order_hint') || 'Check aliases to show on the home page; arrows set the display order. Appears after category sections.' }}
             </p>
           </div>
         </div>
