@@ -201,6 +201,11 @@ func (h *Handlers) runRecatalogize() error {
 		if key == "" {
 			continue
 		}
+		// Skip products without a purchase link — they cannot be bought, so
+		// they should not appear on EAN pages or in the catalog.
+		if p.PurchaseURL == "" && p.ProductURL == "" {
+			continue
+		}
 		g, ok := groups[key]
 		if !ok {
 			g = &group{count: 0, minPrice: p.Price, currency: p.Currency, companyIDs: make(map[int64]struct{})}
@@ -333,6 +338,12 @@ func (h *Handlers) runRecatalogize() error {
 			if g.currency != "" {
 				sp.Currency = g.currency
 			}
+			pageChanged = true
+		}
+		// No products left: reset stale min price so the page cannot leak
+		// back into catalog listings with an old price.
+		if g == nil && sp.MinPrice != 0 {
+			sp.MinPrice = 0
 			pageChanged = true
 		}
 		// Category: use explicit mapping only (catalogizer disabled).

@@ -11,7 +11,7 @@ import (
 
 const (
 	serverBaseURL = "http://localhost:9090"
-	pprofOutDir   = "/home/ihar/IdeaProjects/makoshop/loadtest/pprof_out"
+	pprofOutDir   = "./pprof_out"
 )
 
 func TestMain(m *testing.M) {

@@ -108,6 +108,7 @@ const changePassword = async () => {
 const rebuildEndpoints = {
   reindex: '/admin/reindex',
   recatalogize: '/admin/eanpages/recatalogize',
+  lenovo: '/admin/import-lenovo-eans',
   compact: '/admin/compact',
 };
 
@@ -123,6 +124,7 @@ const rebuildLabel = (key) => {
   return {
     reindex: t('admin.reindex_button'),
     recatalogize: t('admin.recatalogize_button'),
+    lenovo: t('admin.lenovo_import_button'),
     compact: t('admin.compact_button'),
   }[key];
 };
@@ -275,6 +277,13 @@ onMounted(() => {
             class="px-3 py-1.5 text-xs rounded-md border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-50"
           >
             {{ systemLoading === 'recatalogize' ? '...' : t('admin.recatalogize_button') }}
+          </button>
+          <button
+            @click="askRebuild('lenovo')"
+            :disabled="systemLoading !== null"
+            class="px-3 py-1.5 text-xs rounded-md border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+          >
+            {{ systemLoading === 'lenovo' ? '...' : t('admin.lenovo_import_button') }}
           </button>
           <button
             @click="askRebuild('compact')"

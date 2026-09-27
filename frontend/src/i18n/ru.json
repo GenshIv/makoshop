@@ -592,6 +592,7 @@
     "reindex_button": "Глобальный реиндекс",
     "compact_button": "Компакция БД",
     "recatalogize_button": "Перекаталогизация и починка",
+    "lenovo_import_button": "Импорт Lenovo EAN",
     "maintenance_job": "Фоновая операция",
     "job_started": "Операция запущена в фоне; прогресс отображается ниже",
     "rebuild_confirm": "Запустить \"{name}\"? Это может занять некоторое время.",

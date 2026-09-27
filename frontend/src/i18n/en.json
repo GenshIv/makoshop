@@ -592,6 +592,7 @@
     "reindex_button": "Global reindex",
     "compact_button": "Compact DB",
     "recatalogize_button": "Recatalogize & repair",
+    "lenovo_import_button": "Lenovo EAN Import",
     "maintenance_job": "Background job",
     "job_started": "Job started in the background; progress is shown below",
     "rebuild_confirm": "Run \"{name}\"? This may take a while.",

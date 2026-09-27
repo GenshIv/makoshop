@@ -550,6 +550,7 @@
     "reindex_button": "Przebudowa indeksów",
     "compact_button": "Kompakcja bazy",
     "recatalogize_button": "Rekatalogizacja i naprawa",
+    "lenovo_import_button": "Import EAN Lenovo",
     "maintenance_job": "Operacja w tle",
     "job_started": "Operacja uruchomiona w tle; postęp pokazany poniżej",
     "rebuild_confirm": "Uruchomić \"{name}\"? To może zająć chwilę.",

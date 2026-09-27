@@ -12,7 +12,9 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
-const { user } = useAuthStore();
+// Pinia state must not be destructured: `user` would be the raw value (null
+// for guests), and `user.value` below would throw.
+const auth = useAuthStore();
 const { toast } = useToast();
 
 const comments = ref([]);
@@ -47,7 +49,7 @@ const fetchComments = async () => {
     // Reset user votes
     userVotes.value = {};
     // Fetch user votes for each comment
-    if (user.value) {
+    if (auth.user) {
       for (const c of comments.value) {
         try {
           const voteRes = await api.get('/votes/check', {
@@ -91,7 +93,7 @@ const submitComment = async () => {
 };
 
 const vote = async (commentId, voteType) => {
-  if (!user.value) {
+  if (!auth.user) {
     toast.error(t('comments.login_first', 'Login first'));
     return;
   }
@@ -122,7 +124,7 @@ onMounted(() => {
 <template>
   <div class="space-y-6">
     <!-- Comment form -->
-    <div v-if="user" class="bg-surface rounded-xl border border-line p-4">
+    <div v-if="auth.user" class="bg-surface rounded-xl border border-line p-4">
       <h3 class="text-lg font-semibold text-ink mb-3">{{ t('comments.add_title', 'Add a comment') }}</h3>
       <textarea
         v-model="newComment"

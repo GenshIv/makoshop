@@ -13,7 +13,7 @@ import (
 	"github.com/GenshIv/makoshop/internal/model"
 )
 
-const lenovoCatalogPath = "/home/ihar/IdeaProjects/makoshop/lenovo-psref-catalog.json"
+const lenovoCatalogPath = "lenovo-psref-catalog.json"
 
 // LenovoCatalog represents the PSREF catalog structure
 type LenovoCatalog struct {

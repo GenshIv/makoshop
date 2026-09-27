@@ -15,7 +15,7 @@ import (
 //
 // Запуск:
 //
-//	cd /home/ihar/IdeaProjects/makoshop/internal/db
+//	cd <project-root>/internal/db
 //	go test -run=^TestBenchListWithTurbo$ -v -timeout=120s
 //
 // Профили записываются в ./pprof_out/
@@ -26,7 +26,7 @@ func TestBenchListWithTurbo(t *testing.T) {
 
 	// Открываем существующую БД makoshop
 	cfg := config.DatabaseConfig{
-		Path:               "/home/ihar/IdeaProjects/makoshop/makoshop_db",
+		Path:               "../../makoshop_db",
 		NumShards:          16,
 		MaxTotalSize:       40 * 1024 * 1024 * 1024,
 		NumBucketsPerShard: 5_000_000,

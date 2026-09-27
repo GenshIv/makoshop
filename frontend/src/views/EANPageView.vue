@@ -14,7 +14,9 @@ import PriceSparkline from '../components/PriceSparkline.vue';
 import CommentSection from '../components/CommentSection.vue';
 
 const { toast } = useToast();
-const { user } = useAuthStore();
+// Pinia state must not be destructured: `user` would be the raw value (null
+// for guests), and `user.value` below would throw.
+const auth = useAuthStore();
 
 const { t, locale } = useI18n();
 
@@ -909,7 +911,7 @@ if (props.data) {
 
 // Vote on this eanpage
 const votePage = async (voteType) => {
-  if (!user.value) {
+  if (!auth.user) {
     toast.error(t('eanpage.login_first', 'Login first'));
     return;
   }
@@ -933,7 +935,7 @@ const votePage = async (voteType) => {
 
 // Load user's vote on this page
 const loadPageVote = async () => {
-  if (!user.value || !page.value?.ean) return;
+  if (!auth.user || !page.value?.ean) return;
   try {
     const res = await api.get('/votes/check', {
       params: { target_type: 'eanpage', target_id: page.value.ean }
