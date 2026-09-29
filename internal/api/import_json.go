@@ -974,6 +974,21 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNo
 				if err := h.turboSearch.BatchIndexProductstx(txn, batchProducts); err != nil {
 					fmt.Printf("[IMPORT-JSON] WARN: batch index products: %v\n", err)
 				}
+
+				// Commit this batch to free transaction memory before next batch.
+				if err := txn.Commit(); err != nil {
+					fmt.Printf("[IMPORT-JSON] ERROR: commit indexing batch failed: %v\n", err)
+					result.Status = "error_commit"
+					return result
+				}
+
+				// Start new transaction for next batch
+				txn = db.NewTransaction(h.store)
+				if err := txn.Begin(); err != nil {
+					fmt.Printf("[IMPORT-JSON] ERROR: begin indexing batch failed: %v\n", err)
+					result.Status = "error_begin"
+					return result
+				}
 			}
 		}
 
@@ -1117,6 +1132,8 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNo
 			if err := h.attrDefRepo.FlushList(); err != nil {
 				fmt.Printf("[IMPORT-JSON] WARN: FlushList failed: %v\n", err)
 			}
+			// Clear the in-memory attribute cache to free memory after this company.
+			h.attrDefRepo.ClearCache()
 		}
 
 		// Commit transaction (per-company data: products, indexes, EAN pages).

@@ -57,6 +57,17 @@ func NewAttrDefRepo(store *Store) *AttrDefRepo {
 	}
 }
 
+// ClearCache clears the in-memory attribute definition cache.
+// Call this after a large import to free memory. The cache will be
+// repopulated on-demand for subsequent lookups.
+func (r *AttrDefRepo) ClearCache() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.keyCache = make(map[string]*model.AttrDef)
+	r.pendingListCodes = make(map[string]bool)
+}
+
 // SetCategoryRepo attaches a CategoryRepo for cleanup operations.
 func (r *AttrDefRepo) SetCategoryRepo(cr *CategoryRepo) {
 	r.categoryRepo = cr
@@ -443,6 +454,43 @@ func (r *AttrDefRepo) unionAttrDefList(codes map[string]bool) error {
 	return r.store.TurboWrite(turboKeyAttrDefList, buf)
 }
 
+// unionAttrDefListTx is the transactional version of unionAttrDefList.
+func (r *AttrDefRepo) unionAttrDefListTx(txn *Transaction, codes map[string]bool) error {
+	data, _ := r.store.DB().TurboRawRead(turboKeyAttrDefList)
+	var list []string
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &list); err != nil {
+			list = nil
+		}
+	}
+
+	existing := make(map[string]bool, len(list))
+	var deduped []string
+	for _, c := range list {
+		if c == "" || existing[c] {
+			continue
+		}
+		existing[c] = true
+		deduped = append(deduped, c)
+	}
+
+	added := make([]string, 0, len(codes))
+	for c := range codes {
+		if !existing[c] {
+			existing[c] = true
+			added = append(added, c)
+		}
+	}
+	sort.Strings(added)
+	list = append(deduped, added...)
+
+	buf, err := json.Marshal(list)
+	if err != nil {
+		return err
+	}
+	return txn.TurboWrite(turboKeyAttrDefList, buf)
+}
+
 func (r *AttrDefRepo) Get(id int64) (*model.AttrDef, error) {
 	data, err := r.store.DocGet(fmt.Sprintf("attrdef:%d", id))
 	if err != nil {
@@ -722,6 +770,36 @@ func (r *AttrDefRepo) mergeCatCodes(catID int64, newCodes map[string]bool) error
 		return err
 	}
 	return r.store.TurboWrite(key, buf)
+}
+
+// mergeCatCodesTx is the transactional version of mergeCatCodes.
+func (r *AttrDefRepo) mergeCatCodesTx(txn *Transaction, catID int64, newCodes map[string]bool) error {
+	key := turboKeyAttrDefCatCodes + fmt.Sprintf("%d", catID)
+	data, _ := r.store.DB().TurboRawRead(key)
+	existing := make(map[string]bool)
+	if data != nil && len(data) > 0 {
+		var codes []string
+		if json.Unmarshal(data, &codes) == nil {
+			for _, c := range codes {
+				if c != "" {
+					existing[c] = true
+				}
+			}
+		}
+	}
+	for c := range newCodes {
+		existing[c] = true
+	}
+	merged := make([]string, 0, len(existing))
+	for c := range existing {
+		merged = append(merged, c)
+	}
+	sort.Strings(merged)
+	buf, err := json.Marshal(merged)
+	if err != nil {
+		return err
+	}
+	return txn.TurboWrite(key, buf)
 }
 
 func (r *AttrDefRepo) removeFromCatCodes(catID int64, code string) error {
@@ -1305,56 +1383,122 @@ func (r *AttrDefRepo) AddCodeToCategory(code string, catID int64) error {
 // RebuildAttrValuesFromEANPages rebuilds attr_values_cat and attr_label indexes
 // from all EAN pages in the database. Also cleans up old attribute definitions
 // that are not used by any EAN page.
+//
+// Uses batched processing to avoid memory overflow: processes EAN pages in
+// batches, writes out attribute values after each batch, then clears the
+// in-memory map before processing the next batch.
 func (r *AttrDefRepo) RebuildAttrValuesFromEANPages(eanPageRepo *EANPageRepo, fieldMap map[string]model.FieldMapEntry) error {
 	fmt.Println("[ATTRDEF] RebuildAttrValuesFromEANPages: starting...")
 	startTime := time.Now()
 
-	// Get all EAN pages
-	pages, err := eanPageRepo.List()
+	// Track all codes seen across all batches (for attrdef_list and cleanup)
+	listCodes := make(map[string]bool)
+
+	// Process EAN pages in batches to avoid memory overflow
+	batchNum := 0
+	err := eanPageRepo.ForEachEANPageBatch(50000, func(pages []model.EANPage) error {
+		batchNum++
+		fmt.Printf("[ATTRDEF] Processing batch %d (%d pages)\n", batchNum, len(pages))
+
+		// Accumulate attr values for this batch only
+		// code -> catID -> {value -> true}
+		attrValues := make(map[string]map[int64]map[string]bool)
+
+		for _, sp := range pages {
+			if sp.CategoryID == 0 {
+				continue
+			}
+			for _, kv := range sp.Attributes {
+				valStr := kv.Value
+				if valStr == "" {
+					continue
+				}
+				// Skip attribute values longer than 40 runes
+				if model.IsAttrValueTooLong(valStr) {
+					continue
+				}
+				code := kv.Key
+				listCodes[code] = true // Track globally for attrdef_list
+				if attrValues[code] == nil {
+					attrValues[code] = make(map[int64]map[string]bool)
+				}
+				if attrValues[code][sp.CategoryID] == nil {
+					attrValues[code][sp.CategoryID] = make(map[string]bool)
+				}
+				attrValues[code][sp.CategoryID][valStr] = true
+			}
+		}
+
+		// Write out this batch's attribute values
+		if err := r.writeAttrValuesBatch(attrValues); err != nil {
+			return fmt.Errorf("write attr values batch %d: %w", batchNum, err)
+		}
+
+		// Clear in-memory map before next batch (GC can reclaim memory)
+		attrValues = nil
+
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("list eanpages: %w", err)
+		return err
 	}
 
-	// Accumulate attr values per code and category
-	// code -> catID -> {value -> true}
-	attrValues := make(map[string]map[int64]map[string]bool)
+	fmt.Printf("[ATTRDEF] Processed %d batches, %d unique attribute codes\n", batchNum, len(listCodes))
 
-	for _, sp := range pages {
-		if sp.CategoryID == 0 {
-			continue
+	// Ensure all codes are in attrdef_list in ONE batched write.
+	if len(listCodes) > 0 {
+		listTxn := NewTransaction(r.store)
+		if err := listTxn.Begin(); err != nil {
+			return fmt.Errorf("begin attrdef list transaction: %w", err)
 		}
-		for _, kv := range sp.Attributes {
-			valStr := kv.Value
-			if valStr == "" {
-				continue
-			}
-			// Skip attribute values longer than 40 runes
-			if model.IsAttrValueTooLong(valStr) {
-				continue
-			}
-			code := kv.Key
-			if attrValues[code] == nil {
-				attrValues[code] = make(map[int64]map[string]bool)
-			}
-			if attrValues[code][sp.CategoryID] == nil {
-				attrValues[code][sp.CategoryID] = make(map[string]bool)
-			}
-			attrValues[code][sp.CategoryID][valStr] = true
+		if err := r.unionAttrDefListTx(listTxn, listCodes); err != nil {
+			fmt.Printf("WARN: union attrdef_list: %v\n", err)
+		}
+		if err := listTxn.Commit(); err != nil {
+			return fmt.Errorf("commit attrdef list transaction: %w", err)
 		}
 	}
 
-	// Write attr_values_cat and attr_label indexes.
-	// Shared keys (attrdef_cat_codes:{catID}, attrdef_list) are accumulated in
-	// memory and written ONCE each, to avoid O(n) rewrites of the same key
-	// (which bloats the append-only DB). Per-(code,value) and per-(code,cat)
-	// keys are unique, so one write each is fine.
-	catCodes := make(map[int64]map[string]bool) // catID -> set of codes
-	listCodes := make(map[string]bool)          // codes for attrdef_list
+	// Clean up old attribute definitions that are not used by any EAN page.
+	allAds, err := r.List()
+	if err != nil {
+		fmt.Printf("[ATTRDEF] WARN: list AttrDefs for cleanup: %v\n", err)
+	} else {
+		var toDelete []string
+		for _, ad := range allAds {
+			if !listCodes[ad.Code] {
+				toDelete = append(toDelete, ad.Code)
+			}
+		}
+
+		cleaned := 0
+		for _, code := range toDelete {
+			if err := r.store.DocDelete(fmt.Sprintf("attrdef:%s", code)); err != nil {
+				fmt.Printf("[ATTRDEF] WARN: delete attrdef %s: %v\n", code, err)
+			} else {
+				cleaned++
+			}
+		}
+		if cleaned > 0 {
+			fmt.Printf("[ATTRDEF] Cleaned up %d outdated attribute definitions\n", cleaned)
+		}
+	}
+
+	elapsed := time.Since(startTime)
+	fmt.Printf("[ATTRDEF] RebuildAttrValuesFromEANPages completed in %v\n", elapsed)
+	return nil
+}
+
+// writeAttrValuesBatch writes attribute values for one batch of EAN pages.
+// All writes are buffered in a transaction and committed atomically.
+func (r *AttrDefRepo) writeAttrValuesBatch(attrValues map[string]map[int64]map[string]bool) error {
+	txn := NewTransaction(r.store)
+	if err := txn.Begin(); err != nil {
+		return fmt.Errorf("begin attr values batch transaction: %w", err)
+	}
 
 	for code, catMap := range attrValues {
-		listCodes[code] = true
-
-		// Collect all unique values for this code
+		// Collect all unique values for this code across all categories
 		allValues := make(map[string]struct{})
 		for _, valMap := range catMap {
 			for val := range valMap {
@@ -1365,7 +1509,7 @@ func (r *AttrDefRepo) RebuildAttrValuesFromEANPages(eanPageRepo *EANPageRepo, fi
 		// Write labels (per (code, value) — unique keys, one write each)
 		for val := range allValues {
 			labelKey := "attr_label:" + code + ":" + val
-			if err := r.store.TurboWrite(labelKey, []byte(val)); err != nil {
+			if err := txn.TurboWrite(labelKey, []byte(val)); err != nil {
 				fmt.Printf("WARN: write attr_label %s: %v\n", labelKey, err)
 			}
 		}
@@ -1378,87 +1522,15 @@ func (r *AttrDefRepo) RebuildAttrValuesFromEANPages(eanPageRepo *EANPageRepo, fi
 				fmt.Printf("WARN: marshal attr_values_cat %s: %v\n", key, err)
 				continue
 			}
-			if err := r.store.TurboWrite(key, buf); err != nil {
+			if err := txn.TurboWrite(key, buf); err != nil {
 				fmt.Printf("WARN: write attr_values_cat %s: %v\n", key, err)
 			}
-			// Track cat -> code for a single batched write below.
-			if catCodes[catID] == nil {
-				catCodes[catID] = make(map[string]bool)
-			}
-			catCodes[catID][code] = true
 		}
 	}
 
-	// Write attrdef_cat_codes per category ONCE (merged with existing).
-	for catID, codeSet := range catCodes {
-		if err := r.mergeCatCodes(catID, codeSet); err != nil {
-			fmt.Printf("WARN: merge cat_codes %d: %v\n", catID, err)
-		}
+	if err := txn.Commit(); err != nil {
+		return fmt.Errorf("commit attr values batch transaction: %w", err)
 	}
-
-	// Ensure all codes are in attrdef_list in ONE batched write.
-	if len(listCodes) > 0 {
-		if err := r.unionAttrDefList(listCodes); err != nil {
-			fmt.Printf("WARN: union attrdef_list: %v\n", err)
-		}
-	}
-
-	// Clean up old attribute definitions that are not used by any EAN page.
-	// This removes outdated attributes (e.g. "Stan" instead of "attr_11323")
-	// that are remnants from previous imports.
-	allAds, err := r.List()
-	if err != nil {
-		fmt.Printf("[ATTRDEF] WARN: list AttrDefs for cleanup: %v\n", err)
-	} else {
-		// Collect all codes to be deleted
-		var toDelete []string
-		for _, ad := range allAds {
-			if !listCodes[ad.Code] {
-				toDelete = append(toDelete, ad.Code)
-			}
-		}
-
-		// Delete all outdated attribute definitions
-		cleaned := 0
-		for _, code := range toDelete {
-			// Remove from cat -> codes
-			ad, err := r.GetByCode(code)
-			if err != nil {
-				continue
-			}
-			for _, catID := range ad.Categories {
-				r.removeFromCatCodes(catID, code)
-			}
-
-			// Remove doc
-			_ = r.store.DocDelete(fmt.Sprintf("attrdef:%d", ad.ID))
-
-			// Remove indexes
-			_ = r.store.TurboDelete(turboKeyAttrDefCode + code)
-			_ = r.store.TurboDelete(turboKeyAttrDefCats + code)
-
-			cleaned++
-		}
-
-		// Rewrite attrdef_list once with the remaining codes
-		if len(toDelete) > 0 {
-			remaining := make(map[string]bool)
-			for code := range listCodes {
-				remaining[code] = true
-			}
-			var remainingCodes []string
-			for code := range remaining {
-				remainingCodes = append(remainingCodes, code)
-			}
-			buf, _ := json.Marshal(remainingCodes)
-			_ = r.store.TurboWrite(turboKeyAttrDefList, buf)
-		}
-
-		fmt.Printf("[ATTRDEF] Cleanup: removed %d old attribute definitions\n", cleaned)
-	}
-
-	fmt.Printf("[ATTRDEF] RebuildAttrValuesFromEANPages: done in %v (%d pages, %d codes)\n",
-		time.Since(startTime), len(pages), len(attrValues))
 	return nil
 }
 

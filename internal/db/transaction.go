@@ -95,19 +95,36 @@ func (t *Transaction) Commit() error {
 		}
 	}
 
-	// Apply all turbo batch index writes
+	// Apply all turbo batch index writes (chunked to avoid large single writes)
+	const turboBatchChunkSize = 100_000
 	for token, docIDs := range t.turboBatchIndex {
-		if len(docIDs) > 0 {
-			if _, err := t.store.db.TurboPutBatchIndexString(token, docIDs); err != nil {
+		if len(docIDs) == 0 {
+			continue
+		}
+		for i := 0; i < len(docIDs); i += turboBatchChunkSize {
+			end := i + turboBatchChunkSize
+			if end > len(docIDs) {
+				end = len(docIDs)
+			}
+			chunk := docIDs[i:end]
+			if _, err := t.store.db.TurboPutBatchIndexString(token, chunk); err != nil {
 				return fmt.Errorf("commit turbo batch index %s: %w", token, err)
 			}
 		}
 	}
 
-	// Apply all turbo sort index writes
+	// Apply all turbo sort index writes (chunked to avoid large single writes)
 	for token, docIDs := range t.turboSortIndex {
-		if len(docIDs) > 0 {
-			if err := t.store.db.TurboPutSortIndexString(token, docIDs); err != nil {
+		if len(docIDs) == 0 {
+			continue
+		}
+		for i := 0; i < len(docIDs); i += turboBatchChunkSize {
+			end := i + turboBatchChunkSize
+			if end > len(docIDs) {
+				end = len(docIDs)
+			}
+			chunk := docIDs[i:end]
+			if err := t.store.db.TurboPutSortIndexString(token, chunk); err != nil {
 				return fmt.Errorf("commit turbo sort index %s: %w", token, err)
 			}
 		}
@@ -133,6 +150,16 @@ func (t *Transaction) Commit() error {
 			}
 		}
 	}
+
+	// Clear all buffered maps to free memory after commit.
+	// This allows GC to reclaim the memory used by the transaction data.
+	t.docPuts = nil
+	t.turboWrites = nil
+	t.turboBatchIndex = nil
+	t.turboSortIndex = nil
+	t.docDeletes = nil
+	t.turboIndexDeletes = nil
+	t.products = nil
 
 	t.active = false
 	t.finished = true

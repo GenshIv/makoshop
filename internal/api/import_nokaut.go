@@ -590,11 +590,12 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 	}
 
 	// ============================================
-	// Phase 1.5: Batch index all products (IN TRANSACTION)
+	// Phase 1.5: Batch index all products (commit after each batch to free memory)
 	// ============================================
 	h.importProgress.SetStep(StepIndex)
 	if h.turboSearch != nil && len(allProducts) > 0 {
-		// Process in batches of 1000 to avoid filling up the database
+		// Process in batches, committing after each to free transaction memory.
+		// This prevents the transaction from accumulating all index writes in memory.
 		const batchSize = 100_000
 		for i := 0; i < len(allProducts); i += batchSize {
 			end := i + batchSize
@@ -607,6 +608,21 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 
 			if err := h.turboSearch.BatchIndexProductstx(txn, batchProducts); err != nil {
 				fmt.Printf("[IMPORT-NOKAUT] WARN: batch index products: %v\n", err)
+			}
+
+			// Commit this batch to free transaction memory before next batch.
+			if err := txn.Commit(); err != nil {
+				fmt.Printf("[IMPORT-NOKAUT] ERROR: commit indexing batch failed: %v\n", err)
+				result.Status = "error_commit"
+				return result
+			}
+
+			// Start new transaction for next batch
+			txn = db.NewTransaction(h.store)
+			if err := txn.Begin(); err != nil {
+				fmt.Printf("[IMPORT-NOKAUT] ERROR: begin indexing batch failed: %v\n", err)
+				result.Status = "error_begin"
+				return result
 			}
 		}
 	}
@@ -715,6 +731,8 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 		if err := h.attrDefRepo.FlushList(); err != nil {
 			fmt.Printf("[IMPORT-NOKAUT] WARN: FlushList failed: %v\n", err)
 		}
+		// Clear the in-memory attribute cache to free memory after this company.
+		h.attrDefRepo.ClearCache()
 	}
 
 	// Commit transaction (per-company data: products, indexes, EAN pages).
