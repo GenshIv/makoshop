@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GenshIv/makodb/v2"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/silentjson/v2"
 )
@@ -23,24 +22,11 @@ type ProductRepo struct {
 
 	// Single-writer channel for batch operations
 	batchChan chan batchTask
-
-	// Active transaction (nil if not in transaction)
-	txn *makodb.Transaction
 }
 
 // Store returns the underlying Store for direct access (emergency use only).
 func (r *ProductRepo) Store() *Store {
 	return r.store
-}
-
-// SetTransaction sets the active transaction for this repo.
-func (r *ProductRepo) SetTransaction(txn *makodb.Transaction) {
-	r.txn = txn
-}
-
-// ClearTransaction clears the active transaction.
-func (r *ProductRepo) ClearTransaction() {
-	r.txn = nil
 }
 
 type batchTask struct {

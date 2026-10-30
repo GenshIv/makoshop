@@ -22,9 +22,6 @@ type EANPageSearch struct {
 	productRepo  *ProductRepo
 	categoryRepo *CategoryRepo
 	enabled      bool
-
-	// Active transaction (nil if not in transaction)
-	txn *makodb.Transaction
 }
 
 func NewEANPageSearch(db *makodb.ShardedDB, repo *EANPageRepo, productRepo *ProductRepo, categoryRepo *CategoryRepo, enabled bool) *EANPageSearch {
@@ -35,16 +32,6 @@ func NewEANPageSearch(db *makodb.ShardedDB, repo *EANPageRepo, productRepo *Prod
 		categoryRepo: categoryRepo,
 		enabled:      enabled,
 	}
-}
-
-// SetTransaction sets the active transaction for this search.
-func (s *EANPageSearch) SetTransaction(txn *makodb.Transaction) {
-	s.txn = txn
-}
-
-// ClearTransaction clears the active transaction.
-func (s *EANPageSearch) ClearTransaction() {
-	s.txn = nil
 }
 
 // ---------- key helpers ----------

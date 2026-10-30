@@ -29,7 +29,6 @@ type EANPageRepo struct {
 	CatalogizeNew    bool                             // if true, auto-catalogize new EAN pages
 	Catalogizer      interface{}                      // *catalogizer.Catalogizer (interface to avoid import cycle)
 	catalogizerCache []tokenizer.CachedCategoryTokens // pre-loaded for batch operations
-	txn              *makodb.Transaction              // active transaction (nil if not in transaction)
 }
 
 func NewEANPageRepo(store *Store) *EANPageRepo {
@@ -77,17 +76,6 @@ func extractKeywordsFromProduct(p *model.Product) string {
 	}
 
 	return strings.Join(keywords, " ")
-}
-
-// SetTransaction sets the active transaction for this repo.
-// When set, all operations will use the transaction.
-func (r *EANPageRepo) SetTransaction(txn *makodb.Transaction) {
-	r.txn = txn
-}
-
-// ClearTransaction clears the active transaction.
-func (r *EANPageRepo) ClearTransaction() {
-	r.txn = nil
 }
 
 // LoadCatalogizerCache loads category token indexes for fast batch auto-catalogization.

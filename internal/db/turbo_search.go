@@ -24,9 +24,6 @@ type TurboProductSearch struct {
 	eanPageRepo  *EANPageRepo
 	mu           sync.RWMutex
 	enabled      bool
-
-	// Active transaction (nil if not in transaction)
-	txn *makodb.Transaction
 }
 
 func NewTurboProductSearch(store *Store, repo *ProductRepo, categoryRepo *CategoryRepo, enabled bool) *TurboProductSearch {
@@ -41,16 +38,6 @@ func NewTurboProductSearch(store *Store, repo *ProductRepo, categoryRepo *Catego
 // SetLandingRepo attaches a LandingRepo for EAN/landing page management.
 func (t *TurboProductSearch) SetLandingRepo(lr *LandingRepo) {
 	t.landingRepo = lr
-}
-
-// SetTransaction sets the active transaction for this search.
-func (t *TurboProductSearch) SetTransaction(txn *makodb.Transaction) {
-	t.txn = txn
-}
-
-// ClearTransaction clears the active transaction.
-func (t *TurboProductSearch) ClearTransaction() {
-	t.txn = nil
 }
 
 // SetEANPageRepo attaches a EANPageRepo for SEO page management.

@@ -83,9 +83,6 @@ type CategoryRepo struct {
 
 	// EANPageRepo for filtering categories with EAN pages in public tree
 	eanPageRepo *EANPageRepo
-
-	// Active transaction (nil if not in transaction)
-	txn *makodb.Transaction
 }
 
 type treePathEntry struct {
@@ -105,16 +102,6 @@ func NewCategoryRepo(store *Store) *CategoryRepo {
 // SetEANPageRepo attaches an EANPageRepo for filtering categories in public tree.
 func (r *CategoryRepo) SetEANPageRepo(repo *EANPageRepo) {
 	r.eanPageRepo = repo
-}
-
-// SetTransaction sets the active transaction for this repo.
-func (r *CategoryRepo) SetTransaction(txn *makodb.Transaction) {
-	r.txn = txn
-}
-
-// ClearTransaction clears the active transaction.
-func (r *CategoryRepo) ClearTransaction() {
-	r.txn = nil
 }
 
 // ---------- CRUD ----------
