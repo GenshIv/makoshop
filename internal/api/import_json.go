@@ -910,7 +910,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNo
 		}
 
 		// Sort the WHOLE import by EAN page key (names permuted in lockstep):
-		// all products of one page land in the same 50k batch, so each page is
+		// all products of one page land in the same 100k batch, so each page is
 		// loaded, merged and written ONCE per import instead of every batch
 		// touching nearly every page (re-loading, re-merging and re-writing
 		// ~46k full pages per batch — gigabytes of transients and the dominant
@@ -925,7 +925,7 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNo
 		// churn. Accumulating entries across batches bought nothing except a
 		// heap that grew linearly over the whole import (tens of millions of
 		// entries, one per product token) and OOM-killed 400k-product imports.
-		const batchSize = 50_000
+		const batchSize = 100_000
 
 		// importKeys is the offer-key list (EAN | normalized name | companyID)
 		// of every product in this import — a plain string slice, not a map:
