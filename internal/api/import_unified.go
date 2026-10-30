@@ -137,11 +137,12 @@ func (h *Handlers) importCompanyByFormat(company *model.Company, override string
 	}
 	cr := CompanyImportResult{Company: company.Name, Format: format}
 
-	// Reclaim before the rewrite-heavy run: compact shards whose dead-byte
-	// debt crossed 20% of live data. Importing on top of an indebted shard
-	// is what pushes it into its size budget mid-run. Best-effort — a
-	// failed compaction (e.g. no disk headroom) only warns.
-	if n, err := h.store.DB().CompactDebtOverPercent(20); err != nil {
+	// Reclaim before the rewrite-heavy run: compact shards whose used offset
+	// crossed 50% of their size budget (a shard past half its budget is
+	// mostly garbage). Header-only check, so it costs nothing when all
+	// shards are fine. Best-effort — a failed compaction (e.g. no disk
+	// headroom) only warns.
+	if n, err := h.store.DB().CompactShardsOverFillPercent(50); err != nil {
 		fmt.Printf("[IMPORT] WARN: pre-import compaction failed for %s: %v\n", company.Name, err)
 	} else if n > 0 {
 		fmt.Printf("[IMPORT] %s: pre-import compaction reclaimed %d shard(s)\n", company.Name, n)
