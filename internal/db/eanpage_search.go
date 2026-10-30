@@ -615,17 +615,6 @@ func (s *EANPageSearch) BuildSortIndexes() error {
 	start := time.Now().Unix()
 	fmt.Println("[EANPAGE] Building sort indexes per category...")
 
-	// Load pages in batches: the engine paginates the eanpage_list index
-	// directly (offset/limit), each batch is fetched and unmarshalled here.
-	var all []model.EANPage
-	err := s.repo.ForEachEANPageBatch(50000, func(pages []model.EANPage) error {
-		all = append(all, pages...)
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("list eanpages: %w", err)
-	}
-
 	// Group by category ancestors (each ancestor gets its own sort index)
 	type priced struct {
 		docID string
@@ -642,40 +631,53 @@ func (s *EANPageSearch) BuildSortIndexes() error {
 	catCreatedDesc := make(map[int64][]timed)
 	catPricePairs := make(map[int64][]makodb.TurboNumSortPair)
 
-	for _, sp := range all {
-		docIDKey := KeyEANPage(sp.EAN)
+	// Pages stream in batches and are grouped on the fly: only the (much
+	// smaller) index entries accumulate. Accumulating the full page structs
+	// of the whole catalog first — the old "all" slice — held every page in
+	// memory at once and OOM-killed full reindexes.
+	totalPages := 0
+	err := s.repo.ForEachEANPageBatch(50000, func(pages []model.EANPage) error {
+		for i := range pages {
+			sp := &pages[i]
+			docIDKey := KeyEANPage(sp.EAN)
 
-		// Sort indexes hold EVERY page: search paginates through them and
-		// must find pages without usable offers too. Such pages (no offers,
-		// or min_price below EANPageMinCatalogPrice) get the numSort value 0:
-		// catalog listings paginate the numSort range starting at the price
-		// floor, so they never surface in the catalog.
-		price := sp.MinPrice
-		if sp.ProductCount == 0 || price < EANPageMinCatalogPrice {
-			price = 0
-		}
-		priceVal := uint64(price * 100)
-
-		scCreated := sp.CreatedAt
-		// Add to global (catID=0) index
-		catPricesAsc[0] = append(catPricesAsc[0], priced{docID: docIDKey, price: sp.MinPrice})
-		catPricesDesc[0] = append(catPricesDesc[0], priced{docID: docIDKey, price: sp.MinPrice})
-		catCreatedDesc[0] = append(catCreatedDesc[0], timed{docID: docIDKey, ts: int64(scCreated)})
-		catPricePairs[0] = append(catPricePairs[0], makodb.TurboNumSortPair{Value: priceVal, DocID: docIDKey})
-
-		// Add to all ancestor categories
-		if sp.CategoryID != 0 {
-			ancestors, err := s.getCategoryAncestors(sp.CategoryID)
-			if err != nil {
-				ancestors = []int64{sp.CategoryID}
+			// Sort indexes hold EVERY page: search paginates through them and
+			// must find pages without usable offers too. Such pages (no offers,
+			// or min_price below EANPageMinCatalogPrice) get the numSort value 0:
+			// catalog listings paginate the numSort range starting at the price
+			// floor, so they never surface in the catalog.
+			price := sp.MinPrice
+			if sp.ProductCount == 0 || price < EANPageMinCatalogPrice {
+				price = 0
 			}
-			for _, cid := range ancestors {
-				catPricesAsc[cid] = append(catPricesAsc[cid], priced{docID: docIDKey, price: sp.MinPrice})
-				catPricesDesc[cid] = append(catPricesDesc[cid], priced{docID: docIDKey, price: sp.MinPrice})
-				catCreatedDesc[cid] = append(catCreatedDesc[cid], timed{docID: docIDKey, ts: int64(scCreated)})
-				catPricePairs[cid] = append(catPricePairs[cid], makodb.TurboNumSortPair{Value: priceVal, DocID: docIDKey})
+			priceVal := uint64(price * 100)
+
+			scCreated := sp.CreatedAt
+			// Add to global (catID=0) index
+			catPricesAsc[0] = append(catPricesAsc[0], priced{docID: docIDKey, price: sp.MinPrice})
+			catPricesDesc[0] = append(catPricesDesc[0], priced{docID: docIDKey, price: sp.MinPrice})
+			catCreatedDesc[0] = append(catCreatedDesc[0], timed{docID: docIDKey, ts: int64(scCreated)})
+			catPricePairs[0] = append(catPricePairs[0], makodb.TurboNumSortPair{Value: priceVal, DocID: docIDKey})
+
+			// Add to all ancestor categories
+			if sp.CategoryID != 0 {
+				ancestors, err := s.getCategoryAncestors(sp.CategoryID)
+				if err != nil {
+					ancestors = []int64{sp.CategoryID}
+				}
+				for _, cid := range ancestors {
+					catPricesAsc[cid] = append(catPricesAsc[cid], priced{docID: docIDKey, price: sp.MinPrice})
+					catPricesDesc[cid] = append(catPricesDesc[cid], priced{docID: docIDKey, price: sp.MinPrice})
+					catCreatedDesc[cid] = append(catCreatedDesc[cid], timed{docID: docIDKey, ts: int64(scCreated)})
+					catPricePairs[cid] = append(catPricePairs[cid], makodb.TurboNumSortPair{Value: priceVal, DocID: docIDKey})
+				}
 			}
 		}
+		totalPages += len(pages)
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("list eanpages: %w", err)
 	}
 
 	// Build sort indexes for each category. All sort-index writes are
@@ -756,7 +758,7 @@ func (s *EANPageSearch) BuildSortIndexes() error {
 	}
 	committed = true
 
-	fmt.Printf("[EANPAGE] Sort indexes built: %d pages, %d categories, %v\n", len(all), len(catPricesAsc), time.Since(time.Unix(start, 0)))
+	fmt.Printf("[EANPAGE] Sort indexes built: %d pages, %d categories, %v\n", totalPages, len(catPricesAsc), time.Since(time.Unix(start, 0)))
 	return nil
 }
 

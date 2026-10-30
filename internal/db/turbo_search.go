@@ -964,6 +964,57 @@ func (t *TurboProductSearch) IndexProductBatch(products []*model.Product) error 
 
 // ---------- sort indexes (по доке, полная перестройка) ----------
 
+// productSortEntry is the minimal per-product sort input: the doc key plus
+// the two sort keys. Product documents are parsed in bounded batches and
+// released immediately — a MultiGet for ALL tokens at once held every
+// product document in memory simultaneously and OOM-killed full reindexes
+// on large catalogs.
+type productSortEntry struct {
+	key     string
+	price   float64
+	created uint64
+}
+
+// collectProductSorts streams all product documents in bounded batches and
+// returns only their (key, price, created) sort inputs.
+func (t *TurboProductSearch) collectProductSorts() ([]productSortEntry, error) {
+	tokens, err := t.store.db.TurboGetIndexTokens(TurboKeyProductList)
+	if err != nil {
+		return nil, err
+	}
+	if len(tokens) == 0 {
+		return nil, nil
+	}
+
+	const batch = 8192
+	products := make([]productSortEntry, 0, len(tokens))
+	for start := 0; start < len(tokens); start += batch {
+		end := start + batch
+		if end > len(tokens) {
+			end = len(tokens)
+		}
+		docs, err := t.store.db.MultiGetByDocIDs(tokens[start:end])
+		if err != nil {
+			return nil, fmt.Errorf("multi get products: %w", err)
+		}
+		for _, doc := range docs {
+			if len(doc) == 0 {
+				continue
+			}
+			p, err := UnmarshalProduct(doc)
+			if err != nil {
+				continue
+			}
+			products = append(products, productSortEntry{
+				key:     KeyProduct(p.ID),
+				price:   p.Price,
+				created: uint64(p.CreatedAt),
+			})
+		}
+	}
+	return products, nil
+}
+
 // BuildSortIndexes перестраивает все sort-индексы из turbo-индексов price и created.
 // Вызывается один раз после импорта или по расписанию.
 // BuildSortIndexesTx is the transactional version of BuildSortIndexes.
@@ -975,40 +1026,16 @@ func (t *TurboProductSearch) BuildSortIndexesTx(txn *Transaction) error {
 	start := time.Now().Unix()
 	fmt.Println("[TURBO] Building sort indexes (transactional)...")
 
-	tokens, err := t.store.db.TurboGetIndexTokens(TurboKeyProductList)
-	if err != nil || len(tokens) == 0 {
+	products, err := t.collectProductSorts()
+	if err != nil {
+		return err
+	}
+	if len(products) == 0 {
 		fmt.Println("[TURBO] No products in product_list")
 		return nil
 	}
 
-	docs, err := t.store.db.MultiGetByDocIDs(tokens)
-	if err != nil {
-		return fmt.Errorf("multi get products: %w", err)
-	}
-
-	type productSort struct {
-		key     string
-		price   float64
-		created uint64
-	}
-
-	var products []productSort
-	for _, doc := range docs {
-		if len(doc) == 0 {
-			continue
-		}
-		p, err := UnmarshalProduct(doc)
-		if err != nil {
-			continue
-		}
-		products = append(products, productSort{
-			key:     KeyProduct(p.ID),
-			price:   p.Price,
-			created: uint64(p.CreatedAt),
-		})
-	}
-
-	priceAsc := make([]productSort, len(products))
+	priceAsc := make([]productSortEntry, len(products))
 	copy(priceAsc, products)
 	sort.Slice(priceAsc, func(i, j int) bool {
 		if priceAsc[i].price != priceAsc[j].price {
@@ -1020,7 +1047,7 @@ func (t *TurboProductSearch) BuildSortIndexesTx(txn *Transaction) error {
 		return priceAsc[i].key[0] < priceAsc[j].key[0] || (priceAsc[i].key[0] == priceAsc[j].key[0] && priceAsc[i].key[1] < priceAsc[j].key[1])
 	})
 
-	priceDesc := make([]productSort, len(products))
+	priceDesc := make([]productSortEntry, len(products))
 	copy(priceDesc, products)
 	sort.Slice(priceDesc, func(i, j int) bool {
 		if priceDesc[i].price != priceDesc[j].price {
@@ -1032,7 +1059,7 @@ func (t *TurboProductSearch) BuildSortIndexesTx(txn *Transaction) error {
 		return priceDesc[i].key[0] < priceDesc[j].key[0] || (priceDesc[i].key[0] == priceDesc[j].key[0] && priceDesc[i].key[1] < priceDesc[j].key[1])
 	})
 
-	createdDesc := make([]productSort, len(products))
+	createdDesc := make([]productSortEntry, len(products))
 	copy(createdDesc, products)
 	sort.Slice(createdDesc, func(i, j int) bool {
 		if createdDesc[i].created != createdDesc[j].created {
@@ -1074,44 +1101,17 @@ func (t *TurboProductSearch) BuildSortIndexes() error {
 	start := time.Now().Unix()
 	fmt.Println("[TURBO] Building sort indexes...")
 
-	// Read product IDs from product_list
-	tokens, err := t.store.db.TurboGetIndexTokens(TurboKeyProductList)
-	if err != nil || len(tokens) == 0 {
+	products, err := t.collectProductSorts()
+	if err != nil {
+		return err
+	}
+	if len(products) == 0 {
 		fmt.Println("[TURBO] No products in product_list")
 		return nil
 	}
 
-	// Get all product data
-	docs, err := t.store.db.MultiGetByDocIDs(tokens)
-	if err != nil {
-		return fmt.Errorf("multi get products: %w", err)
-	}
-
-	// Parse products and collect for sorting
-	type productSort struct {
-		key     string
-		price   float64
-		created uint64
-	}
-
-	var products []productSort
-	for _, doc := range docs {
-		if len(doc) == 0 {
-			continue
-		}
-		p, err := UnmarshalProduct(doc)
-		if err != nil {
-			continue
-		}
-		products = append(products, productSort{
-			key:     KeyProduct(p.ID),
-			price:   p.Price,
-			created: uint64(p.CreatedAt),
-		})
-	}
-
 	// Sort by price ascending
-	priceAsc := make([]productSort, len(products))
+	priceAsc := make([]productSortEntry, len(products))
 	copy(priceAsc, products)
 	sort.Slice(priceAsc, func(i, j int) bool {
 		if priceAsc[i].price != priceAsc[j].price {
@@ -1125,7 +1125,7 @@ func (t *TurboProductSearch) BuildSortIndexes() error {
 	})
 
 	// Sort by price descending
-	priceDesc := make([]productSort, len(products))
+	priceDesc := make([]productSortEntry, len(products))
 	copy(priceDesc, products)
 	sort.Slice(priceDesc, func(i, j int) bool {
 		if priceDesc[i].price != priceDesc[j].price {
@@ -1139,7 +1139,7 @@ func (t *TurboProductSearch) BuildSortIndexes() error {
 	})
 
 	// Sort by created descending
-	createdDesc := make([]productSort, len(products))
+	createdDesc := make([]productSortEntry, len(products))
 	copy(createdDesc, products)
 	sort.Slice(createdDesc, func(i, j int) bool {
 		if createdDesc[i].created != createdDesc[j].created {

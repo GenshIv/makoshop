@@ -65,15 +65,27 @@ func TestRunRecatalogize(t *testing.T) {
 		t.Fatalf("build category tokens: %v", err)
 	}
 
+	// Explicit mapping: recatalogize assigns categories by mapping only
+	// (the catalogizer path is disabled), so the products' shop category
+	// maps onto the category created above.
+	if err := h.categoryMappingRepo.Create(&model.CategoryMapping{
+		SourceCode:       "shop-laptops",
+		TargetCategoryID: cat.ID,
+	}); err != nil {
+		t.Fatalf("create category mapping: %v", err)
+	}
+
 	// Products first: creating a product auto-creates its EAN page.
 	mkProduct := func(ean string, price float64) {
 		if err := h.productRepo.Create(&model.Product{
-			EAN:       ean,
-			Name:      "laptop thing " + ean,
-			CompanyID: company.ID,
-			Price:     price,
-			Currency:  "PLN",
-			Status:    model.ProductStatusActive,
+			EAN:          ean,
+			Name:         "laptop thing " + ean,
+			CompanyID:    company.ID,
+			Price:        price,
+			Currency:     "PLN",
+			Status:       model.ProductStatusActive,
+			PurchaseURL:  "https://example.com/buy/" + ean,
+			ShopCategory: "shop-laptops",
 		}); err != nil {
 			t.Fatalf("create product %s: %v", ean, err)
 		}
