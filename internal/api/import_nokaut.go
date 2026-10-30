@@ -526,7 +526,7 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 		}
 
 		// Sort the WHOLE import by EAN page key (names permuted in lockstep):
-		// all products of one page land in the same 100k batch, so each page is
+		// all products of one page land in the same 200k batch, so each page is
 		// loaded, merged and written ONCE per import instead of every batch
 		// touching nearly every page.
 		sortStart := time.Now()
@@ -539,7 +539,7 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 		// churn. Accumulating entries across batches bought nothing except a
 		// heap that grew linearly over the whole import and OOM-killed large
 		// imports.
-		const batchSize = 100_000
+		const batchSize = 200_000
 
 		for i := 0; i < len(allParsedProducts); i += batchSize {
 			end := i + batchSize
