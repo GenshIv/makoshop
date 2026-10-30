@@ -1162,13 +1162,17 @@ func sortByEANPageKey(products []*model.Product, names []string) {
 // (WriteIndexEntries), which is what prevents vacuum churn — nothing is gained
 // by accumulating them across chunks except an OOM-sized heap.
 func (h *Handlers) writeBatchIndexEntries(tag string, batchProducts []*model.Product, affectedPages []*model.EANPage) {
-	// Write in sub-chunks: one IndexEntry is produced per product TOKEN
-	// (name+description words), and WriteIndexEntries groups them in a
-	// map[token]docIDs plus the transaction buffers a second copy. A whole 50k
-	// batch at once maps millions of tokens — chunking bounds the map and the
-	// buffer to a fraction of the batch.
-	const productChunk = 10_000
-	const eanPageChunk = 1_000
+	// Write in sub-chunks to bound the WriteIndexEntries byKey map and the
+	// transaction buffer. Chunk sizes trade memory against makodb vacuum
+	// debt: every chunk write of a token appends a NEW full version of the
+	// token's posting list (read-modify-write), and the old version becomes
+	// dead bytes — a hot token written in N chunks costs ~N/2× the final
+	// list size in write amplification. Measured on real imports, vacuum
+	// churn dominated, so the chunks are large: 50k products = one index
+	// write per token per batch (~9 per import), with the memory headroom
+	// left by the page-key sorting.
+	const productChunk = 50_000
+	const eanPageChunk = 5_000
 
 	if h.turboSearch != nil {
 		for lo := 0; lo < len(batchProducts); lo += productChunk {
