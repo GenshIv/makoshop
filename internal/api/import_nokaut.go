@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -383,7 +385,6 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 	var result NokautImportResult
 	result.Files = len(files)
 
-	var allProducts []*model.Product
 	var allParsedProducts []*model.Product
 	var allParsedNames []string
 	// zeroPriceOffers: offers whose price is below the catalog minimum. They
@@ -506,26 +507,40 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 	// ============================================
 	// Phase 1: Batch create/update products (IN TRANSACTION)
 	// ============================================
-	fmt.Printf("[IMPORT-NOKAUT] Phase 1: Creating/updating %d products (transactional)...\n", len(allParsedProducts))
+	fmt.Printf("[IMPORT-NOKAUT] Phase 1: Creating/updating %d products...\n", len(allParsedProducts))
 	h.importProgress.SetStep(StepProducts)
 	phase1Start := time.Now()
 
-	// Create application-level transaction BEFORE any writes
-	txn := db.NewTransaction(h.store)
-	if err := txn.Begin(); err != nil {
-		fmt.Printf("[IMPORT-NOKAUT] ERROR: failed to begin transaction: %v\n", err)
-		result.Status = "error_transaction"
-		return result
-	}
-	defer func() {
-		if !txn.IsFinished() {
-			_ = txn.Abort()
-		}
-	}()
+	// importKeys is the offer-key list (EAN | normalized name | companyID) of
+	// every product in this import — a plain string slice, not a map (the
+	// cleanup sorts it and binary-searches). Phase 1.6 (stale cleanup) needs
+	// only these keys, so the parsed products themselves are released after
+	// each batch instead of being held for the whole import. Declared before
+	// the Phase 1 block because Phase 1.6 lives outside it.
+	importKeys := make([]string, 0, len(allParsedProducts))
 
 	if len(allParsedProducts) > 0 {
-		// Process in batches of 1000 to avoid filling up the database
-		const batchSize = 100_000
+		// Load catalogizer cache once before processing batches
+		if err := h.eanPageRepo.LoadCatalogizerCache(); err != nil {
+			fmt.Printf("[IMPORT-NOKAUT] WARN: load catalogizer cache: %v\n", err)
+		}
+
+		// Sort the WHOLE import by EAN page key (names permuted in lockstep):
+		// all products of one page land in the same 50k batch, so each page is
+		// loaded, merged and written ONCE per import instead of every batch
+		// touching nearly every page.
+		sortStart := time.Now()
+		sortByEANPageKey(allParsedProducts, allParsedNames)
+		fmt.Printf("[IMPORT-NOKAUT] Sorted %d products by EAN page key in %v\n", len(allParsedProducts), time.Since(sortStart))
+
+		// Process in batches. Product+EAN data AND the batch's index entries
+		// are written immediately in per-batch transactions: WriteIndexEntries
+		// groups entries by key within the batch, which is what prevents vacuum
+		// churn. Accumulating entries across batches bought nothing except a
+		// heap that grew linearly over the whole import and OOM-killed large
+		// imports.
+		const batchSize = 50_000
+
 		for i := 0; i < len(allParsedProducts); i += batchSize {
 			end := i + batchSize
 			if end > len(allParsedProducts) {
@@ -537,14 +552,34 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 
 			fmt.Printf("[IMPORT-NOKAUT] Phase 1: Processing batch %d-%d (%d products)...\n", i, end, len(batchProducts))
 
+			// Collect the batch's offer keys for Phase 1.6. batchNames carries
+			// the same NormalizeName normalization BatchGetOrCreateByEANTx uses,
+			// so the keys match 1:1.
+			for j, p := range batchProducts {
+				if p.CompanyID == 0 {
+					continue
+				}
+				importKeys = append(importKeys, db.ProductEANKey(p.EAN, batchNames[j], p.CompanyID))
+			}
+
+			// One transaction per batch for product + EAN page data
+			txn := db.NewTransaction(h.store)
+			if err := txn.Begin(); err != nil {
+				fmt.Printf("[IMPORT-NOKAUT] ERROR: failed to begin batch transaction: %v\n", err)
+				result.Status = "error_transaction"
+				return result
+			}
+
+			// Step 1: Create/update products
 			_, isNewMap, err := h.productRepo.BatchGetOrCreateByEANTx(txn, batchProducts, batchNames, priceDoc)
 			if err != nil {
 				fmt.Printf("[IMPORT-NOKAUT] WARN: BatchGetOrCreateByEANTx: %v\n", err)
 				result.ProductsSkipped += len(batchProducts)
+				_ = txn.Abort()
 				continue
 			}
 
-			for j, p := range batchProducts {
+			for j := range batchProducts {
 				if isNewMap[j] {
 					result.ProductsCreated++
 					h.importProgress.AddCreated(1)
@@ -552,33 +587,114 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 					result.ProductsUpdated++
 					h.importProgress.AddUpdated(1)
 				}
+			}
 
-				// For existing products BatchGetOrCreateByEANTx replaced the
-				// element with the merged stored product — p is already the
-				// final state, no re-Get needed.
-				allProducts = append(allProducts, p)
+			// Step 2: Apply category mappings and create EAN pages
+			for _, p := range batchProducts {
+				if p.ShopCategory == "" {
+					continue
+				}
+				mapping, mapErr := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
+				if mapErr == nil && mapping != nil {
+					p.CategoryID = mapping.TargetCategoryID
+				} else {
+					p.CategoryID = 0
+				}
+			}
+
+			affectedPages := h.eanPageRepo.BatchUpsertFromProductsTx(txn, batchProducts, deliverySlugs)
+			for _, s := range affectedPages {
+				result.AffectedEANPages = append(result.AffectedEANPages, s.EAN)
+			}
+
+			// Commit product + EAN page data immediately
+			if err := txn.Commit(); err != nil {
+				fmt.Printf("[IMPORT-NOKAUT] WARN: commit batch transaction: %v\n", err)
+			}
+
+			// Write this batch's index entries in their own transaction
+			// (after the product commit: entries reference the assigned IDs)
+			h.writeBatchIndexEntries("IMPORT-NOKAUT", batchProducts, affectedPages)
+
+			// Release the batch: nil out the slice slots in allParsedProducts/
+			// allParsedNames so the products become collectable. `batchProducts
+			// = nil` alone frees nothing — allParsedProducts still references
+			// every element.
+			for j := i; j < end; j++ {
+				allParsedProducts[j] = nil
+				allParsedNames[j] = ""
+			}
+			runtime.GC()
+			debug.FreeOSMemory()
+		}
+		fmt.Printf("[IMPORT-NOKAUT] Phase 1: products + EAN pages + indexes written in %v\n", time.Since(phase1Start))
+	}
+	fmt.Printf("[IMPORT-NOKAUT] Phase 1+2: done in %v\n", time.Since(phase1Start))
+
+	// Zero-price offers: no products were imported for them. Create the
+	// missing EAN pages without offers so the items stay present in the
+	// general index (search / direct URLs) while the catalog skips them.
+	if len(zeroPriceOffers) > 0 {
+		zeroTxn := db.NewTransaction(h.store)
+		if err := zeroTxn.Begin(); err != nil {
+			fmt.Printf("[IMPORT-NOKAUT] WARN: begin zero-price transaction: %v\n", err)
+		} else {
+			for _, p := range zeroPriceOffers {
+				if p.ShopCategory == "" {
+					continue
+				}
+				mapping, mapErr := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
+				if mapErr == nil && mapping != nil {
+					p.CategoryID = mapping.TargetCategoryID
+				}
+			}
+			noOfferPages := h.eanPageRepo.EnsureEANPagesWithoutOffersTx(zeroTxn, zeroPriceOffers)
+			if len(noOfferPages) > 0 {
+				fmt.Printf("[IMPORT-NOKAUT] Created %d EAN pages from zero-price offers\n", len(noOfferPages))
+				if h.eanPageSearch != nil {
+					if err := h.eanPageSearch.IndexEANPageBatchTx(zeroTxn, noOfferPages); err != nil {
+						fmt.Printf("[IMPORT-NOKAUT] WARN: index no-offer EAN pages: %v\n", err)
+					}
+				}
+				for _, s := range noOfferPages {
+					result.AffectedEANPages = append(result.AffectedEANPages, s.EAN)
+				}
+			}
+			if err := zeroTxn.Commit(); err != nil {
+				fmt.Printf("[IMPORT-NOKAUT] WARN: commit zero-price transaction: %v\n", err)
 			}
 		}
 	}
-	fmt.Printf("[IMPORT-NOKAUT] Phase 1: done in %v\n", time.Since(phase1Start))
+
+	// Flush any attribute codes created on-the-fly (HTML parser) to the
+	// registry list in ONE batched write.
+	if h.attrDefRepo != nil {
+		if err := h.attrDefRepo.FlushList(); err != nil {
+			fmt.Printf("[IMPORT-NOKAUT] WARN: FlushList failed: %v\n", err)
+		}
+	}
 
 	// ============================================
-	// Phase 1.6: Delete stale products not in this import (IN TRANSACTION)
+	// Phase 1.6: Delete stale products not in this import
 	// ============================================
-	// Removes products for this company that are no longer in the price file.
-	// Runs before indexing so the vendor index still reflects pre-import state.
-	// GUARDED: a parse that produced zero products (bad download, broken feed)
-	// must NOT wipe the whole company — same rule as the json path.
-	// THRESHOLD: cleanup only runs for companies with >100k products to avoid
-	// excessive deletion on small imports where stale products are less impactful.
 	if h.productRepo != nil && len(allParsedProducts) > 0 {
 		if priceDoc != nil && len(priceDoc.Prices) > 100_000 {
 			h.importProgress.SetStep(StepCleanup)
 			fmt.Printf("[IMPORT-NOKAUT] Phase 1.6: Cleaning up stale products for company %d (has %d products)...\n", company.ID, len(priceDoc.Prices))
-			deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, pricesrc.NormalizeName, priceDoc)
-			result.ProductsDeleted = deleted
-			h.importProgress.SetDeleted(deleted)
-			fmt.Printf("[IMPORT-NOKAUT] Phase 1.6: deleted %d stale products\n", deleted)
+
+			cleanupTxn := db.NewTransaction(h.store)
+			if err := cleanupTxn.Begin(); err != nil {
+				fmt.Printf("[IMPORT-NOKAUT] WARN: begin cleanup transaction: %v\n", err)
+			} else {
+				deleted := h.productRepo.CleanupStaleProductsTx(cleanupTxn, company.ID, importKeys, pricesrc.NormalizeName, priceDoc)
+				result.ProductsDeleted = deleted
+				h.importProgress.SetDeleted(deleted)
+				fmt.Printf("[IMPORT-NOKAUT] Phase 1.6: deleted %d stale products\n", deleted)
+
+				if err := cleanupTxn.Commit(); err != nil {
+					fmt.Printf("[IMPORT-NOKAUT] WARN: commit cleanup transaction: %v\n", err)
+				}
+			}
 		} else {
 			fmt.Printf("[IMPORT-NOKAUT] Skipping cleanup for company %d (has %d products, threshold is 100k)\n", company.ID, func() int {
 				if priceDoc != nil {
@@ -588,144 +704,6 @@ func (h *Handlers) importNokautCompany(company *model.Company, limit int, explic
 			}())
 		}
 	}
-
-	// ============================================
-	// Phase 1.5: Batch index all products (IN TRANSACTION)
-	// ============================================
-	h.importProgress.SetStep(StepIndex)
-	if h.turboSearch != nil && len(allProducts) > 0 {
-		// Process in batches of 1000 to avoid filling up the database
-		const batchSize = 100_000
-		for i := 0; i < len(allProducts); i += batchSize {
-			end := i + batchSize
-			if end > len(allProducts) {
-				end = len(allProducts)
-			}
-
-			batchProducts := allProducts[i:end]
-			fmt.Printf("[IMPORT-NOKAUT] Phase 1.5: Indexing batch %d-%d (%d products)...\n", i, end, len(batchProducts))
-
-			if err := h.turboSearch.BatchIndexProductstx(txn, batchProducts); err != nil {
-				fmt.Printf("[IMPORT-NOKAUT] WARN: batch index products: %v\n", err)
-			}
-		}
-	}
-
-	// return NokautImportResult{}
-	// ============================================
-	// Phase 2: Batch upsert EAN pages + index (IN TRANSACTION)
-	// ============================================
-	fmt.Printf("[IMPORT-NOKAUT] Phase 2: Upserting EAN pages for %d products (transactional)...\n", len(allProducts))
-	h.importProgress.SetStep(StepEANPages)
-	phase2Start := time.Now()
-
-	if err := h.eanPageRepo.LoadCatalogizerCache(); err != nil {
-		fmt.Printf("[IMPORT-NOKAUT] WARN: load catalogizer cache: %v\n", err)
-	}
-
-	// Apply explicit category mappings before auto-catalogization.
-	mappedCount := 0
-	for _, p := range allProducts {
-		if p.CategoryID != 0 || p.ShopCategory == "" {
-			continue
-		}
-		mapping, err := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
-		if err != nil {
-			fmt.Printf("[IMPORT-NOKAUT] WARN: lookup category mapping: %v\n", err)
-			continue
-		}
-		if mapping != nil {
-			p.CategoryID = mapping.TargetCategoryID
-			mappedCount++
-		}
-	}
-	if mappedCount > 0 {
-		fmt.Printf("[IMPORT-NOKAUT] Applied explicit category mappings to %d products\n", mappedCount)
-	}
-
-	// Perform batch upsert within transaction; affectedPages is the final
-	// in-memory state of every touched page (post merge/catalogize).
-	productToEANPage, affectedPages := h.eanPageRepo.BatchUpsertFromProductsTx(txn, allProducts, deliverySlugs)
-
-	// Collect affected EAN page IDs for incremental recalculation
-	if productToEANPage != nil {
-		eanPageIDs := make(map[string]struct{})
-		for _, eanPageID := range productToEANPage {
-			eanPageIDs[eanPageID] = struct{}{}
-		}
-		result.AffectedEANPages = make([]string, 0, len(eanPageIDs))
-		for id := range eanPageIDs {
-			result.AffectedEANPages = append(result.AffectedEANPages, id)
-		}
-	}
-
-	// Index ONLY the affected pages from their in-memory state (not the whole
-	// table: ListAll() would re-index every page in the DB and would miss the
-	// freshly created pages anyway, since they are not committed yet).
-	if h.eanPageSearch != nil && len(affectedPages) > 0 {
-		if err := h.eanPageSearch.IndexEANPageBatchTx(txn, affectedPages); err != nil {
-			fmt.Printf("[IMPORT-NOKAUT] ERROR: index EAN pages failed: %v\n", err)
-			_ = txn.Abort()
-			result.Status = "error_index"
-			return result
-		}
-	}
-
-	// Zero-price offers: no products were imported for them. Create the
-	// missing EAN pages without offers so the items stay present in the
-	// general index (search / direct URLs) while the catalog skips them.
-	if len(zeroPriceOffers) > 0 {
-		// Apply explicit category mappings first (same rule as priced offers).
-		for _, p := range zeroPriceOffers {
-			if p.ShopCategory == "" {
-				continue
-			}
-			mapping, mapErr := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
-			if mapErr == nil && mapping != nil {
-				p.CategoryID = mapping.TargetCategoryID
-			}
-		}
-		noOfferPages := h.eanPageRepo.EnsureEANPagesWithoutOffersTx(txn, zeroPriceOffers)
-		if len(noOfferPages) > 0 {
-			fmt.Printf("[IMPORT-NOKAUT] Created %d EAN pages from zero-price offers\n", len(noOfferPages))
-			if h.eanPageSearch != nil {
-				if err := h.eanPageSearch.IndexEANPageBatchTx(txn, noOfferPages); err != nil {
-					fmt.Printf("[IMPORT-NOKAUT] WARN: index no-offer EAN pages: %v\n", err)
-				}
-			}
-			for _, s := range noOfferPages {
-				result.AffectedEANPages = append(result.AffectedEANPages, s.EAN)
-			}
-		}
-	}
-	fmt.Printf("[IMPORT-NOKAUT] Phase 2: EAN pages done in %v\n", time.Since(phase2Start))
-
-	// NOTE: The global (company-independent) recalculations — EAN page product
-	// counts, min prices, product/EAN-page sort indexes, category trees, and
-	// delivery methods — are no longer run here per company. They run ONCE
-	// after all companies have imported (runGlobalRecalculation in
-	// import_unified.go), which saves time and avoids re-doing the same global
-	// work for every company.
-
-	// Flush any attribute codes created on-the-fly (HTML parser) to the
-	// registry list in ONE batched write. This covers the case where
-	// newAttrKeys was empty (so Phase 0 / BatchGetOrCreateByKeys did not run)
-	// but the description parser still created new AttrDefs.
-	if h.attrDefRepo != nil {
-		if err := h.attrDefRepo.FlushList(); err != nil {
-			fmt.Printf("[IMPORT-NOKAUT] WARN: FlushList failed: %v\n", err)
-		}
-	}
-
-	// Commit transaction (per-company data: products, indexes, EAN pages).
-	h.importProgress.SetStep(StepCommit)
-	if err := txn.Commit(); err != nil {
-		fmt.Printf("[IMPORT-NOKAUT] ERROR: commit transaction failed: %v\n", err)
-		result.Status = "error_commit"
-		return result
-	}
-
-	fmt.Println("[IMPORT-NOKAUT] Transaction committed successfully")
 
 	// Persist the price document updated incrementally during the import
 	// (created/changed prices in Phase 1, deleted prices in Phase 1.6).

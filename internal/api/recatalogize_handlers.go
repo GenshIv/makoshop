@@ -409,7 +409,7 @@ func (h *Handlers) runRecatalogize() error {
 				}
 			}
 		}
-		_, createdPages := h.eanPageRepo.BatchUpsertFromProductsTx(txn, missingProducts, nil)
+		createdPages := h.eanPageRepo.BatchUpsertFromProductsTx(txn, missingProducts, nil)
 		if h.eanPageSearch != nil && len(createdPages) > 0 {
 			if err := h.eanPageSearch.IndexEANPageBatchTx(txn, createdPages); err != nil {
 				return fmt.Errorf("index recreated pages: %w", err)

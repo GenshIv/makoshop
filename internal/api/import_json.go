@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,7 +18,6 @@ import (
 
 	attrsPkg "github.com/GenshIv/makoshop/internal/attrs"
 	"github.com/GenshIv/makoshop/internal/db"
-	"github.com/GenshIv/makoshop/internal/helpers"
 	"github.com/GenshIv/makoshop/internal/httpres"
 	"github.com/GenshIv/makoshop/internal/model"
 	"github.com/GenshIv/makoshop/internal/pricesrc"
@@ -898,28 +899,42 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNo
 	// ============================================
 	// Phase 1: Batch create/update products (IN TRANSACTION)
 	// ============================================
-	var allProducts []*model.Product
-
-	// Create application-level transaction BEFORE any writes
-	txn := db.NewTransaction(h.store)
-	if err := txn.Begin(); err != nil {
-		fmt.Printf("[IMPORT-JSON] ERROR: failed to begin transaction: %v\n", err)
-		result.Status = "error_transaction"
-		return result
-	}
-	defer func() {
-		if !txn.IsFinished() {
-			_ = txn.Abort()
-		}
-	}()
-
 	if len(allParsedProducts) > 0 {
-		fmt.Printf("[IMPORT-JSON] Phase 1: Creating/updating %d products (transactional)...\n", len(allParsedProducts))
+		fmt.Printf("[IMPORT-JSON] Phase 1: Creating/updating %d products...\n", len(allParsedProducts))
 		h.importProgress.SetStep(StepProducts)
 		phase1Start := time.Now()
 
-		// Process in batches to avoid filling up the transaction buffer
-		const batchSize = 100_000
+		// Load catalogizer cache once before processing batches
+		if err := h.eanPageRepo.LoadCatalogizerCache(); err != nil {
+			fmt.Printf("[IMPORT-JSON] WARN: load catalogizer cache: %v\n", err)
+		}
+
+		// Sort the WHOLE import by EAN page key (names permuted in lockstep):
+		// all products of one page land in the same 50k batch, so each page is
+		// loaded, merged and written ONCE per import instead of every batch
+		// touching nearly every page (re-loading, re-merging and re-writing
+		// ~46k full pages per batch — gigabytes of transients and the dominant
+		// import time on 400k-product files).
+		sortStart := time.Now()
+		sortByEANPageKey(allParsedProducts, allParsedNames)
+		fmt.Printf("[IMPORT-JSON] Sorted %d products by EAN page key in %v\n", len(allParsedProducts), time.Since(sortStart))
+
+		// Process in batches. Product+EAN data AND the batch's index entries
+		// are written immediately in per-batch transactions: WriteIndexEntries
+		// groups entries by key within the batch, which is what prevents vacuum
+		// churn. Accumulating entries across batches bought nothing except a
+		// heap that grew linearly over the whole import (tens of millions of
+		// entries, one per product token) and OOM-killed 400k-product imports.
+		const batchSize = 50_000
+
+		// importKeys is the offer-key list (EAN | normalized name | companyID)
+		// of every product in this import — a plain string slice, not a map:
+		// at 450k products even a key set is worth keeping map-free (the
+		// cleanup sorts it and binary-searches). Phase 1.6 (stale cleanup)
+		// needs only these keys, so the parsed products themselves are
+		// released after each batch instead of being held for the whole import.
+		importKeys := make([]string, 0, len(allParsedProducts))
+
 		for i := 0; i < len(allParsedProducts); i += batchSize {
 			end := i + batchSize
 			if end > len(allParsedProducts) {
@@ -931,14 +946,34 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNo
 
 			fmt.Printf("[IMPORT-JSON] Phase 1: Processing batch %d-%d (%d products)...\n", i, end, len(batchProducts))
 
+			// Collect the batch's offer keys for Phase 1.6 before anything can
+			// mutate the products. batchNames carries the same normalization
+			// BatchGetOrCreateByEANTx uses, so the keys match 1:1.
+			for j, p := range batchProducts {
+				if p.CompanyID == 0 {
+					continue
+				}
+				importKeys = append(importKeys, db.ProductEANKey(p.EAN, batchNames[j], p.CompanyID))
+			}
+
+			// One transaction per batch for product + EAN page data
+			txn := db.NewTransaction(h.store)
+			if err := txn.Begin(); err != nil {
+				fmt.Printf("[IMPORT-JSON] ERROR: failed to begin batch transaction: %v\n", err)
+				result.Status = "error_transaction"
+				return result
+			}
+
+			// Step 1: Create/update products
 			_, isNewMap, err := h.productRepo.BatchGetOrCreateByEANTx(txn, batchProducts, batchNames, priceDoc)
 			if err != nil {
 				fmt.Printf("[IMPORT-JSON] WARN: BatchGetOrCreateByEANTx: %v\n", err)
 				result.ProductsSkipped += len(batchProducts)
+				_ = txn.Abort()
 				continue
 			}
 
-			for j, p := range batchProducts {
+			for j := range batchProducts {
 				if isNewMap[j] {
 					result.ProductsCreated++
 					h.importProgress.AddCreated(1)
@@ -946,232 +981,120 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNo
 					result.ProductsUpdated++
 					h.importProgress.AddUpdated(1)
 				}
-
-				// For existing products BatchGetOrCreateByEANTx replaced the
-				// element with the merged stored product — p is already the
-				// final state, no re-Get needed.
-				allProducts = append(allProducts, p)
 			}
-		}
-		fmt.Printf("[IMPORT-JSON] Phase 1: done in %v\n", time.Since(phase1Start))
 
-		// ============================================
-		// Phase 1.5: Batch index all products (IN TRANSACTION)
-		// ============================================
-		usages := h.store.DB().ShardUsages()
-
-		h.importProgress.SetStep(StepIndex)
-		if h.turboSearch != nil && len(allProducts) > 0 {
-			for i := 0; i < len(allProducts); i += batchSize {
-				end := i + batchSize
-				if end > len(allProducts) {
-					end = len(allProducts)
-				}
-
-				batchProducts := allProducts[i:end]
-				fmt.Printf("[IMPORT-JSON] Phase 1.5: Indexing batch %d-%d (%d products)...\n", i, end, len(batchProducts))
-
-				if err := h.turboSearch.BatchIndexProductstx(txn, batchProducts); err != nil {
-					fmt.Printf("[IMPORT-JSON] WARN: batch index products: %v\n", err)
-				}
-			}
-		}
-
-		delta, _ := helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
-		usages = h.store.DB().ShardUsages()
-		if delta > 100_000 {
-
-		}
-		// ============================================
-		// Phase 2: Batch upsert EAN pages + index (IN TRANSACTION)
-		// ============================================
-		fmt.Printf("[IMPORT-JSON] Phase 2: Upserting EAN pages for %d products (transactional)...\n", len(allProducts))
-		h.importProgress.SetStep(StepEANPages)
-		phase2Start := time.Now()
-
-		if err := h.eanPageRepo.LoadCatalogizerCache(); err != nil {
-			fmt.Printf("[IMPORT-JSON] WARN: load catalogizer cache: %v\n", err)
-		}
-
-		// Apply explicit category mappings before auto-catalogization.
-		// Products with matching ShopCategory get their CategoryID set directly.
-		// Always re-apply mapping (even if product already has a category) so
-		// that mapping changes take effect on re-import.
-		mappedCount := 0
-		var cpcMappings []*db.CompanyProductCategory
-		for _, p := range allProducts {
-			var mapping *model.CategoryMapping
-			if p.ShopCategory != "" {
-				m, err := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
-				if err != nil {
-					fmt.Printf("[IMPORT-JSON] WARN: lookup category mapping: %v\n", err)
-				} else {
-					mapping = m
-				}
-			}
-			if mapping != nil {
-				p.CategoryID = mapping.TargetCategoryID
-				mappedCount++
-				cpcMappings = append(cpcMappings, &db.CompanyProductCategory{
-					CompanyID:        p.CompanyID,
-					ProductEAN:       db.EANPageKeyForProduct(p),
-					TargetCategoryID: mapping.TargetCategoryID,
-				})
-			} else {
-				p.CategoryID = 0
-			}
-		}
-		if mappedCount > 0 {
-			fmt.Printf("[IMPORT-JSON] Applied explicit category mappings to %d products\n", mappedCount)
-			// Batch-save company-product-category reference mappings
-			if len(cpcMappings) > 0 && h.companyProductCategoryRepo != nil {
-				if err := h.companyProductCategoryRepo.BatchUpsertTx(txn, cpcMappings); err != nil {
-					fmt.Printf("[IMPORT-JSON] WARN: save CPC mappings: %v\n", err)
-				} else {
-					fmt.Printf("[IMPORT-JSON] Saved %d company-product-category references\n", len(cpcMappings))
-				}
-			}
-		}
-
-		delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
-		usages = h.store.DB().ShardUsages()
-		if delta > 100_000 {
-
-		}
-		// Perform batch upsert within transaction; affectedPages is the final
-		// in-memory state of every touched page (post merge/catalogize).
-		productToEANPage, affectedPages := h.eanPageRepo.BatchUpsertFromProductsTx(txn, allProducts, deliverySlugs)
-
-		delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
-		usages = h.store.DB().ShardUsages()
-		if delta > 100_000 {
-
-		}
-
-		// Collect affected EAN page IDs for incremental recalculation
-		if productToEANPage != nil {
-			eanPageIDs := make(map[string]struct{})
-			for _, eanPageID := range productToEANPage {
-				eanPageIDs[eanPageID] = struct{}{}
-			}
-			result.AffectedEANPages = make([]string, 0, len(eanPageIDs))
-			for id := range eanPageIDs {
-				result.AffectedEANPages = append(result.AffectedEANPages, id)
-			}
-		}
-
-		// Index ONLY the affected pages from their in-memory state (not the
-		// whole table: ListAll() would re-index every page in the DB and
-		// would miss freshly created pages anyway — they are not committed yet).
-		if h.eanPageSearch != nil && len(affectedPages) > 0 {
-			if err := h.eanPageSearch.IndexEANPageBatchTx(txn, affectedPages); err != nil {
-				fmt.Printf("[IMPORT-JSON] ERROR: index EAN pages failed: %v\n", err)
-				_ = txn.Abort()
-				result.Status = "error_index"
-				return result
-			}
-		}
-
-		// Zero-price offers: no products were imported for them. Create the
-		// missing EAN pages without offers so the items stay present in the
-		// general index (search / direct URLs) while the catalog skips them.
-		if len(zeroPriceOffers) > 0 {
-			// Apply explicit category mappings first (same rule as priced offers).
-			for _, p := range zeroPriceOffers {
+			// Step 2: Apply category mappings and create EAN pages
+			for _, p := range batchProducts {
 				if p.ShopCategory == "" {
 					continue
 				}
 				mapping, mapErr := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
 				if mapErr == nil && mapping != nil {
 					p.CategoryID = mapping.TargetCategoryID
+				} else {
+					p.CategoryID = 0
 				}
 			}
-			noOfferPages := h.eanPageRepo.EnsureEANPagesWithoutOffersTx(txn, zeroPriceOffers)
-			if len(noOfferPages) > 0 {
-				fmt.Printf("[IMPORT-JSON] Created %d EAN pages from zero-price offers\n", len(noOfferPages))
-				if h.eanPageSearch != nil {
-					if err := h.eanPageSearch.IndexEANPageBatchTx(txn, noOfferPages); err != nil {
-						fmt.Printf("[IMPORT-JSON] WARN: index no-offer EAN pages: %v\n", err)
+
+			affectedPages := h.eanPageRepo.BatchUpsertFromProductsTx(txn, batchProducts, deliverySlugs)
+			for _, s := range affectedPages {
+				result.AffectedEANPages = append(result.AffectedEANPages, s.EAN)
+			}
+
+			// Commit product + EAN page data immediately
+			if err := txn.Commit(); err != nil {
+				fmt.Printf("[IMPORT-JSON] WARN: commit batch transaction: %v\n", err)
+			}
+
+			// Write this batch's index entries in their own transaction
+			// (after the product commit: entries reference the assigned IDs)
+			h.writeBatchIndexEntries("IMPORT-JSON", batchProducts, affectedPages)
+
+			// Release the batch: nil out the slice slots in allParsedProducts/
+			// allParsedNames so the products (descriptions, attributes) become
+			// collectable. The slice backings stay, but they are tiny compared
+			// to the products themselves. Note: `batchProducts = nil` alone
+			// frees nothing — allParsedProducts still references every element.
+			for j := i; j < end; j++ {
+				allParsedProducts[j] = nil
+				allParsedNames[j] = ""
+			}
+			runtime.GC()
+			debug.FreeOSMemory()
+		}
+		fmt.Printf("[IMPORT-JSON] Phase 1: products + EAN pages + indexes written in %v\n", time.Since(phase1Start))
+
+		// Zero-price offers: no products were imported for them. Create the
+		// missing EAN pages without offers so the items stay present in the
+		// general index (search / direct URLs) while the catalog skips them.
+		if len(zeroPriceOffers) > 0 {
+			zeroTxn := db.NewTransaction(h.store)
+			if err := zeroTxn.Begin(); err != nil {
+				fmt.Printf("[IMPORT-JSON] WARN: begin zero-price transaction: %v\n", err)
+			} else {
+				for _, p := range zeroPriceOffers {
+					if p.ShopCategory == "" {
+						continue
+					}
+					mapping, mapErr := h.categoryMappingRepo.FindBySourceCode(p.ShopCategory, &p.CompanyID)
+					if mapErr == nil && mapping != nil {
+						p.CategoryID = mapping.TargetCategoryID
 					}
 				}
-				for _, s := range noOfferPages {
-					result.AffectedEANPages = append(result.AffectedEANPages, s.EAN)
+				noOfferPages := h.eanPageRepo.EnsureEANPagesWithoutOffersTx(zeroTxn, zeroPriceOffers)
+				if len(noOfferPages) > 0 {
+					fmt.Printf("[IMPORT-JSON] Created %d EAN pages from zero-price offers\n", len(noOfferPages))
+					if h.eanPageSearch != nil {
+						if err := h.eanPageSearch.IndexEANPageBatchTx(zeroTxn, noOfferPages); err != nil {
+							fmt.Printf("[IMPORT-JSON] WARN: index no-offer EAN pages: %v\n", err)
+						}
+					}
+					for _, s := range noOfferPages {
+						result.AffectedEANPages = append(result.AffectedEANPages, s.EAN)
+					}
+				}
+				if err := zeroTxn.Commit(); err != nil {
+					fmt.Printf("[IMPORT-JSON] WARN: commit zero-price transaction: %v\n", err)
 				}
 			}
 		}
-		fmt.Printf("[IMPORT-JSON] Phase 2: EAN pages done in %v\n", time.Since(phase2Start))
-
-		delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
-		usages = h.store.DB().ShardUsages()
-		if delta > 100_000 {
-
-		}
-		// NOTE: Post-commit per-company recalcs (counts, min prices, delivery
-		// attributes) and the global part 2 (sort indexes, trees) are described
-		// in import_unified.go.
 
 		// Flush any attribute codes created on-the-fly (description parser) to
-		// the registry list in ONE batched write (covers the case where Phase 0
-		// did not run but the parser still created new AttrDefs).
+		// the registry list in ONE batched write.
 		if h.attrDefRepo != nil {
 			if err := h.attrDefRepo.FlushList(); err != nil {
 				fmt.Printf("[IMPORT-JSON] WARN: FlushList failed: %v\n", err)
 			}
 		}
 
-		// Commit transaction (per-company data: products, indexes, EAN pages).
-	}
+		// ============================================
+		// Phase 1.6: Delete stale products not in this import
+		// ============================================
+		if priceDoc != nil && len(priceDoc.Prices) > 100_000 {
+			h.importProgress.SetStep(StepCleanup)
+			fmt.Printf("[IMPORT-JSON] Phase 1.6: Cleaning up stale products for company %d (has %d products)...\n", company.ID, len(priceDoc.Prices))
 
-	usages := h.store.DB().ShardUsages()
+			cleanupTxn := db.NewTransaction(h.store)
+			if err := cleanupTxn.Begin(); err != nil {
+				fmt.Printf("[IMPORT-JSON] WARN: begin cleanup transaction: %v\n", err)
+			} else {
+				deleted := h.productRepo.CleanupStaleProductsTx(cleanupTxn, company.ID, importKeys, identityNormalize, priceDoc)
+				result.ProductsDeleted = deleted
+				h.importProgress.SetDeleted(deleted)
+				fmt.Printf("[IMPORT-JSON] Phase 1.6: deleted %d stale products\n", deleted)
 
-	delta, _ := helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
-	usages = h.store.DB().ShardUsages()
-	if delta > 100_000 {
-
-	}
-	// ============================================
-	// Phase 1.6: Delete stale products not in this import (IN TRANSACTION)
-	// ============================================
-	// Removes products for this company that are no longer in the price file.
-	// GUARDED: a parse that produced zero products (bad download, broken feed)
-	// must NOT wipe the whole company — cleanup only runs on a successful
-	// non-empty parse, same as the nokaut path.
-	// THRESHOLD: cleanup only runs for companies with >100k products to avoid
-	// excessive deletion on small imports where stale products are less impactful.
-	if len(allParsedProducts) > 0 && priceDoc != nil && len(priceDoc.Prices) > 100_000 {
-		h.importProgress.SetStep(StepCleanup)
-		fmt.Printf("[IMPORT-JSON] Phase 1.6: Cleaning up stale products for company %d (has %d products)...\n", company.ID, len(priceDoc.Prices))
-		deleted := h.productRepo.CleanupStaleProductsTx(txn, company.ID, allParsedProducts, identityNormalize, priceDoc)
-		result.ProductsDeleted = deleted
-		h.importProgress.SetDeleted(deleted)
-		fmt.Printf("[IMPORT-JSON] Phase 1.6: deleted %d stale products\n", deleted)
-	} else if len(allParsedProducts) > 0 {
-		fmt.Printf("[IMPORT-JSON] Skipping cleanup for company %d (has %d products, threshold is 100k)\n", company.ID, func() int {
-			if priceDoc != nil {
-				return len(priceDoc.Prices)
+				if err := cleanupTxn.Commit(); err != nil {
+					fmt.Printf("[IMPORT-JSON] WARN: commit cleanup transaction: %v\n", err)
+				}
 			}
-			return 0
-		}())
-	}
-
-	delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
-	usages = h.store.DB().ShardUsages()
-	if delta > 100_000 {
-
-	}
-	// Commit transaction (per-company data: products, indexes, EAN pages).
-	h.importProgress.SetStep(StepCommit)
-	if err := txn.Commit(); err != nil {
-		fmt.Printf("[IMPORT-JSON] ERROR: commit transaction failed: %v\n", err)
-		result.Status = "error_commit"
-		return result
-	}
-	fmt.Println("[IMPORT-JSON] Transaction committed successfully")
-
-	delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
-	usages = h.store.DB().ShardUsages()
-	if delta > 100_000 {
-
+		} else {
+			fmt.Printf("[IMPORT-JSON] Skipping cleanup for company %d (has %d products, threshold is 100k)\n", company.ID, func() int {
+				if priceDoc != nil {
+					return len(priceDoc.Prices)
+				}
+				return 0
+			}())
+		}
 	}
 
 	// Persist the price document updated incrementally during the import
@@ -1179,12 +1102,6 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNo
 	// This replaces the old full company product rescan.
 	if err := h.productRepo.SaveCompanyPrices(company.ID, priceDoc); err != nil {
 		fmt.Printf("[IMPORT-JSON] WARN: save company prices for %d: %v\n", company.ID, err)
-	}
-
-	delta, _ = helpers.CalculateDeltaOffset(usages, h.store.DB().ShardUsages())
-	usages = h.store.DB().ShardUsages()
-	if delta > 100_000 {
-
 	}
 
 	// Report feed fields that had no entry in the company's field map, so the
@@ -1205,8 +1122,99 @@ func (h *Handlers) importJSONCompany(company *model.Company, limit int, globalNo
 
 // identityNormalize is the name normalization used by the JSON import for offer
 // uniqueness keys. It is the identity function: the JSON import keys offers by
-// their raw (unnormalized) name, matching keys created by earlier imports.
+// their raw (unnormalized) name (allParsedNames carries raw names), and
+// CleanupStaleProductsTx uses it to rebuild DB products' keys the same way.
 func identityNormalize(s string) string { return s }
+
+// sortByEANPageKey permutes products (and names, in lockstep) so that all
+// products of one EAN page are contiguous. Batching the sorted slice then
+// groups each page's products into ONE batch, and BatchUpsertFromProductsTx
+// loads/merges/writes each page exactly once per import.
+func sortByEANPageKey(products []*model.Product, names []string) {
+	keys := make([]string, len(products))
+	order := make([]int, len(products))
+	for i, p := range products {
+		keys[i] = db.EANPageKeyForProduct(p)
+		order[i] = i
+	}
+	sort.Slice(order, func(a, b int) bool { return keys[order[a]] < keys[order[b]] })
+
+	sortedProducts := make([]*model.Product, len(products))
+	var sortedNames []string
+	if names != nil {
+		sortedNames = make([]string, len(names))
+	}
+	for i, j := range order {
+		sortedProducts[i] = products[j]
+		if sortedNames != nil {
+			sortedNames[i] = names[j]
+		}
+	}
+	copy(products, sortedProducts)
+	if sortedNames != nil {
+		copy(names, sortedNames)
+	}
+}
+
+// writeBatchIndexEntries writes ONE batch's product and EAN page index entries
+// in dedicated transactions. tag prefixes the log lines ("IMPORT-JSON" /
+// "IMPORT-NOKAUT"). Entries are grouped by key within each chunk
+// (WriteIndexEntries), which is what prevents vacuum churn — nothing is gained
+// by accumulating them across chunks except an OOM-sized heap.
+func (h *Handlers) writeBatchIndexEntries(tag string, batchProducts []*model.Product, affectedPages []*model.EANPage) {
+	// Write in sub-chunks: one IndexEntry is produced per product TOKEN
+	// (name+description words), and WriteIndexEntries groups them in a
+	// map[token]docIDs plus the transaction buffers a second copy. A whole 50k
+	// batch at once maps millions of tokens — chunking bounds the map and the
+	// buffer to a fraction of the batch.
+	const productChunk = 10_000
+	const eanPageChunk = 1_000
+
+	if h.turboSearch != nil {
+		for lo := 0; lo < len(batchProducts); lo += productChunk {
+			hi := lo + productChunk
+			if hi > len(batchProducts) {
+				hi = len(batchProducts)
+			}
+			chunk := batchProducts[lo:hi]
+
+			txn := db.NewTransaction(h.store)
+			if err := txn.Begin(); err != nil {
+				fmt.Printf("[%s] WARN: begin product index transaction: %v\n", tag, err)
+				return
+			}
+			indexes, eanIndexes, vendorIndexes, priceRangeIndexes := h.turboSearch.BuildProductIndexEntries(chunk)
+			db.WriteIndexEntries(txn, indexes, "product")
+			db.WriteIndexEntries(txn, eanIndexes, "product-ean")
+			db.WriteIndexEntries(txn, vendorIndexes, "product-vendor")
+			db.WriteIndexEntries(txn, priceRangeIndexes, "product-price")
+			if err := txn.Commit(); err != nil {
+				fmt.Printf("[%s] WARN: commit product index transaction: %v\n", tag, err)
+				return
+			}
+		}
+	}
+
+	if h.eanPageSearch != nil && len(affectedPages) > 0 {
+		for lo := 0; lo < len(affectedPages); lo += eanPageChunk {
+			hi := lo + eanPageChunk
+			if hi > len(affectedPages) {
+				hi = len(affectedPages)
+			}
+
+			txn := db.NewTransaction(h.store)
+			if err := txn.Begin(); err != nil {
+				fmt.Printf("[%s] WARN: begin eanpage index transaction: %v\n", tag, err)
+				return
+			}
+			db.WriteIndexEntries(txn, h.eanPageSearch.BuildIndexEntries(affectedPages[lo:hi]), "eanpage")
+			if err := txn.Commit(); err != nil {
+				fmt.Printf("[%s] WARN: commit eanpage index transaction: %v\n", tag, err)
+				return
+			}
+		}
+	}
+}
 
 // parseJSONProductForImport converts a jsonPriceEntry to a model.Product.
 func parseJSONProductForImport(jp JsonProductFileItem, companyID int64, companySlug, companyName, currency string,

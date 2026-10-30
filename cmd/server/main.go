@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -76,6 +78,51 @@ func generateRandomPassword(length int) string {
 	return string(b)
 }
 
+// applyMemoryLimit applies the GOMEMLIMIT environment variable (if set) as the
+// runtime soft memory limit. Accepted formats: plain bytes ("5368709120"),
+// "512MiB"/"6GiB", or short "512M"/"6G" (binary multiples, case-insensitive).
+func applyMemoryLimit() {
+	v := strings.TrimSpace(os.Getenv("GOMEMLIMIT"))
+	if v == "" {
+		return
+	}
+	n, err := parseMemoryLimit(v)
+	if err != nil || n <= 0 {
+		log.Printf("WARN: ignoring invalid GOMEMLIMIT %q: %v", v, err)
+		return
+	}
+	debug.SetMemoryLimit(n)
+	log.Printf("GOMEMLIMIT applied: soft memory limit set to %s (%d bytes)", v, n)
+}
+
+// parseMemoryLimit parses a byte count with an optional binary suffix
+// (KiB/MiB/GiB or K/M/G).
+func parseMemoryLimit(s string) (int64, error) {
+	units := []struct {
+		suffix string
+		mult   int64
+	}{
+		{"gib", 1 << 30}, {"mib", 1 << 20}, {"kib", 1 << 10},
+		{"g", 1 << 30}, {"m", 1 << 20}, {"k", 1 << 10},
+	}
+	ls := strings.ToLower(strings.TrimSpace(s))
+	for _, u := range units {
+		if strings.HasSuffix(ls, u.suffix) {
+			numStr := strings.TrimSpace(strings.TrimSuffix(ls, u.suffix))
+			num, err := strconv.ParseInt(numStr, 10, 64)
+			if err != nil {
+				return 0, fmt.Errorf("bad number in %q", s)
+			}
+			return num * u.mult, nil
+		}
+	}
+	n, err := strconv.ParseInt(ls, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("not a valid size")
+	}
+	return n, nil
+}
+
 func redirectToHTTPS(w http.ResponseWriter, r *http.Request) {
 	// Формируем новый URL с протоколом https
 	target := "https://" + r.Host + r.RequestURI
@@ -137,6 +184,13 @@ func main() {
 	// Automatically load .env (if present) so the server picks up its
 	// configuration without the operator exporting variables manually.
 	config.LoadEnv()
+
+	// Apply the soft memory limit AFTER .env loading: the Go runtime reads
+	// GOMEMLIMIT only at process start, before main runs, so a value from .env
+	// would be silently ignored. The limit makes the GC push back (run harder)
+	// as the heap approaches it, instead of letting RSS grow until the kernel
+	// OOM killer fires during large price-file imports.
+	applyMemoryLimit()
 
 	cfg := config.DefaultConfig()
 
@@ -229,15 +283,13 @@ func main() {
 		}
 	}()
 
-	// Preload EAN pages into OS page cache (background, fire-and-forget)
+	// Preload the category path map (background, fire-and-forget).
+	// The former EAN page "preload" (eanRepo.List()) is deliberately GONE:
+	// List() materializes a copy of every page document (getKey128Copy) and
+	// unmarshals all of them just to discard the result — gigabytes of
+	// transient garbage at every startup, racing with the first import after
+	// a restart (heap profiles caught it at ~2.5GB resident).
 	go func() {
-		log.Println("Preloading EAN pages into cache...")
-		eanRepo := db.NewEANPageRepo(store)
-		if _, err := eanRepo.List(); err != nil {
-			log.Printf("EAN page preload error: %v", err)
-		} else {
-			log.Println("EAN page preload complete")
-		}
 		catRepo := db.NewCategoryRepo(store)
 
 		if _, err := catRepo.BuildPathMap(); err != nil {

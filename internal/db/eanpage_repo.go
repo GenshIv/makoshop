@@ -1367,105 +1367,118 @@ func (r *EANPageRepo) ForEachEANPageBatch(batchSize int, cb func(pages []model.E
 // RecalculateMinPricesForPages was removed: use the combined
 // RecalculateCountsAndMinPricesForPages (one pass, price-map based).
 
-// BatchUpsertFromProductsTx is the transactional version of BatchUpsertFromProducts.
-// It buffers all writes in the transaction instead of writing directly to the DB.
 // BatchUpsertFromProductsTx groups products into EAN pages and creates or
-// updates them inside the transaction. Pages with no category (from the
-// source data) go through autoCatalogize. deliverySlugs are the importing
-// company's delivery method slugs (read ONCE from company settings by the
-// caller) — they are stamped as the delivery_method attribute on every
-// affected page and indexed by the standard attribute path.
-// Returns the productID -> pageID map and the affected page objects in their
-// final in-memory state (post merge and catalogization) — use them for
-// indexing inside the same transaction instead of re-reading committed state.
-func (r *EANPageRepo) BatchUpsertFromProductsTx(txn *Transaction, products []*model.Product, deliverySlugs []string) (map[int64]string, []*model.EANPage) {
+// updates them inside the transaction. The input is sorted by EAN page key so
+// that all products of one page form ONE contiguous group; each page is then
+// loaded from the store, merged with its whole group, and written exactly
+// once. No per-page maps are kept: the previous implementation held
+// pageKeySet/existing/newPages/updatedPages maps referencing every full page
+// object of the batch (tens of thousands of pages with merged attributes and
+// keywords — gigabytes on large imports).
+// Callers that pre-sort the WHOLE import by page key additionally get minimal
+// page-set overlap between batches: without it every 50k batch touches nearly
+// every page, re-loading and re-writing them (and re-merging keywords, so
+// pages keep growing) batch after batch.
+// Note: this also fixes a merge bug of the map-based version — newly created
+// pages absorbed only their FIRST product; now every product of the group is
+// merged into the page (count, min price, images, attributes, keywords).
+// Pages with no category (from the source data) go through autoCatalogize.
+// deliverySlugs are stamped as the delivery_method attribute on every affected
+// page. Returns the affected pages in their final in-memory state (post merge
+// and catalogization) — use them for indexing inside the same transaction
+// instead of re-reading committed state.
+func (r *EANPageRepo) BatchUpsertFromProductsTx(txn *Transaction, products []*model.Product, deliverySlugs []string) []*model.EANPage {
 	if len(products) == 0 {
-		return nil, nil
-	}
-
-	// Collect all page keys and unique category IDs
-	pageKeySet := make(map[string]struct{})
-	catIDs := make(map[int64]struct{})
-	for _, p := range products {
-		if pk := EANPageKeyForProduct(p); pk != "" {
-			pageKeySet[pk] = struct{}{}
-		}
-		if p.CategoryID != 0 {
-			catIDs[p.CategoryID] = struct{}{}
-		}
+		return nil
 	}
 
 	upsertStart := time.Now()
 
-	// Batch load existing pages
-	existing := make(map[string]*model.EANPage)
-	for pk := range pageKeySet {
-		if s, err := r.GetByEAN(pk); err == nil {
-			existing[pk] = s
-			if s.CategoryID != 0 {
-				catIDs[s.CategoryID] = struct{}{}
-			}
-		}
+	// Pre-compute page keys and sort a permutation by key; the caller's slice
+	// order is preserved (it may still be in use for indexing after this call).
+	pageKeys := make([]string, len(products))
+	order := make([]int, len(products))
+	for i, p := range products {
+		pageKeys[i] = EANPageKeyForProduct(p)
+		order[i] = i
 	}
-	fmt.Printf("[EANPAGE] upsert: %d page keys, %d existing, load %v\n",
-		len(pageKeySet), len(existing), time.Since(upsertStart))
+	sort.Slice(order, func(a, b int) bool { return pageKeys[order[a]] < pageKeys[order[b]] })
+	sortedProducts := make([]*model.Product, len(products))
+	sortedKeys := make([]string, len(products))
+	for i, j := range order {
+		sortedProducts[i] = products[j]
+		sortedKeys[i] = pageKeys[j]
+	}
 
-	// Pre-compute tree paths for all category IDs (single pass)
+	// Tree paths for the batch's product category IDs. Paths for categories
+	// discovered later (from loaded pages) self-heal via ComputeSeoURL's
+	// read-through.
 	treePathCache := make(map[int64][]string)
-	for catID := range catIDs {
-		if r.CategoryRepo != nil {
-			if tp, err := r.CategoryRepo.GetTreePath(catID); err == nil && len(tp) > 0 {
-				treePathCache[catID] = tp
-			}
-		}
-	}
-
-	// Group products by EAN and merge into EANPage objects
-	newPages := make(map[string]*model.EANPage)
-	updatedPages := make(map[string]*model.EANPage)
-
-	for _, p := range products {
-		pk := EANPageKeyForProduct(p)
-		if pk == "" {
-			continue
-		}
-
-		if s, ok := existing[pk]; ok {
-			updatedPages[pk] = s
-		} else {
-			if _, ok := newPages[pk]; !ok {
-				slug := toEANPageSlug(pk, p.Name)
-				newPages[pk] = &model.EANPage{
-					EAN:          pk,
-					Slug:         slug,
-					Title:        parseTitleFromProductName(p.Name),
-					Description:  p.Description,
-					Content:      p.Description,
-					Images:       limitStrings(deduplicateStrings(p.Images), maxEANPageImages),
-					CategoryID:   p.CategoryID,
-					Brand:        p.Brand,
-					BrandID:      p.BrandID,
-					IsActive:     true,
-					MinPrice:     p.Price,
-					Currency:     p.Currency,
-					Attributes:   mergeAttributes(nil, p.Attributes),
-					ProductCount: 1,
-					SeoURL:       r.ComputeSeoURL(slug, p.CategoryID, treePathCache),
-					Keywords:     extractKeywordsFromProduct(p),
-					CreatedAt:    time.Now().Unix(),
-					UpdatedAt:    time.Now().Unix(),
+	for _, p := range sortedProducts {
+		if p.CategoryID != 0 {
+			if _, ok := treePathCache[p.CategoryID]; !ok && r.CategoryRepo != nil {
+				if tp, err := r.CategoryRepo.GetTreePath(p.CategoryID); err == nil && len(tp) > 0 {
+					treePathCache[p.CategoryID] = tp
 				}
 			}
 		}
 	}
 
-	// Merge updates for existing pages
-	for _, p := range products {
-		pk := EANPageKeyForProduct(p)
+	// Auto-catalogizer token sets, loaded lazily on the first uncategorized page.
+	var catSets map[int64]map[uint64]struct{}
+	catzStart := time.Now()
+	uncategorized := 0
+	catalogized := 0
+
+	slugsSet := make(map[string]struct{}, len(deliverySlugs))
+	for _, slug := range deliverySlugs {
+		if slug != "" {
+			slugsSet[slug] = struct{}{}
+		}
+	}
+
+	var affected []*model.EANPage
+	var newEANPageIDs []string
+	loadedExisting := 0
+
+	// Walk contiguous groups of products sharing one page key.
+	for lo := 0; lo < len(sortedProducts); {
+		hi := lo + 1
+		for hi < len(sortedProducts) && sortedKeys[hi] == sortedKeys[lo] {
+			hi++
+		}
+		pk := sortedKeys[lo]
+		group := sortedProducts[lo:hi]
+		lo = hi
+
 		if pk == "" {
 			continue
 		}
-		if s, ok := updatedPages[pk]; ok {
+
+		// Load the existing page ONCE per group; merge the whole group into it.
+		first := group[0]
+		var s *model.EANPage
+		isNew := false
+		if existing, err := r.GetByEAN(pk); err == nil {
+			s = existing
+			loadedExisting++
+		} else {
+			isNew = true
+			slug := toEANPageSlug(pk, first.Name)
+			s = &model.EANPage{
+				EAN:       pk,
+				Slug:      slug,
+				Title:     parseTitleFromProductName(first.Name),
+				Brand:     first.Brand,
+				BrandID:   first.BrandID,
+				IsActive:  true,
+				Currency:  first.Currency,
+				SeoURL:    r.ComputeSeoURL(slug, first.CategoryID, treePathCache),
+				CreatedAt: time.Now().Unix(),
+			}
+		}
+
+		for _, p := range group {
 			s.ProductCount++
 
 			if p.Price < s.MinPrice || s.MinPrice == 0 {
@@ -1512,95 +1525,48 @@ func (r *EANPageRepo) BatchUpsertFromProductsTx(txn *Transaction, products []*mo
 
 			s.UpdatedAt = time.Now().Unix()
 		}
-	}
 
-	// Auto-catalogize pages left without a category: use the first product
-	// of the group as the matching source (same input the catalogizer uses).
-	representative := make(map[string]*model.Product, len(newPages)+len(updatedPages))
-	for _, p := range products {
-		pk := EANPageKeyForProduct(p)
-		if pk == "" {
-			continue
-		}
-		if _, ok := representative[pk]; !ok {
-			representative[pk] = p
-		}
-	}
-	// Auto-catalogize pages left without a category: use the first product
-	// of the group as the matching source (same input the catalogizer uses).
-	uncategorized := make([]*model.EANPage, 0, len(newPages)+len(updatedPages))
-	for _, s := range newPages {
+		// Auto-catalogize pages left without a category: use the first product
+		// of the group as the matching source (same input the catalogizer uses).
 		if s.CategoryID == 0 {
-			uncategorized = append(uncategorized, s)
-		}
-	}
-	for _, s := range updatedPages {
-		if s.CategoryID == 0 {
-			uncategorized = append(uncategorized, s)
-		}
-	}
-	if len(uncategorized) > 0 {
-		// Load the catalogizer token sets ONCE for the whole batch: scoring a
-		// page against in-memory sets instead of re-reading every category's
-		// token index per page (this was O(pages × categories) index reads).
-		catSets := r.catalogTokenSets()
-		catalogized := 0
-		catzStart := time.Now()
-		for _, s := range uncategorized {
-			p := representative[s.EAN]
-			if p == nil {
-				continue
+			uncategorized++
+			if catSets == nil {
+				// Load the catalogizer token sets ONCE for the whole batch.
+				catSets = r.catalogTokenSets()
 			}
-			catID := AutoCatalogizeWithSets(p, catSets)
-			if catID == 0 {
-				continue
+			if catID := AutoCatalogizeWithSets(first, catSets); catID != 0 {
+				s.CategoryID = catID
+				s.SeoURL = r.ComputeSeoURL(s.Slug, catID, treePathCache)
+				catalogized++
 			}
-			s.CategoryID = catID
-			s.SeoURL = r.ComputeSeoURL(s.Slug, catID, treePathCache)
-			catalogized++
 		}
-		fmt.Printf("[EANPAGE] auto-catalogized %d / %d uncategorized pages in %v (%d categories)\n",
-			catalogized, len(uncategorized), time.Since(catzStart), len(catSets))
-	}
 
-	// Stamp the company delivery slugs on every affected page: the
-	// delivery_method attribute is company-derived, set once here at import
-	// time and indexed like any other attribute.
-	if len(deliverySlugs) > 0 {
-		slugsSet := make(map[string]struct{}, len(deliverySlugs))
-		for _, slug := range deliverySlugs {
-			if slug != "" {
-				slugsSet[slug] = struct{}{}
-			}
-		}
-		for _, s := range newPages {
+		// Stamp the company delivery slugs on the page: the delivery_method
+		// attribute is company-derived, set once here at import time and
+		// indexed like any other attribute.
+		if len(slugsSet) > 0 {
 			s.Attributes = SetDeliveryMethodAttr(s.Attributes, slugsSet)
 		}
-		for _, s := range updatedPages {
-			s.Attributes = SetDeliveryMethodAttr(s.Attributes, slugsSet)
-		}
-	}
 
-	// Collect the affected pages in their final in-memory state.
-	affected := make([]*model.EANPage, 0, len(newPages)+len(updatedPages))
-	for _, s := range newPages {
-		affected = append(affected, s)
-	}
-	for _, s := range updatedPages {
+		if isNew {
+			if err := r.CreateNoListIndexTx(txn, s); err != nil {
+				fmt.Printf("WARN: create eanpage for EAN %s: %v\n", pk, err)
+				continue
+			}
+			newEANPageIDs = append(newEANPageIDs, KeyEANPage(s.EAN))
+		} else {
+			data := MarshalEANPage(*s)
+			if err := txn.DocPut(KeyEANPage(s.EAN), data); err != nil {
+				fmt.Printf("WARN: update eanpage for EAN %s: %v\n", pk, err)
+				continue
+			}
+		}
 		affected = append(affected, s)
 	}
 
-	// Create new pages (buffered in transaction)
-	created := make(map[string]string)
-	var newEANPageIDs []string
-	for ean, s := range newPages {
-		if err := r.CreateNoListIndexTx(txn, s); err != nil {
-			fmt.Printf("WARN: create eanpage for EAN %s: %v\n", ean, err)
-			continue
-		}
-		created[ean] = s.EAN
-		newEANPageIDs = append(newEANPageIDs, KeyEANPage(s.EAN))
-	}
+	fmt.Printf("[EANPAGE] upsert: %d pages (%d existing, %d new) for %d products in %v; auto-catalogized %d/%d in %v (%d categories)\n",
+		len(affected), loadedExisting, len(newEANPageIDs), len(products),
+		time.Since(upsertStart), catalogized, uncategorized, time.Since(catzStart), len(catSets))
 
 	// Batch add all new EAN pages to eanpage_list index (buffered in transaction)
 	if len(newEANPageIDs) > 0 {
@@ -1609,30 +1575,7 @@ func (r *EANPageRepo) BatchUpsertFromProductsTx(txn *Transaction, products []*mo
 		}
 	}
 
-	// Update existing pages (buffered in transaction)
-	for ean, s := range updatedPages {
-		data := MarshalEANPage(*s)
-		if err := txn.DocPut(KeyEANPage(s.EAN), data); err != nil {
-			fmt.Printf("WARN: update eanpage for EAN %s: %v\n", ean, err)
-			continue
-		}
-		created[ean] = s.EAN
-	}
-
-	// Build productID -> EANPageID map
-	result := make(map[int64]string)
-	for _, p := range products {
-		if p.EAN == "" {
-			continue
-		}
-		if id, ok := created[p.EAN]; ok {
-			result[p.ID] = id
-		}
-	}
-
-	fmt.Printf("[EANPAGE] upsert: done in %v (new %d, updated %d)\n",
-		time.Since(upsertStart), len(newPages), len(updatedPages))
-	return result, affected
+	return affected
 }
 
 // offerDescriptionUsable reports whether an offer's description is good

@@ -134,6 +134,17 @@ func (t *Transaction) Commit() error {
 		}
 	}
 
+	// Clear all buffered writes to release memory. The data is now persisted
+	// in the database; keeping it in the maps would cause an OOM on large
+	// imports (the maps can grow to several GB for 100k+ products).
+	t.docPuts = make(map[string][]byte)
+	t.turboWrites = make(map[string][]byte)
+	t.turboBatchIndex = make(map[string][]string)
+	t.turboSortIndex = make(map[string][]string)
+	t.docDeletes = make(map[string]struct{})
+	t.turboIndexDeletes = make(map[string]map[string]struct{})
+	t.products = nil
+
 	t.active = false
 	t.finished = true
 

@@ -104,6 +104,43 @@ const eanpageCatalogPriceFloorCents = uint64(EANPageMinCatalogPrice * 100)
 
 // ---------- indexing ----------
 
+// BuildIndexEntries builds index entries for EAN pages without writing to DB.
+// Returns a slice of index entries that can be accumulated and written later.
+func (s *EANPageSearch) BuildIndexEntries(pages []*model.EANPage) []IndexEntry {
+	var entries []IndexEntry
+
+	for _, sp := range pages {
+		docID := KeyEANPage(sp.EAN)
+
+		if sp.CategoryID != 0 {
+			ancestors, err := s.getCategoryAncestors(sp.CategoryID)
+			if err != nil {
+				ancestors = []int64{sp.CategoryID}
+			}
+			for _, cid := range ancestors {
+				entries = append(entries, IndexEntry{eanpageKeyCategoryUnion(cid), docID})
+			}
+		}
+
+		if sp.BrandID != 0 {
+			entries = append(entries, IndexEntry{eanpageKeyBrand(sp.BrandID), docID})
+		}
+
+		for _, kv := range sp.Attributes {
+			valStr := kv.Value
+			if valStr != "" && !model.IsAttrValueTooLong(valStr) {
+				entries = append(entries, IndexEntry{eanpageKeyAttr(kv.Key, valStr), docID})
+			}
+		}
+
+		for _, tok := range tokenizeEANPage(sp) {
+			entries = append(entries, IndexEntry{eanpageKeyText(tok), docID})
+		}
+	}
+
+	return entries
+}
+
 // IndexEANPage indexes a single EAN page into turbo indexes.
 // Collects all indexes in memory, then writes in batch (no repeated writes to same key).
 func (s *EANPageSearch) IndexEANPage(sp *model.EANPage) error {

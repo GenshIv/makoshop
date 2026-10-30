@@ -426,9 +426,9 @@ func (r *ProductRepo) GetOrCreateByKey(p *model.Product) (int64, bool, error) {
 // productEANKeyPrefix — префикс для индекса уникальности оффера (EAN+Name+Company).
 const productEANKeyPrefix = "product_ean:"
 
-// productEANKey строит ключ уникальности оффера: EAN + нормализованное имя + CompanyID.
+// ProductEANKey строит ключ уникальности оффера: EAN + нормализованное имя + CompanyID.
 // Если EAN пустой (нет штрихкода), используется только имя + компания.
-func productEANKey(ean, normalizedName string, companyID int64) string {
+func ProductEANKey(ean, normalizedName string, companyID int64) string {
 	return fmt.Sprintf("%s%s|%s|%d", productEANKeyPrefix, ean, normalizedName, companyID)
 }
 
@@ -447,7 +447,7 @@ func (r *ProductRepo) BatchGetOrCreateByEAN(products []*model.Product, normalize
 		if p.CompanyID == 0 {
 			continue
 		}
-		keyPath := productEANKey(p.EAN, normalizedNames[i], p.CompanyID)
+		keyPath := ProductEANKey(p.EAN, normalizedNames[i], p.CompanyID)
 		keysToRead = append(keysToRead, keyPath)
 	}
 
@@ -475,7 +475,7 @@ func (r *ProductRepo) BatchGetOrCreateByEAN(products []*model.Product, normalize
 			continue
 		}
 
-		keyPath := productEANKey(p.EAN, normalizedNames[i], p.CompanyID)
+		keyPath := ProductEANKey(p.EAN, normalizedNames[i], p.CompanyID)
 
 		if existingID, ok := existingIDs[keyPath]; ok {
 			// Update existing product
@@ -591,7 +591,7 @@ func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*mode
 		if p.CompanyID == 0 {
 			continue
 		}
-		keyPath := productEANKey(p.EAN, normalizedNames[i], p.CompanyID)
+		keyPath := ProductEANKey(p.EAN, normalizedNames[i], p.CompanyID)
 		keysToRead = append(keysToRead, keyPath)
 	}
 
@@ -619,7 +619,7 @@ func (r *ProductRepo) BatchGetOrCreateByEANTx(txn *Transaction, products []*mode
 			continue
 		}
 
-		keyPath := productEANKey(p.EAN, normalizedNames[i], p.CompanyID)
+		keyPath := ProductEANKey(p.EAN, normalizedNames[i], p.CompanyID)
 
 		if existingID, ok := existingIDs[keyPath]; ok {
 			// Update existing product (in transaction)
@@ -916,28 +916,38 @@ func (r *ProductRepo) deleteProductNoEANIndexTx(txn *Transaction, p *model.Produ
 }
 
 // CleanupStaleProductsTx deletes products for a company whose offer key is not
-// present in the import set. It enumerates the company's products via the price
-// document (fallback: vendor index), and for each product whose offer key (EAN +
-// normalized name + company) is not among the importProducts' keys, removes it
-// from all indexes and deletes the document — all buffered in the given
-// transaction. priceDoc is the company's price document passed in by the
-// caller; deleted products' prices are removed from it in place.
-// normalize is the name normalization function used to compute offer keys; it
-// must match the one used at import time.
+// present in importKeys. importKeys is the slice of ProductEANKey(EAN,
+// normalized name, companyID) values built by the importer while parsing (per
+// batch), so the parsed products themselves can be released from memory before
+// this phase runs; the normalized name must match the one used at import time
+// (BatchGetOrCreateByEANTx's normalizedNames). Duplicates and unsorted input
+// are fine — the slice is sorted and deduped in place here, and membership is
+// a binary search (a ~450k-entry map on large imports is exactly the kind of
+// map this codebase is trying to shed).
+// The function enumerates the company's products via the price document
+// (fallback: vendor index), and for each product whose offer key is not among
+// importKeys, removes it from all indexes and deletes the document — all
+// buffered in the given transaction. priceDoc is the company's price document
+// passed in by the caller; deleted products' prices are removed from it in
+// place.
 // Returns the number of deleted products.
-func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, importProducts []*model.Product, normalize func(string) string, priceDoc *CompanyPricesDoc) int {
-	if r.store == nil || companyID == 0 || normalize == nil {
+func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, importKeys []string, normalize func(string) string, priceDoc *CompanyPricesDoc) int {
+	if r.store == nil || companyID == 0 || normalize == nil || len(importKeys) == 0 {
 		return 0
 	}
 
-	// Build the set of offer keys present in this import
-	importKeys := make(map[string]struct{}, len(importProducts))
-	for _, p := range importProducts {
-		if p.CompanyID != companyID {
-			continue
+	// Sort + dedupe in place; membership below is a binary search.
+	sort.Strings(importKeys)
+	uniq := importKeys[:0]
+	for i, k := range importKeys {
+		if i == 0 || k != importKeys[i-1] {
+			uniq = append(uniq, k)
 		}
-		key := productEANKey(p.EAN, normalize(p.Name), p.CompanyID)
-		importKeys[key] = struct{}{}
+	}
+	importKeys = uniq
+	hasImportKey := func(key string) bool {
+		i := sort.SearchStrings(importKeys, key)
+		return i < len(importKeys) && importKeys[i] == key
 	}
 
 	// Collect product IDs to remove per EAN key for batched index writes.
@@ -953,8 +963,8 @@ func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, 
 			if err != nil || p.CompanyID != companyID {
 				continue
 			}
-			key := productEANKey(p.EAN, normalize(p.Name), p.CompanyID)
-			if _, ok := importKeys[key]; ok {
+			key := ProductEANKey(p.EAN, normalize(p.Name), p.CompanyID)
+			if hasImportKey(key) {
 				continue // still in the import — keep it
 			}
 			// Stale product — delete in transaction (skip EAN index removal for batching)
@@ -991,8 +1001,8 @@ func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, 
 				if err != nil || p.CompanyID != companyID {
 					continue
 				}
-				key := productEANKey(p.EAN, normalize(p.Name), p.CompanyID)
-				if _, ok := importKeys[key]; ok {
+				key := ProductEANKey(p.EAN, normalize(p.Name), p.CompanyID)
+				if hasImportKey(key) {
 					continue
 				}
 				if err := r.deleteProductNoEANIndexTx(txn, p); err != nil {
@@ -1021,8 +1031,8 @@ func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, 
 				if p.CompanyID != companyID {
 					continue
 				}
-				key := productEANKey(p.EAN, normalize(p.Name), p.CompanyID)
-				if _, ok := importKeys[key]; ok {
+				key := ProductEANKey(p.EAN, normalize(p.Name), p.CompanyID)
+				if hasImportKey(key) {
 					continue
 				}
 				if err := r.deleteProductNoEANIndexTx(txn, p); err != nil {
