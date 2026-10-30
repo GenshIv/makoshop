@@ -137,6 +137,16 @@ func (h *Handlers) importCompanyByFormat(company *model.Company, override string
 	}
 	cr := CompanyImportResult{Company: company.Name, Format: format}
 
+	// Reclaim before the rewrite-heavy run: compact shards whose dead-byte
+	// debt crossed 20% of live data. Importing on top of an indebted shard
+	// is what pushes it into its size budget mid-run. Best-effort — a
+	// failed compaction (e.g. no disk headroom) only warns.
+	if n, err := h.store.DB().CompactDebtOverPercent(20); err != nil {
+		fmt.Printf("[IMPORT] WARN: pre-import compaction failed for %s: %v\n", company.Name, err)
+	} else if n > 0 {
+		fmt.Printf("[IMPORT] %s: pre-import compaction reclaimed %d shard(s)\n", company.Name, n)
+	}
+
 	explicitFile := ""
 	// Paginated APIs (Tradedoubler) are walked page by page inside the JSON
 	// importer, so there is no single file to pre-download for format
