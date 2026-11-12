@@ -1343,14 +1343,20 @@ type (
 
 // Facets holds facet counts for filtering UI.
 type Facets struct {
-	Brands map[string]int            `json:"brands,omitempty"` // brand name -> count
-	Attrs  map[string]map[string]int `json:"attrs,omitempty"`  // attr_code -> {value -> count}
+	Brands []FacetCount `json:"brands,omitempty"` // brand name -> count
+	Attrs  []AttrFacet  `json:"attrs,omitempty"`  // attr_code -> {value -> count}
 }
 
 // FacetCount is a single facet value with its count.
 type FacetCount struct {
 	Value string `json:"value"`
 	Count int    `json:"count"`
+}
+
+// AttrFacet is an attribute facet with its values.
+type AttrFacet struct {
+	Code   string       `json:"code"`
+	Values []FacetCount `json:"values"`
 }
 
 type PriceRange struct {
@@ -1499,8 +1505,8 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*EANListRespData, error
 		var facets *Facets
 		if result.Facets != nil {
 			facets = &Facets{
-				Brands: result.Facets.Brands,
-				Attrs:  result.Facets.Attrs,
+				Brands: mapToFacetCounts(result.Facets.Brands),
+				Attrs:  mapToAttrFacets(result.Facets.Attrs),
 			}
 		}
 
@@ -1514,6 +1520,31 @@ func (r *ProductRepo) ListWithFacets(params ListParams) (*EANListRespData, error
 	}
 
 	return &EANListRespData{Items: nil, Total: 0, Page: params.Page, Limit: params.Limit}, nil
+}
+
+// mapToFacetCounts converts a brand name -> count map to a slice of FacetCount.
+func mapToFacetCounts(m map[string]int) []FacetCount {
+	if m == nil {
+		return nil
+	}
+	result := make([]FacetCount, 0, len(m))
+	for value, count := range m {
+		result = append(result, FacetCount{Value: value, Count: count})
+	}
+	return result
+}
+
+// mapToAttrFacets converts an attr_code -> {value -> count} map to a slice of AttrFacet.
+func mapToAttrFacets(m map[string]map[string]int) []AttrFacet {
+	if m == nil {
+		return nil
+	}
+	result := make([]AttrFacet, 0, len(m))
+	for code, values := range m {
+		attrFacet := AttrFacet{Code: code, Values: mapToFacetCounts(values)}
+		result = append(result, attrFacet)
+	}
+	return result
 }
 
 func toFloat64(v interface{}) (float64, bool) {
