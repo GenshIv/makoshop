@@ -195,6 +195,8 @@ func (h *Handlers) runRecatalogize() error {
 		mappedCategoryID int64  // Target category from explicit mapping
 	}
 	groups := make(map[string]*group, len(allProducts))
+	// Collect company IDs for inactive company cleanup.
+	inactiveCompanyIDs := make(map[int64]struct{})
 	for i := range allProducts {
 		p := &allProducts[i]
 		key := db.EANPageKeyForProduct(p)
@@ -204,6 +206,11 @@ func (h *Handlers) runRecatalogize() error {
 		// Skip products without a purchase link — they cannot be bought, so
 		// they should not appear on EAN pages or in the catalog.
 		if p.PurchaseURL == "" && p.ProductURL == "" {
+			continue
+		}
+		// Skip products from inactive/non-existent companies.
+		if !h.companyRepo.IsCompanyActive(p.CompanyID) {
+			inactiveCompanyIDs[p.CompanyID] = struct{}{}
 			continue
 		}
 		g, ok := groups[key]
@@ -424,6 +431,19 @@ func (h *Handlers) runRecatalogize() error {
 	}
 	fmt.Printf("[RECATALOGIZE] committed: %d pages updated, %d unchanged, %d recreated\n",
 		updated, unchanged, len(missingProducts))
+
+	// 3.5 Clean up products from inactive/non-existent companies.
+	if len(inactiveCompanyIDs) > 0 {
+		cleanupTxn := db.NewTransaction(h.store)
+		if err := cleanupTxn.Begin(); err == nil {
+			deleted := h.productRepo.CleanupInactiveCompanyProductsTx(cleanupTxn, inactiveCompanyIDs, h.companyRepo.IsCompanyActive)
+			if err := cleanupTxn.Commit(); err != nil {
+				fmt.Printf("[RECATALOGIZE] WARN: cleanup commit failed: %v\n", err)
+			} else if deleted > 0 {
+				fmt.Printf("[RECATALOGIZE] cleaned up %d products from inactive companies\n", deleted)
+			}
+		}
+	}
 
 	// 4. Full index rebuild from scratch: every index key is written ONCE
 	// with its complete content (RebuildAllIndexes accumulates everything and

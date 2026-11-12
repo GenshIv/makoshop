@@ -137,6 +137,13 @@ func (h *Handlers) importCompanyByFormat(company *model.Company, override string
 	}
 	cr := CompanyImportResult{Company: company.Name, Format: format}
 
+	// Skip import for inactive companies (only "verified" companies can have products).
+	if company.Status != model.CompanyStatusVerified {
+		fmt.Printf("[IMPORT] %s: skipping import — company status is %q (not verified)\n", company.Name, company.Status)
+		cr.Status = "skipped_inactive_company"
+		return cr
+	}
+
 	// Reclaim before the rewrite-heavy run: compact shards whose used offset
 	// crossed 50% of their size budget (a shard past half its budget is
 	// mostly garbage). Header-only check, so it costs nothing when all

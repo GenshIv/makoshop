@@ -79,6 +79,15 @@ func (r *CompanyRepo) Get(id int64) (*model.Company, error) {
 	return UnmarshalCompany(data)
 }
 
+// IsCompanyActive checks if a company exists and has status "verified".
+func (r *CompanyRepo) IsCompanyActive(id int64) bool {
+	c, err := r.Get(id)
+	if err != nil {
+		return false
+	}
+	return c.Status == model.CompanyStatusVerified
+}
+
 // GetBySlug returns a company by slug.
 func (r *CompanyRepo) GetBySlug(slug string) (*model.Company, error) {
 	nameKey := turboKeyCompanyName + slug

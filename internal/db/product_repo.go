@@ -1047,6 +1047,131 @@ func (r *ProductRepo) CleanupStaleProductsTx(txn *Transaction, companyID int64, 
 	return deleted
 }
 
+// CleanupInactiveCompanyProductsTx removes products from companies that are not
+// active (status != "verified") or don't exist. The isCompanyActive callback
+// checks company status (typically calls CompanyRepo.IsCompanyActive).
+// Returns the number of deleted products.
+func (r *ProductRepo) CleanupInactiveCompanyProductsTx(txn *Transaction, companyIDs map[int64]struct{}, isCompanyActive func(int64) bool) int {
+	if r.store == nil || len(companyIDs) == 0 || isCompanyActive == nil {
+		return 0
+	}
+
+	deleted := 0
+	for cid := range companyIDs {
+		// Check if company exists and is active
+		if !isCompanyActive(cid) {
+			fmt.Printf("[CLEANUP] Company %d: not active or doesn't exist — removing all products\n", cid)
+			n := r.deleteCompanyProductsTx(txn, cid)
+			deleted += n
+		}
+	}
+
+	if deleted > 0 {
+		fmt.Printf("[CLEANUP] Deleted %d products from inactive/non-existent companies\n", deleted)
+	}
+	return deleted
+}
+
+// deleteCompanyProductsTx removes all products for a company in the given transaction.
+// Uses the company price document as the source of truth for existing products.
+func (r *ProductRepo) deleteCompanyProductsTx(txn *Transaction, companyID int64) int {
+	// Load the company's price document to find its products.
+	priceDoc, err := r.LoadCompanyPrices(companyID)
+	if err != nil || priceDoc == nil || len(priceDoc.Prices) == 0 {
+		// No price doc or no products — fall back to scanning product_list.
+		return r.deleteCompanyProductsByScan(txn, companyID)
+	}
+
+	deleted := 0
+	for productID := range priceDoc.Prices {
+		p, err := r.Get(productID)
+		if err != nil || p.CompanyID != companyID {
+			continue
+		}
+		if err := r.deleteProductNoEANIndexTx(txn, p); err != nil {
+			fmt.Printf("WARN: cleanup company product %d: %v\n", p.ID, err)
+			continue
+		}
+		eank := ProductEANIndexKey(p)
+		if eank != "" {
+			// Remove from EAN index
+			ids, _ := r.store.db.TurboGetIndexTokens(eank)
+			var newIDs []string
+			for _, id := range ids {
+				idStr, ok := id.(string)
+				if !ok {
+					continue
+				}
+				if idStr != KeyProduct(p.ID) {
+					newIDs = append(newIDs, idStr)
+				}
+			}
+			if len(newIDs) == 0 {
+				_ = r.store.db.TurboClearIndex(eank)
+			} else {
+				_, _ = r.store.db.TurboPutBatchIndexString(eank, newIDs)
+			}
+		}
+		delete(priceDoc.Prices, productID)
+		deleted++
+	}
+
+	if deleted > 0 {
+		// Update the price document to remove deleted products.
+		_ = r.SaveCompanyPrices(companyID, priceDoc)
+	}
+	return deleted
+}
+
+// deleteCompanyProductsByScan scans all products to find and delete those belonging to a company.
+func (r *ProductRepo) deleteCompanyProductsByScan(txn *Transaction, companyID int64) int {
+	allTokens, err := r.store.db.TurboGetIndexTokens(TurboKeyProductList)
+	if err != nil || len(allTokens) == 0 {
+		return 0
+	}
+
+	allDocs, err := r.store.db.MultiGetByDocIDs(allTokens)
+	if err != nil || len(allDocs) == 0 {
+		return 0
+	}
+
+	deleted := 0
+	for _, doc := range allDocs {
+		if len(doc) == 0 {
+			continue
+		}
+		p, err := UnmarshalProduct(doc)
+		if err != nil || p.CompanyID != companyID {
+			continue
+		}
+		if err := r.deleteProductNoEANIndexTx(txn, p); err != nil {
+			fmt.Printf("WARN: cleanup company product %d: %v\n", p.ID, err)
+			continue
+		}
+		eank := ProductEANIndexKey(p)
+		if eank != "" {
+			ids, _ := r.store.db.TurboGetIndexTokens(eank)
+			var newIDs []string
+			for _, id := range ids {
+				idStr, ok := id.(string)
+				if !ok {
+					continue
+				}
+				if idStr != KeyProduct(p.ID) {
+					newIDs = append(newIDs, idStr)
+				}
+			}
+			if len(newIDs) == 0 {
+				_ = r.store.db.TurboClearIndex(eank)
+			} else {
+				_, _ = r.store.db.TurboPutBatchIndexString(eank, newIDs)
+			}
+		}
+		deleted++
+	}
+	return deleted
+}
+
 // DeleteAllProducts removes all products and related indexes.
 // This is a destructive operation intended for admin use only.
 func (r *ProductRepo) DeleteAllProducts() error {
